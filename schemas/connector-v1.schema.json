@@ -490,9 +490,10 @@
               "generate": {
                 "type": "string",
                 "enum": [
-                  "rsa_key_pair"
+                  "rsa_key_pair",
+                  "webhook_token"
                 ],
-                "description": "A value Taskiem makes for the person: rsa_key_pair makes an RSA key pair in their browser, keeps the private key as the value and shows the public key to paste into the provider's dashboard."
+                "description": "A value Taskiem makes for the person: rsa_key_pair makes an RSA key pair in their browser, keeps the private key as the value and shows the public key to paste into the provider's dashboard; webhook_token is a random token the server makes when the connection is saved (never typed or chosen by anyone), shown once inside the webhook URL to paste into the provider's dashboard. A webhook_token field is secret and not required."
               }
             }
           }
@@ -807,7 +808,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 300,
-          "description": "Read actions only: seconds one call may take when the worker's usual bound (30 s) is too short, such as hearing a long voice note (decision 0062)."
+          "description": "Read actions only: seconds one call may take when the worker's usual bound (30 s) is too short, such as hearing a long voice note (decision 0074)."
         },
         "turn": {
           "type": "object",
@@ -824,7 +825,7 @@
         },
         "resend_if_lost": {
           "type": "boolean",
-          "description": "An unsafe write whose duplicate is only a duplicate chat message: a step may ask for it to be sent once more when its answer is lost (decision 0062 D11)."
+          "description": "An unsafe write whose duplicate is only a duplicate chat message: a step may ask for it to be sent once more when its answer is lost (decision 0074 D11)."
         },
         "compensate": {
           "oneOf": [
@@ -1236,6 +1237,10 @@
               "$ref": "#/$defs/expr"
             },
             "event": {
+              "$ref": "#/$defs/expr"
+            },
+            "through": {
+              "description": "When the action could not list everything since the time asked: the time (RFC 3339) up to which it did, read from its output; absent or null when it listed it all. The next poll carries on from there.",
               "$ref": "#/$defs/expr"
             },
             "every": {

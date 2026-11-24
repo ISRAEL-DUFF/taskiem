@@ -172,12 +172,36 @@ func params(in map[string]any) ([]any, error) {
 	return out, nil
 }
 
+// maxRowsOf reads the step's max_rows (default 1000, at most 10,000). The
+// worker decodes a step's input with encoding/json, so a number arrives
+// as float64 (it was read as int64 only, and the cap was always the
+// default); the other forms are what tests and other callers pass.
+func maxRowsOf(in map[string]any) int {
+	n := int64(1000)
+	switch m := in["max_rows"].(type) {
+	case float64:
+		if m >= 1 && m == math.Trunc(m) {
+			n = int64(math.Min(m, 10000))
+		}
+	case int64:
+		if m > 0 {
+			n = m
+		}
+	case int:
+		if m > 0 {
+			n = int64(m)
+		}
+	case json.Number:
+		if v, err := m.Int64(); err == nil && v > 0 {
+			n = v
+		}
+	}
+	return int(min(n, 10000))
+}
+
 func query(ctx context.Context, req connector.Request) (connector.Response, error) {
 	sql, _ := req.Input["sql"].(string)
-	maxRows := 1000
-	if m, ok := req.Input["max_rows"].(int64); ok && m > 0 {
-		maxRows = int(m)
-	}
+	maxRows := maxRowsOf(req.Input)
 	args, err := params(req.Input)
 	if err != nil {
 		return connector.Response{}, err

@@ -315,3 +315,50 @@ func TestConnectCarriesOn(t *testing.T) {
 		t.Fatalf("published: %q", got)
 	}
 }
+
+// From the web's (and the phone app's) Taskiem conversation: asking used
+// to fail (the link's channel was not allowed). The answer carries the
+// link as a line of its own; the history keeps no one-time link, so the
+// app keeps the live words (docs/spec/mobile-app.md 3.5).
+func TestConnectFromTheWebChat(t *testing.T) {
+	w := newWAWorld(t)
+	ps := fakePaystack(t, "sk_test_good0000000000")
+	if err := w.env.Registry.Register(paystack.New(paystack.Options{BaseURL: ps.URL})); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Ada Foods", "ada@webconnect.test")
+	said := owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "connect Paystack"})["messages"].([]any)
+	answer := said[len(said)-1].(map[string]any)["text"].(string)
+	m := connectLinkRe.FindStringSubmatch(answer)
+	if m == nil || !strings.Contains(answer, "Connect Paystack: ") {
+		t.Fatalf("the answer: %q", answer)
+	}
+	hist := owner.must(200, "GET", "/v1/taskiem-chat", nil)["messages"].([]any)
+	if kept := hist[len(hist)-1].(map[string]any)["text"].(string); strings.Contains(kept, m[1]) {
+		t.Fatalf("the history kept the link: %q", kept)
+	}
+	// What the app asks before opening it: the service, and how it connects.
+	info := owner.must(200, "GET", "/v1/connect/"+m[1], nil)
+	if c := info["connector"].(map[string]any); c["name"] != "Paystack" || info["channel"] != "web" {
+		t.Fatalf("the link: %v", info)
+	}
+	// A key from the app's form: checked, saved, the link spent, the
+	// conversation told.
+	out := owner.must(201, "POST", "/v1/connect/"+m[1], map[string]any{"credentials": map[string]any{"secret_key": "sk_test_good0000000000"}, "mode": "test"})
+	if out["connected"] != "Paystack" {
+		t.Fatalf("connected: %v", out)
+	}
+	owner.must(410, "GET", "/v1/connect/"+m[1], nil)
+	told := false
+	for range 50 {
+		hist = owner.must(200, "GET", "/v1/taskiem-chat", nil)["messages"].([]any)
+		if strings.Contains(hist[len(hist)-1].(map[string]any)["text"].(string), "Paystack is connected") {
+			told = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !told {
+		t.Fatalf("the conversation was not told: %v", hist[len(hist)-1])
+	}
+}

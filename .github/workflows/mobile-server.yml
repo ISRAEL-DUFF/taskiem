@@ -1,0 +1,71 @@
+name: mobile-server
+
+# The phone app's own code against the real server (docs/spec/mobile-app.md
+# §8; mobile/test/server/): the server the browser tests use, started by
+# web/e2e/serve.sh with its own Postgres. Run when the app or the server
+# changes; the rest of the app's checks are mobile.yml.
+
+on:
+  push:
+    branches: [main]
+    paths: ['mobile/**', 'api/**', 'engine/**', 'cmd/**', 'web/e2e/serve.sh', '.github/workflows/mobile-server.yml']
+  pull_request:
+    paths: ['mobile/**', 'api/**', 'engine/**', 'cmd/**', 'web/e2e/serve.sh', '.github/workflows/mobile-server.yml']
+
+permissions:
+  contents: read
+
+env:
+  # As mobile.yml: change them together.
+  FLUTTER_VERSION: 3.47.9
+
+jobs:
+  # The app's own code against the real server (docs/spec/mobile-app.md §8):
+  # the server the browser tests use (web/e2e/serve.sh, its own Postgres),
+  # and test/server/: two businesses talk, a message that did not go, the
+  # live stream, an owner talking to Taskiem. The same scenarios as the web's
+  # (docs/spec/chat-scenarios.md). Not yet on an emulator: these drive the
+  # app's code, not its screens, which the widget tests and the parity test
+  # hold.
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      TASKIEM_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      TASKIEM_E2E_URL: http://127.0.0.1:18080
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Install Flutter
+        run: |
+          curl -fsSL -o flutter.tar.xz "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
+          echo "25ed8c3c29d51a7353f2a944310b478af8214920639524b19c50a19e6c044c5a  flutter.tar.xz" | sha256sum -c -
+          tar -xJf flutter.tar.xz -C "$RUNNER_TEMP" && rm flutter.tar.xz
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: The server, as the browser tests start it
+        run: |
+          mkdir -p web/dist bin
+          nohup bash web/e2e/serve.sh > "$RUNNER_TEMP/server.log" 2>&1 &
+          timeout 300 sh -c 'until curl -fs http://127.0.0.1:18080/healthz >/dev/null; do sleep 2; done'
+      - working-directory: mobile
+        run: flutter pub get --enforce-lockfile
+      - name: The app against it
+        working-directory: mobile
+        run: flutter test test/server
+      - name: The server's log
+        if: failure()
+        run: tail -200 "$RUNNER_TEMP/server.log"
+

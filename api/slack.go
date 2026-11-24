@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -163,6 +164,17 @@ func clip(s string, n int) string {
 // one made through Taskiem's app for it, else its only active connection
 // in prod (an own app). team may be empty: any workspace.
 func (s *Server) slackConnection(ctx context.Context, tenant uuid.UUID, team string) (env, name string, err error) {
+	return s.slackConnectionOf(ctx, tenant, team, true)
+}
+
+// slackAppConnection is only the business's connection made through
+// Taskiem's app for the workspace, never an own app's pasted token: the
+// only one another business may be given (F19).
+func (s *Server) slackAppConnection(ctx context.Context, tenant uuid.UUID, team string) (env, name string, err error) {
+	return s.slackConnectionOf(ctx, tenant, team, false)
+}
+
+func (s *Server) slackConnectionOf(ctx context.Context, tenant uuid.UUID, team string, ownApp bool) (env, name string, err error) {
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if team != "" {
 			err := tx.QueryRow(ctx, `SELECT a.environment, a.connection FROM connection_app_accounts a JOIN connections c ON c.id = a.connection_id AND c.status = 'active'
@@ -170,6 +182,9 @@ func (s *Server) slackConnection(ctx context.Context, tenant uuid.UUID, team str
 			if !errors.Is(err, pgx.ErrNoRows) {
 				return err
 			}
+		}
+		if !ownApp {
+			return fmt.Errorf("%w: no Slack connection through Taskiem's app for this workspace", whatsapp.ErrNothingToSend)
 		}
 		rows, err := tx.Query(ctx, `SELECT environment, name FROM connections WHERE connector = 'slack' AND environment = 'prod' AND status = 'active' LIMIT 2`)
 		if err != nil {
@@ -428,6 +443,23 @@ func (s *Server) slackInteractions(w http.ResponseWriter, r *http.Request) {
 	if pl.Type == "block_actions" && len(pl.Actions) > 0 {
 		action, value = pl.Actions[0].ActionID, pl.Actions[0].Value
 	}
+	// A click on one of Taskiem's own buttons is read once: the same
+	// signed request sent again inside the signature's time window is a
+	// replay (Slack does not send a click twice), claimed as an event's id
+	// is (slack_chat.go). Two presses of one button differ in what Slack
+	// signs, so each is its own click.
+	if strings.HasPrefix(action, slackLink+".") || strings.HasPrefix(action, slackDecide+".") || strings.HasPrefix(action, slackReply+".") {
+		sum := sha256.Sum256([]byte(r.Header.Get("X-Slack-Request-Timestamp") + ":" + r.Header.Get("X-Slack-Signature")))
+		var fresh bool
+		if err := s.Store.Pool.QueryRow(r.Context(), `SELECT taskiem_slack_event_claim($1)`, "click:"+hex.EncodeToString(sum[:])).Scan(&fresh); err != nil {
+			writeErr(w, http.StatusInternalServerError, "try again")
+			return
+		}
+		if !fresh {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	}
 	switch {
 	case strings.HasPrefix(action, slackLink+"."):
 		w.WriteHeader(http.StatusOK)
@@ -568,7 +600,9 @@ func (s *Server) slackReplace(ctx context.Context, pl slackPayload, note string)
 // slackAddrsTx are the Slack addresses of users who linked Slack in the
 // tenant tx is scoped to.
 func slackAddrsTx(ctx context.Context, tx pgx.Tx, users []uuid.UUID) (map[uuid.UUID]string, error) {
-	rows, err := tx.Query(ctx, `SELECT user_id, 'sl:' || team_id || ':' || slack_user_id FROM slack_bindings WHERE verified_at IS NOT NULL AND user_id = ANY ($1)`, users)
+	rows, err := tx.Query(ctx, `SELECT b.user_id, 'sl:' || b.team_id || ':' || b.slack_user_id FROM slack_bindings b
+		WHERE b.verified_at IS NOT NULL AND b.user_id = ANY ($1)
+		  AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = b.user_id AND m.tenant_id = b.tenant_id)`, users)
 	if err != nil {
 		return nil, err
 	}

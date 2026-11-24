@@ -25,6 +25,7 @@ import (
 var notInSpec = []struct{ route, why string }{
 	{"/healthz", "liveness probe for load balancers and orchestrators (docs/operations.md)"},
 	{"/readyz", "readiness probe (docs/operations.md)"},
+	{"/.well-known/", "the files phones read to open links in the app and share its passkeys, in Google's and Apple's formats (docs/spec/mobile-app-m4.md N5)"},
 	{"/hooks/", "inbound webhooks (role edge): each trigger's URL and auth are shown with the workflow (GET /v1/workflows/{wf}/triggers)"},
 	{"/channels/", "provider callbacks for WhatsApp and USSD (role edge), signed by the provider (docs/whatsapp.md, docs/ussd.md)"},
 	{"/git-hooks/", "push notifications from Git hosts, signed per connection (docs/git.md)"},
@@ -130,6 +131,19 @@ func TestOpenAPICoversRoutes(t *testing.T) {
 func TestOpenAPIMatchesSource(t *testing.T) {
 	doc := loadSpec(t)
 	src := routeSource(t)
+	// Every public route is in the source map, so a family of routes cannot
+	// fall out of the comparison unnoticed (as the s.*Routes(r) ones once did).
+	var unread []string
+	for r := range routerRoutes(t) {
+		method, path, _ := strings.Cut(r, " ")
+		if _, ok := src[r]; !ok && !excluded(method, path) {
+			unread = append(unread, r)
+		}
+	}
+	sort.Strings(unread)
+	for _, r := range unread {
+		t.Errorf("route %s is not in routeSource: teach the walker (routes_ast_test.go) how it is registered", r)
+	}
 	ids := map[string]string{}
 	tags := map[string]bool{}
 	for _, tag := range doc.Tags {
@@ -172,8 +186,12 @@ func TestOpenAPIMatchesSource(t *testing.T) {
 		if op.AllEnvironments != meta.TenantWide {
 			t.Errorf("%s (%s): x-taskiem-all-environments is %v, the code says %v", key, meta.Handler, op.AllEnvironments, meta.TenantWide)
 		}
-		if got, want := securityOf(op.Security), securityFor(meta.Auth, op.Method); got != want {
-			t.Errorf("%s (%s): security is %s, want %s", key, meta.Handler, got, want)
+		sec := securityFor(meta.Auth, op.Method)
+		if keysRefusedInHandler[key] {
+			sec = strings.Replace(sec, "apiKey | ", "", 1)
+		}
+		if got := securityOf(op.Security); got != sec {
+			t.Errorf("%s (%s): security is %s, want %s", key, meta.Handler, got, sec)
 		}
 		for _, sch := range op.Security {
 			for name := range sch {
@@ -197,6 +215,13 @@ func securityOf(reqs []map[string][]string) string {
 	}
 	sort.Strings(alts)
 	return "[" + strings.Join(alts, " | ") + "]"
+}
+
+// keysRefusedInHandler are routes the router admits API keys to whose
+// handler refuses them itself: people decide them, keys do not.
+var keysRefusedInHandler = map[string]bool{
+	"POST /v1/schools/approvals/{id}": true, // decideSchoolApproval (schools_cash.go)
+	"POST /v1/schools/plans/{id}":     true, // decideSchoolPlan (schools_family.go)
 }
 
 // securityFor is the security an operation should declare for how the

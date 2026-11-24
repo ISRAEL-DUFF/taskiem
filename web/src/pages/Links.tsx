@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { useChatTools } from "../lib/useChatTools";
+import { setSound, soundOn } from "../lib/moments";
 import {
   Link,
   useNavigate,
   useParams,
+  useLocation,
   useSearchParams,
 } from "react-router-dom";
 import { del, get, getBlob, post, put, whenOff } from "../api";
@@ -32,6 +35,7 @@ import {
 } from "../lib/links";
 import {
   listTime,
+  logoSrc,
   matchChats,
   previewLine,
   type Conversation,
@@ -39,7 +43,18 @@ import {
 } from "../lib/linkchat";
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
+import { useChatAlerts } from "./ChatAlerts";
 import { ChatRow } from "./ChatRow";
+import {
+  CustomerPane,
+  CustomerRows,
+  CustomerSearch,
+  useCustomerChats,
+} from "./CustomerChat";
+import { customerID, customerKey } from "../lib/customerchat";
+import { useConfirm } from "./ConfirmSheet";
+import { Explore, GetStarted } from "./Explore";
+import { HeadMenu } from "./ChatHead";
 import { useChatLive } from "./ChatLive";
 import { useDrafts } from "../lib/drafts";
 import { useTaskiemUnread } from "../lib/taskiemSeen";
@@ -173,8 +188,10 @@ function AnswerButtons({
   busy: boolean;
 }) {
   const who = <span className="sr-only"> {link.name}</span>;
+  const { confirm, node } = useConfirm();
   return (
     <>
+      {node}
       <button
         type="button"
         className="primary small"
@@ -195,10 +212,13 @@ function AnswerButtons({
         type="button"
         className="small danger"
         disabled={busy}
-        onClick={() =>
-          confirm(
-            `Block ${link.name}? Their requests will not reach you, and they are not told.`,
-          ) && answer(link, "block", "Blocked")
+        onClick={async () =>
+          (await confirm({
+            title: `Block ${link.name}?`,
+            body: "Their requests will not reach you, and they are not told.",
+            ok: "Block",
+            danger: true,
+          })) && answer(link, "block", "Blocked")
         }
       >
         Block{who}
@@ -243,12 +263,36 @@ function useLinks() {
  */
 export function ChatPage() {
   const { me, can } = useAuth();
+  const chatTools = useChatTools();
+  // Alerts waiting in the Taskiem conversation, said on its row.
+  const waiting = useChatAlerts(!!chatTools).list?.length ?? 0;
+  const [sound, setSoundState] = useState(soundOn);
   // Chat is also the person's own conversation with Taskiem: with Linked
   // businesses off it shows that alone, and asks for no business's chats.
   const linksOn = areaOn(me?.areas, "links");
   const manage = can("link.manage") && linksOn;
+  // Customers who wrote to the business's own WhatsApp number (customers'
+  // conversations): for those who handle orders, with Orders on.
+  const customersOn =
+    can("storefront.manage|order.handle") && areaOn(me?.areas, "orders");
+  const customers = useCustomerChats(customersOn);
+  const archivedCustomers = useCustomerChats(customersOn, true);
+  // The search box is for the list: with Linked businesses off, it shows
+  // once there are customers' threads to search.
+  const hasCustomers =
+    (customers.data?.length ?? 0) + (archivedCustomers.data?.length ?? 0) > 0;
   const { view, act, answer } = useLinks();
   const [params, setParams] = useSearchParams();
+  // Explore is a step in the browser history (a state of this same address),
+  // so the phone's Back closes it, as it closes WhatsApp's.
+  const here = useLocation();
+  const navigate = useNavigate();
+  const loc = useRef(here);
+  loc.current = here;
+  const go = useRef(navigate);
+  go.current = navigate;
+  const exploring =
+    (here.state as { explore?: boolean } | null)?.explore === true;
   const convs = useLoad(
     () =>
       linksOn
@@ -356,8 +400,21 @@ export function ChatPage() {
   const open = all.find((c) => c.link === openID);
   // The person's own conversation with Taskiem, pinned at the top (§5.5).
   const taskiemOpen = openID === "taskiem";
+  const customerOpen = customersOn ? customerID(openID) : undefined;
   const unreadCount = all.filter((c) => !c.archived && c.unread > 0).length;
-  const archivedCount = all.filter((c) => c.archived).length;
+  const archivedCount =
+    all.filter((c) => c.archived).length +
+    (archivedCustomers.data?.length ?? 0);
+  // Customers' threads as the list shows them: the archived ones under
+  // Archived, narrowed by Unread and by a letter typed.
+  const shownCustomers = (
+    (archived ? archivedCustomers.data : customers.data) ?? []
+  ).filter(
+    (c) =>
+      (filter !== "unread" || c.unread > 0) &&
+      (query.length === 0 ||
+        c.name.toLowerCase().includes(query.toLowerCase())),
+  );
   const narrowed = linksOn && query.length === 1 ? matchChats(all, query) : all;
   const listed = narrowed.filter(
     (c) => c.archived === archived && (filter !== "unread" || c.unread > 0),
@@ -368,9 +425,18 @@ export function ChatPage() {
   const searchBox = useRef<HTMLInputElement>(null);
   const [keysOpen, setKeysOpen] = useState(false);
   const [hint, setHint] = useState("");
-  const order = ["taskiem", ...listed.map((c) => c.link)];
+  const order = [
+    "taskiem",
+    ...(filter !== "starred" && query.length < 2
+      ? shownCustomers.map((c) => customerKey(c.id))
+      : []),
+    ...listed.map((c) => c.link),
+  ];
   const keys = useRef({ order, openID: openID ?? undefined, setParams });
   keys.current = { order, openID: openID ?? undefined, setParams };
+  // Asking a business to link starts at the search box (the "n" key, and the
+  // round button of the list).
+  const startNew = useRef<() => void>(() => undefined);
   useEffect(() => {
     const focusSearch = () =>
       requestAnimationFrame(() =>
@@ -379,6 +445,12 @@ export function ChatPage() {
           searchBox.current?.select();
         }),
       );
+    startNew.current = () => {
+      // Finding a business has a screen of its own (Explore).
+      go.current(`${loc.current.pathname}${loc.current.search}`, {
+        state: { explore: true },
+      });
+    };
     const onKey = (e: KeyboardEvent) => {
       const k = keys.current;
       if (e.key === "Escape") {
@@ -387,7 +459,7 @@ export function ChatPage() {
         if (e.defaultPrevented || !k.openID) return;
         if (
           document.querySelector(
-            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
+            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore, .tk-sheet, .tk-tools, .tk-picker',
           )
         )
           return;
@@ -401,19 +473,18 @@ export function ChatPage() {
         );
         return;
       }
-      // Not under an open menu, sheet or panel: the letters are theirs.
+      // Not under an open menu, sheet, picker, tools or Explore: the
+      // letters are theirs.
       const covered = !!document.querySelector(
-        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
+        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore, .tk-sheet, .tk-tools, .tk-picker',
       );
       const what = shortcutOf(e, covered || isTyping(document.activeElement));
       if (!what || e.defaultPrevented) return;
       e.preventDefault();
       if (what === "help") setKeysOpen(true);
+      else if (what === "tag") startTag();
       else if (what === "search" || what === "new") {
-        if (what === "new")
-          setHint(
-            "Type the business's name or phone number, then choose Request link.",
-          );
+        if (what === "new") return startNew.current();
         k.setParams({});
         focusSearch();
       } else {
@@ -477,25 +548,68 @@ export function ChatPage() {
   return (
     <>
       <h1 className="sr-only">Chat</h1>
-      <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
+      <div
+        className={`chat-layout${open || taskiemOpen || customerOpen ? " open" : ""}`}
+      >
         <div className="chat-list-pane" onKeyDown={onListKey}>
           <div className="chat-list-head">
-            <h2>Chat</h2>
-            <Link className="button small" to="/home">
-              Home
+            <h2>Chats</h2>
+            {me?.tenant_name && (
+              <span className="chat-list-biz">{me.tenant_name}</span>
+            )}
+            {/* Search everywhere (menus-everywhere.md §6). */}
+            <Link className="head-search" to="/search" aria-label="Search everything">
+              <Icon name="search" />
             </Link>
-            <Link className="button small" to="/settings/links">
-              Linked businesses
-            </Link>
-            <button
-              type="button"
-              className="button small kbd-only"
-              onClick={() => setKeysOpen(true)}
-            >
-              Keyboard
-            </button>
+            {linksOn && (
+              <button
+                type="button"
+                className="new-chat"
+                data-testid="new-chat"
+                aria-label="Find a business to link with"
+                onClick={() => startNew.current()}
+              >
+                <Icon name="plus" />
+                <span className="fab-label">Find a business</span>
+              </button>
+            )}
+            <HeadMenu
+              label="More about the chats"
+              items={(close) => (
+                <>
+                  <Link
+                    className="menu-link"
+                    to="/settings/links"
+                    onClick={close}
+                  >
+                    Linked businesses
+                  </Link>
+                  <Link
+                    className="menu-link"
+                    to="/settings/links/profile"
+                    onClick={close}
+                  >
+                    Your business in Explore
+                  </Link>
+                  {chatTools && (
+                    <button
+                      type="button"
+                      className="menu-link"
+                      aria-pressed={sound}
+                      onClick={() => {
+                        setSound(!sound);
+                        setSoundState(!sound);
+                        close();
+                      }}
+                    >
+                      Sound for new orders and payments: {sound ? "on" : "off"}
+                    </button>
+                  )}
+                </>
+              )}
+            />
           </div>
-          {linksOn && (
+          {(linksOn || hasCustomers) && (
             <div className="filters" role="search" aria-label="Find a business">
               <label className="search">
                 <span className="sr-only">Find a business</span>
@@ -503,7 +617,7 @@ export function ChatPage() {
                 <input
                   type="search"
                   ref={searchBox}
-                  placeholder="Cement, catering in Ikeja, Dangote…"
+                  placeholder="Search chats, messages, businesses"
                   value={q}
                   onChange={(e) => (setQ(e.target.value), setHint(""))}
                   onKeyDown={(e) => {
@@ -524,34 +638,37 @@ export function ChatPage() {
           <p className="sr-only" role="status">
             {hint}
           </p>
-          {!searching && all.length > 0 && (
-            <div className="chat-chips" role="group" aria-label="Show">
-              {(
-                [
-                  ["all", "All"],
+          {!searching &&
+            (all.length > 0 ||
+              (customers.data?.length ?? 0) > 0 ||
+              (archivedCustomers.data?.length ?? 0) > 0) && (
+              <div className="chat-chips" role="group" aria-label="Show">
+                {(
                   [
-                    "unread",
-                    unreadCount ? `Unread (${unreadCount})` : "Unread",
-                  ],
-                  ["starred", "Starred"],
-                  ["archived", `Archived (${archivedCount})`],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className="chat-chip"
-                  aria-pressed={filter === key}
-                  onClick={() => {
-                    setFilter(key);
-                    if (key === "starred") setStarTick((n) => n + 1);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+                    ["all", "All"],
+                    [
+                      "unread",
+                      unreadCount ? `Unread (${unreadCount})` : "Unread",
+                    ],
+                    ["starred", "Starred"],
+                    ["archived", `Archived (${archivedCount})`],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="chat-chip"
+                    aria-pressed={filter === key}
+                    onClick={() => {
+                      setFilter(key);
+                      if (key === "starred") setStarTick((n) => n + 1);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           <ErrorBox error={view.error ?? act.error ?? searchError} />
           {!searching &&
             !archived &&
@@ -572,6 +689,15 @@ export function ChatPage() {
                       <>
                         <span className="draft">Draft:</span> {drafts.taskiem}
                       </>
+                    ) : waiting > 0 ? (
+                      <span
+                        className="tk-waiting"
+                        data-testid="taskiem-waiting"
+                      >
+                        {waiting === 1
+                          ? "1 thing needs you"
+                          : `${waiting} things need you`}
+                      </span>
                     ) : (
                       "Your own conversation with Taskiem, as on your phone"
                     )
@@ -582,6 +708,18 @@ export function ChatPage() {
                 />
               </ul>
             )}
+          {customersOn &&
+            filter !== "starred" &&
+            (query.length >= 2 ? (
+              <CustomerSearch query={query} openKey={openID} />
+            ) : (
+              <CustomerRows
+                chats={shownCustomers}
+                openKey={openID}
+                drafts={drafts}
+                archived={archived}
+              />
+            ))}
           {searching ? (
             <section aria-label="Search results" data-testid="link-results">
               {chats.length > 0 && (
@@ -597,8 +735,9 @@ export function ChatPage() {
                         <ChatRow
                           key={l.id}
                           to={`/chat?with=${conv.link}`}
-                          letter={l.name}
-                          title={l.name}
+                          letter={conv.name}
+                          logo={conv.logo ? logoSrc(conv.business) : undefined}
+                          title={conv.name}
                           preview={roleLine(l.role)}
                           unread={conv.unread}
                           selected={openID === conv.link}
@@ -662,7 +801,8 @@ export function ChatPage() {
                 <Skeleton rows={2} label="Searching businesses…" />
               ) : others.length === 0 ? (
                 <EmptyState icon="search">
-                  No business that lets others find it matches “{query}”.
+                  No business found for “{query}”. Only businesses that chose to
+                  be found are listed.
                 </EmptyState>
               ) : (
                 <Items label="Businesses on Taskiem">
@@ -703,10 +843,11 @@ export function ChatPage() {
               g.waiting.length +
               g.sent.length ===
             0 ? (
-            <EmptyState icon="chat">
-              No linked businesses yet. Search for a supplier or a customer that
-              is on Taskiem, and ask to link.
-            </EmptyState>
+            <GetStarted
+              manage={manage}
+              onExplore={() => startNew.current?.()}
+              onChanged={() => view.reload()}
+            />
           ) : (
             <>
               {g.asked.length > 0 && (
@@ -773,7 +914,10 @@ export function ChatPage() {
               {filter !== "starred" && all.length > 0 && (
                 <section aria-label="Chats">
                   <div className="toolbar" style={{ marginBottom: 6 }}>
-                    <h2 className="grow" style={{ margin: 0 }}>
+                    <h2
+                      className={archived ? "grow" : "grow sr-only"}
+                      style={{ margin: 0 }}
+                    >
                       {archived ? "Archived" : "Chats"}
                     </h2>
                   </div>
@@ -797,6 +941,7 @@ export function ChatPage() {
                         key={c.link}
                         to={`/chat?with=${c.link}`}
                         letter={c.name}
+                        logo={c.logo ? logoSrc(c.business) : undefined}
                         title={c.name}
                         time={c.last ? listTime(c.last.created_at) : undefined}
                         lead={
@@ -897,6 +1042,15 @@ export function ChatPage() {
               />
             )}
           {keysOpen && <KeysSheet onClose={() => setKeysOpen(false)} />}
+          {exploring && (
+            <Explore
+              links={view.data?.links ?? []}
+              convs={all}
+              manage={manage}
+              onClose={() => go.current(-1)}
+              onChanged={() => view.reload()}
+            />
+          )}
           {asking && (
             <RequestSheet
               asking={asking}
@@ -906,11 +1060,22 @@ export function ChatPage() {
           )}
         </div>
         {taskiemOpen && <TaskiemPane onBack={() => setParams({})} />}
+        {customerOpen && (
+          <CustomerPane
+            key={customerOpen}
+            id={customerOpen}
+            onBack={() => setParams({})}
+            onChanged={() => (customers.reload(), archivedCustomers.reload())}
+          />
+        )}
         {open && (
           <ConversationPane
             key={open.link}
             conv={open}
             others={all}
+            roles={Object.fromEntries(
+              (view.data?.links ?? []).map((l) => [l.id, l.role]),
+            )}
             onBack={() => setParams({})}
             onChanged={reloadConvs}
             focus={params.get("msg") ?? undefined}
@@ -1041,6 +1206,20 @@ export function LinkedBusinessesPage() {
           <Skeleton rows={1} label="Loading the setting…" />
         )}
       </section>
+      <section
+        className="card"
+        aria-labelledby="link-profile"
+        data-testid="link-profile-card"
+      >
+        <h2 id="link-profile">How other businesses see you</h2>
+        <p className="hint">
+          Your name, a line about what you do, your area, a logo and up to 12
+          photos.
+        </p>
+        <Link className="button" to="/settings/links/profile">
+          Edit your business in Explore
+        </Link>
+      </section>
       {settings.data?.url && <CodeCard url={settings.data.url} />}
       <section aria-label="Links">
         {!view.data ? (
@@ -1123,23 +1302,30 @@ function LinkActions({
   busy: boolean;
 }) {
   const who = <span className="sr-only"> {link.name}</span>;
+  const { confirm, node } = useConfirm();
   switch (link.state) {
     case "asked_us":
       return <AnswerButtons link={link} answer={answer} busy={busy} />;
     case "active":
       return (
-        <button
-          type="button"
-          className="small danger"
-          disabled={busy}
-          onClick={() =>
-            confirm(
-              `End the link with ${link.name}? What passed between you stays on both sides.`,
-            ) && answer(link, "end", "Link ended")
-          }
-        >
-          End link{who}
-        </button>
+        <>
+          {node}
+          <button
+            type="button"
+            className="small danger"
+            disabled={busy}
+            onClick={async () =>
+              (await confirm({
+                title: `End the link with ${link.name}?`,
+                body: "What passed between you stays on both sides.",
+                ok: "End link",
+                danger: true,
+              })) && answer(link, "end", "Link ended")
+            }
+          >
+            End link{who}
+          </button>
+        </>
       );
     case "requested":
     case "not_accepted":
@@ -1357,7 +1543,8 @@ export function LinkCodeSignedOut() {
         </Link>
       </p>
       <p className="hint">
-        Not on Taskiem yet? <Link to="/signup">Sign up your business</Link>,
+        Not on Taskiem yet?{" "}
+        <Link to="/signup?start=business">Start your business on Taskiem</Link>,
         then open the link again.
       </p>
     </div>
@@ -1385,7 +1572,9 @@ function FindableQuestion({
       <h2 id="link-findable-ask">Let other businesses on Taskiem find you?</h2>
       <p className="hint">
         They would find you by your name, what you sell and your area, from what
-        your storefront already shows. {findableLine(settings)}
+        your storefront already shows, or from your{" "}
+        <Link to="/settings/links/profile">business profile</Link>.{" "}
+        {findableLine(settings)}
       </p>
       <div className="row-actions">
         <button
@@ -1402,6 +1591,24 @@ function FindableQuestion({
       </div>
     </section>
   );
+}
+
+/** "@" away from the box: the open chat's box takes the focus and an "@",
+ * and the picker opens as if it were typed. */
+function startTag() {
+  const el = document.querySelector<HTMLTextAreaElement>(
+    "textarea[data-chat-box]",
+  );
+  if (!el) return;
+  const add = el.value && !/\s$/.test(el.value) ? " @" : "@";
+  const next = el.value + add;
+  Object.getOwnPropertyDescriptor(
+    HTMLTextAreaElement.prototype,
+    "value",
+  )?.set?.call(el, next);
+  el.focus();
+  el.setSelectionRange(next.length, next.length);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 /** The keys of the Chat page, for a reader who has a keyboard. */

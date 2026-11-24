@@ -152,7 +152,7 @@ func TestUnchangedOrRenamedPatchIsAProblem(t *testing.T) {
 
 type spent struct{}
 
-func (spent) Allow(context.Context) error { return ai.ErrBudgetExhausted }
+func (spent) Reserve(context.Context, int64) (func(), error) { return nil, ai.ErrBudgetExhausted }
 
 func TestBudget(t *testing.T) {
 	f := &ai.Fake{}

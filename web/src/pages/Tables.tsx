@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { Help } from "../onboarding";
 import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad, Item, Items } from "../ui";
 import { Icon } from "../icons";
+import { ShowAsPage } from "./Pages";
 import {
   COLUMN_TYPES,
   TYPE_HELP,
@@ -313,6 +314,7 @@ export function TablePage() {
         actions={
           <>
             <Link to="/tables">All tables</Link>
+            {can("page.edit") && !isKept(t) && <ShowAsPage table={t} />}
             {controls.columns && (
               <button onClick={() => setAdding(true)}>
                 <Icon name="plus" />
@@ -667,7 +669,7 @@ function RowForm({ table, row, onClose, onDone }: { table: Table; row: Row | nul
 }
 
 /** How a workflow reaches the table. */
-/** How long the table keeps its rows (decision 0062 V5): until deleted, so many days, or with the business's conversations. */
+/** How long the table keeps its rows (decision 0074 V5): until deleted, so many days, or with the business's conversations. */
 function KeepRows({ table, edit, onChanged }: { table: Table; edit: boolean; onChanged: () => void }) {
   const act = useAction();
   const mode = table.keep_with_conversations ? "conversations" : table.keep_days ? "days" : "forever";

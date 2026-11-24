@@ -755,6 +755,8 @@ export interface WaitingPayment {
   left_kobo?: number | null;
   /** Why matching held it for a person. */
   held_reason?: string;
+  /** Its currency when it is not naira ("USD"): the amounts are then in that currency. */
+  currency?: string;
   channel: string;
   reference: string;
   received_at: string;
@@ -787,6 +789,7 @@ export interface UnmatchedMoney {
   amount_kobo: number | null;
   left_kobo?: number | null;
   held_reason?: string;
+  currency?: string;
   channel: string;
   reference: string;
   received_at: string;
@@ -859,7 +862,12 @@ export const creditWords = (kobo: number) =>
   kobo > 0 ? `${naira(kobo)}: paid and not yet counted towards an invoice. It counts towards the next invoice sent to this customer.` : "None";
 
 /** An amount that may be missing, in words. */
-export const amountWords = (kobo: number | null | undefined) => (kobo === null || kobo === undefined ? "Amount not known" : naira(kobo));
+export const amountWords = (kobo: number | null | undefined, currency?: string) =>
+  kobo === null || kobo === undefined ? "Amount not known" : currency ? otherMoney(kobo, currency) : naira(kobo);
+
+/** Money that is not naira, under its own currency: "USD 50.00". Never written with ₦. */
+export const otherMoney = (units: number, currency: string) =>
+  `${currency} ${(units / 100).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /** The invoices a payment can be matched to: sent and not yet fully paid. */
 export function openInvoices(list: CustomerInvoice[] | null | undefined): CustomerInvoice[] {

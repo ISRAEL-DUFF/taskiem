@@ -532,6 +532,39 @@ func TestEnteredMoneyMatchedByHandNeedsASecondPerson(t *testing.T) {
 	if x := w.invoiceOf(w.invA.ID); x.PaidKobo != 6_000_000 || x.Payments[0].By != "user:ada" {
 		t.Fatalf("after approval %+v", x)
 	}
+	// An invoice made to the student as the school's customer, outside
+	// any term (an excursion fee), is the student's too: held.
+	var extra invoicing.Invoice
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		extra, err = w.s.Invoices.Create(ctx, tx, tn, invoicing.Draft{Customer: invoicing.Customer{Name: "Ngozi Eze", Phone: "+2348031234567", Key: schools.StudentKey(w.a.ID)},
+			AmountKobo: 25_000_000}, "user:ada")
+		return err
+	})
+	if _, err := w.s.Invoices.Send(ctx, tn, extra.Number, "user:ada", "send:"+extra.Number); err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.Match(ctx, tn, enter(25_000_000), extra.Number, "user:ada")
+	held = nil
+	if !errors.As(err, &held) || held.AmountKobo != 25_000_000 {
+		t.Fatalf("a student's own invoice, matched by hand at the threshold: %v", err)
+	}
+	if x := w.invoiceOf(extra.ID); x.PaidKobo != 0 {
+		t.Fatalf("held money reached the extra fee: %+v", x)
+	}
+	w.in(func(tx pgx.Tx) error {
+		p, err := w.s.Posting(ctx, tx, tn, held.RequestID)
+		if err != nil || p.StudentID == nil || *p.StudentID != w.a.ID || p.InvoiceNumber != extra.Number {
+			t.Fatalf("the extra fee's request %v %+v", err, p)
+		}
+		return nil
+	})
+	if _, err := w.decide(held.RequestID, true, "", "user:bola"); err != nil {
+		t.Fatal(err)
+	}
+	if x := w.invoiceOf(extra.ID); x.PaidKobo != 25_000_000 {
+		t.Fatalf("the extra fee after approval %+v", x)
+	}
 	// Another of the business's invoices, not a student's: not held.
 	var shop invoicing.Invoice
 	w.in(func(tx pgx.Tx) error {
@@ -785,5 +818,71 @@ func TestSplitDiscountsNeedASecondPerson(t *testing.T) {
 	})
 	if err != nil || needs == nil || needs.Request.AmountKobo != 1_000_000 {
 		t.Fatalf("an amendment with a standing discount: %v %+v", err, needs)
+	}
+}
+
+// Money that becomes credit is weighed too: with no invoice open, cash
+// posted in parts under the threshold adds up for the student, and the
+// part that brings it to the threshold waits for a second person.
+func TestCashThatBecomesCreditNeedsASecondPerson(t *testing.T) {
+	w := newCashWorld(t)
+	fifty := int64(5_000_000)
+	w.setCashThreshold(&fifty)
+	// Enrolled after the term was invoiced: nothing is open for her.
+	n := w.student("Ngozi Obi", "GCA/003", w.j1, nil)
+	if p, err := w.post("GCA/003", 4_500_000, "cash", "user:ada"); err != nil || p.Status != schools.StatePosted {
+		t.Fatalf("the first posting: %v %+v", err, p)
+	}
+	for i := 2; i <= 5; i++ {
+		if _, err := w.post("GCA/003", 4_500_000, "cash", "user:ada"); !errors.Is(err, schools.ErrNeedsApproval) {
+			t.Fatalf("posting %d went in without a second person: %v", i, err)
+		}
+	}
+	var credit int64
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		credit, err = invoicing.CreditOf(ctx, tx, w.env.Tenant, "key:"+schools.StudentKey(n.ID))
+		return err
+	})
+	if credit != 4_500_000 {
+		t.Fatalf("credit without a second person = %d, want 4500000", credit)
+	}
+	// Backdated cash is weighed by when it was posted, not the date given.
+	if _, _, err := w.s.PostPayment(ctx, w.env.Tenant, schools.PostingIn{Student: "GCA/003", AmountKobo: 400_000, How: "cash", Date: "2026-01-05"}, "user:ada"); err != nil {
+		t.Fatalf("a small backdated posting: %v", err)
+	}
+	if _, _, err := w.s.PostPayment(ctx, w.env.Tenant, schools.PostingIn{Student: "GCA/003", AmountKobo: 100_000, How: "cash", Date: "2026-01-05"}, "user:ada"); !errors.Is(err, schools.ErrNeedsApproval) {
+		t.Fatalf("a backdated posting that reaches the threshold went in without a second person: %v", err)
+	}
+}
+
+// Postings made at the same moment for one student are weighed one after
+// another: together at the threshold, only those under it go in.
+func TestCashPostedAtOnceNeedsASecondPerson(t *testing.T) {
+	w := newCashWorld(t)
+	fifty := int64(5_000_000)
+	w.setCashThreshold(&fifty)
+	const n = 8
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, errs[i] = w.s.PostPayment(ctx, w.env.Tenant, schools.PostingIn{Student: "GCA/001", AmountKobo: 3_000_000, How: "cash"}, "user:ada")
+		}()
+	}
+	wg.Wait()
+	posted := 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			posted++
+		case !errors.Is(err, schools.ErrNeedsApproval):
+			t.Fatalf("a posting: %v", err)
+		}
+	}
+	if posted != 1 {
+		t.Fatalf("%d postings of ₦30,000 went in at once without a second person, want 1", posted)
 	}
 }

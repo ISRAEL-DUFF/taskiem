@@ -15,6 +15,7 @@
   <div class="hero-actions">
     {{range .Forms}}{{if or (eq .Ref "order") (and (eq .Kind "booking") (not $.Ordering))}}<a class="btn btn-light" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
     {{with .M.WhatsLink}}<a class="round{{if not $.Forms}} round-wide{{end}}" href="{{.}}" rel="noopener" aria-label="Chat on WhatsApp">{{template "i-whatsapp"}}{{if not $.Forms}}<span>Chat on WhatsApp</span>{{end}}</a>{{end}}
+    {{with .M.ChatLink}}<a class="round{{if not $.Forms}} round-wide{{end}}" href="{{.}}" rel="noopener" aria-label="Chat with us">{{template "i-chat"}}{{if not $.Forms}}<span>Chat with us</span>{{end}}</a>{{end}}
     {{with .Phone}}<a class="round" href="tel:{{.}}" aria-label="Call">{{template "i-call"}}</a>{{end}}
     {{with .M.MapLink}}<a class="round" href="{{.}}" rel="noopener" aria-label="Directions">{{template "i-map"}}</a>{{end}}
   </div>
@@ -52,10 +53,9 @@
       <article class="tile{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
         <div class="tile-img">{{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 40rem) 13rem, 45vw" alt="{{.Name}}" loading="lazy" decoding="async">{{end}}
         {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{end}}</div>
-        <h3><a class="item-open" href="#i-{{.ID}}">{{.Name}}</a></h3>
+        <h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3>
         {{with .Description}}<p class="tile-sub">{{.}}</p>{{end}}{{if .ReadyIn}}<p class="tile-sub">Ready in {{.ReadyIn}} min</p>{{end}}
-        <p class="tile-row"><span class="price">{{.Price}}</span>{{if and $.Ordering .Orderable}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}</p>
-        {{template "itemsheet" (sheet . $)}}
+        <p class="tile-row"><span class="price">{{.Price}}</span>{{if and $.Ordering .Orderable}}{{if or .Options .Sizes}}<a class="add" href="{{$.Base}}/i/{{.ID}}" aria-label="Choose {{.Name}}">{{template "i-plus"}}</a>{{else}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}{{end}}</p>
       </article>
       {{end}}
     </div>

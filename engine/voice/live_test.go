@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/israel-duff/taskiem/engine/media"
 )
 
 // TestLiveSpeechRoundTrip checks the real provider (plan V3, T4): it
@@ -30,7 +28,7 @@ func TestLiveSpeechRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("speak: %v", err)
 	}
-	if !media.IsOpus(sp.Data) {
+	if !isOpus(sp.Data) {
 		t.Fatalf("the provider's opus answer is not Ogg/Opus (%d bytes, starts %q): a transcoder is needed (plan F7)", len(sp.Data), sp.Data[:min(8, len(sp.Data))])
 	}
 	d, ok := OggDuration(sp.Data)

@@ -90,3 +90,36 @@ func TestFromPayout(t *testing.T) {
 		}
 	}
 }
+
+// A negative amount from a rail is never turned positive: the entry is
+// recorded with no amount and a note saying what the rail sent, so it
+// waits for a person instead of counting as money received.
+func TestNegativeRailAmountIsNotFlipped(t *testing.T) {
+	for _, v := range []any{int64(-5000), -5000.0, "-5000", -5000} {
+		e, ok := FromEvent("paystack/main", "payment.received", map[string]any{"payment_id": "P-neg", "amount_kobo": v, "fee_kobo": int64(-75)})
+		if !ok {
+			t.Fatalf("%T: not recorded at all", v)
+		}
+		if e.AmountKobo != nil || e.FeeKobo != nil {
+			t.Fatalf("%T: a negative amount was kept as %v (fee %v)", v, deref(e.AmountKobo), deref(e.FeeKobo))
+		}
+		if e.Note == "" || e.check() != nil {
+			t.Fatalf("%T: the entry does not say what was wrong: %+v (%v)", v, e, e.check())
+		}
+	}
+	// A payout's amount comes from the step's own input: the same rule.
+	if e, ok := FromPayout("paystack/main", map[string]any{"amount_kobo": int64(-900)}, map[string]any{"status": "settled", "payout_id": "T-neg"}); !ok || e.AmountKobo != nil || e.Note == "" {
+		t.Fatalf("payout: %+v %v", e, ok)
+	}
+	// Amounts as they should be are untouched.
+	if e, _ := FromEvent("paystack/main", "payment.received", map[string]any{"payment_id": "P-ok", "amount_kobo": int64(5000), "fee_kobo": int64(75)}); e.AmountKobo == nil || *e.AmountKobo != 5000 || *e.FeeKobo != 75 || e.Note != "" {
+		t.Fatalf("a good amount: %+v", e)
+	}
+}
+
+func deref(p *int64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}

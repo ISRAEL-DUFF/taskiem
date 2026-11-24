@@ -46,6 +46,9 @@ const (
 	// turn them off, others neither unless they turn them on
 	// (MoneyDefault).
 	GroupMoney = "money"
+	// GroupChanges is the changes a person makes themselves (chat tools'
+	// diary lines, docs/spec/chat-tools.md): on their chat, never email.
+	GroupChanges = "changes"
 )
 
 // GroupOf is the settings group of a kind.
@@ -170,7 +173,7 @@ type Setting struct {
 // Defaults: failures and setup problems reach owners on chat (else
 // email); finished runs only in the app. The money group's default depends
 // on the person (MoneyDefault).
-var Defaults = []Setting{{GroupFailures, true, true}, {GroupSetup, true, true}, {GroupFinished, false, false}}
+var Defaults = []Setting{{GroupFailures, true, true}, {GroupSetup, true, true}, {GroupFinished, false, false}, {GroupChanges, true, false}}
 
 // MoneyDefault is the money group of a person who has not chosen: both
 // summaries for an owner, neither for anyone else.
@@ -232,7 +235,7 @@ var ErrNoMoney = errors.New("notices: the money summaries need invoice.read")
 func SetTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, settings []Setting, money bool) error {
 	for _, s := range settings {
 		switch s.Group {
-		case GroupFailures, GroupSetup, GroupFinished:
+		case GroupFailures, GroupSetup, GroupFinished, GroupChanges:
 		case GroupMoney:
 			if !money {
 				return ErrNoMoney

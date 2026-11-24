@@ -1,18 +1,56 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSavedPicks } from "./SavedPicks";
+import { Link, useSearchParams } from "react-router-dom";
+import { TOOLS, type ToolKey } from "../lib/tools";
+import { DiaryLine } from "../kit";
+import { useChatTools } from "../lib/useChatTools";
 import { useThread } from "../lib/useThread";
 import { ThreadJump } from "./ThreadParts";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
+import { ReadMore, useFold } from "./ReadMore";
 import { ComposerView, TASKIEM_FILES, useComposer } from "./ChatComposer";
+import { AlertCards, useChatAlerts } from "./ChatAlerts";
+import { BriefingCard, ChartCard } from "./ChatStaff";
+import { MenuCard, parseMenu } from "./ChatMenu";
+import { useAuth } from "../auth";
+import { asksBriefing, showBriefing, type SalesChart } from "../lib/staff";
+import { TasksSheet } from "./Tasks";
+import { CustomersSheet } from "./CustomerChatSettings";
+
+/** A chart message's numbers, or undefined when they cannot be read. */
+function parseChart(text: string): SalesChart | undefined {
+  try {
+    const v = JSON.parse(text) as SalesChart;
+    return Array.isArray(v.bars) ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
 import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
 import { useChatLive } from "./ChatLive";
 import { get, post, upload } from "../api";
 import type { Conversation } from "../lib/linkchat";
+import { categoriesOf } from "../lib/mentions";
+import {
+  cardRefs,
+  knownRefs,
+  productRefs,
+  refParts,
+  refSources,
+  type ChatRef,
+  type KnownRef,
+} from "../lib/refs";
+import { RefCard } from "./ChatRefCard";
+import { customerKey } from "../lib/customerchat";
+import type { StockItem, StockView } from "../lib/stock";
 import { priceWords, type SupplierPrices } from "../lib/pricelists";
-import { Icon } from "../icons";
+import { Icon, TaskiemMark } from "../icons";
 import { clock } from "../lib/linkchat";
 import {
   boldParts,
+  forgetInflight,
   inflight,
   inflightOutcome,
   keepInflight,
@@ -51,6 +89,66 @@ if (typeof window !== "undefined") {
   window.addEventListener("pageshow", () => (leaving = false));
 }
 
+/** Taskiem's words, *bold* marked, a long answer folded. */
+function TaskiemText({
+  text,
+  gap,
+  known = [],
+  onRef,
+}: {
+  text: string;
+  gap: boolean;
+  /** Things "#" may name (an invoice, an order, a product): shown as a
+   * chip that opens it. */
+  known?: KnownRef[];
+  onRef?: (r: KnownRef, from: DOMRect) => void;
+}) {
+  const fold = useFold(text);
+  return (
+    <span className="text">
+      {boldParts(fold.shown).map((p, k) => {
+        const parts = refParts(p.text, known);
+        const words = parts.map((x, j) =>
+          !x.ref ? (
+            x.text
+          ) : x.ref.kind === "order" || x.ref.kind === "customer" ? (
+            <Link
+              key={j}
+              className="mention"
+              to={
+                x.ref.kind === "order"
+                  ? `/storefront/orders/${encodeURIComponent(x.ref.name)}`
+                  : `/chat?with=${customerKey(x.ref.id)}`
+              }
+            >
+              {x.text}
+            </Link>
+          ) : !onRef ? (
+            <strong key={j} className="mention">
+              {x.text}
+            </strong>
+          ) : (
+            <button
+              key={j}
+              type="button"
+              className="mention mention-open"
+              onClick={(e) =>
+                x.ref && onRef(x.ref, e.currentTarget.getBoundingClientRect())
+              }
+            >
+              {x.text}
+              <span className="sr-only">: open it</span>
+            </button>
+          ),
+        );
+        return p.bold ? <strong key={k}>{words}</strong> : <span key={k}>{words}</span>;
+      })}
+      {fold.folded && <ReadMore onClick={fold.more} />}
+      {gap && <span className="stamp-gap" aria-hidden="true" />}
+    </span>
+  );
+}
+
 const startsRun = (
   prev: TaskiemMessage | undefined,
   m: TaskiemMessage,
@@ -77,15 +175,104 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     [],
   );
   const act = useAction();
+  const [tasksOpen, setTasksOpen] = useState(false);
+  const [customersOpen, setCustomersOpen] = useState(false);
+  const chatTools = useChatTools();
+  const { can, me } = useAuth();
+  // The business's own categories: "@sneakers" offers its Sneakers, to
+  // open in Products (docs/spec/chat-categories-and-variants.md).
+  const ownStock = useLoad(
+    () =>
+      chatTools && can("table.read")
+        ? get<StockView>("/v1/stock").then(
+            (r) => r.items,
+            () => [] as StockItem[],
+          )
+        : Promise.resolve([] as StockItem[]),
+    [chatTools],
+  );
+  // What "/invoice", "/bill", "/order", "/purchase" and "/customer" offer
+  // to tag (phase 2 additions): all the person may see.
+  const refList = useLoad(
+    () =>
+      chatTools
+        ? get<{ refs: ChatRef[] }>("/v1/chat-refs").then(
+            (r) => r.refs ?? [],
+            () => [] as ChatRef[],
+          )
+        : Promise.resolve([] as ChatRef[]),
+    [chatTools],
+  );
+  const ownProducts = useMemo(() => productRefs(ownStock.data ?? []), [ownStock.data]);
+  const known = useMemo(
+    () => knownRefs(refList.data ?? [], ownProducts),
+    [refList.data, ownProducts],
+  );
+  const refSrc = useMemo(() => refSources(refList.data ?? []), [refList.data]);
+  // Alerts you can act on, as cards at the end (chat-tools.md §6).
+  const alerts = useChatAlerts(!!chatTools);
+  const afterDiary = useRef<() => void>(() => undefined);
   const localN = useRef(0);
+  // The briefing card is here for those who sell or bill; the tools menu
+  // and "briefing" typed bring it back.
+  const briefs = !!chatTools && (can("storefront.manage") || can("invoice.manage"));
+  // Saved things by @name (saved objects S1): Taskiem reads any of them.
+  const savedPicks = useSavedPicks("all");
+  // Save as… on a message (saved objects S1, part 4): in a business, its
+  // saved things for whoever may manage them; else one's own.
+  const saveAs = useSaveAs({ business: true, onSaved: () => savedPicks.reload() });
   const c = useComposer<never>({
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
+    tools: chatTools,
+    // Your tools (made tools M1): whether or not the built-in tools are on.
+    madeTools: true,
+    // The tools panel's menu: as a row of the chat's own menus.
+    onAction: (reply, text) => say({ reply, text }),
+    // With chat tools, "@" tags things and businesses in groups, and finds
+    // businesses not yet linked (their card, with Connect); Taskiem is
+    // who is being talked to, so it is not offered.
+    grouped: chatTools ? { taskiem: false } : undefined,
+    placeholder: chatTools ? "Ask Taskiem, or @ to tag" : undefined,
+    diaryWhere: "taskiem",
+    // A tool saved: the server's diary line is pulled in.
+    // A tool saved a change: its diary line, and the cards it settles.
+    onDiary: () => (afterDiary.current(), alerts.reload()),
+    extras: chatTools
+      ? [
+          ...(briefs
+            ? [
+                {
+                  key: "briefing",
+                  title: "Briefing",
+                  icon: "sparkle",
+                  line: "Today's numbers",
+                  onPick: showBriefing,
+                },
+              ]
+            : []),
+          // Tasks, given and done (phase 3, step 4).
+          { key: "tasks", title: "Tasks", icon: "check", line: "To do, and given", onPick: () => setTasksOpen(true) },
+          // Customers: your chat link and offers (taskiem-for-everyone §8.2).
+          ...(can("order.handle") || can("storefront.manage")
+            ? [{ key: "customers", title: "Customers", icon: "members", line: "Your chat link", onPick: () => setCustomersOpen(true) }]
+            : []),
+          // Clocking in and out, as "in" and "out" are said (phase 3): for
+          // staff; owners and admins say "in" when they keep hours too.
+          ...(can("member.manage")
+            ? []
+            : [
+                { key: "clock-in", title: "Clock in", icon: "clock", line: "Start your shift", onPick: () => say({ text: "in" }) },
+                { key: "clock-out", title: "Clock out", icon: "clock", line: "End your shift", onPick: () => say({ text: "out" }) },
+              ]),
+        ]
+      : undefined,
     sources: {
       "@": (convs.data ?? [])
         .filter((x) => x.state === "active")
         .map((x) => ({ kind: "business" as const, id: x.link, name: x.name })),
-      "#": (prices.data ?? []).flatMap((p) =>
+      // "#": the business's own products first, then what suppliers sell.
+      "#": [...ownProducts, ...(prices.data ?? []).flatMap((p) =>
         p.items
           .filter((it) => it.available)
           .map((it) => ({
@@ -93,11 +280,17 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             id: `${p.link}:${it.item_id}`,
             name: it.name,
             sub: `${p.business} · ${priceWords(it)}`,
+            category: it.category,
+            words: it.description,
           })),
-      ),
+      )],
+      categories: categoriesOf(ownStock.data ?? []),
+      refs: { ...refSrc, product: ownProducts },
+      saved: savedPicks.saved, savedComplete: savedPicks.complete, wantSaved: savedPicks.want, saveNamed: (name) => saveAs.named(name),
     },
     onSend: (s) => {
-      if (s.file) sendFile(s.file, s.text);
+      if (!s.file && briefs && asksBriefing(s.text)) showBriefing();
+      else if (s.file) sendFile(s.file, s.text);
       else say({ text: s.text });
     },
   });
@@ -130,6 +323,31 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     if (after && out.messages.length >= 200 && newest)
       await pull(newest.created_at);
   }, []);
+  afterDiary.current = () => void pull(messages?.[messages.length - 1]?.created_at).catch(setError);
+  // A link from the chat apps ("tools", a typed request) opens its tool,
+  // at its form, filled in (chat_tool_requests.go); the link's words go.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const tool = params.get("tool") as ToolKey | null;
+    if (!chatTools || !tool || !TOOLS.some((t) => t.key === tool)) return;
+    const num = (k: string) => {
+      const v = params.get(k);
+      return v && /^\d+$/.test(v) ? Number(v) : undefined;
+    };
+    c.openTool(tool, undefined, {
+      rowId: params.get("row") ?? undefined,
+      add: params.get("add") === "1",
+      prefill: { priceKobo: num("price"), count: num("count"), name: params.get("name") ?? undefined, minutes: num("minutes") },
+    });
+    setParams({ with: "taskiem" }, { replace: true });
+    // Once, when the switch is known.
+  }, [chatTools]);
+  // A message the last page left on its way, read as this page is first
+  // drawn: before anything is sent from it. Read when the history comes
+  // instead, a message sent quickly from this page (before the history
+  // came) would be taken for the last page's, missing from a history asked
+  // for before it went, and put back in the box as not sent.
+  const [left] = useState(inflight);
   // The newest page: the view is placed at its end.
   useEffect(() => {
     get<{ messages: TaskiemMessage[] }>("/v1/taskiem-chat")
@@ -140,9 +358,9 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         setMessages(mergeTaskiem([], out.messages));
         // A message that was on its way when the page went away: Taskiem
         // has it, or the words come back to the box, for the person to check.
-        const f = inflight();
+        const f = left;
         if (f) {
-          keepInflight(undefined);
+          forgetInflight(f);
           if (inflightOutcome(out.messages, f) === "not-sent") {
             // Kept as the draft too: the pane may be shown again (a page
             // that is drawn twice as it loads) before this is read.
@@ -279,7 +497,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   // For each of Taskiem's answers with buttons: the one pressed (the
   // person's next message, when it is the button's title); and which of the
   // person's messages Taskiem has answered (their ticks go blue).
-  const { pressed, answered, pressableId } = useMemo(() => {
+  const { pressed, answered, pressableId, lastMenu } = useMemo(() => {
     const pressed = new Map<string, string>();
     const answered = new Set<string>();
     const list = messages ?? [];
@@ -303,7 +521,19 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         break;
       }
     }
-    return { pressed, answered, pressableId };
+    // The newest menu stays open while nothing has been said since it;
+    // every other folds (chat-menus.md §6.1; folding once the person types
+    // something else, 21 November 2026).
+    let lastMenu: string | undefined;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const m = list[i];
+      if (!m || m.inbound) break;
+      if (m.kind === "menu") {
+        lastMenu = m.id;
+        break;
+      }
+    }
+    return { pressed, answered, pressableId, lastMenu };
   }, [messages]);
 
   return (
@@ -318,19 +548,19 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         onBack={onBack}
         menuLabel="More about this conversation"
         avatar={
-          <span className="chat-avatar" aria-hidden="true">
-            T
+          <span className="chat-avatar accent" aria-hidden="true">
+            <TaskiemMark />
           </span>
         }
-        title={
-          <>
-            Taskiem
-            {act.busy && (
-              <span className="typing" data-testid="taskiem-typing">
-                typing…
-              </span>
-            )}
-          </>
+        title="Taskiem"
+        subtitle={
+          act.busy ? (
+            <span className="typing" data-testid="taskiem-typing">
+              typing…
+            </span>
+          ) : (
+            (me?.tenant_name ?? "Your assistant")
+          )
         }
       />
       <ErrorBox error={error ?? act.error ?? c.fileError} />
@@ -350,6 +580,48 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           </>
         }
         render={(m, { first }) => {
+          // A menu (chat-menus.md): a topic's actions, or the topics.
+          if (m.kind === "menu") {
+            const menu = parseMenu(m.text);
+            if (menu)
+              return (
+                <div className="tk-menu-wrap" data-msg={m.id}>
+                  <MenuCard
+                    id={m.id}
+                    menu={menu}
+                    open={m.id === lastMenu}
+                    busy={act.busy}
+                    onReply={(reply, text) => say({ reply, text })}
+                    openTool={(k, from, start) => c.openTool(k, from, start)}
+                  />
+                </div>
+              );
+          }
+          // "How did we do?" answered: its chart, as a card.
+          if (m.kind === "chart") {
+            const chart = parseChart(m.text);
+            if (chart)
+              return (
+                <div className="tk-chart-row" data-msg={m.id}>
+                  <ChartCard chart={chart} />
+                </div>
+              );
+          }
+          // A change made with a chat tool: a line, not a bubble.
+          if (m.kind === "diary")
+            return (
+              <DiaryLine
+                msg={m.id}
+                fresh={Date.now() - Date.parse(m.created_at) < 60_000}
+                when={
+                  <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
+                    You, {clock(m.created_at)}
+                  </time>
+                }
+              >
+                {m.text}
+              </DiaryLine>
+            );
           const choice = pressed.get(m.id);
           const pressable = m.id === pressableId;
           // The time sits in the corner of the last line when there are no
@@ -365,7 +637,14 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               what={m.text.split("\n")[0]?.slice(0, 60) ?? "message"}
               menu={
                 !m.local && m.text
-                  ? () => <CopyItem text={m.text} />
+                  ? (close) => ({
+                      actions: (
+                        <>
+                          <CopyItem text={m.text} />
+                          <SaveAsItem text={m.text} onSave={saveAs.fromWords} close={close} />
+                        </>
+                      ),
+                    })
                   : undefined
               }
               after={
@@ -399,12 +678,35 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               }
             >
               {!m.inbound && first && <span className="who">Taskiem</span>}
-              <span className="text">
-                {boldParts(m.text).map((p, k) =>
-                  p.bold ? <strong key={k}>{p.text}</strong> : p.text,
-                )}
-                {inline && <span className="stamp-gap" aria-hidden="true" />}
-              </span>
+              <TaskiemText
+                text={m.text}
+                gap={inline}
+                known={known}
+                onRef={(r, from) =>
+                  c.openTool(
+                    r.kind === "invoice"
+                      ? "invoices"
+                      : r.kind === "bill"
+                        ? "bills"
+                        : r.kind === "purchase"
+                          ? "purchases"
+                          : "products",
+                    from,
+                    { rowId: r.id },
+                  )
+                }
+              />
+              {cardRefs(m.text, known).length > 0 && (
+                <span className="tk-refs">
+                  {cardRefs(m.text, known).map((r) => (
+                    <RefCard
+                      key={`${r.kind}:${r.id}`}
+                      url={`/v1/chat-card?kind=${r.kind}&id=${encodeURIComponent(r.id)}`}
+                      openTool={c.openTool}
+                    />
+                  ))}
+                </span>
+              )}
               {m.buttons && m.buttons.length > 0 && (
                 <span
                   className="reply-buttons"
@@ -447,6 +749,21 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             <ThreadJump count={thread.newCount} onClick={thread.toBottom} />
           ) : undefined
         }
+        tail={
+          chatTools ? (
+            <>
+              {briefs && (
+                <BriefingCard openTool={c.openTool} onAsk={(text) => say({ text })} />
+              )}
+              <AlertCards
+              alerts={alerts.list}
+              onReload={alerts.reload}
+              onDiary={() => afterDiary.current()}
+              openTool={c.openTool}
+              />
+            </>
+          ) : undefined
+        }
       />
       <ComposerView
         c={c}
@@ -455,6 +772,9 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         textId="taskiem-text"
         textLabel="Message to Taskiem"
       />
+      {tasksOpen && <TasksSheet onClose={() => setTasksOpen(false)} />}
+      {customersOpen && <CustomersSheet onClose={() => setCustomersOpen(false)} />}
+      {saveAs.node}
     </section>
   );
 }

@@ -1,5 +1,5 @@
 // Package speech is the speech@1 platform connector (docs/speech.md,
-// decision 0062 D5, plan V3): it hears a customer's voice note and speaks
+// decision 0074 D5, plan V3): it hears a customer's voice note and speaks
 // a reply through engine/speech, for the tenant of the run calling it
 // (connector.CallerFrom), never one named in its input. Audio comes from
 // and goes to the run's file store.

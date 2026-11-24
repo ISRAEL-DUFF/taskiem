@@ -18,7 +18,7 @@ import (
 // line break) where it can, else between words, and inside a word only
 // when one word is longer than max. Pieces are trimmed; an empty text
 // gives an empty list. A workflow sends each piece as its own step
-// (foreach), so each send keeps its own key and retry (decision 0062 C20).
+// (foreach), so each send keeps its own key and retry (decision 0074 C20).
 //
 // chunks(text, max, "utf16") counts as Telegram and WhatsApp do: in UTF-16
 // code units, where an emoji or another character outside the Basic
@@ -123,7 +123,7 @@ func ChunksIn(text string, max int, unit string) []string {
 }
 
 // language(text) guesses which of Taskiem's languages a customer wrote in
-// (decision 0062 V4, A9): en, pcm, yo, ha or ig, from the words typical of
+// (decision 0074 V4, A9): en, pcm, yo, ha or ig, from the words typical of
 // each and the letters only some use (lang.Detect, as Taskiem's own chat
 // does). It says en unless another language clearly leads.
 // language(text, otherwise) gives otherwise instead when it cannot tell:

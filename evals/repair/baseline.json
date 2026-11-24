@@ -14,8 +14,8 @@
     "patch_valid_rate": 1,
     "patch_pass_rate": 0.7778,
     "usage": {
-      "input_tokens": 161734,
-      "output_tokens": 7005,
+      "input_tokens": 228035,
+      "output_tokens": 7069,
       "cache_creation_tokens": 0,
       "cache_read_tokens": 0
     },
@@ -189,34 +189,8 @@
       "attempts": 1,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 13169,
+        "input_tokens": 18775,
         "output_tokens": 24,
-        "cache_creation_tokens": 0,
-        "cache_read_tokens": 0
-      }
-    },
-    {
-      "id": "credential-401",
-      "tags": [
-        "credential",
-        "dogfood"
-      ],
-      "status": "ok",
-      "expected": "credential",
-      "rules_class": "credential",
-      "rules_certain": true,
-      "class": "credential",
-      "classified_by": "rules",
-      "class_correct": true,
-      "certainty_correct": true,
-      "model_called": false,
-      "patch_expected": false,
-      "patch_valid": false,
-      "patch_passed": false,
-      "attempts": 0,
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -298,6 +272,291 @@
       }
     },
     {
+      "id": "unknown-indeterminate",
+      "tags": [
+        "unknown_outcome"
+      ],
+      "status": "ok",
+      "expected": "unknown_outcome",
+      "rules_class": "unknown_outcome",
+      "rules_certain": true,
+      "class": "unknown_outcome",
+      "classified_by": "rules",
+      "class_correct": true,
+      "certainty_correct": true,
+      "model_called": false,
+      "patch_expected": false,
+      "patch_valid": false,
+      "patch_passed": false,
+      "attempts": 0,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "drift-reason",
+      "tags": [
+        "schema_drift"
+      ],
+      "status": "ok",
+      "expected": "schema_drift",
+      "rules_class": "schema_drift",
+      "rules_certain": true,
+      "class": "schema_drift",
+      "classified_by": "rules",
+      "class_correct": true,
+      "certainty_correct": true,
+      "model_called": true,
+      "patch_expected": true,
+      "patch_valid": true,
+      "patch_passed": true,
+      "attempts": 1,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 18792,
+        "output_tokens": 793,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "data-missing-trigger-field",
+      "tags": [
+        "data"
+      ],
+      "status": "ok",
+      "expected": "data",
+      "rules_class": "data",
+      "rules_certain": true,
+      "class": "data",
+      "classified_by": "rules",
+      "class_correct": true,
+      "certainty_correct": true,
+      "model_called": true,
+      "patch_expected": true,
+      "patch_valid": true,
+      "patch_passed": false,
+      "attempts": 3,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 44183,
+        "output_tokens": 390,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "data-foreach-item-field",
+      "tags": [
+        "data"
+      ],
+      "status": "ok",
+      "expected": "data",
+      "rules_class": "data",
+      "rules_certain": true,
+      "class": "data",
+      "classified_by": "rules",
+      "class_correct": true,
+      "certainty_correct": true,
+      "model_called": true,
+      "patch_expected": true,
+      "patch_valid": true,
+      "patch_passed": false,
+      "attempts": 3,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 44414,
+        "output_tokens": 516,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "data-422-provider",
+      "tags": [
+        "data"
+      ],
+      "status": "ok",
+      "expected": "data",
+      "rules_class": "data",
+      "rules_certain": true,
+      "class": "data",
+      "classified_by": "rules",
+      "class_correct": true,
+      "certainty_correct": true,
+      "model_called": true,
+      "patch_expected": true,
+      "patch_valid": true,
+      "patch_passed": true,
+      "attempts": 1,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 17823,
+        "output_tokens": 173,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "data-400-vague",
+      "tags": [
+        "data"
+      ],
+      "status": "ok",
+      "expected": "data",
+      "rules_class": "data",
+      "rules_certain": false,
+      "class": "data",
+      "classified_by": "model",
+      "class_correct": true,
+      "certainty_correct": true,
+      "model_called": true,
+      "patch_expected": true,
+      "patch_valid": true,
+      "patch_passed": true,
+      "attempts": 1,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 17826,
+        "output_tokens": 173,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "logic-division",
+      "tags": [
+        "logic"
+      ],
+      "status": "ok",
+      "expected": "logic",
+      "rules_class": "logic",
+      "rules_certain": false,
+      "class": "logic",
+      "classified_by": "model",
+      "class_correct": true,
+      "certainty_correct": true,
+      "model_called": true,
+      "patch_expected": true,
+      "patch_valid": true,
+      "patch_passed": true,
+      "attempts": 1,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 14134,
+        "output_tokens": 128,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "logic-overload",
+      "tags": [
+        "logic"
+      ],
+      "status": "ok",
+      "expected": "logic",
+      "rules_class": "logic",
+      "rules_certain": false,
+      "class": "logic",
+      "classified_by": "model",
+      "class_correct": true,
+      "certainty_correct": true,
+      "model_called": true,
+      "patch_expected": true,
+      "patch_valid": true,
+      "patch_passed": true,
+      "attempts": 1,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 14137,
+        "output_tokens": 121,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "logic-unsupported",
+      "tags": [
+        "logic",
+        "dogfood"
+      ],
+      "status": "ok",
+      "expected": "logic",
+      "rules_class": "logic",
+      "rules_certain": false,
+      "class": "logic",
+      "classified_by": "model",
+      "class_correct": true,
+      "certainty_correct": true,
+      "model_called": true,
+      "patch_expected": true,
+      "patch_valid": true,
+      "patch_passed": true,
+      "attempts": 1,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 14541,
+        "output_tokens": 507,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "transient-reset-read",
+      "tags": [
+        "transient"
+      ],
+      "status": "ok",
+      "expected": "transient",
+      "rules_class": "transient",
+      "rules_certain": true,
+      "class": "transient",
+      "classified_by": "rules",
+      "class_correct": true,
+      "certainty_correct": true,
+      "model_called": false,
+      "patch_expected": false,
+      "patch_valid": false,
+      "patch_passed": false,
+      "attempts": 0,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "credential-401",
+      "tags": [
+        "credential",
+        "dogfood"
+      ],
+      "status": "ok",
+      "expected": "credential",
+      "rules_class": "credential",
+      "rules_certain": true,
+      "class": "credential",
+      "classified_by": "rules",
+      "class_correct": true,
+      "certainty_correct": true,
+      "model_called": false,
+      "patch_expected": false,
+      "patch_valid": false,
+      "patch_passed": false,
+      "attempts": 0,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
       "id": "unknown-parked-payout",
       "tags": [
         "unknown_outcome",
@@ -350,57 +609,6 @@
       }
     },
     {
-      "id": "unknown-indeterminate",
-      "tags": [
-        "unknown_outcome"
-      ],
-      "status": "ok",
-      "expected": "unknown_outcome",
-      "rules_class": "unknown_outcome",
-      "rules_certain": true,
-      "class": "unknown_outcome",
-      "classified_by": "rules",
-      "class_correct": true,
-      "certainty_correct": true,
-      "model_called": false,
-      "patch_expected": false,
-      "patch_valid": false,
-      "patch_passed": false,
-      "attempts": 0,
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "cache_creation_tokens": 0,
-        "cache_read_tokens": 0
-      }
-    },
-    {
-      "id": "drift-reason",
-      "tags": [
-        "schema_drift"
-      ],
-      "status": "ok",
-      "expected": "schema_drift",
-      "rules_class": "schema_drift",
-      "rules_certain": true,
-      "class": "schema_drift",
-      "classified_by": "rules",
-      "class_correct": true,
-      "certainty_correct": true,
-      "model_called": true,
-      "patch_expected": true,
-      "patch_valid": true,
-      "patch_passed": true,
-      "attempts": 1,
-      "model": "heuristic",
-      "usage": {
-        "input_tokens": 13186,
-        "output_tokens": 793,
-        "cache_creation_tokens": 0,
-        "cache_read_tokens": 0
-      }
-    },
-    {
       "id": "drift-expression",
       "tags": [
         "schema_drift",
@@ -421,216 +629,8 @@
       "attempts": 1,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18741,
-        "output_tokens": 4180,
-        "cache_creation_tokens": 0,
-        "cache_read_tokens": 0
-      }
-    },
-    {
-      "id": "data-missing-trigger-field",
-      "tags": [
-        "data"
-      ],
-      "status": "ok",
-      "expected": "data",
-      "rules_class": "data",
-      "rules_certain": true,
-      "class": "data",
-      "classified_by": "rules",
-      "class_correct": true,
-      "certainty_correct": true,
-      "model_called": true,
-      "patch_expected": true,
-      "patch_valid": true,
-      "patch_passed": false,
-      "attempts": 3,
-      "model": "heuristic",
-      "usage": {
-        "input_tokens": 31114,
-        "output_tokens": 390,
-        "cache_creation_tokens": 0,
-        "cache_read_tokens": 0
-      }
-    },
-    {
-      "id": "data-foreach-item-field",
-      "tags": [
-        "data"
-      ],
-      "status": "ok",
-      "expected": "data",
-      "rules_class": "data",
-      "rules_certain": true,
-      "class": "data",
-      "classified_by": "rules",
-      "class_correct": true,
-      "certainty_correct": true,
-      "model_called": true,
-      "patch_expected": true,
-      "patch_valid": true,
-      "patch_passed": false,
-      "attempts": 3,
-      "model": "heuristic",
-      "usage": {
-        "input_tokens": 31345,
-        "output_tokens": 516,
-        "cache_creation_tokens": 0,
-        "cache_read_tokens": 0
-      }
-    },
-    {
-      "id": "data-422-provider",
-      "tags": [
-        "data"
-      ],
-      "status": "ok",
-      "expected": "data",
-      "rules_class": "data",
-      "rules_certain": true,
-      "class": "data",
-      "classified_by": "rules",
-      "class_correct": true,
-      "certainty_correct": true,
-      "model_called": true,
-      "patch_expected": true,
-      "patch_valid": true,
-      "patch_passed": true,
-      "attempts": 1,
-      "model": "heuristic",
-      "usage": {
-        "input_tokens": 12216,
-        "output_tokens": 173,
-        "cache_creation_tokens": 0,
-        "cache_read_tokens": 0
-      }
-    },
-    {
-      "id": "data-400-vague",
-      "tags": [
-        "data"
-      ],
-      "status": "ok",
-      "expected": "data",
-      "rules_class": "data",
-      "rules_certain": false,
-      "class": "data",
-      "classified_by": "model",
-      "class_correct": true,
-      "certainty_correct": true,
-      "model_called": true,
-      "patch_expected": true,
-      "patch_valid": true,
-      "patch_passed": true,
-      "attempts": 1,
-      "model": "heuristic",
-      "usage": {
-        "input_tokens": 12219,
-        "output_tokens": 173,
-        "cache_creation_tokens": 0,
-        "cache_read_tokens": 0
-      }
-    },
-    {
-      "id": "logic-division",
-      "tags": [
-        "logic"
-      ],
-      "status": "ok",
-      "expected": "logic",
-      "rules_class": "logic",
-      "rules_certain": false,
-      "class": "logic",
-      "classified_by": "model",
-      "class_correct": true,
-      "certainty_correct": true,
-      "model_called": true,
-      "patch_expected": true,
-      "patch_valid": true,
-      "patch_passed": true,
-      "attempts": 1,
-      "model": "heuristic",
-      "usage": {
-        "input_tokens": 9778,
-        "output_tokens": 128,
-        "cache_creation_tokens": 0,
-        "cache_read_tokens": 0
-      }
-    },
-    {
-      "id": "logic-overload",
-      "tags": [
-        "logic"
-      ],
-      "status": "ok",
-      "expected": "logic",
-      "rules_class": "logic",
-      "rules_certain": false,
-      "class": "logic",
-      "classified_by": "model",
-      "class_correct": true,
-      "certainty_correct": true,
-      "model_called": true,
-      "patch_expected": true,
-      "patch_valid": true,
-      "patch_passed": true,
-      "attempts": 1,
-      "model": "heuristic",
-      "usage": {
-        "input_tokens": 9781,
-        "output_tokens": 121,
-        "cache_creation_tokens": 0,
-        "cache_read_tokens": 0
-      }
-    },
-    {
-      "id": "logic-unsupported",
-      "tags": [
-        "logic",
-        "dogfood"
-      ],
-      "status": "ok",
-      "expected": "logic",
-      "rules_class": "logic",
-      "rules_certain": false,
-      "class": "logic",
-      "classified_by": "model",
-      "class_correct": true,
-      "certainty_correct": true,
-      "model_called": true,
-      "patch_expected": true,
-      "patch_valid": true,
-      "patch_passed": true,
-      "attempts": 1,
-      "model": "heuristic",
-      "usage": {
-        "input_tokens": 10185,
-        "output_tokens": 507,
-        "cache_creation_tokens": 0,
-        "cache_read_tokens": 0
-      }
-    },
-    {
-      "id": "transient-reset-read",
-      "tags": [
-        "transient"
-      ],
-      "status": "ok",
-      "expected": "transient",
-      "rules_class": "transient",
-      "rules_certain": true,
-      "class": "transient",
-      "classified_by": "rules",
-      "class_correct": true,
-      "certainty_correct": true,
-      "model_called": false,
-      "patch_expected": false,
-      "patch_valid": false,
-      "patch_passed": false,
-      "attempts": 0,
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
+        "input_tokens": 23410,
+        "output_tokens": 4244,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }

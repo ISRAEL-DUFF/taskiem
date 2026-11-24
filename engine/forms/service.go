@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -32,6 +33,9 @@ import (
 type FileStore interface {
 	PutFile(ctx context.Context, tenant uuid.UUID, data []byte) (media.File, error)
 	SignURL(ctx context.Context, tenant uuid.UUID, path string, ttl time.Duration) (string, time.Time, error)
+	// Delete removes stored files (of submissions retention or erasure
+	// deleted, DrainDeletions).
+	Delete(ctx context.Context, tenant uuid.UUID, bucket string, paths []string) error
 }
 
 // Service runs forms on the api side.
@@ -47,12 +51,20 @@ type Service struct {
 	// form step (runtime.Store.DeliverSignalOnce).
 	Start  func(ctx context.Context, req runtime.StartRequest) (runtime.Started, error)
 	Signal func(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error)
+	// Retention is how long a run of def would be kept (runtime.Store.Retention):
+	// a submission that starts no run, refused or held at a plan limit, is
+	// kept as long, then deleted with its files (ExpireRunless). nil keeps
+	// such submissions runtime.DefaultRetention.
+	Retention func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition) (time.Duration, error)
 	// FormHost is the form host's name (forms.<preview domain>); AppURL
 	// the web app's, where members' forms open.
 	FormHost string
 	AppURL   string
-	Logger   *slog.Logger
-	Now      func() time.Time
+	// Ask puts a form step to people in their chat apps once its request
+	// is recorded as sent (device fields §2); nil asks in the app alone.
+	Ask    func(ctx context.Context, a ChatAsk)
+	Logger *slog.Logger
+	Now    func() time.Time
 }
 
 // Errors a submission is refused with; the respondent was told before it
@@ -61,6 +73,11 @@ var (
 	ErrRefused   = errors.New("forms: submission refused")
 	ErrNoRequest = errors.New("forms: no such form request")
 )
+
+// NoLongerTaking is the note of a submission refused because its form,
+// or its form step, takes no more answers: answered by another meanwhile,
+// withdrawn or expired.
+const NoLongerTaking = "the form is no longer taking answers"
 
 func (s *Service) now() time.Time {
 	if s.Now != nil {
@@ -117,6 +134,59 @@ func (s *Service) Drain(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
+// DrainDeletions deletes the submissions that started no run once their
+// retain_until passes (00394), then removes from storage the files of
+// submissions that retention or erasure deleted (taskiem_purge_run and the
+// erasure trigger queue them, 00380) and of refused ones. A file whose removal fails stays queued and is
+// tried again once its lease lapses.
+func (s *Service) DrainDeletions(ctx context.Context) error {
+	// Submissions that started no run, past their own retention, go first
+	// (their files join the queue).
+	if _, err := s.Pool.Exec(ctx, `SELECT taskiem_form_submissions_expire(500)`); err != nil {
+		return err
+	}
+	if s.Files == nil {
+		return nil
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT tenant_id, storage_key FROM taskiem_form_file_deletions_claim(100)`)
+	if err != nil {
+		return err
+	}
+	type queued struct {
+		tenant uuid.UUID
+		key    string
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (queued, error) {
+		var q queued
+		return q, r.Scan(&q.tenant, &q.key)
+	})
+	if err != nil {
+		return err
+	}
+	byTenant := map[uuid.UUID][]string{}
+	var order []uuid.UUID
+	for _, q := range list {
+		if _, ok := byTenant[q.tenant]; !ok {
+			order = append(order, q.tenant)
+		}
+		byTenant[q.tenant] = append(byTenant[q.tenant], q.key)
+	}
+	var errs []error
+	for _, t := range order {
+		keys := byTenant[t]
+		if err := s.Files.Delete(ctx, t, media.PrivateBucket, keys); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", t, err))
+			continue
+		}
+		for _, k := range keys {
+			if _, err := s.Pool.Exec(ctx, `SELECT taskiem_form_file_deletions_done($1, $2)`, t, k); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
 func (s *Service) processInbox(ctx context.Context, x inboxRow) error {
 	var sub Submission
 	if err := s.Keys.Open(SubmissionAAD(x.reference), x.payload, &sub); err != nil {
@@ -142,11 +212,11 @@ func (s *Service) processInbox(ctx context.Context, x inboxRow) error {
 	count := map[string]int{}
 	for i, meta := range sub.Files {
 		if i >= len(raw) || raw[i].field != meta.Field {
-			return s.refuse(ctx, x.tenant, x.endpoint, x.request, x.reference, x.statusHash, sub, "a file did not arrive")
+			return s.refuse(ctx, x.tenant, x.endpoint, x.request, x.reference, x.statusHash, sub, nil, nil, "a file did not arrive")
 		}
 		data, err := s.Keys.OpenBytes(UploadAAD(x.reference, meta.Field, count[meta.Field]), raw[i].data)
 		if err != nil {
-			return s.refuse(ctx, x.tenant, x.endpoint, x.request, x.reference, x.statusHash, sub, "a file did not open")
+			return s.refuse(ctx, x.tenant, x.endpoint, x.request, x.reference, x.statusHash, sub, nil, nil, "a file did not open")
 		}
 		count[meta.Field]++
 		uploads = append(uploads, Upload{Meta: meta, Data: data})
@@ -200,19 +270,29 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 	})
 	if err != nil || done {
 		if errors.Is(err, ErrNoRequest) {
-			return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, "the form is no longer taking answers")
+			return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, nil, nil, NoLongerTaking)
 		}
 		return err
 	}
 	answers, files, why, err := s.files(ctx, in, tg)
 	if err != nil {
-		return err
+		// Files stored before the error are stored again on the retry.
+		return errors.Join(err, s.discard(ctx, in.Tenant, files))
+	}
+	received := in.Submission.Submitted
+	if received.IsZero() {
+		received = s.now()
+	}
+	device := deviceMeta(in.Submission, received)
+	if why == "" {
+		deviceAt, _ := time.Parse(time.RFC3339, device["at"].(string))
+		why = deviceAnswers(tg.schema, answers, in.Submission, deviceAt)
 	}
 	if why == "" {
 		why = s.check(tg, answers, files)
 	}
 	if why != "" {
-		return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, why)
+		return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, tg.def, files, why)
 	}
 	id := uuid.Must(uuid.NewV7())
 	r := in.Submission.Respondent
@@ -241,6 +321,31 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 		if ch == "" {
 			ch = "direct"
 		}
+		if tg.request != nil {
+			// Answered now, in this transaction: the step's run may end as
+			// soon as the signal arrives, which withdraws pending requests.
+			// Taken once: of two answers arriving together, the second
+			// waits on the row and finds it answered; only this same
+			// submission, whose signal did not get through, goes on.
+			tag, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'answered', answered_at = now() WHERE id = $1 AND status = 'pending'`, *tg.request)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() != 1 {
+				var mine bool
+				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM form_submissions WHERE reference = $1 AND request_id = $2 AND status <> 'refused')`,
+					in.Reference, *tg.request).Scan(&mine); err != nil {
+					return err
+				}
+				if !mine {
+					return ErrNoRequest
+				}
+			}
+			// What a chat held towards it, anyone's, goes with the answer.
+			if _, err := tx.Exec(ctx, `DELETE FROM form_chat_answers WHERE request_id = $1`, *tg.request); err != nil {
+				return err
+			}
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO form_submissions (id, tenant_id, endpoint_id, request_id, reference, status_hash, answers, respondent, channel)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (reference) DO NOTHING`,
 			id, in.Tenant, tg.endpoint, tg.request, in.Reference, in.StatusHash, a, rr, ch); err != nil {
@@ -258,27 +363,29 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 			}
 		}
 		if tg.request != nil {
-			// Answered now, in this transaction: the step's run may end as
-			// soon as the signal arrives, which withdraws pending requests.
-			if _, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'answered', answered_at = now() WHERE id = $1 AND status = 'pending'`, *tg.request); err != nil {
-				return err
-			}
 			payload := map[string]any{}
 			for k, v := range sealedAnswers.(map[string]any) {
 				payload[k] = v
 			}
 			payload["respondent"] = resp
+			payload["device"] = device
 			signal = payload
 		}
-		return audit(ctx, tx, in.Tenant, "form.submitted", in.Reference, map[string]any{"files": len(files), "channel": ch})
+		return audit(ctx, tx, in.Tenant, "form.submitted", in.Reference, map[string]any{"files": len(files), "channel": ch, "device": deviceAudit(tg.schema, answers)})
 	})
+	if errors.Is(err, ErrNoRequest) {
+		// Answered by another submission meanwhile: refused, its files
+		// discarded.
+		return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, tg.def, files, NoLongerTaking)
+	}
 	if err != nil {
-		return err
+		// Not recorded: the retry stores its files again.
+		return errors.Join(err, s.discard(ctx, in.Tenant, files))
 	}
 	if tg.request != nil {
 		return s.answerStep(ctx, in, tg, id, signal)
 	}
-	return s.startRun(ctx, in, tg, id, answers)
+	return s.startRun(ctx, in, tg, id, answers, device)
 }
 
 // roundTrip makes v plain JSON values (file references become maps).
@@ -373,31 +480,54 @@ func (s *Service) files(ctx context.Context, in Incoming, tg target) (map[string
 	var out []storedFile
 	for _, u := range in.Uploads {
 		p, _ := props[u.Meta.Field].(map[string]any)
-		if f, _ := p["format"].(string); f != "file" {
-			return nil, nil, fmt.Sprintf("%q takes no file", u.Meta.Field), nil
+		kind := wd.DeviceKind(p)
+		if f, _ := p["format"].(string); f != "file" && kind != wd.DevicePhoto && kind != wd.DeviceSignature {
+			return nil, out, fmt.Sprintf("%q takes no file", u.Meta.Field), nil
+		}
+		switch kind {
+		case wd.DevicePhoto:
+			p = map[string]any{"x-form": map[string]any{"accept": []any{"image/jpeg", "image/png"}}}
+		case wd.DeviceSignature:
+			// A pad's drawing: a PNG by its content, not only its name,
+			// and small (device fields §5, D2).
+			if len(u.Data) > MaxSignatureBytes {
+				return nil, out, fmt.Sprintf("the signature %q is larger than 1 MB", clipName(u.Meta.Name)), nil
+			}
+			if http.DetectContentType(u.Data) != "image/png" {
+				return nil, out, fmt.Sprintf("a signature is a PNG drawing; %q is not one", clipName(u.Meta.Name)), nil
+			}
+			p = map[string]any{"x-form": map[string]any{"accept": []any{"image/png"}}}
 		}
 		if why := fileRule(p, u); why != "" {
-			return nil, nil, why, nil
+			return nil, out, why, nil
 		}
 		threat, err := s.Scanner.Scan(ctx, u.Data)
 		if err != nil {
-			return nil, nil, "", err // tried again
+			return nil, out, "", err // tried again
 		}
 		if threat != "" {
 			s.log().Warn("forms: a file failed the malware scan", "reference", in.Reference, "field", u.Meta.Field, "threat", threat)
-			return nil, nil, fmt.Sprintf("the file %q did not pass the malware check", u.Meta.Name), nil
+			return nil, out, fmt.Sprintf("the file %q did not pass the malware check", u.Meta.Name), nil
 		}
 		f, err := s.Files.PutFile(ctx, in.Tenant, u.Data)
 		if errors.Is(err, media.ErrFile) {
-			return nil, nil, plain(err), nil
+			return nil, out, plain(err), nil
 		}
 		if err != nil {
-			return nil, nil, "", err
+			return nil, out, "", err
 		}
 		sum := sha256.Sum256(u.Data)
 		ref := FileRef{ID: uuid.Must(uuid.NewV7()).String(), Name: clipName(u.Meta.Name), Type: f.Type, Size: f.Size, SHA256: hex.EncodeToString(sum[:])}
 		out = append(out, storedFile{field: u.Meta.Field, path: f.Path, ref: ref})
 		answers[u.Meta.Field] = ref
+		if kind == wd.DeviceSignature {
+			// The signer's name, given beside the pad in the answers.
+			if m, ok := in.Submission.Answers[u.Meta.Field].(map[string]any); ok {
+				if who, ok := m["signed_by"].(string); ok {
+					answers[u.Meta.Field] = signedFile{FileRef: ref, SignedBy: who}
+				}
+			}
+		}
 	}
 	return answers, out, "", nil
 }
@@ -504,8 +634,11 @@ func (s *Service) check(tg target, answers map[string]any, files []storedFile) s
 	for k, v := range answers {
 		probe[k] = v
 	}
+	props, _ := tg.schema["properties"].(map[string]any)
 	for _, f := range files {
-		probe[f.field] = f.ref.ID
+		if wd.DeviceKind(props[f.field]) == "" {
+			probe[f.field] = f.ref.ID
+		}
 	}
 	var msgs []string
 	if tg.def != nil {
@@ -522,7 +655,8 @@ func (s *Service) check(tg target, answers map[string]any, files []storedFile) s
 		msgs = schemacheck.New("https://schemas.taskiem.dev/forms/"+tg.def.ID+".json", raw).Validate(body)
 	} else {
 		body, _ := json.Marshal(probe)
-		raw, _ := json.Marshal(tg.schema)
+		// Device fields as the answers the server made of them.
+		raw, _ := json.Marshal(wd.AnswerSchema(tg.schema))
 		msgs = schemacheck.New("https://schemas.taskiem.dev/forms/request.json", raw).Validate(body)
 	}
 	if len(msgs) > 0 {
@@ -535,6 +669,9 @@ func (s *Service) sealRespondent(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 	out := map[string]any{"kind": r.Kind}
 	if r.MemberID != "" {
 		out["member_id"] = r.MemberID
+	}
+	if r.Business != "" {
+		out["business"] = r.Business
 	}
 	for k, v := range map[string]string{"phone": r.Phone, "email": r.Email} {
 		if v == "" {
@@ -549,10 +686,10 @@ func (s *Service) sealRespondent(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 	return out, nil
 }
 
-func (s *Service) startRun(ctx context.Context, in Incoming, tg target, id uuid.UUID, answers map[string]any) error {
+func (s *Service) startRun(ctx context.Context, in Incoming, tg target, id uuid.UUID, answers, device map[string]any) error {
 	sub := in.Submission
 	form := map[string]any{"submission_id": id.String(), "reference": in.Reference, "submitted_at": sub.Submitted.UTC().Format(time.RFC3339),
-		"respondent": respondentMap(sub.Respondent), "channel": channelOf(sub), "consents": consentsOf(sub.Consents)}
+		"respondent": respondentMap(sub.Respondent), "channel": channelOf(sub), "consents": consentsOf(sub.Consents), "device": device}
 	if sub.Site != "" {
 		form["site"] = sub.Site
 	}
@@ -574,10 +711,15 @@ func (s *Service) startRun(ctx context.Context, in Incoming, tg target, id uuid.
 	}
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{in.Tenant}, func(tx pgx.Tx) error {
 		if note != "" {
-			_, err := tx.Exec(ctx, `UPDATE form_submissions SET note = $2, updated_at = now() WHERE id = $1`, id, note)
+			// No run will delete it: it is kept as long as its run would be.
+			keep, err := s.retention(ctx, tx, in.Tenant, tg.def)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(ctx, `UPDATE form_submissions SET note = $2, retain_until = now() + $3::interval, updated_at = now() WHERE id = $1`, id, note, keep)
 			return err
 		}
-		_, err := tx.Exec(ctx, `UPDATE form_submissions SET run_id = $2, status = 'started', updated_at = now() WHERE id = $1`, id, st.Ref.ID)
+		_, err := tx.Exec(ctx, `UPDATE form_submissions SET run_id = $2, status = 'started', retain_until = NULL, updated_at = now() WHERE id = $1`, id, st.Ref.ID)
 		return err
 	})
 }
@@ -587,23 +729,61 @@ func (s *Service) answerStep(ctx context.Context, in Incoming, tg target, id uui
 		return err
 	}
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{in.Tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE form_submissions SET run_id = $2, status = 'answered', updated_at = now() WHERE id = $1`, id, tg.run)
+		_, err := tx.Exec(ctx, `UPDATE form_submissions SET run_id = $2, status = 'answered', retain_until = NULL, updated_at = now() WHERE id = $1`, id, tg.run)
 		return err
 	})
 }
 
 // refuse records a submission that cannot go ahead, so its status link
-// says so, and drops its inbox row.
-func (s *Service) refuse(ctx context.Context, tenant uuid.UUID, endpoint, request *uuid.UUID, reference string, statusHash []byte, sub Submission, why string) error {
+// says so, and drops its inbox row. No run will delete the record, so it
+// is kept as long as a run of def would be (nil: the tenant's default);
+// files already stored for it are discarded.
+func (s *Service) refuse(ctx context.Context, tenant uuid.UUID, endpoint, request *uuid.UUID, reference string, statusHash []byte, sub Submission, def *wd.Definition, stored []storedFile, why string) error {
 	s.log().Warn("forms: submission refused", "reference", reference, "why", why)
+	if err := s.discard(ctx, tenant, stored); err != nil {
+		return err
+	}
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		ch := sub.Channel
 		if ch == "" {
 			ch = "direct"
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO form_submissions (id, tenant_id, endpoint_id, request_id, reference, status_hash, answers, respondent, channel, status, note)
-			VALUES ($1, $2, $3, $4, $5, $6, '{}', $7, $8, 'refused', $9) ON CONFLICT (reference) DO NOTHING`,
-			uuid.Must(uuid.NewV7()), tenant, endpoint, request, reference, statusHash, map[string]any{"kind": sub.Respondent.Kind}, ch, why)
+		keep, err := s.retention(ctx, tx, tenant, def)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO form_submissions (id, tenant_id, endpoint_id, request_id, reference, status_hash, answers, respondent, channel, status, note, retain_until)
+			VALUES ($1, $2, $3, $4, $5, $6, '{}', $7, $8, 'refused', $9, now() + $10::interval) ON CONFLICT (reference) DO NOTHING`,
+			uuid.Must(uuid.NewV7()), tenant, endpoint, request, reference, statusHash, map[string]any{"kind": sub.Respondent.Kind}, ch, why, keep)
+		return err
+	})
+}
+
+// retention is how long a submission that starts no run is kept, as an
+// interval for Postgres.
+func (s *Service) retention(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition) (string, error) {
+	d := runtime.DefaultRetention
+	if s.Retention != nil {
+		var err error
+		if d, err = s.Retention(ctx, tx, tenant, def); err != nil {
+			return "", err
+		}
+	}
+	return fmt.Sprintf("%d seconds", int64(d.Seconds())), nil
+}
+
+// discard queues files stored for a submission that was not recorded with
+// them (refused, or failed and tried again), for DrainDeletions to remove.
+func (s *Service) discard(ctx context.Context, tenant uuid.UUID, stored []storedFile) error {
+	if len(stored) == 0 {
+		return nil
+	}
+	keys := make([]string, len(stored))
+	for i, f := range stored {
+		keys[i] = f.path
+	}
+	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT taskiem_form_files_discard($1, $2)`, tenant, keys)
 		return err
 	})
 }
@@ -618,6 +798,9 @@ func respondentMap(r Respondent) map[string]any {
 	}
 	if r.MemberID != "" {
 		m["member_id"] = r.MemberID
+	}
+	if r.Business != "" {
+		m["business"] = r.Business
 	}
 	return m
 }

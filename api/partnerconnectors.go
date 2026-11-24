@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"strconv"
 	"time"
@@ -227,6 +228,10 @@ func (s *Server) createSubTenantConnection(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, fmt.Errorf("%w: connector %q is not available to the sub-tenant (share your own with PUT /v1/partner/connectors/{id}/share)", errBadRequest, req.Connector))
 		return
 	}
+	if err := refuseMadeFields(c, req.Credentials); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if err := checkCredentials(c, req.Credentials); err != nil {
 		s.fail(w, r, err)
 		return
@@ -254,13 +259,18 @@ func (s *Server) createSubTenantConnection(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, fmt.Errorf("%w: %q is kept for the account Taskiem holds for a business: choose another name", errBadRequest, req.Name))
 		return
 	}
+	creds, made, err := withMadeFields(c, req.Credentials)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	by := partnerActor(p)
 	var id uuid.UUID
 	err = s.partnerTx(r, sub, "partner.connection.create", map[string]any{"connector": c.Manifest.ID, "environment": env, "name": req.Name}, func(tx pgx.Tx) error {
 		if err := s.checkCount(r.Context(), tx, sub, "max_connections"); err != nil {
 			return err
 		}
-		created, err := s.Vault.CreateConnectionTx(r.Context(), tx, sub, env, c.Manifest.ID, req.Name, c.Manifest.Auth.Type, req.Credentials, by, by)
+		created, err := s.Vault.CreateConnectionTx(r.Context(), tx, sub, env, c.Manifest.ID, req.Name, c.Manifest.Auth.Type, creds, by, by)
 		if isUnique(err) {
 			return fmt.Errorf("%w: a %s connection named %q already exists in %s (replace its credentials instead)", errConflict, c.Manifest.ID, req.Name, env)
 		}
@@ -271,13 +281,17 @@ func (s *Server) createSubTenantConnection(w http.ResponseWriter, r *http.Reques
 		if err := setConnectionMode(r.Context(), tx, id, mode); err != nil {
 			return err
 		}
-		return secrets.SetRouteKeysTx(r.Context(), tx, sub, id, c.Manifest.RouteKeys(req.Credentials))
+		return secrets.SetRouteKeysTx(r.Context(), tx, sub, id, c.Manifest.RouteKeys(creds))
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name, "provisioned_by": by})
+	out := map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name, "provisioned_by": by}
+	if hooks := connectionWebhooks(c, s.hooksBase(), sub, env, req.Name, made); len(hooks) > 0 {
+		out["webhooks"] = hooks // shown this once: they carry the token Taskiem made
+	}
+	writeJSON(w, http.StatusCreated, out)
 }
 
 func connParam(r *http.Request) (uuid.UUID, error) {
@@ -336,13 +350,32 @@ func (s *Server) replaceSubTenantConnection(w http.ResponseWriter, r *http.Reque
 		if c == nil {
 			return fmt.Errorf("%w: connector %s is no longer available to the sub-tenant", errConflict, id)
 		}
+		if err := refuseMadeFields(c, req.Credentials); err != nil {
+			return err
+		}
 		if err := checkCredentials(c, req.Credentials); err != nil {
 			return err
 		}
-		if err := s.Vault.ReplaceCredentialsTx(r.Context(), tx, sub, conn, req.Credentials, partnerActor(p)); err != nil {
+		// A token Taskiem made stays as it was: the provider's dashboard
+		// already holds the address that carries it.
+		creds := req.Credentials
+		if keys := c.Manifest.WebhookTokenFields(); len(keys) > 0 {
+			use := secrets.WithUse(r.Context(), secrets.Use{Kind: secrets.KindConnection, Purpose: "partner.connection.credentials_replace", Actor: partnerActor(p)})
+			existing, err := s.Vault.ConnectionCredentialsTx(use, tx, sub, conn)
+			if err != nil {
+				return err
+			}
+			creds = maps.Clone(req.Credentials)
+			for _, k := range keys {
+				if v := existing[k]; v != "" {
+					creds[k] = v
+				}
+			}
+		}
+		if err := s.Vault.ReplaceCredentialsTx(r.Context(), tx, sub, conn, creds, partnerActor(p)); err != nil {
 			return err
 		}
-		return secrets.SetRouteKeysTx(r.Context(), tx, sub, conn, c.Manifest.RouteKeys(req.Credentials))
+		return secrets.SetRouteKeysTx(r.Context(), tx, sub, conn, c.Manifest.RouteKeys(creds))
 	})
 	if errors.Is(err, secrets.ErrNotFound) {
 		err = pgx.ErrNoRows

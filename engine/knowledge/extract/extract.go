@@ -1,5 +1,5 @@
 // Package extract turns a business's website pages and uploaded files into
-// plain text for its customer assistant's knowledge store (decision 0062
+// plain text for its customer assistant's knowledge store (decision 0074
 // D12, plan V5b in docs/spec/voice-assistant.md, gaps K6 and K7).
 //
 // It reads three kinds of input: HTML pages (HTMLText, and Crawl to read a

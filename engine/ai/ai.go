@@ -3,7 +3,8 @@
 // self-hosted open models, so the builder (engine/ai/builder) never talks
 // to a vendor SDK directly.
 //
-// The layer is deliberately powerless. It turns text into text: it holds
+// The layer is deliberately powerless. It turns text (and, where a
+// business allowed it, a photo to read: Message.Images) into text: it holds
 // no vault, no database handle, no connector handlers and no principal,
 // and its import graph is tested to exclude the secrets vault, the
 // runtime's workers, approvals and the API (see imports_test.go). Every
@@ -32,7 +33,27 @@ import (
 type Message struct {
 	Role string `json:"role"` // "user" | "assistant"
 	Text string `json:"text"`
+	// Images go before the text in a user turn (a photo to read). They
+	// cannot be redacted, so only a caller the business allowed to send
+	// photos to a model sets them (reading handwriting, I3); providers
+	// that cannot see images refuse (ErrNoImages).
+	Images []Image `json:"-"`
 }
+
+// Image is a picture in a message: its bytes and their media type
+// (image/jpeg, image/png, image/webp or image/gif).
+type Image struct {
+	MediaType string
+	Data      []byte
+}
+
+// ErrNoImages means the provider cannot read images.
+var ErrNoImages = errors.New("ai: this model cannot read images")
+
+// imageTokens is about what one photo costs, for budgets: a photo with
+// its long edge at 2576 pixels (as the apps send one), as the Messages
+// API counts it (width x height / 750: about 4,784 for 2576 x 1932).
+const imageTokens = 4800
 
 // SystemBlock is part of the system prompt. Cache marks the end of a
 // prefix worth caching (the stable instructions, the connector catalogue).
@@ -54,6 +75,26 @@ type Request struct {
 	// Effort is the thinking depth: low, medium, high, xhigh or max.
 	// Providers without the notion ignore it.
 	Effort string
+}
+
+// Estimate is the most tokens a request may use, as a budget reserves
+// them before the call: its prompt, at about 4 characters a token, and
+// its longest answer (DefaultMaxTokens when MaxTokens is 0).
+func (r Request) Estimate() int64 {
+	n := 0
+	for _, b := range r.System {
+		n += len(b.Text)
+	}
+	images := 0
+	for _, m := range r.Messages {
+		n += len(m.Text)
+		images += len(m.Images)
+	}
+	answer := r.MaxTokens
+	if answer <= 0 {
+		answer = DefaultMaxTokens
+	}
+	return int64(n/4 + answer + images*imageTokens)
 }
 
 // Usage is what one completion consumed.
@@ -135,7 +176,9 @@ func RedactRequest(req Request) Request {
 	}
 	out.Messages = make([]Message, len(req.Messages))
 	for i, m := range req.Messages {
-		out.Messages[i] = Message{Role: m.Role, Text: pii.Redact(m.Text)}
+		// Images pass as they are: a picture cannot be redacted (see
+		// Message.Images).
+		out.Messages[i] = Message{Role: m.Role, Text: pii.Redact(m.Text), Images: m.Images}
 	}
 	return out
 }
@@ -210,6 +253,20 @@ type StatusError struct {
 func (e *StatusError) Error() string { return e.Err.Error() }
 func (e *StatusError) Unwrap() error { return e.Err }
 
+// StatusOf is the HTTP status of a provider's failed answer, or 0 when
+// err is not one (a broken connection, a timeout).
+func StatusOf(err error) int {
+	var se *StatusError
+	var ae *anthropic.Error
+	switch {
+	case errors.As(err, &se):
+		return se.Status
+	case errors.As(err, &ae):
+		return ae.StatusCode
+	}
+	return 0
+}
+
 // Transient reports whether a failed call may succeed if made again: a
 // rate limit, a server error, an overloaded provider, a timeout or a
 // broken connection. A refused request (400, 401, 403, 404) is not.
@@ -217,16 +274,7 @@ func Transient(err error) bool {
 	if err == nil {
 		return false
 	}
-	status := 0
-	var se *StatusError
-	var ae *anthropic.Error
-	switch {
-	case errors.As(err, &se):
-		status = se.Status
-	case errors.As(err, &ae):
-		status = ae.StatusCode
-	}
-	if status != 0 {
+	if status := StatusOf(err); status != 0 {
 		return status == 408 || status == 409 || status == 429 || status >= 500
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
@@ -242,7 +290,7 @@ const (
 	// DefaultReplyModel is offered to ai steps alongside the default
 	// when TASKIEM_AI_STEP_MODELS is unset and the provider is Anthropic:
 	// a small, fast model for a customer's reply, where the building
-	// model is slow and costly (decision 0062 V4, A6).
+	// model is slow and costly (decision 0074 V4, A6).
 	DefaultReplyModel = "claude-haiku-5-5"
 	DefaultEffort     = "high"
 	DefaultMaxTokens  = 32000

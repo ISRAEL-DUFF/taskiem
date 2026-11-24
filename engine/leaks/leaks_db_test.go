@@ -46,6 +46,20 @@ func TestLeaks(t *testing.T) {
 		}
 		return x
 	}
+	read := func(number string) invoicing.Invoice {
+		var x invoicing.Invoice
+		in(func(tx pgx.Tx) error {
+			var err error
+			x, err = inv.Get(ctx, tx, e.Tenant, number)
+			return err
+		})
+		return x
+	}
+	legacy, err := e.DB.Admin.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacy.Release()
 	heard := func(event string, f map[string]any) {
 		if _, err := log.RecordEvent(ctx, e.Tenant, "prod", "paystack", "main", event, f); err != nil {
 			t.Fatal(err)
@@ -65,12 +79,25 @@ func TestLeaks(t *testing.T) {
 	if _, err := e.DB.Admin.Exec(ctx, `UPDATE customer_invoices SET due_on = '2020-01-01' WHERE id = $1`, late.ID); err != nil {
 		t.Fatal(err)
 	}
-	// An invoice paid more than it asked.
+	// An invoice paid more than it asked, as could be counted before an
+	// invoice took only what is due: neither the api nor the database
+	// writes one now, so the row is put in past the database's check.
 	over := send("Chidi", 100000, "")
 	in(func(tx pgx.Tx) error {
 		_, _, err := inv.RecordPayment(ctx, tx, e.Tenant, over.Number, invoicing.PaymentIn{AmountKobo: 150000, PaymentID: "OVER-1", How: "manual", By: "user:ada"})
 		return err
 	})
+	if x := read(over.Number); x.PaidKobo != 100000 {
+		t.Fatalf("an invoice of ₦1,000 counted %d kobo", x.PaidKobo)
+	}
+	for _, q := range []string{`SET session_replication_role = replica`,
+		`INSERT INTO customer_invoice_payments (id, tenant_id, invoice_id, amount_kobo, payment_id, how, by) SELECT gen_random_uuid(), tenant_id, id, 50000, 'OVER-2', 'manual', 'user:ada' FROM customer_invoices WHERE number = '` + over.Number + `'`,
+		`SET session_replication_role = origin`,
+		`UPDATE customer_invoices SET updated_at = now() WHERE number = '` + over.Number + `'`} {
+		if _, err := legacy.Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
 	// Money into the account of a voided invoice.
 	void := send("Dayo", 200000, "")
 	in(func(tx pgx.Tx) error {
@@ -191,4 +218,69 @@ func TestLeaks(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+// Money paid into an invoice's own account beyond what was due is kept as
+// the customer's credit and listed as an overpaid leak while any of it is
+// unused; the leak resolves when the credit pays their next invoice.
+func TestOverpaidKeptAsCreditIsALeak(t *testing.T) {
+	e := rt.New(t)
+	in := func(fn func(pgx.Tx) error) {
+		t.Helper()
+		if err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, fn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	log := &moneylog.Log{Pool: e.DB.App, PII: e.Vault}
+	inv := &invoicing.Invoices{Pool: e.DB.App, Vault: e.Vault, PageBase: "https://forms.test", MoneyLog: log,
+		Messages: &sender.Queue{Vault: e.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}}
+	m := &matching.Matcher{Invoices: inv, PII: e.Vault}
+	send := func(kobo int64) invoicing.Invoice {
+		var x invoicing.Invoice
+		in(func(tx pgx.Tx) error {
+			var err error
+			x, err = inv.Create(ctx, tx, e.Tenant, invoicing.Draft{Customer: invoicing.Customer{Name: "Ada Obi", Phone: "+2348031234567"}, AmountKobo: kobo}, "user:ada")
+			return err
+		})
+		if _, err := inv.Send(ctx, e.Tenant, x.Number, "user:ada", "k"+x.Number); err != nil {
+			t.Fatal(err)
+		}
+		return x
+	}
+	x := send(5000000)
+	for i, ref := range []string{"tsk_twice_a", "tsk_twice_b"} {
+		in(func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `INSERT INTO customer_invoice_accounts (id, tenant_id, invoice_id, seq, kind, connector, connection, payment_id, amount_kobo, status)
+				VALUES (gen_random_uuid(), $1, $2, $3, 'transfer', 'paystack', 'main', $4, 5000000, 'open')`, e.Tenant, x.ID, i+1, ref)
+			return err
+		})
+		if _, err := log.RecordEvent(ctx, e.Tenant, "prod", "paystack", "main", "payment.received", map[string]any{"payment_id": ref, "amount_kobo": int64(5000000)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := m.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	d := &leaks.Detector{Pool: e.DB.App}
+	open := func() []leaks.Leak {
+		if _, err := d.Tenant(ctx, e.Tenant); err != nil {
+			t.Fatal(err)
+		}
+		var list []leaks.Leak
+		in(func(tx pgx.Tx) error {
+			var err error
+			list, err = leaks.List(ctx, tx, e.Tenant, "open", 0)
+			return err
+		})
+		return list
+	}
+	got := open()
+	if len(got) != 1 || got[0].Kind != "overpaid" || got[0].AmountKobo != 5000000 ||
+		!strings.Contains(got[0].Detail, x.Number+" was paid ₦50,000 more than it asked for; it is kept as the customer's credit") {
+		t.Fatalf("leaks: %+v", got)
+	}
+	send(5000000) // the credit pays it
+	if got := open(); len(got) != 0 {
+		t.Errorf("after the credit was used: %+v", got)
+	}
 }

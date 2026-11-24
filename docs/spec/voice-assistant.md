@@ -228,15 +228,15 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 
 ### V0. Decisions and clean-up
 
-**Built** (2026-11-08): [decision 0062](../decisions/0062-customer-assistant.md); `docs/integrations/whatsapp.md` describes the split events and `trigger.item`; `docs/operations.md` agrees with `docs/ai.md` that ai steps fail over budget; the `whatsapp` trigger is refused on save and publish (`checkRetiredTriggers`, kept in the schema so saved versions read), gone from the builder's cards and the evaluation suite's trigger list, and documented in the wd-v1 contract and the builder guide.
+**Built** (2026-11-08): [decision 0074](../decisions/0074-customer-assistant.md); `docs/integrations/whatsapp.md` describes the split events and `trigger.item`; `docs/operations.md` agrees with `docs/ai.md` that ai steps fail over budget; the `whatsapp` trigger is refused on save and publish (`checkRetiredTriggers`, kept in the schema so saved versions read), gone from the builder's cards and the evaluation suite's trigger list, and documented in the wd-v1 contract and the builder guide.
 
-- Record D1 to D13, all decided on 2026-11-08, as decision 0062 ("Customer assistant").
+- Record D1 to D13, all decided on 2026-11-08, as decision 0074 ("Customer assistant").
 - Fix stale docs: `docs/integrations/whatsapp.md` (one event per delivery, `entry[0]`), `docs/operations.md` vs `docs/ai.md` on AI over budget.
 - Remove the dead `whatsapp` trigger type from wd/v1, or define it (D1).
 
 ### V1. Files in runs
 
-**Built** (2026-11-08), see [Files in runs](../files.md): the reference `{file, name, type, size, sha256}` (plain JSON: no wd/v1 schema change was needed); `engine/runfiles` with `run_files` (migration 00313), checks on type, size, Ogg length and malware for what a person sent, 30 days capped by the plan, a sweep every 10 minutes; `connector.Request.Files` for every connector call in a run; `files@1` (`link`, `delete`). The file reference is not itself personal data (an id and a name); the content stays in storage and is marked personal. Erasing a customer's files with the rest of their data was brought forward from V6 by the review below (gap 16).
+**Built** (2026-11-08), see [Files in runs](../files.md): the reference `{file, name, type, size, sha256}` (plain JSON: no wd/v1 schema change was needed); `engine/runfiles` with `run_files` (migration 00591), checks on type, size, Ogg length and malware for what a person sent, 30 days capped by the plan, a sweep every 10 minutes; `connector.Request.Files` for every connector call in a run; `files@1` (`link`, `delete`). The file reference is not itself personal data (an id and a name); the content stays in storage and is marked personal. Erasing a customer's files with the rest of their data was brought forward from V6 by the review below (gap 16).
 
 - A **file reference** kind in wd/v1: `{file: <id>, name, type, size, sha256}` in trigger bodies and step outputs, never the bytes (F1).
 - A **run files** store on `engine/media`: private bucket, per tenant, signed links on request, a retention per workflow capped by plan (F2, F6), sealed as personal data when it came from a person.
@@ -297,7 +297,7 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 
 **Built** (2026-11-08), see [Speech in workflows](../speech.md):
 - `engine/voice` speaks through the OpenAI-compatible speech API (`TASKIEM_SPEECH_*`, a short list of voices) (T2).
-- `engine/speech` sits behind the owner's **Voice in workflows** switch (Settings; `tenant_channel_settings.workflow_voice`, separate from chat voice notes) (T7). It has a monthly allowance of seconds heard and spoken (`speech_seconds_monthly`, separate from AI tokens; placeholders per plan until VP7) and counts usage per month (`speech_usage`, migration 00315) and in metrics (T3, D7).
+- `engine/speech` sits behind the owner's **Voice in workflows** switch (Settings; `tenant_channel_settings.workflow_voice`, separate from chat voice notes) (T7). It has a monthly allowance of seconds heard and spoken (`speech_seconds_monthly`, separate from AI tokens; placeholders per plan until VP7) and counts usage per month (`speech_usage`, migration 00593) and in metrics (T3, D7).
 - `speech@1` offers `transcribe`, `speak` and `cannot_hear` (T1, T2).
 - A voice note that cannot be heard completes the step with a fixed answer in the customer's language, drafted in all five (T8).
 - Readiness blocks a workflow that hears or speaks while the switch is off or the service is missing.
@@ -332,9 +332,9 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 - **A conversation in the ai step** (A1, A2): wd/v1 `history` (the last 50 `{role, text}` turns, masked like the prompt), `system` (the business's instruction, after Taskiem's rules, which it cannot change) and `max_tokens`. These go through schema, Go, SDK, read-back, checks, builder rule 21 and the canvas, and the harness replays every test run.
 - **`fallback`** (A12): the output when the model cannot answer, checked against `output_schema` when saved and when used. It is used at once for budget, off, refusal or a never-matching answer, and on the last attempt when the provider is down. A mistake in the step itself (`invalid_step`) never gets it.
 - **`language(text[, otherwise])`** (A9), on chat's detection. English is sure only with three of its common words and nothing of the other languages.
-- **`ai_step_monthly_tokens`** (A7, A8, D7), migration 00316. AI steps spend it and never building's `ai_monthly_tokens`. 0 means AI steps are off, and it, not the `ai` feature, decides, so a shop's plan can run an assistant without AI building. Overage is billed per budget, and plans carry placeholders until VP7.
+- **`ai_step_monthly_tokens`** (A7, A8, D7), migration 00594. AI steps spend it and never building's `ai_monthly_tokens`. 0 means AI steps are off, and it, not the `ai` feature, decides, so a shop's plan can run an assistant without AI building. Overage is billed per budget, and plans carry placeholders until VP7.
 - **`claude-haiku-5-5`** is offered for AI steps by default on Anthropic (A6).
-- **`tools/replybench`** (A10) measures delivery to reply for text and voice, and with many conversations at once. The runs to record are in [performance](../performance.md#replies-to-customers-decision-0062-a10).
+- **`tools/replybench`** (A10) measures delivery to reply for text and voice, and with many conversations at once. The runs to record are in [performance](../performance.md#replies-to-customers-decision-0074-a10).
 - **Not done here:**
   - The numbers themselves: they need staging with real providers (VP5).
   - A11, the reply policy: in V6.
@@ -365,7 +365,7 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 - **A5, personal columns sealed cell by cell:** a run that writes or reads a data table has the table's personal columns (and its phone and email columns) sealed one cell at a time, in rows, `set` and filter values. Before, the manifest could only declare whole rows, which are never sealed.
 - **D6, the customer's words through:** an ai step may name `history` in `personal_data`. The turns' words then reach the model with identifiers still placeholders (`MaskKeepingWords`). The call's record redacts known values before patterns, which also fixed the record of answers and fields let through.
 - **The known table `conversations`** (M2, M5): its words and who said them are personal. It is kept with the business's conversations and is not offered as a list in chat.
-- **Row expiry** (M3): `keep_days` or `keep_with_conversations` on any table, set when it is made or on its page. An hourly sweep in the api role reads only ids and deletes exactly those (migration 00317).
+- **Row expiry** (M3): `keep_days` or `keep_with_conversations` on any table, set when it is made or on its page. An hourly sweep in the api role reads only ids and deletes exactly those (migration 00595).
 - **One rule** (M6, Q4): the owner's `conversation_days`, 30 by default and capped by the plan, kept on the Voice in workflows card. The conversations table follows it, runs with `settings.retention: "conversations"` follow it, and a run's files now end with their run.
 - **Erasure** (P2, in part): erasing by number or chat id deletes the person's conversation rows in every form the number takes, even with no sealed key. Their messages sealed in run histories still need P2's full erase action (V6).
 - **Tests:** turns sealed in history and heard with their words; the last N turns in order (`reverse()`); expiry by days and with conversations, within the plan; erasure.
@@ -382,7 +382,7 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 | Found | Fix |
 | --- | --- |
 | A filter written as a list (`in` with `values`) on a personal column was not sealed | Its values are sealed like a single filter value |
-| The sweep read the first 1,000 tables due and never reached the rest | It reads them a page at a time (migration 00318) |
+| The sweep read the first 1,000 tables due and never reached the rest | It reads them a page at a time (migration 00596) |
 | Changing how long conversations are kept left runs already ended (and their files) at the old date, so they no longer went with the rows | The change moves them too |
 | Settings showed the owner's days where the plan caps them lower (a Shop plan keeps runs 7 days) | It shows the days in effect |
 | Ending a run updated its files by run alone, missing the index | By tenant and run |
@@ -405,7 +405,7 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 - Tests: each source kind against fixtures; refresh replaces; deletion removes; search finds the right passage; a page with injected instructions does not change what the assistant does.
 
 **Built** (2026-11-08), see [What your assistant knows](../knowledge.md):
-- **Store and search** (`engine/knowledge`, migration 00319): `knowledge_sources` and `knowledge_passages` under forced row-level security. Passages are at most 1,200 characters (2,000 per source, 50 sources per business), and a GIN index covers the words. Search uses Postgres full text with the `simple` dictionary, matching any word or a word's start, ranked with `ts_rank_cd`, over approved sources that are not paused.
+- **Store and search** (`engine/knowledge`, migration 00597): `knowledge_sources` and `knowledge_passages` under forced row-level security. Passages are at most 1,200 characters (2,000 per source, 50 sources per business), and a GIN index covers the words. Search uses Postgres full text with the `simple` dictionary, matching any word or a word's start, ranked with `ts_rank_cd`, over approved sources that are not paused.
 - **Approval.** Text read before the owner approves waits as pending passages. After approval, a refresh replaces the text in use at once. The About page is approved as written. A failed read keeps the last text, records the reason and alerts once a day (`knowledge_source`). A digest tells when the text changed.
 - **Readers** (`api/knowledge_readers.go`, `api/knowledge_website.go`, `engine/knowledge/extract`):
   - About;
@@ -486,7 +486,7 @@ Left as they are:
 - Threat model entries for customer chat (P7, A11).
 
 **Built** (2026-11-09), see [keeping a customer assistant safe](../assistant-guard.md):
-- **The customer guard** (`engine/assistant`, `engine/ingest/guard.go`, migration 00320). A chat trigger takes `guard` (wd/v1, SDK, read-back, builder rule 21). The channel's manifest reads each event as a customer's message: connector/v1 rule 23 `conversation`, declared by `whatsapp@1` `messages` and `telegram@1` `update`. The guard decides before a run is recorded, in this order:
+- **The customer guard** (`engine/assistant`, `engine/ingest/guard.go`, migration 00598). A chat trigger takes `guard` (wd/v1, SDK, read-back, builder rule 21). The channel's manifest reads each event as a customer's message: connector/v1 rule 23 `conversation`, declared by `whatsapp@1` `messages` and `telegram@1` `update`. The guard decides before a run is recorded, in this order:
   - Only new messages in private chats start a run (C18).
   - Taskiem's `TASKIEM_ASSISTANTS` (on, beta, off), and per business a beta flag and a stop written only from the operators' console (E4, L11).
   - STOP and START in the five languages, each confirmed once (P3).
@@ -517,7 +517,7 @@ Left as they are:
 - Assistant metrics on the page: replies, time to reply, failures, cost this month (E5).
 
 **Built** ([conversations](../conversations.md)):
-- **The record.** `assistant_turns` (migration 00322): each customer message as the guard decided it, each step that sent them something (an action declaring `turn`, connector/v1 rule 24: WhatsApp and Telegram sends, the speech transcript), each reply the check held back, and each answer by hand; sealed under the customer, erased with them, expired with the conversation days.
+- **The record.** `assistant_turns` (migration 00600): each customer message as the guard decided it, each step that sent them something (an action declaring `turn`, connector/v1 rule 24: WhatsApp and Telegram sends, the speech transcript), each reply the check held back, and each answer by hand; sealed under the customer, erased with them, expired with the conversation days.
 - **The page** `/conversations`: assistants, customers (last four digits or a mark), a conversation with the run behind each answer, **Show numbers and emails** (`pii.reveal`, audited), pause and resume for one customer, answering by hand (templates outside WhatsApp's window, once per request id, never after STOP; answering pauses the assistant for them), and the month's numbers. Permissions `conversation.read` and `conversation.reply`.
 - **Talk to it here**: the guard on the member's own test chat, then a *sandbox run* (`runs.sandbox`) where every write is simulated (connector writes answer an output of their shape, marked `simulated`; HTTP writes and containers too; code runs, as it only reads; a step that would ask a person, even in a subflow or template, ends the test run), alerting no one when it fails.
 - **Different from the plan:** Talk to it here runs the version published in the environment, not a draft (a draft has no trigger or guard); "cost" is the share of this month's AI and voice allowances used, all assistants together; voice notes and pictures show as their kind and transcript, not played; the test chat has no memory of earlier test messages (the recipe's memory is the conversations table, which a sandbox run does not write).
@@ -571,7 +571,7 @@ Left as they are:
 - Debounce several quick messages into one answer (L5).
 
 **Built:**
-- **Quality watch (C23).** `whatsapp@1 get_phone_number` reads the messaging limit tier and status too; every six hours each assistant's WhatsApp number is read (`whatsapp_number_health`, migration 00323, definer `taskiem_whatsapp_quality_due`), and the owners told (`whatsapp_quality`) when its rating, limit or status (flagged, rate limited, restricted, disconnected, banned, deleted) gets worse in prod, or a number read before can no longer be read; once a day per state. A number read in the last five hours is not read again, so two servers or a restart do not read it twice.
+- **Quality watch (C23).** `whatsapp@1 get_phone_number` reads the messaging limit tier and status too; every six hours each assistant's WhatsApp number is read (`whatsapp_number_health`, migration 00601, definer `taskiem_whatsapp_quality_due`), and the owners told (`whatsapp_quality`) when its rating, limit or status (flagged, rate limited, restricted, disconnected, banned, deleted) gets worse in prod, or a number read before can no longer be read; once a day per state. A number read in the last five hours is not read again, so two servers or a restart do not read it twice.
 - **The builder knows assistants (A13).** Six evaluation cases (`evals/builder/assistant.jsonl`) graded with a `customer_guard` property; the builder's prompt learned `gather`; retrieval meets the WhatsApp or Telegram assistant for an assistant goal and the `-accounts` variants only for goals naming customers' balances, accounts or wallets, never a business's own balance (the callable building blocks carry no channel words). The builder's prompt had the recipe since V8.
 - **Debounce (L5).** `assistant@1 gather` and a short wait in the templates (**Wait for more messages**, 4 seconds): the newest of several quick messages answers them all, the others stay quiet. Each run claims the turns it answers (`step_run`, under an advisory lock), so two runs never answer the same message; a newer STOP or a request for a person, or a newer message whose run has not started in 30 seconds, does not silence this one. Earlier turns are those not answered in the last 15 minutes (at most 20); an unheard voice note among them is named, not dropped. The guard repeats the first-answer notice when it was given under a minute ago and the customer has not been answered since. The wait holds a run slot for seconds; WhatsApp's typing indicator lasts 25 seconds, so a wait longer than about 20 is not offered.
 - **A document sent in chat (K7).** A PDF or Word document sent in Taskiem's chat by someone with `secret.manage` becomes a document source waiting for **Use this** (up to 10 MB; a scan refused in plain words). The document is read after the chat's answer ("Reading…"), with its own time, and the person told how it went; the same document sent again updates its source; a file that is not really a PDF or .docx, an old .doc, and the most sources a business may have each get their own words.

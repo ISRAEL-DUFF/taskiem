@@ -1,0 +1,638 @@
+import {
+  expect,
+  test,
+  type Browser,
+  type Page,
+  type Route,
+} from "@playwright/test";
+import { axe, describe } from "./a11y";
+
+// Explore: finding a business by browsing, on a screen of its own. The lists,
+// the search, Connect and Withdraw run on the real server; the photos and
+// logos (the test server has no photo storage) are stand-in pictures, added
+// to the lists' answers, so the swipe and its dots can be seen working.
+test.use({ bypassCSP: true, viewport: { width: 1280, height: 800 } });
+
+const H = { "X-Taskiem-Request": "1" };
+const letters = () =>
+  String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+async function signUp(page: Page, tenant: string) {
+  const r = await page.request.post("/v1/signup", {
+    headers: H,
+    data: {
+      tenant,
+      email: `${letters()}-${Math.random().toString(36).slice(2, 8)}@chat.test`,
+      name: `${tenant.split(" ")[0]} Owner`,
+      password: "correct horse battery",
+    },
+  });
+  expect(r.status(), await r.text()).toBe(201);
+}
+
+async function axeBoth(page: Page, where: string) {
+  for (const scheme of ["light", "dark"] as const) {
+    await page.evaluate((t) => {
+      if (t === "dark") document.documentElement.dataset.theme = "dark";
+      else delete document.documentElement.dataset.theme;
+    }, scheme);
+    await page.waitForTimeout(300);
+    const vs = await axe(page);
+    expect(vs, describe(`${where} (${scheme})`, vs)).toEqual([]);
+  }
+  await page.evaluate(() => delete document.documentElement.dataset.theme);
+}
+
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC",
+  "base64",
+);
+
+async function twoBusinesses(browser: Browser, buyerOptions = {}) {
+  const stamp = letters();
+  const seller = await (
+    await browser.newContext({ viewport: { width: 1280, height: 800 } })
+  ).newPage();
+  await signUp(seller, `Dangote Depot ${stamp}`);
+  const hidden = await (await browser.newContext()).newPage();
+  await signUp(hidden, `Hidden Hardware ${stamp}`);
+  const buyer = await (
+    await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      ...buyerOptions,
+    })
+  ).newPage();
+  await signUp(buyer, `Ada Kitchen ${stamp}`);
+  expect(
+    (
+      await seller.request.put("/v1/link-settings", {
+        headers: H,
+        data: { findable: true },
+      })
+    ).ok(),
+  ).toBe(true);
+  const name = `Dangote Cement ${stamp}`;
+  expect(
+    (
+      await seller.request.put("/v1/business-profile", {
+        headers: H,
+        data: {
+          name,
+          tagline: "Cement and sand, delivered",
+          area: "Ikeja",
+          about: "Family-run since 1998.",
+        },
+      })
+    ).ok(),
+  ).toBe(true);
+  expect(
+    (
+      await buyer.request.put("/v1/business-profile", {
+        headers: H,
+        data: { name: "", tagline: "", area: "Ikeja", about: "" },
+      })
+    ).ok(),
+  ).toBe(true);
+  // Stand-in pictures: four photos and a logo for each card the server lists.
+  await buyer.route("**/v1/explore/*/photos/*", (r: Route) =>
+    r.fulfill({ status: 200, contentType: "image/png", body: PNG }),
+  );
+  await buyer.route("**/v1/explore/*/logo*", (r: Route) =>
+    r.fulfill({ status: 200, contentType: "image/png", body: PNG }),
+  );
+  await buyer.route(/\/v1\/explore(\?.*)?$/, async (route) => {
+    const res = await route.fetch();
+    const j = (await res.json()) as Record<
+      string,
+      { photos?: number; logo?: boolean }[]
+    >;
+    for (const k of ["results", "near", "fresh"]) {
+      for (const c of j[k] ?? []) {
+        c.photos = 4;
+        c.logo = true;
+      }
+    }
+    return route.fulfill({ response: res, json: j });
+  });
+  return { seller, buyer, hidden, name, stamp };
+}
+
+test("Find a business opens Explore: Near you and the newest, a swipe of photos with dots, Connect and Withdraw, Message once linked; only those found", async ({
+  browser,
+}) => {
+  const { seller, buyer, name } = await twoBusinesses(browser);
+  await buyer.goto("/chat");
+  await buyer.getByTestId("new-chat").click();
+  const ex = buyer.getByTestId("explore");
+  await expect(ex).toBeVisible();
+  await expect(ex.getByTestId("explore-search")).toBeFocused();
+
+  // The two sections; the business that is not findable is not there.
+  await expect(ex.getByRole("heading", { name: "Near you" })).toBeVisible();
+  await expect(
+    ex.getByRole("heading", { name: "New on Taskiem" }),
+  ).toBeVisible();
+  const card = ex.getByTestId("explore-card").filter({ hasText: name }).first();
+  await expect(card).toContainText("Cement and sand, delivered · Ikeja");
+  await expect(card).toContainText("Family-run since 1998.");
+  await expect(ex).not.toContainText("Hidden Hardware");
+
+  // Photos: four slides, dots that follow, keys and dots that move.
+  const track = card.getByRole("group", {
+    name: /swipe or use the arrow keys/,
+  });
+  await expect(card.locator(".carousel-slide")).toHaveCount(4);
+  await expect(card.locator(".carousel-dot")).toHaveCount(4);
+  await expect(
+    card.locator('.carousel-dot[aria-current="true"]'),
+  ).toHaveAttribute("aria-label", "Show photo 1 of 4");
+  await expect
+    .poll(() =>
+      card
+        .locator(".carousel-slide img")
+        .first()
+        .evaluate((i: HTMLImageElement) => i.naturalWidth),
+    )
+    .toBeGreaterThan(0);
+  await track.focus();
+  await buyer.keyboard.press("ArrowRight");
+  await expect(
+    card.locator('.carousel-dot[aria-current="true"]'),
+  ).toHaveAttribute("aria-label", "Show photo 2 of 4");
+  await card.getByRole("button", { name: "Show photo 4 of 4" }).click();
+  await expect(
+    card.locator('.carousel-dot[aria-current="true"]'),
+  ).toHaveAttribute("aria-label", "Show photo 4 of 4");
+  await card.getByRole("button", { name: "Show photo 1 of 4" }).click();
+  await expect(
+    card.locator('.carousel-dot[aria-current="true"]'),
+  ).toHaveAttribute("aria-label", "Show photo 1 of 4");
+  await axeBoth(buyer, "Explore");
+
+  // Connect asks at once (both ways); Withdraw takes it back.
+  await card.getByRole("button", { name: new RegExp(`^Connect`) }).click();
+  await expect(card.getByText("Requested")).toBeVisible();
+  const asked = async () =>
+    (
+      (await (
+        await seller.request.get("/v1/links", { headers: H })
+      ).json()) as { links: { state: string; role: string }[] }
+    ).links;
+  await expect
+    .poll(async () => (await asked()).map((l) => `${l.state}/${l.role}`))
+    .toEqual(["asked_us/both"]); // as the other side sees it;
+  await card.getByRole("button", { name: /^Withdraw/ }).click();
+  await expect(card.getByRole("button", { name: /^Connect/ })).toBeVisible();
+  await expect.poll(async () => (await asked()).length).toBe(0);
+
+  // Connect again; they accept; it is a chat now: out of the sections, a Message in a search.
+  await card.getByRole("button", { name: /^Connect/ }).click();
+  await expect(card.getByText("Requested")).toBeVisible();
+  await expect.poll(async () => (await asked()).length).toBe(1);
+  const link = (await asked())[0] as unknown as { id: string };
+  expect(
+    (
+      await seller.request.post(`/v1/links/${link.id}/accept`, { headers: H })
+    ).ok(),
+  ).toBe(true);
+  await buyer.keyboard.press("Escape"); // closes Explore
+  await expect(ex).toHaveCount(0);
+  await expect(buyer.getByTestId("new-chat")).toBeFocused();
+  await buyer.getByTestId("new-chat").click();
+  await expect(
+    ex.getByTestId("explore-card").filter({ hasText: name }),
+  ).toHaveCount(0);
+  await ex.getByTestId("explore-search").fill("cement");
+  const found = ex.getByTestId("explore-card").filter({ hasText: name });
+  await expect(found).toBeVisible();
+  await found.getByRole("button", { name: /^Message/ }).click();
+  await expect(ex).toHaveCount(0);
+  await expect(buyer).toHaveURL(/\/chat\?with=/);
+});
+
+test("Explore search: nothing found says so, a phone number is the one blind row, a business that is not findable is never found; the back arrow closes it", async ({
+  browser,
+}) => {
+  const { buyer, stamp } = await twoBusinesses(browser);
+  await buyer.goto("/chat");
+  await buyer.getByTestId("new-chat").click();
+  const ex = buyer.getByTestId("explore");
+  const box = ex.getByTestId("explore-search");
+  await box.fill("zzqx");
+  await expect(ex).toContainText("No business found for “zzqx”");
+  await box.fill(`hidden hardware ${stamp}`);
+  await expect(ex).toContainText("No business found");
+  await box.fill("0803 123 4567");
+  await expect(ex.getByTestId("explore-blind")).toContainText(
+    "Send a link request to 0803…4567",
+  );
+  await box.fill("");
+  await expect(
+    ex.getByRole("heading", { name: "New on Taskiem" }),
+  ).toBeVisible();
+  await ex.getByTestId("explore-back").click();
+  await expect(ex).toHaveCount(0);
+  await expect(buyer.getByTestId("new-chat")).toBeFocused();
+});
+
+test("Explore on a phone fits the screen: nothing scrolls sideways, the photos swipe inside their card", async ({
+  browser,
+}) => {
+  const { buyer, name } = await twoBusinesses(browser, {
+    viewport: { width: 360, height: 740 },
+  });
+  await buyer.goto("/chat");
+  await buyer.getByTestId("new-chat").click();
+  const ex = buyer.getByTestId("explore");
+  const card = ex.getByTestId("explore-card").filter({ hasText: name }).first();
+  await expect(card).toBeVisible();
+  const box = await card.boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 360).toBe(true);
+  expect(
+    await buyer.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+    ),
+  ).toBe(false);
+  await buyer.screenshot({
+    path: "/tmp/claude-0/-home-user-taskier/ee15d754-4291-5a7a-bc3f-fed0af824ab6/scratchpad/explore-360.png",
+  });
+  await axeBoth(buyer, "Explore on a phone");
+});
+
+test("with Explore open over a conversation, the keys and Esc belong to Explore, not to the chat behind it; the phone's Back closes it", async ({
+  browser,
+}) => {
+  const { seller, buyer, name } = await twoBusinesses(browser);
+  // A chat to have open behind it: the buyer asks, the seller accepts.
+  const cards = (await (
+    await buyer.request.get("/v1/explore", { headers: H })
+  ).json()) as {
+    fresh: { business: string; name: string }[];
+  };
+  const sellerId = cards.fresh.find((c) => c.name === name)?.business;
+  expect(
+    (
+      await buyer.request.post("/v1/links", {
+        headers: H,
+        data: { business: sellerId, role: "both" },
+      })
+    ).ok(),
+  ).toBe(true);
+  const asked = (await (
+    await seller.request.get("/v1/links", { headers: H })
+  ).json()) as { links: { id: string }[] };
+  expect(
+    (
+      await seller.request.post(`/v1/links/${asked.links[0]?.id}/accept`, {
+        headers: H,
+      })
+    ).ok(),
+  ).toBe(true);
+  const link = (
+    (await (
+      await buyer.request.get("/v1/link-chats", { headers: H })
+    ).json()) as { conversations: { link: string }[] }
+  ).conversations[0]?.link;
+  const here = new RegExp(`with=${link}`);
+
+  await buyer.goto(`/chat?with=${link}`);
+  await expect(buyer.getByTestId("chat-pane")).toBeVisible();
+  await buyer.getByTestId("new-chat").click();
+  const ex = buyer.getByTestId("explore");
+  await expect(ex).toBeVisible();
+  await expect(buyer).toHaveURL(here); // the chat stays open behind it
+
+  // The chat page's shortcuts do nothing behind Explore.
+  await ex.getByTestId("explore-back").focus();
+  for (const key of ["j", "k", "n", "/", "?"]) await buyer.keyboard.press(key);
+  await expect(buyer).toHaveURL(here);
+  await expect(ex).toBeVisible();
+  await expect(
+    buyer.getByRole("dialog", { name: /keyboard|shortcuts/i }),
+  ).toHaveCount(0);
+
+  // Esc closes Explore only: the conversation is still open.
+  await buyer.keyboard.press("Escape");
+  await expect(ex).toHaveCount(0);
+  await expect(buyer).toHaveURL(here);
+  await expect(buyer.getByTestId("chat-pane")).toBeVisible();
+
+  // The phone's Back closes it too, and stays on the chat.
+  await buyer.getByTestId("new-chat").click();
+  await expect(ex).toBeVisible();
+  await buyer.goBack();
+  await expect(ex).toHaveCount(0);
+  await expect(buyer).toHaveURL(here);
+  await expect(buyer.getByTestId("chat-pane")).toBeVisible();
+});
+
+test("a request to a phone number from Explore says it was sent, and does not offer to send it again", async ({
+  browser,
+}) => {
+  const { buyer } = await twoBusinesses(browser);
+  await buyer.goto("/chat");
+  await buyer.getByTestId("new-chat").click();
+  const ex = buyer.getByTestId("explore");
+  await ex.getByTestId("explore-search").fill("0803 123 4567");
+  const blind = ex.getByTestId("explore-blind");
+  await blind.getByRole("button", { name: "Send request" }).click();
+  await expect(blind.getByText("Request sent")).toBeVisible();
+  await expect(blind.getByRole("button", { name: "Send request" })).toHaveCount(
+    0,
+  );
+});
+
+// Chat tools phase 6 (docs/spec/chat-tools.md §8): tagging a business we are
+// not linked with, in the Taskiem conversation, shows its Explore card in a
+// sheet, and a link request is sent from it.
+test("tagging a business you are not linked with shows its card, and Connect asks it to link", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { seller, buyer, name, stamp } = await twoBusinesses(browser, {
+    viewport: { width: 390, height: 844 },
+  });
+  expect(
+    (
+      await buyer.request.put("/v1/settings/chat-tools", {
+        headers: H,
+        data: { chat_tools: true },
+      })
+    ).ok(),
+  ).toBe(true);
+  await buyer.goto("/chat?with=taskiem");
+  const box = buyer.getByTestId("taskiem-pane").locator("textarea[data-chat-box]");
+  await box.fill(`@Dangote Cement ${stamp}`);
+  const picker = buyer.getByTestId("mention-list");
+  const row = picker.getByRole("button", { name: new RegExp(`^${name}.*Not linked · Ikeja.*see their card`) });
+  await expect(row).toBeVisible();
+  await axeBoth(buyer, "the picker with a business not linked");
+  await row.click();
+  const sheet = buyer.getByTestId("business-card-sheet");
+  await expect(sheet).toBeVisible();
+  // Nothing was tagged: the words stay as typed.
+  await expect(box).toHaveValue(`@Dangote Cement ${stamp}`);
+  const card = sheet.getByTestId("explore-card");
+  await expect(card).toContainText("Cement and sand, delivered · Ikeja");
+  await expect(card).toContainText("Family-run since 1998.");
+  await expect(card.locator(".carousel-slide")).toHaveCount(4);
+  await axeBoth(buyer, "a business's card from the picker");
+  await card.getByRole("button", { name: `Connect with ${name}` }).click();
+  await expect(card.getByText("Requested")).toBeVisible();
+  await expect(sheet).toContainText(`Asked ${name} to link`);
+  await expect(sheet.locator(".tk-saved")).toHaveCount(0, { timeout: 5000 });
+  // The seller has the ask.
+  const asks = (await (await seller.request.get("/v1/links")).json()) as {
+    links: { state: string; asked_by_us: boolean }[];
+  };
+  expect(asks.links.some((l) => l.state === "asked_us" || (l.state === "requested" && !l.asked_by_us))).toBe(true);
+  // Withdraw takes it back; Connect is offered again.
+  await card.getByRole("button", { name: /^Withdraw/ }).click();
+  await expect(card.getByRole("button", { name: /^Connect/ })).toBeVisible();
+});
+
+test("the @ key starts a tag in the open chat; the keys stay out of Explore", async ({
+  browser,
+}) => {
+  const { buyer } = await twoBusinesses(browser);
+  expect(
+    (
+      await buyer.request.put("/v1/settings/chat-tools", {
+        headers: H,
+        data: { chat_tools: true },
+      })
+    ).ok(),
+  ).toBe(true);
+  await buyer.goto("/chat?with=taskiem");
+  const box = buyer.getByTestId("taskiem-pane").locator("textarea[data-chat-box]");
+  await expect(box).toBeVisible();
+  await buyer.locator("body").click({ position: { x: 5, y: 400 } });
+  await buyer.keyboard.press("@");
+  await expect(box).toBeFocused();
+  await expect(box).toHaveValue("@");
+  // n opens Explore; in it, "@" and "j" are typed, not taken.
+  await box.fill("");
+  await buyer.locator("body").click({ position: { x: 5, y: 400 } });
+  await buyer.keyboard.press("n");
+  const ex = buyer.getByTestId("explore");
+  await expect(ex).toBeVisible();
+  await buyer.keyboard.press("@");
+  await expect(ex.getByTestId("explore-search")).toHaveValue("@");
+  await expect(box).toHaveValue("");
+});
+
+test("a business that asked you to link is answered from its card; the keys stay out of the sheet", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { seller, buyer, name, stamp } = await twoBusinesses(browser, {
+    viewport: { width: 390, height: 844 },
+  });
+  const me = (await (await buyer.request.get("/v1/me")).json()) as { tenant_id: string };
+  // The seller asks the buyer (who can be found, so may be asked).
+  await buyer.request.put("/v1/link-settings", { headers: H, data: { findable: true } });
+  expect(
+    (
+      await seller.request.post("/v1/links", {
+        headers: H,
+        data: { business: me.tenant_id, role: "both" },
+      })
+    ).status(),
+  ).toBeLessThan(300);
+  expect(
+    (
+      await buyer.request.put("/v1/settings/chat-tools", {
+        headers: H,
+        data: { chat_tools: true },
+      })
+    ).ok(),
+  ).toBe(true);
+  await buyer.goto("/chat?with=taskiem");
+  const box = buyer.getByTestId("taskiem-pane").locator("textarea[data-chat-box]");
+  await box.fill(`@Dangote Cement ${stamp}`);
+  const row = buyer
+    .getByTestId("mention-list")
+    .getByRole("button", { name: new RegExp(`^${name}.*asked you to link`) });
+  await row.click();
+  const sheet = buyer.getByTestId("business-card-sheet");
+  const card = sheet.getByTestId("explore-card");
+  await expect(card).toContainText(`${name} asked to link with you`);
+  await axeBoth(buyer, "a card that asked you to link");
+  // The chat's letters do nothing under the sheet.
+  await buyer.keyboard.press("n");
+  await expect(buyer.getByTestId("explore")).toHaveCount(0);
+  await card.getByRole("button", { name: /^Accept/ }).click();
+  await expect(card.getByRole("button", { name: /^Message/ })).toBeVisible();
+  // Linked: a diary line in the Taskiem conversation, and Message opens theirs.
+  await card.getByRole("button", { name: /^Message/ }).click();
+  await expect(buyer).toHaveURL(/\/chat\?with=(?!taskiem)/);
+  const said = (await (await buyer.request.get("/v1/taskiem-chat")).json()) as {
+    messages: { kind: string; text: string }[];
+  };
+  expect(said.messages.filter((m) => m.kind === "diary").map((m) => m.text)).toContain(
+    // The link's own name (the business's), as the chat list shows it.
+    `Linked with Dangote Depot ${stamp}`,
+  );
+});
+
+test("with no linked business, the chats offer businesses to link with, Find a business, and the way to be found", async ({ browser }) => {
+  const { buyer, name } = await twoBusinesses(browser, { viewport: { width: 390, height: 844 } });
+  // Other tests' businesses share the server: only this one's.
+  await buyer.route(/\/v1\/explore(\?.*)?$/, async (route) => {
+    const res = await route.fetch();
+    const j = (await res.json()) as Record<string, unknown>;
+    for (const k of ["near", "fresh", "delivery", "featured", "across", "trusted", "popular"])
+      j[k] = ((j[k] as { name: string }[]) ?? []).filter((c) => c.name === name);
+    return route.fulfill({ response: res, json: j });
+  });
+  // Asked once already, and said no: the panel offers the switch again.
+  await buyer.request.put("/v1/link-settings", { headers: H, data: { findable: false } });
+  await buyer.goto("/chat");
+  const start = buyer.getByTestId("chats-start");
+  await expect(start).toContainText("Link with the businesses you trade with");
+  // The one near us first: Connect asks it to link.
+  await expect(start.getByText(name, { exact: true })).toBeVisible();
+  // Not findable yet (no storefront): said, with the switch.
+  await expect(start).toContainText("Other businesses cannot find you yet.");
+  await start.getByRole("button", { name: "Let them find me" }).click();
+  // Asked what it sells; not now.
+  const ask = buyer.getByRole("dialog", { name: "What do you sell?" });
+  await expect(ask).toBeVisible();
+  await ask.getByRole("button", { name: "Not now" }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(start).not.toContainText("Other businesses cannot find you yet.");
+  await axeBoth(buyer, "the chats with no linked business");
+  // Find a business opens Explore; closed, the chats again.
+  await start.getByRole("button", { name: "Find a business" }).click();
+  await expect(buyer.getByTestId("explore-search")).toBeVisible();
+  await buyer.goBack();
+  // Connect asks it to link: the request is then among the chats.
+  await start.getByRole("button", { name: `Connect with ${name}` }).click();
+  await expect(start).toHaveCount(0);
+  await expect(buyer.getByText(name).first()).toBeVisible();
+});
+
+test("Explore with no one to show says why, and offers to be found", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  await signUp(page, `Lonely Shop ${letters()}`);
+  await page.route(/\/v1\/explore(\?.*)?$/, (r) =>
+    r.fulfill({ json: { results: [], near: [], near_more: false, fresh: [], more: false, delivery: [], delivery_more: false } }),
+  );
+  await page.goto("/chat");
+  await page.getByTestId("chats-start").getByRole("button", { name: "Find a business" }).click();
+  await expect(page.getByText("No other business can be found yet")).toBeVisible();
+  await page.getByRole("button", { name: "Let other businesses find me" }).click();
+  // Found now, with no category: asked what it sells.
+  const ask = page.getByRole("dialog", { name: "What do you sell?" });
+  await expect(ask).toBeVisible();
+  await axeBoth(page, "What do you sell?");
+  await ask.getByRole("button", { name: "Food and drinks" }).click();
+  await ask.getByRole("button", { name: "Save" }).click();
+  await expect(ask).toHaveCount(0);
+  await expect
+    .poll(async () => (await (await page.request.get("/v1/business-profile", { headers: H })).json()).categories)
+    .toEqual(["food"]);
+  await expect(page.getByRole("button", { name: "Let other businesses find me" })).toHaveCount(0);
+  expect((await (await page.request.get("/v1/link-settings", { headers: H })).json()).findable_now).toBe(true);
+  await axeBoth(page, "Explore with no one to show");
+});
+
+test("Explore's start page: the categories with their counts, one chosen and back; Featured, Popular with its count, Recently viewed; picking categories in Your business in Explore", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { seller, buyer, name } = await twoBusinesses(browser);
+  // The seller picks its category, as Your business in Explore does.
+  expect(
+    (
+      await seller.request.put("/v1/business-profile", {
+        headers: H,
+        data: { name, tagline: "Cement and sand, delivered", area: "Ikeja", about: "Family-run since 1998.", categories: ["building"] },
+      })
+    ).ok(),
+  ).toBe(true);
+  // Featured and Popular need verified, busy businesses the test server
+  // has none of: the seller's own card is shown in them, as the server
+  // would show it.
+  await buyer.route(/\/v1\/explore$/, async (route) => {
+    const res = await route.fetch();
+    const j = (await res.json()) as { featured?: unknown[]; popular?: unknown[] };
+    // Its card as a search finds it (other tests' businesses fill the pages).
+    const found = (await (await buyer.request.get(`/v1/explore?q=${encodeURIComponent(name)}`, { headers: H })).json()) as {
+      results: Record<string, unknown>[];
+    };
+    const mine = found.results.find((c) => c.name === name);
+    if (mine) {
+      j.featured = [{ ...mine }];
+      j.popular = [{ ...mine, links: 20 }];
+    }
+    return route.fulfill({ response: res, json: j });
+  });
+  await buyer.goto("/chat");
+  await buyer.getByTestId("new-chat").click();
+  const ex = buyer.getByTestId("explore");
+  const chips = ex.getByTestId("explore-categories");
+  await expect(chips.getByRole("button", { name: /Building materials [1-9]\d* business/ })).toBeVisible();
+  await expect(chips.getByRole("button")).toHaveCount(13);
+  await expect(ex.getByTestId("explore-featured").getByText(name, { exact: true })).toBeVisible();
+  // The Featured card: a cover, then who it is; no swipe of photos.
+  await expect(ex.getByTestId("explore-featured").locator(".tk-x-cover")).toHaveCount(1);
+  await expect(ex.getByTestId("explore-featured").locator(".carousel")).toHaveCount(0);
+  const popular = ex.getByTestId("explore-popular");
+  await expect(popular).toContainText("Linked with 20+ businesses");
+  await expect(popular).toContainText("Building materials");
+  await expect(ex.getByTestId("explore-recent")).toHaveCount(0);
+  await axeBoth(buyer, "Explore's start page");
+
+  // A category: its businesses in the sections' place; pressed again, back.
+  await chips.getByRole("button", { name: /Building materials/ }).click();
+  await expect(chips.getByRole("button", { name: /Building materials/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(ex.getByRole("heading", { name: "Building materials" })).toBeVisible();
+  // Every card listed is in it (other tests' businesses may be too).
+  const inCat = ex.getByRole("list", { name: "Building materials" }).getByTestId("explore-card");
+  await expect(inCat.first()).toContainText("Building materials");
+  expect(await inCat.count()).toBeGreaterThan(0);
+  for (const t of await inCat.allInnerTexts()) expect(t).toContain("Building materials");
+  await expect(ex.getByTestId("explore-featured")).toHaveCount(0);
+  await chips.getByRole("button", { name: /Building materials/ }).click();
+  await expect(ex.getByTestId("explore-featured")).toBeVisible();
+
+  // Acted on: first in Recently viewed, and still there when Explore opens again.
+  await ex.getByTestId("explore-featured").getByRole("button", { name: `Connect with ${name}` }).click();
+  await expect(ex.getByTestId("explore-recent").getByText(name, { exact: true })).toBeVisible();
+  await ex.getByTestId("explore-back").click();
+  await buyer.getByTestId("new-chat").click();
+  await expect(buyer.getByTestId("explore-recent").getByText(name, { exact: true })).toBeVisible();
+
+  // Your business in Explore: two at most, saved with the rest.
+  await buyer.goto("/settings/links/profile");
+  const cats = buyer.getByTestId("profile-categories");
+  await cats.getByRole("button", { name: "Food and drinks" }).click();
+  await cats.getByRole("button", { name: "Farm produce" }).click();
+  await expect(cats.getByRole("button", { name: "Fashion" })).toBeDisabled();
+  await buyer.getByTestId("profile-save").click();
+  await expect
+    .poll(async () => (await (await buyer.request.get("/v1/business-profile", { headers: H })).json()).categories)
+    .toEqual(["food", "farm"]);
+  await axeBoth(buyer, "Your business in Explore with categories");
+});
+
+test("with no one near us, or no area set, Across Nigeria takes Near you's place", async ({ browser }) => {
+  const { buyer, name } = await twoBusinesses(browser);
+  expect((await buyer.request.put("/v1/business-profile", { headers: H, data: { name: "", tagline: "", area: "", about: "" } })).ok()).toBe(true);
+  const page = (await (await buyer.request.get("/v1/explore", { headers: H })).json()) as { near: unknown[]; across: { name: string }[] };
+  expect(page.near).toHaveLength(0);
+  expect(page.across.length).toBeGreaterThan(0);
+  await buyer.goto("/chat");
+  await buyer.getByTestId("new-chat").click();
+  const ex = buyer.getByTestId("explore");
+  await expect(ex.getByRole("heading", { name: "Across Nigeria" })).toBeVisible();
+  await expect(ex.getByRole("heading", { name: "Near you" })).toHaveCount(0);
+  await expect(ex.getByTestId("explore-no-area")).toBeVisible();
+  // Our area set again, with the seller in it: Near you is back.
+  expect((await buyer.request.put("/v1/business-profile", { headers: H, data: { name: "", tagline: "", area: "Ikeja", about: "" } })).ok()).toBe(true);
+  await ex.getByTestId("explore-back").click();
+  await buyer.getByTestId("new-chat").click();
+  await expect(buyer.getByTestId("explore").getByRole("heading", { name: "Near you" })).toBeVisible();
+  await expect(buyer.getByTestId("explore").getByRole("heading", { name: "Across Nigeria" })).toHaveCount(0);
+  void name;
+});

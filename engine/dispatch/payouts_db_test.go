@@ -384,3 +384,80 @@ func TestPayoutMarkedNotPaid(t *testing.T) {
 		t.Fatalf("next payout %+v %v", b2, err)
 	}
 }
+
+// A payout binds exactly the deliveries whose fees it pays: one that is
+// confirmed delivered while the batch is being made (after the fees were
+// added up, before the deliveries are bound) is left for the next payout,
+// not marked paid for nothing.
+func TestRiderPayoutBindsOnlyWhatItPays(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	tunde := w.rider("Tunde", "+2348031110012", "Lekki")
+	w.in(func(tx pgx.Tx) error {
+		_, err := w.d.SetBankTx(ctx, tx, w.env.Tenant, tunde.ID, dispatch.Bank{BankCode: "035", BankName: "Wema Bank", AccountNumber: "0123456789"}, "user:ada", "totp")
+		return err
+	})
+	w.deliver(tunde.ID, 80000, false)
+	late := w.deliver(tunde.ID, 70000, false)
+	// The second is not delivered yet when the fees are added up, and is
+	// by the time the payout's row is written: as if its rider's tap
+	// committed between the two.
+	admin := w.env.DB.Admin
+	var lateID uuid.UUID
+	if err := admin.QueryRow(ctx, `UPDATE deliveries d SET status = 'arrived' FROM storefront_orders o WHERE o.id = d.order_id AND o.reference = $1 RETURNING d.id`, late).Scan(&lateID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(ctx, `CREATE FUNCTION test_late_delivery() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+		BEGIN UPDATE deliveries SET status = 'delivered' WHERE id = '`+lateID.String()+`'; RETURN NEW; END $$`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(ctx, `CREATE TRIGGER test_late_delivery BEFORE INSERT ON rider_payouts FOR EACH ROW EXECUTE FUNCTION test_late_delivery()`); err != nil {
+		t.Fatal(err)
+	}
+	b, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New(), uuid.Nil)
+	if err != nil || len(b.Payouts) != 1 {
+		t.Fatalf("batch %+v %v", b, err)
+	}
+	if _, err := admin.Exec(ctx, `DROP TRIGGER test_late_delivery ON rider_payouts`); err != nil {
+		t.Fatal(err)
+	}
+	p := b.Payouts[0]
+	var bound int
+	var fees int64
+	if err := admin.QueryRow(ctx, `SELECT count(*), COALESCE(sum(fee_kobo), 0) FROM deliveries WHERE payout_id = $1`, p.ID).Scan(&bound, &fees); err != nil {
+		t.Fatal(err)
+	}
+	if bound != p.Deliveries || fees != p.FeesKobo {
+		t.Fatalf("the payout pays %d deliveries' fees of %d and binds %d deliveries with fees of %d", p.Deliveries, p.FeesKobo, bound, fees)
+	}
+	// Whatever it left is due next time: nothing is lost.
+	var due int64
+	if l, ok := w.lines()["Tunde"]; ok {
+		due = l.FeesKobo
+	}
+	if p.FeesKobo+due != 150000 {
+		t.Fatalf("paid %d and %d still due of 150000", p.FeesKobo, due)
+	}
+}
+
+// A second batch made while the first is still open pays nothing: the
+// deliveries are bound to the first, so two payout runs started by a
+// request sent twice cannot pay a rider twice.
+func TestRiderSecondBatchPaysNothing(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	tunde := w.rider("Tunde", "+2348031110022", "Lekki")
+	w.in(func(tx pgx.Tx) error {
+		_, err := w.d.SetBankTx(ctx, tx, w.env.Tenant, tunde.ID, dispatch.Bank{BankCode: "035", BankName: "Wema Bank", AccountNumber: "0123456789"}, "user:ada", "totp")
+		return err
+	})
+	w.deliver(tunde.ID, 80000, false)
+	first, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New(), uuid.Nil)
+	if err != nil || len(first.Payouts) != 1 || first.TotalKobo != 80000 {
+		t.Fatalf("the first batch %+v %v", first, err)
+	}
+	second, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New(), uuid.Nil)
+	if err != nil || len(second.Payouts) != 0 || second.TotalKobo != 0 {
+		t.Fatalf("the second batch pays again: %+v %v", second, err)
+	}
+}

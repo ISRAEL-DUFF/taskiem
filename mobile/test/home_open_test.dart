@@ -1,0 +1,240 @@
+// The app as a whole, opened by what comes from outside it
+// (docs/spec/mobile-app-m4.md N4, N5): a link that waited behind signing in
+// opens its screen; a notification's page opens its screen; the question
+// asked once after signing in; a notification with the app open is a toast
+// with Open; and where each page of the web opens in the app.
+
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:taskiem/app/applinks.dart';
+import 'package:taskiem/app/notify.dart';
+import 'package:taskiem/app/prefs.dart';
+import 'package:taskiem/app/route.dart';
+import 'package:taskiem/app/session.dart';
+import 'package:taskiem/chat/conversation.dart';
+import 'package:taskiem/chat/customer.dart';
+import 'package:taskiem/chat/invoices_page.dart';
+import 'package:taskiem/chat/people_chat.dart' show PeopleChatScreen;
+import 'package:taskiem/chat/discover.dart' show DiscoverTab;
+import 'package:taskiem/chat/taskiem.dart';
+import 'package:taskiem/chat/your_orders.dart' show YourOrderPage;
+import 'package:taskiem/main.dart';
+
+import 'lock_test.dart' show FakeUnlocker;
+import 'notify_test.dart' show FakeFirebase;
+import 'support.dart';
+
+const _bayo = 'ef99249d-9322-40ca-91c2-e24fdd450c15';
+
+http.Response _json(Object body, [int status = 200]) => http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json; charset=utf-8'});
+
+void main() {
+  test('where each page of the web opens in the app', () {
+    expect(routeOf('/chat'), (tab: tabChats, screen: RouteScreen.none, id: ''));
+    expect(routeOf('/chat?with=$_bayo'), (tab: tabChats, screen: RouteScreen.conversation, id: _bayo));
+    expect(routeOf('/chat?with=c-42'), (tab: tabChats, screen: RouteScreen.customer, id: '42'));
+    expect(routeOf('/approvals'), (tab: tabChats, screen: RouteScreen.taskiem, id: ''));
+    expect(routeOf('/invoices/INV-1'), (tab: tabMoney, screen: RouteScreen.invoice, id: 'INV-1'));
+    expect(routeOf('/bills/b1'), (tab: tabMoney, screen: RouteScreen.bill, id: 'b1'));
+    expect(routeOf('/purchases/p1'), (tab: tabOrders, screen: RouteScreen.purchase, id: 'p1'));
+    expect(routeOf('/trade-orders/t1'), (tab: tabOrders, screen: RouteScreen.tradeOrder, id: 't1'));
+    expect(routeOf('/storefront/orders/ORD-9'), (tab: tabOrders, screen: RouteScreen.storefrontOrder, id: 'ORD-9'));
+    expect(routeOf('/invoices'), (tab: tabMoney, screen: RouteScreen.none, id: ''));
+    expect(routeOf('/storefront/orders'), (tab: tabOrders, screen: RouteScreen.none, id: ''));
+    // A bad escape opens the tab, not a crash.
+    expect(routeOf('/invoices/%E0%A4'), (tab: tabMoney, screen: RouteScreen.none, id: ''));
+    expect(routeOf('/settings'), (tab: tabToday, screen: RouteScreen.none, id: ''));
+  });
+
+  group('the app', () {
+    setUpAll(loadFonts);
+
+    Future<void> settle(WidgetTester t) async {
+      for (var i = 0; i < 8; i++) {
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
+        await t.pump();
+      }
+      // A dialog's leaving (200 ms) played out.
+      await t.pump(const Duration(milliseconds: 250));
+    }
+
+    Future<Prefs> noLock() async {
+      final p = Prefs(MemoryKeyStore());
+      await p.load();
+      return p;
+    }
+
+    Future<void> open(WidgetTester t, {LinkInbox? links, PhoneNotifications? notify, Future<http.Response?> Function(http.Request)? also}) async {
+      t.view.physicalSize = const Size(390, 844);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final auth = Fixture('chats').auth(also: also);
+      final prefs = await t.runAsync(noLock);
+      await t.pumpWidget(TaskiemApp(auth: auth, unlocker: FakeUnlocker(), prefs: prefs, links: links, notify: notify));
+      await settle(t);
+      addTearDown(() async {
+        await t.pumpWidget(const SizedBox());
+        await t.pump();
+      });
+    }
+
+    testWidgets('a link that came before signing in opens its screen once the app is open', (t) async {
+      final inbox = LinkInbox(links: const Stream.empty(), first: () async => Uri.parse('https://staging.ispend.name.ng/approvals'));
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      expect(inbox.waiting, isTrue);
+      await open(t, links: inbox);
+      expect(find.byType(TaskiemScreen), findsOneWidget);
+      expect(inbox.waiting, isFalse);
+    });
+
+    testWidgets('a link to a conversation opens it, and one to an invoice its page', (t) async {
+      final links = StreamController<Uri>();
+      final inbox = LinkInbox(links: links.stream, first: () async => null);
+      await open(t, links: inbox);
+      links.add(Uri.parse('https://staging.ispend.name.ng/chat?with=$_bayo'));
+      await settle(t);
+      expect(find.byType(ConversationScreen), findsOneWidget);
+      links.add(Uri.parse('https://staging.ispend.name.ng/invoices/INV-0002'));
+      await settle(t);
+      expect(find.byType(ConversationScreen), findsNothing, reason: 'what was open goes first');
+      expect(find.byType(InvoicePage), findsOneWidget);
+      links.add(Uri.parse('https://staging.ispend.name.ng/chat?with=c-8d3a448a-c24d-485e-93a0-ddfd438fa74e'));
+      await settle(t);
+      expect(find.byType(CustomerScreen), findsOneWidget);
+      await links.close();
+    });
+
+    testWidgets('a customer opened by their WhatsApp line’s id holds back notifications by their own id', (t) async {
+      // One customer on both lines (§11): the pair's id is the app thread's,
+      // the tag the server's notifications carry (`c-{id}`).
+      const wa = 'b0b0b0b0-0000-4000-8000-00000000000a', app = 'a0a0a0a0-0000-4000-8000-00000000000a';
+      Map<String, dynamic> l(String line, String id) => {'line': line, 'id': id, 'phone': '+2348031230000', 'window_open': true, 'stopped': false, 'blocked': false, 'last_in_at': null};
+      Future<http.Response?> also(http.Request req) async {
+        if (req.url.path == '/v1/customer-chats/$wa') {
+          return _json({
+            'id': app, 'name': 'Tolu Ade', 'phone': '+2348031230000', 'line': 'app', 'stopped': false, 'blocked': false, 'window_open': true, 'archived': false,
+            'last': 'Hi', 'last_at': '2026-11-16T10:00:00Z', 'last_mine': false, 'unread': 0, 'lines': [l('app', app), l('whatsapp', wa)], 'reply_line': 'app',
+          });
+        }
+        if (req.url.path == '/v1/customer-chats/$wa/messages') return _json({'messages': <Object>[], 'more': false});
+        return null;
+      }
+      final links = StreamController<Uri>();
+      final inbox = LinkInbox(links: links.stream, first: () async => null);
+      t.view.physicalSize = const Size(390, 844);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final auth = Fixture('chats').auth(also: also);
+      final notify = PhoneNotifications(auth: auth, keys: MemoryKeyStore(), platform: FakeFirebase());
+      final prefs = await t.runAsync(noLock);
+      await t.pumpWidget(TaskiemApp(auth: auth, unlocker: FakeUnlocker(), prefs: prefs, links: inbox, notify: notify));
+      await settle(t);
+      links.add(Uri.parse('https://staging.ispend.name.ng/chat?with=c-$wa'));
+      await settle(t);
+      expect(find.byType(CustomerScreen), findsOneWidget);
+      expect(notify.showing, 'c-$app');
+      await links.close();
+      await t.pumpWidget(const SizedBox());
+      await t.pump();
+    });
+
+    testWidgets('in a business, a link to the person’s own order or Discover opens over the business', (t) async {
+      final links = StreamController<Uri>();
+      final inbox = LinkInbox(links: links.stream, first: () async => null);
+      await open(t, links: inbox, also: (r) async {
+        if (r.url.path == '/v1/me/orders/b1/MK-1042') {
+          return _json({
+            'business_id': 'b1', 'business': 'Mama’s Kitchen', 'reference': 'MK-1042', 'kind': 'order', 'state': 'accepted', 'summary': '1 × Jollof rice',
+            'total_kobo': 250000, 'due_kobo': 0, 'pay': false, 'made_at': '2026-11-15T10:00:00Z', 'chat_id': null, 'lines': <Object>[], 'paid_kobo': 0,
+          });
+        }
+        if (r.url.path == '/v1/discover/search') return _json({'results': <Object>[], 'more': false});
+        if (r.url.path == '/v1/discover/categories') return _json({'categories': <Object>[]});
+        return null;
+      });
+      links.add(Uri.parse('https://staging.ispend.name.ng/you/orders/b1/MK-1042'));
+      await settle(t);
+      expect(find.byType(YourOrderPage), findsOneWidget);
+      expect(find.text('Order MK-1042'), findsOneWidget);
+      links.add(Uri.parse('https://staging.ispend.name.ng/you/discover'));
+      await settle(t);
+      expect(find.byType(YourOrderPage), findsNothing);
+      expect(find.byType(DiscoverTab), findsOneWidget);
+      await links.close();
+    });
+
+    testWidgets('in a business, a person’s chat opens over it with the business chats’ opener and this phone’s notifications', (t) async {
+      final fb = FakeFirebase();
+      final links = StreamController<Uri>();
+      final inbox = LinkInbox(links: links.stream, first: () async => null);
+      Future<http.Response?> also(http.Request req) async {
+        if (req.url.path == '/v1/app/config') {
+          return _json({'min_version': '0.1.0', 'passkeys': false, 'signup': false,
+            'push': {'fcm': {'api_key': 'k', 'app_id_android': '1:1:android:a', 'project_id': 'p', 'sender_id': '1'}}});
+        }
+        if (req.url.path == '/v1/me/push') return _json({'devices': [], 'max': 10, 'kinds': pushKinds, 'browsers': true, 'phones': true});
+        if (req.url.path == '/v1/me/people/pc1') {
+          return _json({'id': 'pc1', 'kind': 'person', 'person_id': 'p1', 'name': 'Ada Obi', 'gone': false, 'last': 'Hi', 'last_mine': false, 'last_at': '2026-11-17T09:10:00Z',
+            'unread': 0, 'muted': false, 'archived': false, 'request': false, 'waiting': false, 'blocked': false});
+        }
+        if (req.url.path == '/v1/me/people/pc1/messages') return _json({'messages': <Object>[], 'more': false});
+        return null;
+      }
+      t.view.physicalSize = const Size(390, 844);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final auth = Fixture('chats').auth(also: also);
+      final notify = PhoneNotifications(auth: auth, keys: MemoryKeyStore(), platform: fb);
+      final prefs = await t.runAsync(noLock);
+      await t.pumpWidget(TaskiemApp(auth: auth, unlocker: FakeUnlocker(), prefs: prefs, links: inbox, notify: notify));
+      await settle(t);
+      await t.tap(find.text('Not now'));
+      await settle(t);
+      links.add(Uri.parse('https://staging.ispend.name.ng/you/people/pc1'));
+      await settle(t);
+      final chat = t.widget<PeopleChatScreen>(find.byType(PeopleChatScreen));
+      expect(chat.openBusiness, isNotNull, reason: 'a shared card’s Chat opens the person’s chat with that business');
+      expect(identical(chat.notify, notify), isTrue, reason: 'no push of its own while it is on the screen');
+      await links.close();
+      await t.pumpWidget(const SizedBox());
+      await t.pump();
+    });
+
+    testWidgets('asked once after signing in; with the app open a notification is a toast with Open', (t) async {
+      final fb = FakeFirebase();
+      Future<http.Response?> also(http.Request req) async {
+        if (req.url.path == '/v1/app/config') {
+          return _json({'min_version': '0.1.0', 'passkeys': false, 'signup': false,
+            'push': {'fcm': {'api_key': 'k', 'app_id_android': '1:1:android:a', 'project_id': 'p', 'sender_id': '1'}}});
+        }
+        if (req.url.path == '/v1/me/push') return _json({'devices': [], 'max': 10, 'kinds': pushKinds, 'browsers': true, 'phones': true});
+        return null;
+      }
+      t.view.physicalSize = const Size(390, 844);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final auth = Fixture('chats').auth(also: also);
+      final notify = PhoneNotifications(auth: auth, keys: MemoryKeyStore(), platform: fb);
+      final prefs = await t.runAsync(noLock);
+      await t.pumpWidget(TaskiemApp(auth: auth, unlocker: FakeUnlocker(), prefs: prefs, notify: notify));
+      await settle(t);
+      expect(find.text('Get a notification when a business or customer writes?'), findsOneWidget);
+      await t.tap(find.text('Not now'));
+      await settle(t);
+      expect(find.text('Get a notification when a business or customer writes?'), findsNothing);
+      expect(await t.runAsync(notify.shouldAsk), isFalse, reason: 'asked once');
+      fb.notes.add(const PushNote(title: 'Bayo Rice Mills', body: 'Rice is 45k', data: {'link': '/chat?with=$_bayo', 'tag': _bayo}));
+      await settle(t);
+      expect(find.text('Bayo Rice Mills: Rice is 45k'), findsOneWidget);
+      await t.tap(find.text('Open'));
+      await settle(t);
+      expect(find.byType(ConversationScreen), findsOneWidget);
+      await t.pumpWidget(const SizedBox());
+      await t.pump();
+    });
+  });
+}

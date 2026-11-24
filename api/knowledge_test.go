@@ -21,7 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 )
 
-// What the assistant knows (decision 0062 D12): the owner's own words are
+// What the assistant knows (decision 0074 D12): the owner's own words are
 // used as written and found by a customer's question; a source from
 // outside waits for the owner; personal columns never go in; a refresh
 // replaces, a pause hides, a delete removes; and it is the owner's.

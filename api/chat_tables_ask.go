@@ -260,6 +260,14 @@ func (s *Server) waAskFrom(ctx context.Context, c *chat, question string, fallba
 	if info.Tag == "" {
 		info, _ = lang.Lookup(lang.EN)
 	}
+	// The call's tokens are reserved until it is recorded (finding F49).
+	release, err := s.reserveAI(ctx, c.tenant.ID, "table_query", tablequery.Request(question, info, described, 0).Estimate(), chatAIReservation)
+	if errors.Is(err, ai.ErrBudgetExhausted) {
+		return say("wa.ask.budget")
+	}
+	if err != nil {
+		return true, err
+	}
 	spec, resp, err := (&tablequery.Asker{Provider: model}).Ask(ctx, question, info, described)
 	outcome, errText := "valid", ""
 	switch {
@@ -276,7 +284,8 @@ func (s *Server) waAskFrom(ctx context.Context, c *chat, question string, fallba
 			outcome, errText = "refused", err.Error()
 		}
 	}
-	s.recordModelCall(ctx, c, "table_query", "tablequery", model, question, resp, outcome, errText)
+	s.recordModelCall(ctx, c, "table_query", "tablequery", model, resp, outcome, errText)
+	release()
 	if fallback && outcome == "unknown" {
 		// Not about the tables: the chat's usual answer follows.
 		return false, nil
@@ -528,26 +537,44 @@ func (s *Server) waAskMore(ctx context.Context, c *chat, f *chatFound) error {
 	return s.waAnswer(ctx, c, q, f.Last)
 }
 
+// chatAIReservation is how long a chat's model call holds its tokens of
+// the budget if it is never released (its process died).
+const chatAIReservation = 5 * time.Minute
+
 // recordModelCall records a chat's model call like a build's
-// (ai_interactions), so it counts against the business's AI budget.
-func (s *Server) recordModelCall(ctx context.Context, c *chat, kind, digest string, model ai.Provider, text string, resp *ai.Response, outcome, errText string) {
+// (ai_interactions), so it counts against the business's AI budget. It
+// keeps the tokens and what happened, never the chat's words: the message
+// and the model's answer name people and amounts that pattern redaction
+// leaves, and ai_interactions is insert-only, outside retention and
+// erasure (finding F50). The chat's history keeps the words, sealed and
+// for a bounded time. Only a provider's error is kept, redacted: the
+// others (a refused spec) can repeat what was asked.
+func (s *Server) recordModelCall(ctx context.Context, c *chat, kind, digest string, model ai.Provider, resp *ai.Response, outcome, errText string) {
+	s.recordModelCallFor(ctx, c.tenant.ID, c.p.Actor(), kind, digest, model, resp, outcome, errText)
+}
+
+// recordModelCallFor is recordModelCall for a tenant and an actor (a call
+// made from the web).
+func (s *Server) recordModelCallFor(ctx context.Context, tenant uuid.UUID, actor, kind, digest string, model ai.Provider, resp *ai.Response, outcome, errText string) {
 	var u ai.Usage
-	var respText *string
 	var stop, name string
 	if resp != nil {
-		r := pii.Redact(resp.Text)
-		respText, stop, name, u = &r, resp.StopReason, resp.Model, resp.Usage
+		stop, name, u = resp.StopReason, resp.Model, resp.Usage
 	}
 	if name == "" {
 		name = model.Model()
 	}
+	if outcome != "error" {
+		errText = ""
+	}
 	ctx = context.WithoutCancel(ctx)
-	msgs := []map[string]string{{"role": "user", "text": pii.Redact(text)}}
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+	msgs := []map[string]string{}
+	var respText *string
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO ai_interactions (id, tenant_id, build_id, round, kind, actor, provider, model, system_digest, messages,
 			response, stop_reason, outcome, error, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens)
 			VALUES ($1, $2, NULL, 0, $3, $4, $5, $6, $7, $8, $9, NULLIF($10, ''), $11, NULLIF($12, ''), $13, $14, $15, $16, $17)`,
-			uuid.Must(uuid.NewV7()), c.tenant.ID, kind, c.p.Actor(), model.Name(), name, digest, msgs, respText, stop, outcome, pii.Redact(errText),
+			uuid.Must(uuid.NewV7()), tenant, kind, actor, model.Name(), name, digest, msgs, respText, stop, outcome, pii.Redact(errText),
 			u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens, u.Total())
 		return err
 	})

@@ -56,7 +56,7 @@ type Limits struct {
 	// runs are never affected.
 	AIMonthlyTokens int64 `json:"ai_monthly_tokens"`
 	// AIStepMonthlyTokens: tokens the ai steps of runs may use per UTC
-	// month (decision 0062 D7): an assistant answering customers spends
+	// month (decision 0074 D7): an assistant answering customers spends
 	// these, never AIMonthlyTokens, so it cannot starve building. 0 turns
 	// AI steps off for the plan.
 	AIStepMonthlyTokens int64 `json:"ai_step_monthly_tokens"`
@@ -66,7 +66,7 @@ type Limits struct {
 	// back (docs/whatsapp.md#template-costs).
 	WhatsAppTemplatesMonthly int64 `json:"whatsapp_templates_monthly"`
 	// SpeechSecondsMonthly: seconds of speech, heard and spoken, a tenant's
-	// workflows may use per UTC month (decision 0062 D7, docs/speech.md),
+	// workflows may use per UTC month (decision 0074 D7, docs/speech.md),
 	// separate from AI building's tokens. Beyond it speech@1 refuses and
 	// a workflow answers in text.
 	SpeechSecondsMonthly int64 `json:"speech_seconds_monthly"`
@@ -98,6 +98,17 @@ type Limits struct {
 	// LinkMessagesDaily caps messages sent to linked businesses per UTC
 	// day (business links §13); 0: no limit.
 	LinkMessagesDaily int64 `json:"link_messages_daily"`
+
+	// MaxSavedObjects: the saved things a business may keep (saved objects
+	// §15 6): 2,000 by default, more on higher plans; 0: no limit. A
+	// person's own are capped apart (500).
+	MaxSavedObjects int `json:"max_saved_objects"`
+
+	// MaxPages: the pages a business may make (pages §12; decision 0072),
+	// drafts counted: 10 on the lowest plan, 50 on the middle, none above;
+	// 0: no limit. A business over it after a move to a lower plan keeps
+	// its pages and cannot add more.
+	MaxPages int `json:"max_pages"`
 
 	// The plan (when billing is on) and its subscription status: a
 	// sub-tenant's are its partner's. Set by the store.
@@ -203,6 +214,8 @@ var LimitKeys = []struct{ Key, Help string }{
 	{"sms_monthly", "SMS to customers per UTC month; beyond it only verification codes are sent (0: no limit)"},
 	{"embed_sites", "websites that may embed the storefront and forms (0: no limit)"},
 	{"link_messages_daily", "messages to linked businesses per UTC day; more are refused (0: no limit)"},
+	{"max_saved_objects", "saved things a business keeps (accounts, people, places, texts, files); more are refused (0: no limit)"},
+	{"max_pages", "pages a business makes, drafts counted; more are refused (0: no limit)"},
 }
 
 // DefaultEmbedSites is the platform's default number of websites that
@@ -237,6 +250,14 @@ const (
 	DefaultMaxDataTableColumns = 50
 )
 
+// DefaultMaxSavedObjects is the platform's default number of saved things a
+// business keeps: the lowest plan's (saved objects §15 6).
+const DefaultMaxSavedObjects = 2000
+
+// DefaultMaxPages is the platform's default number of pages a business
+// makes: the lowest plan's (pages §16, 6).
+const DefaultMaxPages = 10
+
 // MaxPayload is the largest delivery any tenant may be allowed.
 const MaxPayload = 10 << 20
 
@@ -260,6 +281,8 @@ func DefaultLimits() Limits {
 		MaxDataTables:            DefaultMaxDataTables,
 		MaxDataTableColumns:      DefaultMaxDataTableColumns,
 		EmbedSites:               DefaultEmbedSites,
+		MaxSavedObjects:          DefaultMaxSavedObjects,
+		MaxPages:                 DefaultMaxPages,
 	}
 }
 
@@ -709,7 +732,9 @@ func (s *Store) SetLimits(ctx context.Context, tenant uuid.UUID, values map[stri
 		if !exists {
 			return fmt.Errorf("tenant %s: %w", tenant, ErrNotFound)
 		}
-		if _, err := tx.Exec(ctx, `SELECT taskiem_set_tenant_limits($1, $2, $3)`, tenant, raw, by); err != nil {
+		// The operators' function: taskiem_set_tenant_limits is the partner
+		// API's and sets only a sub-tenant's limits (migration 00357).
+		if _, err := tx.Exec(ctx, `SELECT taskiem_ops_set_tenant_limits($1, $2, $3)`, tenant, raw, by); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', $2, 'limits.set', $3, $4)`, tenant, by, strings.Join(keys, ","), raw)
@@ -837,7 +862,22 @@ func checkBacklog(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, l Limits) er
 
 // CheckCount refuses creating one more of something a tenant has max of
 // (workflows, secrets, connections); max 0 is no limit.
+//
+// Call it in the transaction that creates the thing. It holds a lock on
+// the limit and its first argument (the tenant) until that transaction
+// ends, so creates made at the same moment are counted one after another:
+// with room for one more, one is made and the rest are refused. A check
+// in a transaction of its own is only an early answer.
 func CheckCount(ctx context.Context, tx pgx.Tx, limit, from string, max int, args ...any) error {
+	if max > 0 {
+		scope := ""
+		if len(args) > 0 {
+			scope = fmt.Sprint(args[0])
+		}
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('limit ' || $1 || ' ' || $2, 0))`, scope, limit); err != nil {
+			return err
+		}
+	}
 	n, err := countUpTo(ctx, tx, from, max, args...)
 	if err != nil {
 		return err

@@ -1,5 +1,5 @@
 // Package knowledge is the knowledge@1 platform connector (docs/knowledge.md,
-// decision 0062 D12): it searches what a business's assistant knows, for
+// decision 0074 D12): it searches what a business's assistant knows, for
 // the tenant of the run calling it (connector.CallerFrom), never one named
 // in its input.
 package knowledge

@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// A customer's own invoices, by their phone number (decision 0062 V9,
+// A customer's own invoices, by their phone number (decision 0074 V9,
 // I1): what a customer assistant tells the person writing from that
 // number, who the trigger says they are. Read only.
 

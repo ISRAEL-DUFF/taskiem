@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/variants"
 )
 
 // MaxItems caps the catalogue until the plans set their own (S8).
@@ -63,6 +64,30 @@ type Storefront struct {
 	// Domain is the primary of the business's own verified domains
 	// (domains.go), where the page is served once published.
 	Domain *string `json:"domain"`
+	// RetentionDays is how long ended orders keep their customer's
+	// details (SetRetention).
+	RetentionDays int `json:"retention_days"`
+}
+
+// Retention bounds: ended orders keep their customer's details for 30
+// days to 10 years; 365 by default.
+const (
+	MinRetentionDays     = 30
+	MaxRetentionDays     = 3650
+	DefaultRetentionDays = 365
+)
+
+// SetRetention sets how long ended orders keep their customer's details
+// before they are erased (Orders.ForgetExpired).
+func SetRetention(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, days int) error {
+	if days < MinRetentionDays || days > MaxRetentionDays {
+		return fmt.Errorf("%w: orders are kept %d to %d days", ErrInvalid, MinRetentionDays, MaxRetentionDays)
+	}
+	tag, err := tx.Exec(ctx, `UPDATE storefronts SET retention_days = $2, updated_at = now() WHERE tenant_id = $1`, tenant, days)
+	if err == nil && tag.RowsAffected() == 0 {
+		err = ErrNotFound
+	}
+	return err
 }
 
 // URL is the published page's public address: its own primary domain
@@ -81,12 +106,15 @@ type Image map[string]string
 // Model is what a published snapshot holds: everything the page shows
 // but the catalogue's rows, which are read from the copy.
 type Model struct {
-	Version    int    `json:"version"`
-	Slug       string `json:"slug"`
-	Card       Card   `json:"card"`
-	Logo       Image  `json:"logo,omitempty"`
-	MapLink    string `json:"map_link,omitempty"`
-	WhatsLink  string `json:"whatsapp_link,omitempty"`
+	Version   int    `json:"version"`
+	Slug      string `json:"slug"`
+	Card      Card   `json:"card"`
+	Logo      Image  `json:"logo,omitempty"`
+	MapLink   string `json:"map_link,omitempty"`
+	WhatsLink string `json:"whatsapp_link,omitempty"`
+	// ChatLink is the business's Taskiem chat link, for "Chat with us"
+	// (docs/spec/taskiem-for-everyone.md §8.2), when the owner offers it.
+	ChatLink   string `json:"chat_link,omitempty"`
 	HasCatalog bool   `json:"has_catalogue"`
 	// HasServices: the page lists services to book.
 	HasServices bool `json:"has_services,omitempty"`
@@ -105,9 +133,19 @@ type Item struct {
 	PriceKobo   *int64 `json:"price_kobo,omitempty"`
 	Description string `json:"description,omitempty"`
 	Photo       Image  `json:"photo,omitempty"`
-	Available   bool   `json:"available"`
-	Category    string `json:"category,omitempty"`
-	// Stock is how many are left, when the catalogue tracks it.
+	// Gallery is the photos after the first, when the photo column holds
+	// several media ids separated by commas.
+	Gallery []Image `json:"gallery,omitempty"`
+	// PhotoIDs are the media ids of the photo and the gallery, in order,
+	// for the owner's screens to remove one.
+	PhotoIDs  []string `json:"photo_ids,omitempty"`
+	Available bool     `json:"available"`
+	Category  string   `json:"category,omitempty"`
+	// Unit is what one is (bag, carton), where the catalogue says: for a
+	// linked business ordering from the storefront, never on the page.
+	Unit string `json:"unit,omitempty"`
+	// Stock is how many are left (whole sales its stock item covers), when
+	// a stock item counts it: read with the copy, never kept in it.
 	Stock *int64 `json:"stock,omitempty"`
 	// A service's length, customers at once and time kept free after.
 	DurationMinutes int `json:"duration_minutes,omitempty"`
@@ -120,6 +158,99 @@ type Item struct {
 	// when it starts.
 	Starts *time.Time `json:"starts,omitempty"`
 	Venue  string     `json:"venue,omitempty"`
+	// Sizes and colours: a variant's product (its row id) and its values;
+	// a product's number of variants on sale, its Stock then being theirs
+	// together.
+	VariantOf string            `json:"variant_of,omitempty"`
+	Variant   map[string]string `json:"variant,omitempty"`
+	Variants  int               `json:"variants,omitempty"`
+	// Choices and Sizes are, on a product sold in sizes and colours, its
+	// choices (with only the values some size on sale has) and those sizes,
+	// so a page picks one: a basket line names the size's own row.
+	Choices []variants.Choice `json:"choices,omitempty"`
+	Sizes   []Size            `json:"sizes,omitempty"`
+}
+
+// Size is one of a product's sizes and colours on sale, as a page picks it.
+type Size struct {
+	ID        string            `json:"id"`
+	Variant   map[string]string `json:"variant"`
+	PriceKobo *int64            `json:"price_kobo,omitempty"`
+	Stock     *int64            `json:"stock,omitempty"`
+	// Photo is its own, a colour's (the product's shows for the rest).
+	Photo Image `json:"photo,omitempty"`
+}
+
+// SoldOut reports whether the size keeps a count and has none left.
+func (z Size) SoldOut() bool { return z.Stock != nil && *z.Stock <= 0 }
+
+// Name is the size's full name, as its row and an order line have it.
+func (z Size) Name(product Item) string {
+	return variants.Name(product.Name, z.Variant, product.Choices)
+}
+
+// SizeItems are a product's sizes as items a basket takes: each its own
+// row, price and stock; the product's photo where a size has none.
+func SizeItems(product Item) []Item {
+	out := make([]Item, 0, len(product.Sizes))
+	for _, z := range product.Sizes {
+		it := Item{ID: z.ID, Name: z.Name(product), PriceKobo: z.PriceKobo, Stock: z.Stock, Available: product.Available,
+			Category: product.Category, VariantOf: product.ID, Variant: z.Variant, Photo: z.Photo}
+		if it.PriceKobo == nil {
+			it.PriceKobo = product.PriceKobo
+		}
+		if it.Photo == nil {
+			it.Photo = product.Photo
+		}
+		out = append(out, it)
+	}
+	return out
+}
+
+// WithSizes is items with each product's sizes and colours after it, as
+// items a basket takes (the page lists the product; a line names a size).
+func WithSizes(items []Item) []Item {
+	n := 0
+	for _, it := range items {
+		n += len(it.Sizes)
+	}
+	if n == 0 {
+		return items
+	}
+	out := make([]Item, 0, len(items)+n)
+	for _, it := range items {
+		out = append(out, it)
+		out = append(out, SizeItems(it)...)
+	}
+	return out
+}
+
+// FindSize is the product's size of the values picked, case aside.
+func (it Item) FindSize(picked map[string]string) (Size, bool) {
+	v, ok := variants.Fit(picked, it.Choices)
+	if !ok {
+		return Size{}, false
+	}
+	k := variants.Key(v)
+	for _, z := range it.Sizes {
+		if variants.Key(z.Variant) == k {
+			return z, true
+		}
+	}
+	return Size{}, false
+}
+
+// PublicItems is the items a public page lists: a product, not its
+// sizes and colours one by one (picked on the page from phase 4 of the
+// plan). Items keeps them, so an order's live prices still find them.
+func PublicItems(items []Item) []Item {
+	out := make([]Item, 0, len(items))
+	for _, it := range items {
+		if it.VariantOf == "" {
+			out = append(out, it)
+		}
+	}
+	return out
 }
 
 // SoldOut reports whether the item tracks stock and has none left.
@@ -129,14 +260,14 @@ const cols = `id, slug, status, draft, catalogue_table, catalogue_columns, publi
 	catalogue_synced_at, catalogue_error, updated_at, services_table, services_columns, availability, review_note, suspended_reason, orders_paused,
 	(SELECT m.urls FROM storefront_media m WHERE m.tenant_id = storefronts.tenant_id AND m.id::text = storefronts.draft->>'logo' AND m.moderation <> 'rejected'),
 	(SELECT d.host FROM storefront_domains d WHERE d.storefront_id = storefronts.id AND d.verified_at IS NOT NULL
-	  ORDER BY d.is_primary DESC, d.verified_at, d.host LIMIT 1)`
+	  ORDER BY d.is_primary DESC, d.verified_at, d.host LIMIT 1), retention_days`
 
 func scan(r pgx.Row) (Storefront, error) {
 	var s Storefront
 	var draft, columns, scols, avail, logo []byte
 	err := r.Scan(&s.ID, &s.Slug, &s.Status, &draft, &s.CatalogueTable, &columns, &s.PublishedVersion, &s.PublishedSlug, &s.PublishedAt,
 		&s.ClosedMessage, &s.CatalogueSynced, &s.CatalogueError, &s.UpdatedAt, &s.ServicesTable, &scols, &avail,
-		&s.ReviewNote, &s.SuspendedReason, &s.OrdersPaused, &logo, &s.Domain)
+		&s.ReviewNote, &s.SuspendedReason, &s.OrdersPaused, &logo, &s.Domain, &s.RetentionDays)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Storefront{}, ErrNotFound
 	}
@@ -191,6 +322,21 @@ func Save(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, slug string, card Ca
 // going live: a first publish the checks or the business's verification
 // send to the review queue (docs/moderation.md).
 func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, actor string, hold bool) (Storefront, error) {
+	return PublishWith(ctx, tx, tenant, previewDomain, actor, hold, Chat{})
+}
+
+// Chat is how a published page offers to chat with the business (§8.2 of
+// docs/spec/taskiem-for-everyone.md): its Taskiem chat link, and whether
+// the WhatsApp button stays beside it, gives way to it, or is alone.
+type Chat struct {
+	// Link is the business's chat link; "" offers none.
+	Link string
+	// Button is whatsapp, taskiem or both ("" is both).
+	Button string
+}
+
+// PublishWith is Publish, with the page's chat button.
+func PublishWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, actor string, hold bool, chat Chat) (Storefront, error) {
 	s, err := Get(ctx, tx, tenant)
 	if err != nil {
 		return Storefront{}, err
@@ -207,6 +353,7 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 	}
 	m := Model{Version: s.PublishedVersion + 1, Slug: s.Slug, Card: card, MapLink: card.MapLink(), WhatsLink: card.WhatsAppLink(),
 		HasCatalog: s.CatalogueTable != nil, HasServices: s.ServicesTable != nil, PublishedAt: time.Now().UTC()}
+	m.applyChat(card, chat)
 	if card.Logo != "" {
 		img, err := mediaImage(ctx, tx, tenant, card.Logo)
 		if err != nil {
@@ -241,6 +388,76 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 	return scan(tx.QueryRow(ctx, `UPDATE storefronts SET status = CASE WHEN $3 THEN 'in_review' WHEN status = 'closed' THEN 'closed' ELSE 'published' END,
 		review_note = NULL, published_version = $2, published_slug = slug, published_at = now(), updated_at = now() WHERE tenant_id = $1 RETURNING `+cols,
 		tenant, m.Version, hold))
+}
+
+// applyChat sets a model's chat button and WhatsApp link: WhatsApp's from
+// the card, beside the chat link, given way to it, or alone.
+func (m *Model) applyChat(card Card, chat Chat) {
+	m.WhatsLink, m.ChatLink = card.WhatsAppLink(), ""
+	switch chat.Button {
+	case "whatsapp":
+	case "taskiem":
+		// Chat with us instead of WhatsApp, when there is a link to offer.
+		if chat.Link != "" {
+			m.ChatLink, m.WhatsLink = chat.Link, ""
+		}
+	default:
+		m.ChatLink = chat.Link
+	}
+}
+
+// RepublishChat publishes the page as it is published now, with only its
+// chat button changed (a new chat link, the owner's button, chats turned
+// on or off): a copy of the published snapshot as the next version, never
+// the owner's draft, which stays unpublished, and with nothing for the
+// moderators to look at again. It does nothing to a page that is not
+// published (ErrNotFound before the first publish), or whose button is
+// already chat's.
+func RepublishChat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, actor string, chat Chat) (bool, error) {
+	s, err := Get(ctx, tx, tenant)
+	if err != nil {
+		return false, err
+	}
+	if s.PublishedVersion == 0 || s.Status != "published" {
+		return false, nil
+	}
+	m, err := PublishedModel(ctx, tx, tenant)
+	if err != nil {
+		return false, err
+	}
+	before := m
+	m.applyChat(m.Card, chat)
+	if m.ChatLink == before.ChatLink && m.WhatsLink == before.WhatsLink {
+		return false, nil
+	}
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) + 1 FROM storefront_snapshots WHERE storefront_id = $1`, s.ID).Scan(&m.Version); err != nil {
+		return false, err
+	}
+	raw, _ := json.Marshal(m)
+	sum := sha256.Sum256(raw)
+	if _, err := tx.Exec(ctx, `INSERT INTO storefront_snapshots (storefront_id, version, tenant_id, model, hash, created_by) VALUES ($1, $2, $3, $4, $5, $6)`,
+		s.ID, m.Version, tenant, raw, sum[:], actor); err != nil {
+		return false, err
+	}
+	// The page's own published time and status stay: only its version moves.
+	_, err = tx.Exec(ctx, `UPDATE storefronts SET published_version = $2, updated_at = now() WHERE tenant_id = $1 AND status = 'published'`, tenant, m.Version)
+	return err == nil, err
+}
+
+// PublishedModel is the published page's snapshot; ErrNotFound before
+// the first publish.
+func PublishedModel(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Model, error) {
+	var raw []byte
+	err := tx.QueryRow(ctx, `SELECT snap.model FROM storefronts s JOIN storefront_snapshots snap ON snap.storefront_id = s.id AND snap.version = s.published_version
+		WHERE s.tenant_id = $1`, tenant).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Model{}, ErrNotFound
+	}
+	if err != nil {
+		return Model{}, err
+	}
+	var m Model
+	return m, json.Unmarshal(raw, &m)
 }
 
 // DefaultClosedMessage is what a page closed without a message says.
@@ -352,6 +569,9 @@ func MediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Im
 }
 
 // mediaImage is a media record's URLs, refusing rejected or unknown ids.
+// MaxGallery is the most photos after the first an item has.
+const MaxGallery = 5
+
 func mediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Image, error) {
 	mid, err := uuid.Parse(id)
 	if err != nil {
@@ -374,6 +594,23 @@ func mediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Im
 	return img, nil
 }
 
+// Shown keeps the media ids of a photo column a page can show (stored,
+// and not refused by review), in order.
+func Shown(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ids []string) ([]string, error) {
+	var out []string
+	for _, id := range ids {
+		_, err := mediaImage(ctx, tx, tenant, id)
+		if errors.Is(err, ErrInvalid) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, nil
+}
+
 // --- the catalogue copy ---
 
 // Rows reads every row of a data table (in pages, up to MaxItems + 1).
@@ -383,6 +620,17 @@ type Rows func(ctx context.Context, tenant uuid.UUID, table string, limit int) (
 // photos through the tenant's media. Rows without a name are left out;
 // rejected or unknown photos are dropped, never the item.
 func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]any, m Columns) ([]Item, error) {
+	return mapItems(ctx, tx, tenant, rows, m, false)
+}
+
+// CatalogueItems is Items for the catalogue's own table: each product
+// counted by a stock item also says how many are left of it
+// (engine/productstock), read in tx.
+func CatalogueItems(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]any, m Columns) ([]Item, error) {
+	return mapItems(ctx, tx, tenant, rows, m, true)
+}
+
+func mapItems(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]any, m Columns, withCounts bool) ([]Item, error) {
 	if len(rows) > MaxItems {
 		return nil, fmt.Errorf("%w: the catalogue has more than %d items", ErrInvalid, MaxItems)
 	}
@@ -408,12 +656,6 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 				it.Available = b
 			}
 		}
-		if m.Stock != "" {
-			if f, ok := num(r[m.Stock]); ok {
-				n := max(0, int64(f))
-				it.Stock = &n
-			}
-		}
 		if m.Options != "" {
 			it.Options = ParseOptions(r[m.Options])
 		}
@@ -422,6 +664,15 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 		}
 		if m.Venue != "" {
 			it.Venue = str(r[m.Venue])
+		}
+		if m.VariantOf != "" {
+			it.VariantOf = str(r[m.VariantOf])
+		}
+		if m.Variant != "" && it.VariantOf != "" {
+			it.Variant = variants.ParseVariant(str(r[m.Variant]))
+		}
+		if m.Choices != "" && it.VariantOf == "" {
+			it.Choices = variants.ParseChoices(str(r[m.Choices]))
 		}
 		if m.ReadyIn != "" {
 			if n, ok := num(r[m.ReadyIn]); ok && n >= 1 && n <= 600 {
@@ -451,11 +702,25 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 			}
 		}
 		if m.Photo != "" {
-			if id := str(r[m.Photo]); id != "" {
-				if img, err := mediaImage(ctx, tx, tenant, id); err == nil {
-					it.Photo = img
-				} else if !errors.Is(err, ErrInvalid) {
+			// One media id, or several separated by commas: the first is
+			// the photo, the rest its gallery (at most MaxGallery).
+			for _, id := range strings.Split(str(r[m.Photo]), ",") {
+				id = strings.TrimSpace(id)
+				if id == "" || len(it.Gallery) >= MaxGallery {
+					continue
+				}
+				img, err := mediaImage(ctx, tx, tenant, id)
+				if errors.Is(err, ErrInvalid) {
+					continue
+				}
+				if err != nil {
 					return nil, err
+				}
+				it.PhotoIDs = append(it.PhotoIDs, id)
+				if it.Photo == nil {
+					it.Photo = img
+				} else {
+					it.Gallery = append(it.Gallery, img)
 				}
 			}
 		}
@@ -472,7 +737,105 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 	for i, s := range out {
 		items[i] = s.item
 	}
+	// How many are left of each product counted by a stock item.
+	if withCounts && tx != nil {
+		if err := counted(ctx, tx, tenant, items); err != nil {
+			return nil, err
+		}
+	}
+	rollUpVariants(items)
 	return items, nil
+}
+
+// rollUpVariants gives a product with sizes and colours on sale their
+// number and their stock together (the product row keeps none of its
+// own): unknown (nil) when any size on sale keeps no count, so the
+// product is sold out only when every size on sale is counted and at
+// none left. It gives the sizes themselves to pick from, with
+// its choices narrowed to the values they have. A size whose values do
+// not fit its product's choices is left out of the pick.
+func rollUpVariants(items []Item) {
+	byID := map[string]int{}
+	for i, it := range items {
+		if it.VariantOf == "" {
+			byID[it.ID] = i
+		}
+	}
+	type sum struct {
+		n         int
+		stock     int64
+		uncounted bool
+		sizes     []Size
+	}
+	of := map[string]*sum{}
+	for _, it := range items {
+		if it.VariantOf == "" || !it.Available {
+			continue
+		}
+		pi, ok := byID[it.VariantOf]
+		if !ok {
+			continue
+		}
+		s := of[it.VariantOf]
+		if s == nil {
+			s = &sum{}
+			of[it.VariantOf] = s
+		}
+		s.n++
+		if it.Stock != nil {
+			s.stock += *it.Stock
+		} else {
+			s.uncounted = true
+		}
+		if v, fits := variants.Fit(it.Variant, items[pi].Choices); fits {
+			z := Size{ID: it.ID, Variant: v, Stock: it.Stock, Photo: it.Photo}
+			if it.PriceKobo != nil && (items[pi].PriceKobo == nil || *it.PriceKobo != *items[pi].PriceKobo) {
+				z.PriceKobo = it.PriceKobo
+			}
+			s.sizes = append(s.sizes, z)
+		}
+	}
+	for i := range items {
+		it := &items[i]
+		if it.VariantOf != "" {
+			continue
+		}
+		s := of[it.ID]
+		if s == nil {
+			// Set up in sizes and colours with none of them on sale: not a
+			// plain item to put in a bag (it keeps no stock of its own).
+			if len(it.Choices) > 0 {
+				it.Available = false
+			}
+			it.Choices = nil
+			continue
+		}
+		it.Variants, it.Stock, it.Sizes = s.n, nil, s.sizes
+		if !s.uncounted {
+			n := s.stock
+			it.Stock = &n
+		}
+		it.Choices = usedChoices(it.Choices, s.sizes)
+	}
+}
+
+// usedChoices are the choices with only the values some size has, in
+// their order.
+func usedChoices(cs []variants.Choice, sizes []Size) []variants.Choice {
+	out := make([]variants.Choice, 0, len(cs))
+	for _, c := range cs {
+		var vals []string
+		for _, v := range c.Values {
+			for _, z := range sizes {
+				if z.Variant[c.Name] == v {
+					vals = append(vals, v)
+					break
+				}
+			}
+		}
+		out = append(out, variants.Choice{Name: c.Name, Values: vals})
+	}
+	return out
 }
 
 // SyncCatalogue replaces the storefront's copy with items, and records
@@ -495,7 +858,9 @@ func SyncCatalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Ite
 	if _, err := tx.Exec(ctx, `DELETE FROM storefront_catalogue WHERE storefront_id = $1 AND table_name = $2`, s.ID, table); err != nil {
 		return err
 	}
-	for i, it := range items {
+	// The copy holds no count: how many are left is read with it (LeftTx,
+	// WithLeft).
+	for i, it := range withoutCounts(items) {
 		raw, _ := json.Marshal(it)
 		if _, err := tx.Exec(ctx, `INSERT INTO storefront_catalogue (storefront_id, table_name, row_id, tenant_id, position, item) VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (storefront_id, table_name, row_id) DO NOTHING`, s.ID, table, it.ID, tenant, i, raw); err != nil {
@@ -516,7 +881,10 @@ func CatalogueFailed(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, cause err
 	return err
 }
 
-// Catalogue reads the copy, for the owner's preview.
+// Catalogue reads the copy, in the business's scope, with how many are
+// left of each product read from its stock item (LeftTx): for the owner's
+// preview, their shop, the price lists a linked business is offered, and
+// the business's own chat and orders.
 func Catalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Item, error) {
 	// The catalogue's own copy: a front's list from another table is read
 	// with ListItems.
@@ -525,7 +893,7 @@ func Catalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Item, error)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Item, error) {
+	items, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Item, error) {
 		var raw []byte
 		var it Item
 		if err := r.Scan(&raw); err != nil {
@@ -533,6 +901,10 @@ func Catalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Item, error)
 		}
 		return it, json.Unmarshal(raw, &it)
 	})
+	if err != nil {
+		return nil, err
+	}
+	return items, LeftTx(ctx, tx, tenant, items)
 }
 
 // parseStarts reads a date or a date and time cell; a date alone starts
@@ -600,10 +972,3 @@ func FormatNaira(kobo int64) string {
 	}
 	return "₦" + s
 }
-
-// CatalogueTableSQL is the name of the table a catalogue copy row c of the
-// storefront is kept by, as SyncCatalogue names it (” when the table is
-// not found): stock is kept on the catalogue's table only (fronts §5.2).
-const CatalogueTableSQL = `COALESCE((SELECT d.name FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table WHERE s.id = c.storefront_id), '')`
-
-const catalogueTableSQL = CatalogueTableSQL

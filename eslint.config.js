@@ -3,8 +3,9 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   // .claude/ holds agent worktrees (other checkouts of this repository);
-  // site/ is the built docs site (make docs).
-  { ignores: ["**/dist/**", "**/node_modules/**", "web/test-results/**", "web/playwright-report/**", ".claude/**", "site/**"] },
+  // site/ is the built docs site (make docs); web/public/ocr/ is Tesseract.js,
+  // copied from node_modules before dev and build (web/scripts/ocr-assets.mjs).
+  { ignores: ["**/dist/**", "**/node_modules/**", "web/test-results/**", "web/playwright-report/**", ".claude/**", "site/**", "web/e2e/demo/**", "web/public/ocr/**"] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   // Plain scripts the public host serves to browsers (docs/public-host.md).
@@ -12,7 +13,38 @@ export default tseslint.config(
     files: ["engine/**/*.js"],
     languageOptions: {
       sourceType: "script",
-      globals: { window: "readonly", document: "readonly", crypto: "readonly", TextEncoder: "readonly", setTimeout: "readonly" },
+      globals: { window: "readonly", document: "readonly", crypto: "readonly", TextEncoder: "readonly", setTimeout: "readonly", URLSearchParams: "readonly" },
+    },
+  },
+  // The phone app's fixture recorder (mobile/tool/capture.mjs) runs on Node.
+  {
+    files: ["mobile/tool/*.mjs", "docs/store/*/*.mjs", "web/scripts/ocr-assets.mjs"],
+    languageOptions: { globals: { process: "readonly", console: "readonly", URL: "readonly" } },
+  },
+  // The explainer's renderer, the recordings and the how-to videos
+  // (video/README.md) run on Node; the scenes'
+  // timeline runs in Chromium.
+  {
+    files: ["video/*.mjs", "video/recording/*.mjs", "video/howto/*.mjs"],
+    languageOptions: { globals: { process: "readonly", console: "readonly", window: "readonly", document: "readonly" } },
+  },
+  {
+    files: ["video/kit/kit.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: { window: "readonly", document: "readonly", location: "readonly", addEventListener: "readonly", performance: "readonly", requestAnimationFrame: "readonly", URLSearchParams: "readonly" },
+    },
+  },
+  // The service worker of chat push (docs/spec/chat-push.md): a plain script a
+  // browser runs apart from the page; its functions are also run by a test.
+  {
+    files: ["web/public/sw.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: {
+        self: "readonly", module: "writable", fetch: "readonly", URL: "readonly", JSON: "readonly", ServiceWorkerGlobalScope: "readonly",
+        btoa: "readonly", AbortController: "readonly", setTimeout: "readonly", clearTimeout: "readonly", Response: "readonly",
+      },
     },
   },
   // The card maker's Node script, whose callbacks also run in the browser (docs/strategy/marketing/cards).

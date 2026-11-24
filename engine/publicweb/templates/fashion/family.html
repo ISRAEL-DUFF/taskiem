@@ -1,0 +1,96 @@
+{{template "fhead" .}}{{with .CopyScript}}<script src="{{.}}" defer></script>
+{{end}}{{template "fbody" .}}
+<p class="kicker">{{.Business}}</p>
+<h1>School fees</h1>
+<p class="hint">This link works until {{.Expires}}; every message from the school carries a new one.</p>
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
+{{if .Children}}<nav class="chips fam-children" aria-label="Children">
+{{range .Children}}<a class="chip{{if .Current}} is-current{{end}}" href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}>{{.Name}}</a>
+{{end}}</nav>{{else}}<p class="notice" role="status">No student is in this family yet. Ask {{.Business}} to check its records.</p>{{end}}
+{{with .Child}}
+<section class="panel" aria-labelledby="fam-child-h">
+<h2 id="fam-child-h">{{.Name}}</h2>
+<p class="facts"><span>{{.Admission}}</span><span>{{.Class}}</span>{{with .Status}}<span class="badge">{{.}}</span>{{end}}</p>
+<dl class="inv-sums">
+{{if $.Balance}}<dt>Balance</dt><dd class="inv-due">{{$.Balance}}</dd>{{end}}
+{{with $.Credit}}<dt>Family credit</dt><dd>{{.}}</dd>{{end}}
+</dl>
+{{with $.BalanceNote}}<p class="hint">{{.}}</p>{{end}}
+{{with $.CreditNote}}<p class="hint">{{.}}</p>{{end}}
+</section>
+
+<section class="panel" aria-labelledby="fam-acct-h">
+<h2 id="fam-acct-h">{{.Name}}'s account number</h2>
+{{with $.Account}}<p class="inv-acct-no"><span data-copy>{{.Number}}</span></p>
+<p>{{.Bank}}{{with .Name}} · {{.}}{{end}}</p>
+<p class="hint">Check that the name shown when you transfer is the one above.</p>
+{{end}}<p class="hint">{{$.AccountNote}}</p>
+</section>
+
+{{range $.Invoices}}<section class="panel inv" aria-labelledby="fam-inv-{{.ID}}">
+<h2 id="fam-inv-{{.ID}}">{{.Term}}{{if not .Current}} (earlier term){{end}}</h2>
+<p class="facts"><span>Invoice {{.Number}}</span><span class="badge">{{.Status}}</span>{{with .DueOn}}<span>{{.}}</span>{{end}}</p>
+{{range .Lines}}<div class="line"><div class="inv-what"><span>{{.Description}}</span>{{with .Each}} <span class="line-price">{{.}}</span>{{end}}{{with .Note}} <span class="line-price">{{.}}</span>{{end}}</div><span>{{.Amount}}</span></div>
+{{end}}<dl class="inv-sums">
+<dt>Total</dt><dd>{{.Total}}</dd>
+{{with .Paid}}<dt>Paid</dt><dd>{{.}}</dd>
+{{end}}{{with .Due}}<dt>Still due</dt><dd class="inv-due">{{.}}</dd>
+{{end}}</dl>
+{{if .Receipts}}<h3>Receipts for this invoice</h3>
+<ul class="fam-list">{{range .Receipts}}<li>{{.Number}} · {{.Date}} · {{.Amount}} · {{if .Link}}<a href="{{.Link}}">{{.State}}</a>{{else}}{{.State}}{{end}}</li>{{end}}</ul>
+{{end}}{{with .PayLink}}<a class="btn btn-block" href="{{.}}">Pay this invoice by transfer or card</a>{{end}}
+</section>
+{{end}}
+
+{{if $.Receipts}}<section class="panel" aria-labelledby="fam-rc-h">
+<h2 id="fam-rc-h">Receipts</h2>
+<table class="fam-table">
+<thead><tr><th scope="col">Number</th><th scope="col">Date</th><th scope="col">Amount</th><th scope="col">State</th></tr></thead>
+<tbody>{{range $.Receipts}}<tr><td>{{.Number}}</td><td>{{.Date}}</td><td>{{.Amount}}</td><td>{{if .Link}}<a href="{{.Link}}">{{.State}}</a>{{else}}{{.State}}{{end}}</td></tr>
+{{end}}</tbody></table>
+<p class="hint">A receipt's link shows the school's check of it: Valid or Voided.</p>
+</section>{{end}}
+
+{{if $.Claims}}<section class="panel" aria-labelledby="fam-cl-h">
+<h2 id="fam-cl-h">Payments you told the school about</h2>
+<ul class="fam-list">{{range $.Claims}}<li>{{.Line}}: <strong>{{.State}}</strong></li>{{end}}</ul>
+</section>{{end}}
+
+{{if $.Plans}}<section class="panel" aria-labelledby="fam-pl-h">
+<h2 id="fam-pl-h">Payment plans</h2>
+{{range $.Plans}}<div class="fam-plan"><p>{{.Line}}: <strong>{{.State}}</strong></p>
+{{if .Instalments}}<ul class="fam-list">{{range .Instalments}}<li>{{.}}</li>{{end}}</ul>{{end}}
+{{with .Note}}<p class="hint">From the school: {{.}}</p>{{end}}</div>
+{{end}}</section>{{end}}
+
+<section class="panel" aria-labelledby="fam-paid-h">
+<h2 id="fam-paid-h">I have paid some other way</h2>
+<p class="hint">Paid cash at the school, or to another account? Tell the school here and it will look for the payment. This does not change the fees until the school finds it.</p>
+{{if eq $.ErrorFor "paid"}}<p class="form-error" role="alert">{{$.Error}}</p>{{end}}
+<form method="post" action="{{$.Action}}/paid" class="fields">
+<input type="hidden" name="child" value="{{.ID}}"><input type="hidden" name="idem" value="{{$.Idem}}">
+<div class="field"><label for="paid-amount">Amount paid (₦)</label><input id="paid-amount" name="amount" inputmode="decimal" autocomplete="off" required></div>
+<div class="field"><label for="paid-date">Date paid</label><input id="paid-date" name="date" type="date" value="{{$.Today}}" max="{{$.Today}}" required></div>
+<div class="field"><label for="paid-how">How you paid</label><select id="paid-how" name="how" required><option value="">Choose…</option>{{range $.Hows}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select></div>
+<div class="field"><label for="paid-ref">Reference <span class="hint">(optional)</span></label><input id="paid-ref" name="reference" maxlength="80" autocomplete="off"><p class="hint">The transfer's reference or the teller number, if you have it.</p></div>
+<div class="field"><label for="paid-note">Note <span class="hint">(optional)</span></label><textarea id="paid-note" name="note" rows="2" maxlength="500"></textarea></div>
+<button class="btn btn-primary btn-block" type="submit">Tell the school I have paid</button>
+</form>
+</section>
+
+<section class="panel" aria-labelledby="fam-plan-h">
+<h2 id="fam-plan-h">Ask for a payment plan</h2>
+<p class="hint">Suggest instalments and dates for {{.Name}}'s fees. The school decides and tells you.</p>
+{{if eq $.ErrorFor "plan"}}<p class="form-error" role="alert">{{$.Error}}</p>{{end}}
+<form method="post" action="{{$.Action}}/plan" class="fields">
+<input type="hidden" name="child" value="{{.ID}}"><input type="hidden" name="idem" value="{{$.Idem}}">
+<fieldset class="fam-rows"><legend>Instalments (up to six)</legend>
+{{range $.PlanRows}}<div class="fam-row"><div class="field"><label for="plan-amount{{.}}">Amount {{.}} (₦)</label><input id="plan-amount{{.}}" name="amount{{.}}" inputmode="decimal" autocomplete="off"{{if eq . 1}} required{{end}}></div>
+<div class="field"><label for="plan-date{{.}}">By date {{.}}</label><input id="plan-date{{.}}" name="date{{.}}" type="date" min="{{$.Today}}"{{if eq . 1}} required{{end}}></div></div>
+{{end}}</fieldset>
+<div class="field"><label for="plan-message">A short message <span class="hint">(optional)</span></label><textarea id="plan-message" name="message" rows="3" maxlength="500"></textarea></div>
+<button class="btn btn-block" type="submit">Ask for this plan</button>
+</form>
+</section>
+{{end}}
+{{template "ffoot" .}}

@@ -23,7 +23,7 @@ import {
   templateSlots,
 } from "../lib/conversations";
 
-// Conversations (decision 0062 V7, docs/conversations.md): what customers
+// Conversations (decision 0074 V7, docs/conversations.md): what customers
 // said to the business's assistant and what was answered, answering by
 // hand, and Talk to it here.
 

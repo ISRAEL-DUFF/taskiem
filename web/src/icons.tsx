@@ -36,11 +36,21 @@ const paths: Record<string, string> = {
   sparkle: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6",
   refund: "M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 010 11H11",
   lock: "M6 11h12v9H6zM8 11V8a4 4 0 018 0v3",
+  eye: "M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zm10 3a3 3 0 100-6 3 3 0 000 6z",
+  "eye-off": "M3 3l18 18M10.6 5.1A10.7 10.7 0 0112 5c6.4 0 10 7 10 7a17.6 17.6 0 01-3.1 4M6.6 6.6C3.9 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 005.4-1.6M9.9 9.9a3 3 0 004.2 4.2",
+  warn: "M12 4l9 16H3zM12 10v4M12 17v.5",
+  fingerprint: "M6.5 7.5A7 7 0 0119 12v2M5 11.5V12c0 3 .7 5.5 2 7.5M9 21c-1-2-1.5-4.5-1.5-9a4.5 4.5 0 019 0v1.5M12 12v1.5c0 3 .7 5.5 2 7.5M16.5 16.5c0 1.5.3 3 .8 4",
   clock: "M12 7v5l3 2M12 21a9 9 0 100-18 9 9 0 000 18z",
   bolt: "M13 3L5 14h6l-1 7 8-11h-6z",
   invoices: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3",
   money: "M3 6h18v12H3zM12 9a3 3 0 100 6 3 3 0 000-6zM6.5 9.5v.01M17.5 14.5v.01",
   info: "M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5M12 8v.01",
+  calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h2M12 14h2M16 14h.01",
+  // The message menu's: reply, copy, forward, delete.
+  reply: "M9 17l-5-5 5-5M4 12h10a6 6 0 016 6v1",
+  forward: "M15 7l5 5-5 5M20 12H10a6 6 0 00-6 6v1",
+  copy: "M9 9h11v11H9zM15 9V4H4v11h5",
+  trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
   back: "M15 6l-6 6 6 6",
   // The chat's: ticks (sent, delivered), the emoji panel, send, and "to the newest".
   tick: "M5 13l4 4L19 7",
@@ -48,15 +58,23 @@ const paths: Record<string, string> = {
   emoji: "M12 21a9 9 0 100-18 9 9 0 000 18zM8.5 14a4.5 4.5 0 007 0M9 9.5v.01M15 9.5v.01",
   send: "M21 3L3 11l7 3 3 7zM10 14L21 3",
   down: "M6 9l6 6 6-6",
+  "arrow-up": "M12 19V5M5 12l7-7 7 7",
+  "arrow-right": "M5 12h14M13 5l7 7-7 7",
+  package: "M4 8h16v11a2 2 0 01-2 2H6a2 2 0 01-2-2zM3 4h18v4H3zM10 12h4",
   star: "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z",
   image: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01",
+  link: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1",
   pin: "M9 3h6l-1 6 3 3H7l3-3zM12 12v9",
+  place: "M12 21s-6.5-5.7-6.5-11a6.5 6.5 0 0113 0c0 5.3-6.5 11-6.5 11zM12 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z",
   mute: "M6 16V11a6 6 0 019-5.2M18 11v5l2 2H8M4 4l16 16",
   // The workflow builder's.
   chat: "M21 12a8 8 0 01-11.6 7.1L4 20l1.1-4.4A8 8 0 1121 12z",
   mail: "M3 5h18v14H3zM3 7l9 6 9-6",
   card: "M2 5h20v14H2zM2 10h20M6 15h4",
   split: "M4 12h6l4-6h6M10 12l4 6h6",
+  retry: "M20 12a8 8 0 11-2.3-5.6M20 4v4h-4",
+  archive: "M3 5h18v4H3zM5 9v10h14V9M10 13h4",
+  unlink: "M9 15l6-6M7.5 12.5l-1.2 1.2a3.5 3.5 0 005 5l1.2-1.2M16.5 11.5l1.2-1.2a3.5 3.5 0 00-5-5l-1.2 1.2",
   loop: "M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3",
   code: "M8 7l-5 5 5 5M16 7l5 5-5 5",
   play: "M7 5l12 7-12 7z",
@@ -73,6 +91,11 @@ const paths: Record<string, string> = {
   camera: "M3 8h4l2-3h6l2 3h4v12H3zM12 10a4 4 0 100 8 4 4 0 000-8z",
   mic: "M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zM5 11a7 7 0 0014 0M12 18v3",
   file: "M6 3h9l4 4v14H6zM14 3v5h5",
+  // Chat tools (chat-tools.md): a product, the tools button, stock, a price list.
+  box: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10",
+  grid: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
+  store: "M4 20V10l8-6 8 6v10zM9 20v-6h6v6",
+  tag: "M20 12l-8 8-9-9V3h8zM7.5 7.5h.01",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {
@@ -81,6 +104,17 @@ export function Icon({ name, className }: { name: string; className?: string }) 
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" className={className}>
       <path d={d} />
+    </svg>
+  );
+}
+
+/** Taskiem's mark in the chat (the boards): a filled four-point spark with
+ * a small one beside it, in the colour around it. */
+export function TaskiemMark() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+      <path d="M12 2l1.8 5.6L19.5 9l-5.7 1.5L12 16l-1.8-5.5L4.5 9l5.7-1.4z" />
+      <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
     </svg>
   );
 }

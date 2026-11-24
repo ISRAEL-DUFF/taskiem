@@ -96,10 +96,16 @@ export interface Item {
   price_kobo?: number;
   description?: string;
   photo?: Image;
+  /** The photos after the first, and every photo's media id in order. */
+  gallery?: Image[];
+  photo_ids?: string[];
   available: boolean;
   category?: string;
   /** How many are left, when the catalogue tracks stock. */
   stock?: number;
+  /** A product sold in sizes and colours: those on sale, each with its
+   * values and its own photo (a colour's) when it has one. */
+  sizes?: { id: string; variant: Record<string, string>; photo?: Image }[];
 }
 
 export interface Catalogue {

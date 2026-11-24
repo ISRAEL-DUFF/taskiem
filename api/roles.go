@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/access"
+	"github.com/israel-duff/taskiem/engine/push"
 )
 
 // Custom roles (spec 13.3): a tenant names a set of permissions, and
@@ -105,6 +106,10 @@ func rolesTx(ctx context.Context, tx pgx.Tx) ([]roleInfo, error) {
 	}
 	sort.Slice(names, func(i, j int) bool { return len(rolePermissions[names[i]]) > len(rolePermissions[names[j]]) })
 	for _, n := range names {
+		// A business's own role of a name built in later is what it holds.
+		if slices.ContainsFunc(custom, func(c roleInfo) bool { return c.Name == n }) {
+			continue
+		}
 		out = append(out, roleInfo{Name: n, Permissions: slices.Sorted(slices.Values(rolePermissions[n])), BuiltIn: true, Members: counts[n]})
 	}
 	for _, c := range custom {
@@ -175,8 +180,26 @@ func (s *Server) putRole(w http.ResponseWriter, r *http.Request) {
 			}
 		} else if err != nil {
 			return err
-		} else if _, err := tx.Exec(r.Context(), `UPDATE roles SET description = $2, permissions = $3, updated_at = now() WHERE name = $1`, name, req.Description, perms); err != nil {
-			return err
+		} else {
+			// Changing a role changes it for everyone who holds it: it takes
+			// the standing to grant (and so take away) the role as it is,
+			// as revoking it from one member does.
+			if err := canGrant(r.Context(), tx, p, []string{name}); err != nil {
+				return err
+			}
+			// Widening a role members hold grants them the new permissions.
+			if slices.ContainsFunc(perms, func(perm string) bool { return !slices.Contains(before, perm) }) && !p.Can(PermMemberManage) {
+				var held bool
+				if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM memberships WHERE role = $1)`, name).Scan(&held); err != nil {
+					return err
+				}
+				if held {
+					return fmt.Errorf("%w: members hold %s; widening it needs %s", errForbidden, name, PermMemberManage)
+				}
+			}
+			if _, err := tx.Exec(r.Context(), `UPDATE roles SET description = $2, permissions = $3, updated_at = now() WHERE name = $1`, name, req.Description, perms); err != nil {
+				return err
+			}
 		}
 		return auditTx(r, tx, "role.put", name, map[string]any{"permissions": perms, "before": before})
 	})
@@ -249,6 +272,43 @@ func canGrant(ctx context.Context, tx pgx.Tx, p *Principal, roles []string) erro
 	return nil
 }
 
+// errLastOwner refuses taking owner from a business's only owner.
+var errLastOwner = fmt.Errorf("%w: a business keeps at least one owner", errConflict)
+
+// mayTakeRoles is the one check before roles are taken from a member of
+// the transaction's business, by whatever route (a role revoked, a person
+// removed from Staff, SCIM, a single sign-on mapping). Taking a role away
+// needs the same standing as giving it: actor must be able to grant each
+// (canGrant, whose refusal names the role); actor is nil when no person
+// acts and the rule that takes the role was checked when it was saved.
+// And a business keeps at least one owner (errLastOwner): the owners'
+// rows are locked, in one order, so two owners removing each other at
+// the same moment leave one, whatever the interleaving.
+func mayTakeRoles(ctx context.Context, tx pgx.Tx, actor *Principal, user uuid.UUID, roles []string) error {
+	if actor != nil {
+		for _, role := range roles {
+			if err := canGrant(ctx, tx, actor, []string{role}); err != nil {
+				return err
+			}
+		}
+	}
+	if !slices.Contains(roles, "owner") {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT user_id FROM memberships WHERE role = 'owner' ORDER BY user_id FOR UPDATE`)
+	if err != nil {
+		return err
+	}
+	held, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(held, func(o uuid.UUID) bool { return o != user }) {
+		return errLastOwner
+	}
+	return nil
+}
+
 // approvalRole reports whether an approval names role: an open or past
 // approval, an approval policy, or a workflow definition.
 func approvalRole(ctx context.Context, tx pgx.Tx, role string) (bool, error) {
@@ -270,28 +330,8 @@ func (s *Server) revokeRole(w http.ResponseWriter, r *http.Request) {
 	role := chi.URLParam(r, "role")
 	p := principalFrom(r.Context())
 	err = s.tx(r, func(tx pgx.Tx) error {
-		if err := canGrant(r.Context(), tx, p, []string{role}); err != nil {
-			return err // taking a role away needs the same standing as giving it
-		}
-		if role == "owner" {
-			// Lock the owners' rows, so two owners cannot revoke each other at once.
-			rows, err := tx.Query(r.Context(), `SELECT user_id FROM memberships WHERE role = 'owner' FOR UPDATE`)
-			if err != nil {
-				return err
-			}
-			held, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-			if err != nil {
-				return err
-			}
-			owners := 0
-			for _, o := range held {
-				if o != user {
-					owners++
-				}
-			}
-			if owners == 0 {
-				return fmt.Errorf("%w: a tenant keeps at least one owner", errConflict)
-			}
+		if err := mayTakeRoles(r.Context(), tx, p, user, []string{role}); err != nil {
+			return err
 		}
 		tag, err := tx.Exec(r.Context(), `DELETE FROM memberships WHERE user_id = $1 AND role = $2`, user, role)
 		if err != nil {
@@ -304,8 +344,14 @@ func (s *Server) revokeRole(w http.ResponseWriter, r *http.Request) {
 		if err := endDelegations(r.Context(), tx, user, role); err != nil {
 			return err
 		}
+		if err := dropLeaverLinksTx(r.Context(), tx, p.TenantID, user); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL
 			AND NOT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1)`, user); err != nil {
+			return err
+		}
+		if err := push.DropOrphansTx(r.Context(), tx, user); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "member.revoke", user.String(), map[string]any{"role": role})

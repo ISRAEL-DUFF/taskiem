@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/url"
@@ -89,4 +90,40 @@ func (w *Worker) scrubCodeSecrets(ctx context.Context, p *plan) {
 			p.scrub = append(p.scrub, v)
 		}
 	}
+}
+
+// dropNUL replaces every NUL character in a JSON payload's strings and
+// keys with U+FFFD: PostgreSQL's jsonb cannot store one, and an outcome
+// that could not be stored was never recorded.
+func dropNUL(payload []byte) ([]byte, error) {
+	if !bytes.Contains(payload, []byte(`\u0000`)) {
+		return payload, nil
+	}
+	v, err := expr.DecodeJSON(payload)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(withoutNUL(v))
+}
+
+func withoutNUL(v any) any {
+	const nul, instead = "\x00", "\uFFFD"
+	switch t := v.(type) {
+	case string:
+		return strings.ReplaceAll(t, nul, instead)
+	case map[string]any:
+		for k, c := range t {
+			c = withoutNUL(c)
+			if strings.Contains(k, nul) {
+				delete(t, k)
+				k = strings.ReplaceAll(k, nul, instead)
+			}
+			t[k] = c
+		}
+	case []any:
+		for i, c := range t {
+			t[i] = withoutNUL(c)
+		}
+	}
+	return v
 }

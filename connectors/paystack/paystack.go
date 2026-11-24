@@ -25,6 +25,9 @@ type Options struct {
 	BaseURL string
 	// Now is the clock for one-time accounts' expiry; nil uses time.Now.
 	Now func() time.Time
+	// PollPages bounds how many pages of a hundred one poll reads (tests);
+	// 0 is ten.
+	PollPages int
 }
 
 // New returns the Paystack connector.
@@ -32,9 +35,12 @@ func New(o Options) *connector.Connector {
 	m := connector.MustParse(manifest)
 	m.OverrideBaseURL(o.BaseURL)
 	base := strings.TrimRight(m.BaseURL, "/")
-	c := &client{base: base, now: o.Now}
+	c := &client{base: base, now: o.Now, pollPages: o.PollPages}
 	if c.now == nil {
 		c.now = time.Now
+	}
+	if c.pollPages < 1 {
+		c.pollPages = 10
 	}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
 		"check_balance":          connector.ActionFunc(c.checkBalance),
@@ -57,8 +63,9 @@ func New(o Options) *connector.Connector {
 }
 
 type client struct {
-	base string
-	now  func() time.Time
+	base      string
+	now       func() time.Time
+	pollPages int
 }
 
 // envelope is Paystack's response wrapper.
@@ -90,30 +97,87 @@ func (c *client) checkBalance(ctx context.Context, req connector.Request) (conne
 	return connector.Response{Output: map[string]any{"balances": balances}}, nil
 }
 
-// listSince lists a resource's records created since input.from, up to a
-// hundred, with Paystack's status filter when given.
+// pollPerPage is the page size of a poll's listing; maxPollProbes bounds
+// how often one poll halves its window looking for one it can read whole.
+const (
+	pollPerPage   = 100
+	maxPollProbes = 16
+)
+
+// listSince lists a resource's records since input.from, every page, with
+// Paystack's status filter when given. Where there are more than a poll
+// may read (pollPages pages: an outage, a busy day), it lists the first
+// part of the time instead, whole, and says in "through" how far that
+// went, so the poller carries on from there: nothing is skipped. The
+// part is found by halving the window (from..to), which relies only on
+// Paystack's own from and to filter, not on the order of its list.
 func (c *client) listSince(path, status string) func(context.Context, connector.Request) (connector.Response, error) {
 	return func(ctx context.Context, req connector.Request) (connector.Response, error) {
 		from, _ := req.Input["from"].(string)
-		if _, err := time.Parse(time.RFC3339, from); err != nil {
+		start, err := time.Parse(time.RFC3339, from)
+		if err != nil {
 			return connector.Response{}, fmt.Errorf("paystack: from must be a time (RFC 3339): %w", effects.ErrFatal)
 		}
-		q := url.Values{"from": {from}, "perPage": {"100"}}
+		q := url.Values{"from": {from}, "perPage": {fmt.Sprint(pollPerPage)}}
 		if status != "" {
 			q.Set("status", status)
 		}
-		var env struct {
-			Data []map[string]any `json:"data"`
-		}
-		if err := c.do(ctx, req, http.MethodGet, path+"?"+q.Encode(), nil, &env); err != nil {
+		data, whole, err := c.listWindow(ctx, req, path, q)
+		if err != nil {
 			return connector.Response{}, err
 		}
-		data := make([]any, len(env.Data))
-		for i, d := range env.Data {
-			data[i] = d
+		if whole {
+			return connector.Response{Output: map[string]any{"data": data}}, nil
 		}
-		return connector.Response{Output: map[string]any{"data": data}}, nil
+		end := c.now().UTC()
+		for probe := 0; probe < maxPollProbes; probe++ {
+			end = start.Add(end.Sub(start) / 2).Truncate(time.Second)
+			if !end.After(start) {
+				break
+			}
+			q.Set("to", end.Format(time.RFC3339))
+			data, whole, err = c.listWindow(ctx, req, path, q)
+			if err != nil {
+				return connector.Response{}, err
+			}
+			if whole {
+				return connector.Response{Output: map[string]any{"data": data, "through": end.Format(time.RFC3339)}}, nil
+			}
+		}
+		// Not skipped past: the poll fails, stays where it is and shows.
+		return connector.Response{}, fmt.Errorf("paystack: more than %d records in the seconds after %s; the listing cannot be read whole: %w",
+			c.pollPages*pollPerPage, from, effects.ErrFatal)
 	}
+}
+
+// listWindow reads every page of one listing, up to pollPages; whole is
+// false when there was more than that.
+func (c *client) listWindow(ctx context.Context, req connector.Request, path string, q url.Values) (data []any, whole bool, err error) {
+	data = []any{}
+	for page := 1; page <= c.pollPages; page++ {
+		q.Set("page", fmt.Sprint(page))
+		var env struct {
+			Data []map[string]any `json:"data"`
+			Meta struct {
+				PageCount int `json:"pageCount"`
+			} `json:"meta"`
+		}
+		if err := c.do(ctx, req, http.MethodGet, path+"?"+q.Encode(), nil, &env); err != nil {
+			return nil, false, err
+		}
+		if env.Meta.PageCount > c.pollPages {
+			return nil, false, nil // too many: no need to read the rest
+		}
+		for _, d := range env.Data {
+			data = append(data, d)
+		}
+		// The last page by Paystack's count, or, where it gives none, a
+		// page that is not full.
+		if (env.Meta.PageCount > 0 && page >= env.Meta.PageCount) || (env.Meta.PageCount == 0 && len(env.Data) < pollPerPage) {
+			return data, true, nil
+		}
+	}
+	return nil, false, nil
 }
 
 func transferOutput(d map[string]any) map[string]any {
@@ -143,7 +207,14 @@ func (c *client) transfer(ctx context.Context, req connector.Request) (connector
 	err := c.do(ctx, req, http.MethodPost, "/transfer", body, &env)
 	if err != nil && connector.StatusOf(err) == http.StatusBadRequest && strings.Contains(strings.ToLower(errBody(err)), "duplicate") {
 		// The transfer already exists under this reference: report it.
-		return c.verifyTransfer(ctx, connector.Request{Input: map[string]any{"reference": ref}, Credentials: req.Credentials, HTTP: req.HTTP})
+		out, verr := c.lookupTransfer(ctx, req, ref)
+		if errors.Is(verr, connector.ErrNotFound) {
+			return connector.Response{}, fmt.Errorf("paystack refused reference %s as a duplicate and has no transfer under it: %w", ref, effects.ErrUnknownOutcome)
+		}
+		if verr != nil {
+			return connector.Response{}, verr
+		}
+		return connector.Response{Output: out}, nil
 	}
 	if err != nil {
 		return connector.Response{}, err
@@ -154,18 +225,35 @@ func (c *client) transfer(ctx context.Context, req connector.Request) (connector
 	return connector.Response{Output: transferOutput(env.Data)}, nil
 }
 
-// verifyTransfer is also the reconcile action for transfer.
-func (c *client) verifyTransfer(ctx context.Context, req connector.Request) (connector.Response, error) {
-	ref, _ := req.Input["reference"].(string)
+// lookupTransfer reads a transfer by its reference; ErrNotFound when
+// Paystack has none.
+func (c *client) lookupTransfer(ctx context.Context, req connector.Request, ref string) (map[string]any, error) {
 	var env envelope
 	err := c.do(ctx, req, http.MethodGet, "/transfer/verify/"+url.PathEscape(ref), nil, &env)
 	if isNotFound(err) {
-		return connector.Response{}, connector.ErrNotFound
+		return nil, fmt.Errorf("paystack: no transfer with reference %s: %w", ref, connector.ErrNotFound)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return transferOutput(env.Data), nil
+}
+
+// verifyTransfer is also the reconcile action for transfer. As a
+// reconcile, a transfer Paystack does not have is ErrNotFound (send it
+// again). As a step or a payout lookup it is an answer, status not_found,
+// which get_payout reads as still pending with that reason: a lookup that
+// finds nothing does not say the payout failed.
+func (c *client) verifyTransfer(ctx context.Context, req connector.Request) (connector.Response, error) {
+	ref, _ := req.Input["reference"].(string)
+	out, err := c.lookupTransfer(ctx, req, ref)
+	if errors.Is(err, connector.ErrNotFound) && !req.Reconciling {
+		return connector.Response{Output: map[string]any{"reference": ref, "status": "not_found"}}, nil
 	}
 	if err != nil {
 		return connector.Response{}, err
 	}
-	return connector.Response{Output: transferOutput(env.Data)}, nil
+	return connector.Response{Output: out}, nil
 }
 
 // checkout creates a checkout page under the request's reference
@@ -183,7 +271,13 @@ func (c *client) checkout(ctx context.Context, req connector.Request) (connector
 		}
 	}
 	var env envelope
-	if err := c.do(ctx, req, http.MethodPost, "/transaction/initialize", body, &env); err != nil {
+	err := c.do(ctx, req, http.MethodPost, "/transaction/initialize", body, &env)
+	if err != nil && connector.StatusOf(err) == http.StatusBadRequest && strings.Contains(strings.ToLower(errBody(err)), "duplicate") {
+		// A resend after a lost answer: the checkout exists under this
+		// reference. Read it back rather than fail.
+		return c.existingCheckout(ctx, req, ref, paystackMessage(err))
+	}
+	if err != nil {
 		return connector.Response{}, err
 	}
 	if !env.Status {
@@ -194,6 +288,34 @@ func (c *client) checkout(ctx context.Context, req connector.Request) (connector
 		if v, ok := env.Data[k].(string); ok {
 			out[k] = v
 		}
+	}
+	return connector.Response{Output: out}, nil
+}
+
+// existingCheckout reports the checkout already made under ref, read
+// through the payment's verification. Its page address is given again
+// only if Paystack's answer carries one (its documentation shows none):
+// without it the step cannot hand the customer a page, and with the
+// payment made under the reference it must not make another, so a person
+// decides (a retry there makes a new checkout under a new key).
+func (c *client) existingCheckout(ctx context.Context, req connector.Request, ref, refusal string) (connector.Response, error) {
+	var env envelope
+	err := c.do(ctx, req, http.MethodGet, "/transaction/verify/"+url.PathEscape(ref), nil, &env)
+	if isNotFound(err) {
+		return connector.Response{}, fmt.Errorf("paystack refused reference %s (%s) and has no payment under it: %w", ref, refusal, effects.ErrUnknownOutcome)
+	}
+	if err != nil {
+		return connector.Response{}, err
+	}
+	out := map[string]any{"reference": ref}
+	for _, k := range []string{"authorization_url", "access_code"} {
+		if v, ok := env.Data[k].(string); ok && v != "" {
+			out[k] = v
+		}
+	}
+	if _, ok := out["authorization_url"]; !ok {
+		return connector.Response{}, fmt.Errorf("paystack: a checkout already exists under reference %s (status %v), and Paystack does not give its page address again. If the customer never got the page, retry the step to make a new one: %w",
+			ref, env.Data["status"], effects.ErrIndeterminate)
 	}
 	return connector.Response{Output: out}, nil
 }
@@ -279,7 +401,8 @@ func (c *client) verifyCharge(ctx context.Context, req connector.Request) (conne
 
 // refund refunds a payment in full (Paystack's POST /refund, no amount).
 // Paystack refuses to refund a payment twice; that refusal is reported as
-// the refund already made (status "already"), so a retry never pays twice.
+// the refund already made (status "already") or, where it says only that
+// a refund is under way, as pending, so a retry never pays twice.
 func (c *client) refund(ctx context.Context, req connector.Request) (connector.Response, error) {
 	in := req.Input
 	ref, _ := in["reference"].(string)
@@ -295,7 +418,13 @@ func (c *client) refund(ctx context.Context, req connector.Request) (connector.R
 	var env envelope
 	err := c.do(ctx, req, http.MethodPost, "/refund", body, &env)
 	if err != nil && connector.StatusOf(err) == http.StatusBadRequest && alreadyRefunded(errBody(err)) {
-		return connector.Response{Output: map[string]any{"reference": ref, "status": "already"}}, nil
+		// "already" only where Paystack says the refund is done; a refund
+		// it refuses because one is under way is pending, not refunded.
+		status := "pending"
+		if refundDone(errBody(err)) {
+			status = "already"
+		}
+		return connector.Response{Output: map[string]any{"reference": ref, "status": status}}, nil
 	}
 	if err != nil && connector.StatusOf(err) == http.StatusBadRequest {
 		// Not enough balance, a payment not refundable: retrying will not help.
@@ -314,27 +443,46 @@ func (c *client) refund(ctx context.Context, req connector.Request) (connector.R
 	return connector.Response{Output: out}, nil
 }
 
-// refundStatus is refund_transaction's reconcile: a payment shown as
-// reversed was refunded; one that was not is not found, so the refund is
-// sent (again).
+// refundStatus is refund_transaction's reconcile. It is given the step's
+// own input, so reference is the payment's (refund_transaction has no
+// key field of the engine's). A payment shown as reversed was refunded.
+// One that is not may still have a refund on its way (a refund is
+// pending, then processing, for days before the payment reads reversed),
+// and the payment's status does not say: that is not "not found", which
+// would send the refund again, but an outcome a person settles in
+// Paystack. As an ordinary step, a payment not refunded is not found.
 func (c *client) refundStatus(ctx context.Context, req connector.Request) (connector.Response, error) {
 	ref, _ := req.Input["reference"].(string)
+	if ref == "" {
+		return connector.Response{}, fmt.Errorf("refund_status needs the payment's reference: %w", effects.ErrFatal)
+	}
 	var env envelope
 	err := c.do(ctx, req, http.MethodGet, "/transaction/verify/"+url.PathEscape(ref), nil, &env)
 	if err != nil {
 		return connector.Response{}, err
 	}
 	st, _ := env.Data["status"].(string)
-	if !strings.Contains(st, "reversed") {
-		return connector.Response{}, connector.ErrNotFound
+	if strings.Contains(st, "reversed") {
+		return connector.Response{Output: map[string]any{"reference": ref, "status": st}}, nil
 	}
-	return connector.Response{Output: map[string]any{"reference": ref, "status": st}}, nil
+	if req.Reconciling {
+		return connector.Response{}, fmt.Errorf("paystack: payment %s is %q, not reversed; a refund of it may still be pending, which the payment does not show. Check its refunds in Paystack, then resolve the step: %w",
+			ref, st, effects.ErrIndeterminate)
+	}
+	return connector.Response{}, connector.ErrNotFound
 }
 
 func alreadyRefunded(body string) bool {
 	b := strings.ToLower(body)
 	return strings.Contains(b, "fully reversed") || strings.Contains(b, "already been refunded") || strings.Contains(b, "pending refund") ||
 		strings.Contains(b, "refund already")
+}
+
+// refundDone reports a refusal that says the payment has been refunded,
+// not merely that a refund exists.
+func refundDone(body string) bool {
+	b := strings.ToLower(body)
+	return strings.Contains(b, "fully reversed") || strings.Contains(b, "already been refunded")
 }
 
 // paystackMessage is the message of Paystack's error body.

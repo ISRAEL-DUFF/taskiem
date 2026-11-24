@@ -35,10 +35,13 @@ import (
 
 func (s *Server) linkOrderRoutes(r chi.Router) {
 	manage := s.need(PermStorefrontManage)
-	r.With(manage).Get("/trade-orders", s.listTradeOrders)
-	r.With(manage).Get("/trade-orders/{id}", s.getTradeOrder)
+	// Working an order that came in is a cashier's too (order.handle);
+	// placing one for a buyer is the storefront's.
+	orders := s.need(PermOrders)
+	r.With(orders).Get("/trade-orders", s.listTradeOrders)
+	r.With(orders).Get("/trade-orders/{id}", s.getTradeOrder)
 	r.With(manage, s.tenantWide).Post("/trade-orders", s.placeTradeOrder)
-	r.With(manage, s.tenantWide).Post("/trade-orders/{id}/{step}", s.tradeOrderStep)
+	r.With(orders, s.tenantWide).Post("/trade-orders/{id}/{step}", s.tradeOrderStep)
 	r.With(manage, s.tenantWide).Put("/trade-orders/{id}/lines/{line}/item", s.setTradeLineItem)
 	r.With(s.need(PermLinkManage)).Get("/links/{id}/trade", s.getLinkTrade)
 	r.With(s.need(PermLinkManage), s.tenantWide).Put("/links/{id}/trade", s.putLinkTrade)
@@ -46,6 +49,8 @@ func (s *Server) linkOrderRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Put("/stock/suppliers/{id}/link", s.linkSupplier)
 	r.With(manage).Get("/stock/deliver-to", s.getDeliverTo)
 	r.With(manage, s.tenantWide).Put("/stock/deliver-to", s.putDeliverTo)
+	r.With(manage).Get("/stock/purchases/{id}/deliver-to", s.getPurchaseDeliverTo)
+	r.With(manage, s.tenantWide).Put("/stock/purchases/{id}/deliver-to", s.putPurchaseDeliverTo)
 	r.With(manage, s.tenantWide).Post("/stock/purchases/{id}/accept-change", s.acceptPurchaseChange)
 	r.With(manage, s.tenantWide).Post("/stock/purchases/{id}/confirm-proposed", s.confirmProposed)
 	r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/{id}/all-came", s.allCame)
@@ -87,13 +92,39 @@ func (s *Server) getTradeOrder(w http.ResponseWriter, r *http.Request) {
 	var out tradeOrderOut
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		out.Order, err = links.GetOrderTx(r.Context(), tx, chi.URLParam(r, "id"), false)
-		return err
+		if out.Order, err = links.GetOrderTx(r.Context(), tx, chi.URLParam(r, "id"), false); err != nil {
+			return err
+		}
+		// A delivery's customer, for the rider while they hold it.
+		return s.openHeld(r.Context(), tx, principalFrom(r.Context()), &out.Order)
 	}); err != nil {
 		s.fail(w, r, orderErr(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// cashierSteps are the steps working an order takes (order.handle): no
+// price is set or agreed in them.
+var cashierSteps = map[string]bool{links.StepAccept: true, links.StepDecline: true, links.StepReady: true, links.StepDispatched: true, links.StepDelivered: true}
+
+// orderStepAllowed refuses, to those who work the orders without the
+// storefront's say over prices (a cashier), a step that sets or agrees a
+// price: a change, a cancel or keep, a short count agreed, or accepting
+// lines the buyer priced.
+func orderStepAllowed(p *Principal, step string, o links.Order) error {
+	if p.Can(PermStorefrontManage) {
+		return nil
+	}
+	if !cashierSteps[step] && (step != links.StepChange || !links.IsOffer(o.Lines)) {
+		return fmt.Errorf("%w: %s needs %s", errForbidden, strings.ReplaceAll(step, "_", " "), PermStorefrontManage)
+	}
+	// A deal (phase 7): an offer is theirs to accept or counter, within
+	// the floor (dealGate, before the step); a buyer's last costs are not.
+	if step == links.StepAccept && !links.SellerPriced(o.Lines) && !links.IsOffer(o.Lines) {
+		return fmt.Errorf("%w: the buyer priced some lines; someone who sets prices accepts it", errForbidden)
+	}
+	return nil
 }
 
 // tradeOrderStep is POST /v1/trade-orders/{id}/{step}: the seller accepts,
@@ -102,6 +133,24 @@ func (s *Server) getTradeOrder(w http.ResponseWriter, r *http.Request) {
 // delivery. The buyer's purchase order follows at once.
 func (s *Server) tradeOrderStep(w http.ResponseWriter, r *http.Request) {
 	step := chi.URLParam(r, "step")
+	// A delivery for a linked business (docs/spec/chat-riders.md): the
+	// rider's steps run on the business's delivery through the door.
+	if _, ok := deliveryOrderSteps[step]; ok {
+		var ref links.DeliveryRef
+		err := s.tx(r, func(tx pgx.Tx) error {
+			var err error
+			ref, err = links.DeliveryRefTx(r.Context(), tx, chi.URLParam(r, "id"))
+			return err
+		})
+		switch {
+		case err == nil:
+			s.deliveryStep(w, r, ref, step)
+			return
+		case !errors.Is(err, links.ErrNotFound):
+			s.fail(w, r, orderErr(err))
+			return
+		}
+	}
 	if !slices.Contains(links.SellerSteps, step) {
 		s.fail(w, r, pgx.ErrNoRows)
 		return
@@ -114,12 +163,63 @@ func (s *Server) tradeOrderStep(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := principalFrom(r.Context())
+	if in.KeepDays > 0 && (step != links.StepAccept || !p.Can(PermStorefrontManage)) {
+		s.fail(w, r, fmt.Errorf("%w: keeping a price for a buyer is for those who set prices, on accepting", errForbidden))
+		return
+	}
+	// A counter as one total (phase 7): spread over the order's lines.
+	if in.TotalKobo > 0 {
+		if step != links.StepChange || len(in.Lines) > 0 {
+			s.fail(w, r, fmt.Errorf("%w: a total is for a change, without lines", errBadRequest))
+			return
+		}
+		var cur links.Order
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			var err error
+			cur, err = links.GetOrderTx(r.Context(), tx, chi.URLParam(r, "id"), false)
+			return err
+		}); err != nil {
+			s.fail(w, r, orderErr(err))
+			return
+		}
+		spread, err := links.CounterIn(cur, in.TotalKobo, in.Note)
+		if err != nil {
+			s.fail(w, r, orderErr(err))
+			return
+		}
+		in = spread
+	}
+	// The floor (phase 7): staff below it wait for the owner, or are told.
+	if err := s.dealGate(r.Context(), p, chi.URLParam(r, "id"), step, in); err != nil {
+		if why, ok := isOwnerAsked(err); ok {
+			writeJSON(w, http.StatusAccepted, map[string]any{"waiting": "owner", "why": why})
+			return
+		}
+		s.fail(w, r, orderErr(err))
+		return
+	}
+	var who string
+	_ = s.tx(r, func(tx pgx.Tx) error { who = personName(r.Context(), tx, p); return nil })
+	in.Who = who
+	offer := false
 	o, short, err := s.sellerStep(r.Context(), p.TenantID, chi.URLParam(r, "id"), step, in, actorOf(p), p.Actor(), func(tx pgx.Tx, o links.Order) error {
+		if err := orderStepAllowed(p, step, o); err != nil {
+			return err
+		}
+		offer = links.IsOffer(o.Lines)
 		return auditTx(r, tx, "trade_order."+step, o.Reference, map[string]any{"order_id": o.ID, "buyer": o.Buyer})
 	})
 	if err != nil {
 		s.fail(w, r, orderErr(err))
 		return
+	}
+	if step == links.StepAccept && offer {
+		s.diaryChange(r.Context(), p, fmt.Sprintf("Agreed %s with %s on %s", invoicing.Naira(orderTotal(o.Lines)), o.BuyerName, o.OrderReference))
+		if err := s.keepDealPrices(r.Context(), p, o, in.KeepDays); err != nil {
+			s.Logger.Warn("deals: keeping a price", "err", err)
+		}
+	} else {
+		s.diaryChange(r.Context(), p, orderStepWords(step, o.OrderReference, o.BuyerName))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"order": o, "short": short})
 }
@@ -145,6 +245,14 @@ func (s *Server) sellerStep(ctx context.Context, tenant uuid.UUID, ref, step str
 		cur, err := links.GetOrderTx(ctx, tx, ref, true)
 		if err != nil {
 			return err
+		}
+		if step == links.StepAccept {
+			// One order of a link is accepted at a time: a credit check
+			// made for another of its orders counts this one, or waits
+			// for it (links.LockCreditTx).
+			if err := links.LockCreditTx(ctx, tx, tenant, cur.LinkID); err != nil {
+				return err
+			}
 		}
 		if audit != nil {
 			if err := audit(tx, cur); err != nil {
@@ -530,7 +638,12 @@ func (s *Server) receiptStep(w http.ResponseWriter, r *http.Request, short bool)
 		}
 	}
 	p := principalFrom(r.Context())
+	var reference, supplier string
 	told, err := s.settleReceipt(r.Context(), p.TenantID, id, in.Counts, actorOf(p), p.Actor(), func(tx pgx.Tx, ref string) error {
+		reference = ref
+		if x, err := stock.PurchaseTx(r.Context(), tx, p.TenantID, id, false); err == nil {
+			supplier = x.Supplier
+		}
 		return auditTx(r, tx, map[bool]string{false: "purchase.all_came", true: "purchase.not_all_came"}[short], ref, map[string]any{"purchase_id": id})
 	})
 	if err != nil {
@@ -538,18 +651,17 @@ func (s *Server) receiptStep(w http.ResponseWriter, r *http.Request, short bool)
 		return
 	}
 	s.tellOrder(r.Context(), told, links.StepIn{Delivered: in.Counts})
+	s.diaryChange(r.Context(), p, buyerStepWords(map[bool]string{false: "all_came", true: "not_all_came"}[short], reference, supplier, 0))
 	s.purchaseAfter(w, r, id, nil)
 }
 
 // settleReceipt records what came of a delivered linked order (the
 // seller's count, or the buyer's when short is given) and settles the
-// receipt with the seller, in one transaction; then sends the stock
-// movements. audit writes the business's own record of who did it, before
+// receipt with the seller, with its stock movements, in one transaction.
+// audit writes the business's own record of who did it, before
 // the transaction enters the seller's side.
 func (s *Server) settleReceipt(ctx context.Context, tenant, id uuid.UUID, short []int64, by links.Actor, actor string, audit func(tx pgx.Tx, ref string) error) (*links.Told, error) {
 	var told *links.Told
-	var moves []stock.Movement
-	var costs []stock.Cost
 	key := stock.LinkReceiptKey + id.String()
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		got, ref, err := links.ToReceive(ctx, tx, id, short)
@@ -562,7 +674,7 @@ func (s *Server) settleReceipt(ctx context.Context, tenant, id uuid.UUID, short 
 			}
 		}
 		if len(got) > 0 {
-			if _, moves, costs, err = stock.ReceiveTx(ctx, tx, tenant, id, got, actor, key); err != nil {
+			if _, _, err = stock.ReceiveTx(ctx, tx, tenant, id, got, actor, key); err != nil {
 				return err
 			}
 		}
@@ -572,7 +684,6 @@ func (s *Server) settleReceipt(ctx context.Context, tenant, id uuid.UUID, short 
 	if err != nil {
 		return nil, err
 	}
-	s.Purchases.Apply(ctx, tenant, moves, costs, key)
 	return told, nil
 }
 
@@ -645,19 +756,26 @@ func (s *Server) writeLinkedOrder(ctx context.Context, buyer, id uuid.UUID) erro
 	seller := told.Tenant
 	o := s.matchTradeItems(ctx, seller, told.Order)
 	// Over the buyer's credit limit (L5), it waits: flagged, not accepted
-	// by itself.
+	// by itself. A check that could not be made is not a pass: the order
+	// waits for a person, and says so.
 	var credit links.Credit
+	checked := false
 	if o != nil {
-		credit, _ = s.creditCheck(ctx, seller, o.OrderReference)
+		var co *links.Order
+		if credit, co = s.creditCheck(ctx, seller, o.OrderReference); co != nil {
+			checked = true
+		} else {
+			s.creditUnchecked(ctx, seller, *o)
+		}
 	}
 	// Accepted by itself only when the seller's side priced every line
 	// (its list, its catalogue), never a line priced by the buyer alone;
 	// at another price than the buyer proposed, it is the seller's change
 	// instead, for the buyer to accept.
-	if o != nil && !credit.Over && o.AutoAccept && o.Status == links.OrderReceived && links.SellerPriced(o.Lines) {
+	if o != nil && checked && !credit.Over && o.AutoAccept && o.Status == links.OrderReceived && links.SellerPriced(o.Lines) {
 		by := links.Actor{Type: "system", ID: "link-orders"}
 		if links.AsProposed(o.Lines) {
-			if _, _, err := s.sellerStep(ctx, seller, o.ID.String(), links.StepAccept, links.StepIn{}, by, "system:link-orders", nil); err == nil {
+			if err := s.acceptWithinCredit(ctx, seller, *o); err == nil {
 				told.Event = "auto_accepted"
 			} else {
 				s.Logger.Warn("links: accepting an order by itself", "tenant", seller, "err", err)
@@ -671,7 +789,7 @@ func (s *Server) writeLinkedOrder(ctx context.Context, buyer, id uuid.UUID) erro
 	}
 	note := ""
 	if o != nil {
-		note = linesWords(o.Lines) + ", " + storefront.FormatNaira(linesKobo(o.Lines))
+		note = linesWords(o.Lines, s.sizeParents(ctx, seller)) + ", " + storefront.FormatNaira(linesKobo(o.Lines))
 		if err := s.Orders.StartTrade(ctx, seller, o.OrderReference); err != nil {
 			s.Logger.Warn("links: starting the order workflow", "tenant", seller, "err", err)
 		}
@@ -689,10 +807,44 @@ func linesKobo(lines []links.OrderLine) int64 {
 }
 
 // linesWords says an order's lines: "10 bags Rice, 5 cartons Indomie".
-func linesWords(lines []links.OrderLine) string {
-	parts := make([]string, len(lines))
-	for i, l := range lines {
-		parts[i] = (stock.Item{Unit: l.Unit}).Quantity(l.Quantity) + " " + l.Item
+// A product's sizes and colours (named "Air Max 90 – 42, Black") are told
+// together: "36 pairs Air Max 90 in 7 sizes and colours". parents is each
+// size's product (sizeParents): only lines of one product's sizes are
+// grouped, never items that merely share the start of their names.
+func linesWords(lines []links.OrderLine, parents map[string]string) string {
+	type group struct {
+		name, full, unit string
+		qty              int64
+		n                int
+		sized            bool
+	}
+	var order []string
+	byKey := map[string]*group{}
+	for _, l := range lines {
+		key, name, sized := "\x01"+l.Item, l.Item, false
+		if product := parents[l.ItemID]; product != "" && l.ItemID != "" {
+			key, sized = "\x00"+product, true
+			if i := strings.Index(l.Item, " – "); i > 0 {
+				name = l.Item[:i]
+			}
+		}
+		g := byKey[key]
+		if g == nil {
+			g = &group{name: name, full: l.Item, unit: l.Unit, sized: sized}
+			byKey[key] = g
+			order = append(order, key)
+		}
+		g.qty += l.Quantity
+		g.n++
+	}
+	parts := make([]string, 0, len(order))
+	for _, k := range order {
+		g := byKey[k]
+		w := (stock.Item{Unit: g.unit}).Quantity(g.qty) + " " + g.full
+		if g.sized && g.n > 1 {
+			w = (stock.Item{Unit: g.unit}).Quantity(g.qty) + " " + g.name + " in " + strconv.Itoa(g.n) + " " + sizesWord(g.n)
+		}
+		parts = append(parts, w)
 	}
 	return strings.Join(parts, ", ")
 }
@@ -817,7 +969,6 @@ func (s *Server) adjustShort(ctx context.Context, buyer, id uuid.UUID) error {
 	if s.Purchases == nil {
 		return errors.New("purchases are not configured")
 	}
-	var moves []stock.Movement
 	key := "link-short-" + id.String()
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{buyer}, func(tx pgx.Tx) error {
 		if err := links.Undue(ctx, tx, buyer, "adjust", id); err != nil {
@@ -836,13 +987,12 @@ func (s *Server) adjustShort(ctx context.Context, buyer, id uuid.UUID) error {
 		if err := json.Unmarshal(short, &counts); err != nil {
 			return err
 		}
-		_, moves, err = stock.AdjustShortTx(ctx, tx, buyer, id, counts, "system:link-orders", key)
+		_, _, err = stock.AdjustShortTx(ctx, tx, buyer, id, counts, "system:link-orders", key)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	s.Purchases.Apply(ctx, buyer, moves, nil, key)
 	return nil
 }
 
@@ -884,13 +1034,25 @@ func (s *Server) tellOrder(ctx context.Context, t *links.Told, in links.StepIn) 
 		if note == "" || told.Event == "change" || told.Event == "delivered" || told.Event == "short" {
 			note = s.orderNote(ctx, told, in)
 		}
+		// The seller's side is told whoever works the orders (a cashier
+		// too); the buyer's purchasing stays the storefront's.
 		perms := []string{PermStorefrontManage}
+		if sellerTold(told.Event) {
+			perms = []string{PermOrders}
+		}
 		if told.Event == "delivered" {
 			perms = []string{PermTableEdit} // who records what came
 		}
+		// The seller's counter to an offer (phase 7) is told as a deal.
+		words := "order.link." + told.Event
+		if told.Event == "change" {
+			if deal, ok := s.sellerCounterNote(ctx, told); ok {
+				words, note = "order.link.seller_countered", deal
+			}
+		}
 		s.tellHoldersSent(ctx, told.Tenant, perms, "order:"+told.Reference+":"+told.Event, link, func(l lang.Tag) (string, string) {
-			return tr(l, "order.link."+told.Event+"_title", "from", told.From, "reference", told.Reference),
-				strings.TrimSpace(tr(l, "order.link."+told.Event, "from", whatsapp.SafeText(told.From), "reference", told.Reference, "note", whatsapp.SafeText(note)))
+			return tr(l, words+"_title", "from", told.From, "reference", told.Reference),
+				strings.TrimSpace(tr(l, words, "from", whatsapp.SafeText(told.From), "reference", told.Reference, "note", whatsapp.SafeText(note)))
 		}, func(l lang.Tag) []whatsapp.Button { return orderButtons(l, told) }, sent)
 	})
 }
@@ -904,11 +1066,15 @@ const orderPrefix = "lo:"
 // and Decline on a new order, All came on a delivery.
 func orderButtons(l lang.Tag, t links.Told) []whatsapp.Button {
 	switch t.Event {
-	case "ordered":
+	case "ordered", "offered", "countered":
 		return []whatsapp.Button{
 			{ID: orderPrefix + links.StepAccept + ":" + t.Order.String(), Title: tr(l, "order.link.button_accept")},
 			{ID: orderPrefix + links.StepDecline + ":" + t.Order.String(), Title: tr(l, "order.link.button_decline")},
 		}
+	case "change":
+		// The seller's price (a counter, phase 7): accepted with a tap, or
+		// answered with "counter 750k".
+		return []whatsapp.Button{{ID: orderPrefix + "accept_change:" + t.Purchase.String(), Title: tr(l, "order.link.button_accept_change")}}
 	case "delivered":
 		return []whatsapp.Button{{ID: orderPrefix + "all_came:" + t.Purchase.String(), Title: tr(l, "order.link.button_all_came")}}
 	}
@@ -921,14 +1087,14 @@ func orderButtons(l lang.Tag, t links.Told) []whatsapp.Button {
 func (s *Server) waOrderPress(ctx context.Context, c *chat, reply string) error {
 	step, idText, _ := strings.Cut(strings.TrimPrefix(reply, orderPrefix), ":")
 	id, err := uuid.Parse(idText)
-	if err != nil || !slices.Contains([]string{links.StepAccept, links.StepDecline, "all_came"}, step) {
+	if err != nil || !slices.Contains([]string{links.StepAccept, links.StepDecline, "all_came", "accept_change"}, step) {
 		return c.say(ctx, s, c.t("order.link.gone"))
 	}
 	tenants := append([]tenantRef{c.tenant}, slices.DeleteFunc(slices.Clone(c.tenants), func(t tenantRef) bool { return t.ID == c.tenant.ID })...)
 	for _, t := range tenants {
 		var ref string
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.ID}, func(tx pgx.Tx) error {
-			if step == "all_came" {
+			if step == "all_came" || step == "accept_change" {
 				x, err := stock.PurchaseTx(ctx, tx, t.ID, id, false)
 				ref = x.Reference
 				return err
@@ -941,25 +1107,53 @@ func (s *Server) waOrderPress(ctx context.Context, c *chat, reply string) error 
 		} else if err != nil {
 			return err
 		}
-		perm := PermStorefrontManage
-		if step == "all_came" {
+		perm := PermOrders
+		switch step {
+		case "all_came":
 			perm = PermTableEdit
+		case "accept_change":
+			perm = PermStorefrontManage // as POST /v1/stock/purchases/{id}/accept-change
 		}
 		p, err := s.principalOf(ctx, t.ID, c.p.UserID)
 		if err != nil || !p.Can(perm) {
 			return c.say(ctx, s, c.t("order.link.denied", "org", t.Name))
 		}
 		var told *links.Told
-		if step == "all_came" {
+		switch step {
+		case "accept_change":
+			err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.ID}, func(tx pgx.Tx) error {
+				if err := waAudit(ctx, tx, c.ch.Name(), p, "purchase.accept_change", ref, map[string]any{"purchase_id": id}); err != nil {
+					return err
+				}
+				var err error
+				told, err = links.AcceptChangeTx(ctx, tx, t.ID, id, actorOf(p))
+				return err
+			})
+			if err == nil {
+				s.acceptedByBuyer(ctx, told)
+			}
+		case "all_came":
 			told, err = s.settleReceipt(ctx, t.ID, id, nil, actorOf(p), p.Actor(), func(tx pgx.Tx, ref string) error {
 				return waAudit(ctx, tx, c.ch.Name(), p, "purchase.all_came", ref, map[string]any{"purchase_id": id})
 			})
-		} else {
+		default:
+			// The floor (phase 7): an accept below it waits for the owner.
+			if err := s.dealGate(ctx, p, id.String(), step, links.StepIn{}); err != nil {
+				if _, ok := isOwnerAsked(err); ok {
+					return c.say(ctx, s, c.t("deal.owner_asked", "reference", ref))
+				}
+				return err
+			}
 			_, _, err = s.sellerStep(ctx, t.ID, id.String(), step, links.StepIn{}, actorOf(p), p.Actor(), func(tx pgx.Tx, o links.Order) error {
+				if err := orderStepAllowed(p, step, o); err != nil {
+					return err
+				}
 				return waAudit(ctx, tx, c.ch.Name(), p, "trade_order."+step, o.Reference, map[string]any{"order_id": id})
 			})
 		}
 		switch {
+		case errors.Is(err, errForbidden):
+			return c.say(ctx, s, c.t("order.link.denied", "org", t.Name))
 		case errors.Is(err, links.ErrState):
 			return c.say(ctx, s, c.t("order.link.gone"))
 		case errors.Is(err, links.ErrInvalid):
@@ -977,7 +1171,7 @@ func (s *Server) waOrderPress(ctx context.Context, c *chat, reply string) error 
 // buyer).
 func sellerTold(event string) bool {
 	switch event {
-	case "ordered", "auto_accepted", "auto_changed", "cancelled_by_buyer", "cancel_asked", "change_accepted", "received", "short", "confirmed":
+	case "ordered", "auto_accepted", "auto_changed", "cancelled_by_buyer", "cancel_asked", "change_accepted", "received", "short", "confirmed", "offered", "countered":
 		return true
 	}
 	return false
@@ -992,6 +1186,10 @@ func (s *Server) orderNote(ctx context.Context, t links.Told, in links.StepIn) s
 			o, err := links.GetOrderTx(ctx, tx, t.Order.String(), false)
 			if err != nil {
 				return err
+			}
+			if t.Event == "offered" || t.Event == "countered" {
+				note = dealNote(o)
+				return nil
 			}
 			var parts []string
 			for i, l := range o.Lines {
@@ -1074,6 +1272,76 @@ func (s *Server) getDeliverTo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, d)
+}
+
+// getPurchaseDeliverTo is GET /v1/stock/purchases/{id}/deliver-to: where
+// one purchase is delivered, its own place (own true) or the business's
+// default (saved objects S2).
+func (s *Server) getPurchaseDeliverTo(w http.ResponseWriter, r *http.Request) {
+	if !s.purchasesReady(w) {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var d links.DeliverTo
+	var own bool
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		d, own, err = links.PurchaseDeliverToTx(r.Context(), tx, s.Vault, principalFrom(r.Context()).TenantID, id)
+		return err
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "not found")
+			return
+		}
+		s.fail(w, r, orderErr(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"address": d.Address, "phone": d.Phone, "own": own})
+}
+
+// putPurchaseDeliverTo is PUT /v1/stock/purchases/{id}/deliver-to
+// {address, phone}: where one purchase from a linked supplier is delivered
+// (a saved place, on the web and in the app), only before the supplier has
+// it (409 after).
+func (s *Server) putPurchaseDeliverTo(w http.ResponseWriter, r *http.Request) {
+	if !s.purchasesReady(w) {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var d links.DeliverTo
+	if err := decodeBody(r, &d); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	e164, err := s.Purchases.Book.Phone(d.Phone)
+	if err != nil {
+		s.fail(w, r, fmt.Errorf("%w: %s is not a mobile number Taskiem can reach (like 0803 123 4567)", errBadRequest, strings.TrimSpace(d.Phone)))
+		return
+	}
+	d.Phone = e164
+	p := principalFrom(r.Context())
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		if err := links.SetPurchaseDeliverToTx(r.Context(), tx, s.Vault, p.TenantID, id, d); err != nil {
+			return err
+		}
+		return auditTx(r, tx, "purchase.deliver_to", id.String(), map[string]any{"own": true})
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "not found")
+			return
+		}
+		s.fail(w, r, orderErr(err))
+		return
+	}
+	s.getPurchaseDeliverTo(w, r)
 }
 
 func (s *Server) putDeliverTo(w http.ResponseWriter, r *http.Request) {
@@ -1170,8 +1438,14 @@ func (s *Server) setTradeLineItem(w http.ResponseWriter, r *http.Request) {
 // linked business that buys from us (a phone order, §7). It reaches the
 // buyer as a purchase order to us waiting for its Confirm. Each line is
 // one of our items (item_id, at its price unless one is given) or named
-// with its price.
+// with its price. With an Idempotency-Key, the same request again answers
+// the order it made, and the buyer is not told twice.
 func (s *Server) placeTradeOrder(w http.ResponseWriter, r *http.Request) {
+	key, err := optionalKey(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var in struct {
 		Link  uuid.UUID `json:"link"`
 		Lines []struct {
@@ -1218,23 +1492,35 @@ func (s *Server) placeTradeOrder(w http.ResponseWriter, r *http.Request) {
 	var out tradeOrderOut
 	var told *links.Told
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		if key != "" {
+			if o, ok, err := links.PlacedOrderTx(r.Context(), tx, p.TenantID, in.Link, key); err != nil || ok {
+				out.Order = o
+				return err
+			}
+		}
 		if err := auditTx(r, tx, "trade_order.place", in.Link.String(), map[string]any{"lines": len(lines)}); err != nil {
 			return err
 		}
 		var err error
-		out.Order, told, err = links.PlaceOrderTx(r.Context(), tx, s.Vault, p.TenantID, in.Link, lines, in.Note, actorOf(p))
+		out.Order, told, err = links.PlaceOrderTx(r.Context(), tx, s.Vault, p.TenantID, in.Link, lines, in.Note, actorOf(p), key)
 		return err
 	}); err != nil {
 		s.fail(w, r, orderErr(err))
 		return
 	}
-	s.tellOrder(r.Context(), told, links.StepIn{Note: linesWords(out.Order.Lines) + ", " + storefront.FormatNaira(out.Order.TotalKobo)})
+	if told != nil {
+		s.tellOrder(r.Context(), told, links.StepIn{Note: linesWords(out.Order.Lines, s.sizeParents(r.Context(), p.TenantID)) + ", " + storefront.FormatNaira(out.Order.TotalKobo)})
+	}
 	writeJSON(w, http.StatusCreated, out)
 }
 
 // confirmProposed is POST /v1/stock/purchases/{id}/confirm-proposed: an
-// order a linked supplier drafted for us, confirmed, each line said to be
-// one of our items (items, in order). It is then accepted on both sides.
+// order a linked supplier drafted for us, confirmed. How each line is
+// treated (what a business buys §6): lines, in order, each a treatment
+// (null: as remembered or suggested), or items, in order, each one of our
+// items whose stock the line adds to; neither: every line as it is. A
+// line we had no memory of is remembered as confirmed. It is then
+// accepted on both sides.
 func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
 	if !s.purchasesReady(w) {
 		return
@@ -1245,37 +1531,54 @@ func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Items []string `json:"items"`
+		Items []string            `json:"items"`
+		Lines []*stock.LineChoice `json:"lines"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
-	byID, err := s.itemsByID(r.Context(), p.TenantID)
-	if err != nil {
-		s.stockFail(w, r, err)
-		return
-	}
-	items := make([]links.BuyerItem, len(in.Items))
-	for i, x := range in.Items {
-		it, ok := byID[x]
-		if !ok {
-			s.fail(w, r, fmt.Errorf("%w: line %d is not one of your items", errBadRequest, i+1))
+	var byID map[string]stock.Item
+	if len(in.Items) > 0 {
+		var err error
+		if byID, err = s.itemsByID(r.Context(), p.TenantID); err != nil {
+			s.stockFail(w, r, err)
 			return
 		}
-		items[i] = links.BuyerItem{ID: it.ID, Name: it.Name, Unit: it.Unit}
+		for i, x := range in.Items {
+			if _, ok := byID[x]; !ok {
+				s.fail(w, r, fmt.Errorf("%w: line %d is not one of your items", errBadRequest, i+1))
+				return
+			}
+		}
 	}
 	var told *links.Told
+	var x stock.Purchase
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		x, err := stock.PurchaseTx(r.Context(), tx, p.TenantID, id, true)
+		var err error
+		x, err = stock.PurchaseTx(r.Context(), tx, p.TenantID, id, true)
 		if err != nil {
 			return err
 		}
 		if err := auditTx(r, tx, "purchase.confirm_proposed", x.Reference, map[string]any{"purchase_id": x.ID}); err != nil {
 			return err
 		}
-		told, err = links.ConfirmProposedTx(r.Context(), tx, s.Vault, p.TenantID, id, items, p.Actor(), actorOf(p))
+		choices := in.Lines
+		if len(in.Items) > 0 {
+			if len(in.Items) != len(x.Lines) {
+				return fmt.Errorf("%w: say which of your items each of the %d lines is", links.ErrInvalid, len(x.Lines))
+			}
+			choices = make([]*stock.LineChoice, len(in.Items))
+			for i, item := range in.Items {
+				l, err := stock.LineOf(r.Context(), tx, p.TenantID, byID[item], x.Lines[i].Quantity, &x.Lines[i].CostKobo, p.Actor())
+				if err != nil {
+					return err
+				}
+				choices[i] = &stock.LineChoice{Treatment: l.Treatment, StockItemID: l.StockItemID, Uses: l.Uses, LabelID: x.Lines[i].LabelID}
+			}
+		}
+		told, err = links.ConfirmProposedTx(r.Context(), tx, s.Vault, p.TenantID, id, choices, p.Actor(), actorOf(p))
 		return err
 	}); err != nil {
 		s.purchaseOrOrderFail(w, r, err)
@@ -1283,5 +1586,6 @@ func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
 	}
 	s.acceptedByBuyer(r.Context(), told)
 	s.tellOrder(r.Context(), told, links.StepIn{})
+	s.diaryChange(r.Context(), p, buyerStepWords("confirm", x.Reference, x.Supplier, x.TotalKobo))
 	s.purchaseAfter(w, r, id, nil)
 }

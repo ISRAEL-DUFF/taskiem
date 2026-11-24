@@ -15,7 +15,7 @@ import (
 // WhatsApp gives it, with + or a leading 0, as "other" (a chat sender may
 // be declared so), and a number given as a number reaches it sealed as a
 // string (a Telegram chat id). A subject named by its generation erases
-// the person; nothing found at all is 404 (decision 0062 P2).
+// the person; nothing found at all is 404 (decision 0074 P2).
 func TestEraseForms(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t)

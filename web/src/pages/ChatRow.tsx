@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Icon } from "../icons";
+import { Icon, TaskiemMark } from "../icons";
+import { ChatAvatar } from "./ChatAvatar";
 
 /**
  * One conversation in the chat list, as WhatsApp's row: a round avatar, the
@@ -11,7 +12,9 @@ import { Icon } from "../icons";
 export function ChatRow({
   to,
   letter,
+  logo,
   title,
+  mark,
   time,
   preview,
   lead,
@@ -21,11 +24,16 @@ export function ChatRow({
   selected = false,
   typing = false,
   accent = false,
+  trust,
   testid,
 }: {
   to: string;
   letter: string;
+  /** The logo's address, when the business has one. */
+  logo?: string;
   title: ReactNode;
+  /** After the name, outside its ellipsis: a kind's mark ("Business"). */
+  mark?: ReactNode;
   time?: string;
   preview: ReactNode;
   /** Before the preview: the ticks of our own last message. */
@@ -37,6 +45,8 @@ export function ChatRow({
   typing?: boolean;
   /** The avatar in the brand's tint (Taskiem's own conversation). */
   accent?: boolean;
+  /** Under the preview: what a business has proved (its trust line). */
+  trust?: string;
   testid?: string;
 }) {
   return (
@@ -46,15 +56,18 @@ export function ChatRow({
         to={to}
         aria-current={selected ? "true" : undefined}
       >
-        <span
-          className={`chat-avatar${accent ? " accent" : ""}`}
-          aria-hidden="true"
-        >
-          {letter.slice(0, 1).toUpperCase()}
-        </span>
+        {accent ? (
+          // Taskiem's own mark: the spark, lime on pine (the boards).
+          <span className="chat-avatar accent" aria-hidden="true">
+            <TaskiemMark />
+          </span>
+        ) : (
+          <ChatAvatar name={letter} logo={logo} />
+        )}
         <span className="chat-row-main">
           <span className="chat-row-top">
             <span className="title">{title}</span>
+            {mark}
             {time && (
               <span className={`chat-row-time${unread > 0 ? " unread" : ""}`}>
                 {time}
@@ -89,6 +102,11 @@ export function ChatRow({
               )}
             </span>
           </span>
+          {trust && (
+            <span className="chat-row-trust" data-testid="chat-row-trust" title={trust}>
+              {trust}
+            </span>
+          )}
         </span>
       </Link>
     </li>

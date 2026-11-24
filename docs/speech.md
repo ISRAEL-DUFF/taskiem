@@ -1,6 +1,6 @@
 # Speech in workflows
 
-A workflow can hear a customer's voice note and answer by voice ([decision 0062](decisions/0062-customer-assistant.md) D5, [plan V3](spec/voice-assistant.md#v3-speech-steps)). The `speech@1` connector turns a voice note into text and text into a voice note. Audio comes from the run's files and goes back to them ([Files in runs](files.md)), so a run only ever carries references.
+A workflow can hear a customer's voice note and answer by voice ([decision 0074](decisions/0074-customer-assistant.md) D5, [plan V3](spec/voice-assistant.md#v3-speech-steps)). The `speech@1` connector turns a voice note into text and text into a voice note. Audio comes from the run's files and goes back to them ([Files in runs](files.md)), so a run only ever carries references.
 
 This is separate from voice notes in Taskiem's own chat, which let an owner give commands by voice ([Languages](languages.md#voice-notes)). That has its own switch and its own limits.
 

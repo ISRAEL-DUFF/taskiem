@@ -40,6 +40,7 @@ func TestTransient(t *testing.T) {
 		{&pgconn.PgError{Code: "57P01"}, true},
 		{&pgconn.PgError{Code: "08006"}, true},
 		{&pgconn.PgError{Code: "40001"}, true},
+		{&pgconn.PgError{Code: "40P01"}, true},  // a deadlock's victim rolled back
 		{&pgconn.PgError{Code: "23505"}, false}, // unique violation: the statement, not the server
 		{&pgconn.PgError{Code: "42501"}, false},
 		{io.ErrUnexpectedEOF, true},
@@ -179,8 +180,16 @@ func TestRetryAtCommit(t *testing.T) {
 	if !errors.Is(err, db.ErrCommitUnknown) || attempts.Load() != 1 {
 		t.Fatalf("cut after commit, not idempotent: %v after %d attempts", err, attempts.Load())
 	}
-	time.Sleep(200 * time.Millisecond)
-	if n := vars(t, d, tn.ID, "after"); n != 1 {
+	// The server has the COMMIT but may not have run it yet (the proxy
+	// keeps its side open 2 s for that): wait for it to land, on a slow
+	// machine too, rather than for a fixed moment.
+	n := 0
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		if n = vars(t, d, tn.ID, "after"); n != 0 {
+			break
+		}
+	}
+	if n != 1 {
 		t.Fatalf("the commit landed %d times, want once", n)
 	}
 

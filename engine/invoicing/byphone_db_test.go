@@ -22,7 +22,7 @@ func TestPhoneForms(t *testing.T) {
 }
 
 // What a customer owes, by their number however WhatsApp gives it
-// (decision 0062 V9): their open invoices, oldest due first, and the last
+// (decision 0074 V9): their open invoices, oldest due first, and the last
 // one they paid; another customer's are never counted.
 func TestFindByPhone(t *testing.T) {
 	w := newWorld(t)

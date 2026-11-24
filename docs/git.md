@@ -19,12 +19,28 @@ Both directories are configurable. Definitions are what deploy; keep each `.flow
 ## A Git-led deploy
 
 1. The host sends a push webhook to `/git-hooks/{tenant}/{env}`, served by the API and by the edge role. Taskiem checks the signature (GitHub's `X-Hub-Signature-256` HMAC, GitLab's `X-Gitlab-Token`, or Bitbucket's `X-Hub-Signature` HMAC) before it touches the repository credentials; an unknown tenant or environment gets the same `401` as a bad signature. It ignores other branches and events, and **pushes whose commit is no longer the branch head** (logged, `202`), so an old delivery sent again cannot roll the environment back. Each delivery is taken once, by its id (`X-GitHub-Delivery`, `X-Gitlab-Event-UUID`, or Bitbucket's `X-Request-UUID`). Then it queues a sync, and the host gets its answer.
-2. The API role works the queue. It reads every `*.wd.json` and `*.test.json` under the two directories at the pushed commit.
+2. The API role works the queue, one sync at a time per replica: a replica claims a sync for five minutes and gives it four to finish (a sync that takes longer fails with a timeout). A sync whose claim lapsed and that another replica took over is deployed only by that replica; the first deploys nothing and records nothing. It reads every `*.wd.json` and `*.test.json` under the two directories at the pushed commit.
 3. It checks every definition as publishing would, and runs every workflow test. **If any check or test fails, nothing is deployed** (spec 10.5); the sync is marked failed with the problems and failing cases.
 4. Otherwise, in one transaction, each definition is matched to a workflow by its `id`. A new one is created; a changed one gets a new version recording the commit; each is published. Every publish is in the audit log with the commit, repository and file.
 5. The sync and its report are listed in settings and at `GET /v1/git/{env}/syncs`. "Deploy from <branch> now" (`POST /v1/git/{env}/sync`) deploys the branch head by hand.
 
 A workflow removed from the repository is left as it is: Taskiem never deletes on a sync.
+
+## Who made a Git-led version
+
+The maker of a workflow cannot approve its runs ([governance](governance.md)). For a version that Git deployed, the makers are the people behind the commits:
+
+- **whoever pushed or merged**, as the Git host's signed-in account (GitHub's `pusher`, GitLab's `user_email`);
+- **each commit's author and committer** in the push. A merge made on github.com is committed by GitHub itself, so its committer is left out and the person who merged counts as the pusher;
+- **whoever pressed "Deploy now"**, for a sync started by hand.
+
+Every verified push to the connected branch is kept (`git_pushes`), deployed or not, and a sync counts everyone behind every push since the commit Taskiem last deployed from that connection. Each is matched to a member by email. Neither the author of a commit nor whoever merged it can approve a run of the versions it deployed, however the run started.
+
+When someone cannot be matched, the version has an **unknown maker**: a name that is no member's email, a push Taskiem never received, a forced push, a push with more commits than the host lists, the first sync of a connection, or a sync by hand of commits whose pushes were not received. Bitbucket does not send the pusher's email, so its versions always have one. Taskiem then cannot show that an approver is not the maker, so for runs of that version **one approval is not enough: two different people must approve** before the step is decided, whatever count the step or policy asks for, and a person who is the only one able to decide is refused with the reason (the [one-person exception](governance.md#one-person-businesses) does not apply). Versions Git deployed before this rule are treated the same way.
+
+A commit's author is whatever the commit says, so someone could write a colleague's email there. The pusher cannot be faked that way. Protect the branch (pull requests with review, signed commits) if that matters to you.
+
+Approval policies (`policies/<name>.policy.json`) apply to every environment. A repository deploys them only through the connection of `prod` or of an environment with a promotion gate; from any other connection, a policy file that differs from the active policy fails the sync and nothing is deployed.
 
 ## Second person for Git-led connections
 

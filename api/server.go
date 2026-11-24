@@ -29,12 +29,14 @@ import (
 	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/catalogue"
+	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embedsites"
+	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/inmail"
@@ -44,6 +46,10 @@ import (
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/people"
+	"github.com/israel-duff/taskiem/engine/peoplechats"
+	"github.com/israel-duff/taskiem/engine/phoneindex"
+	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/riders"
@@ -64,8 +70,57 @@ import (
 
 // Server serves the API.
 type Server struct {
+	// ChatCodes finds the business a chat link's code names
+	// (taskiem-for-everyone §8.2; stream B's customer_chat_codes); nil
+	// knows no code (customer_app.go).
+	ChatCodes ChatCodeResolver
+	// ChatPolicy answers who may message whom, contacts, shown numbers,
+	// read ticks and the stranger checks for chats between people
+	// (people-chatting §5.4, §8.4); nil is finding people's own (People,
+	// through peopleJoin, people_join.go). Tests set another.
+	ChatPolicy peoplechats.Policy
+	// PersonLinks finds the person a person's link names (§5.2); nil is
+	// People's links (peopleJoin).
+	PersonLinks peoplechats.LinkResolver
+	// peopleKeys seal each person's copy of their people chats.
+	peopleKeysOnce sync.Once
+	peopleKeys     *peoplechats.Keys
+	// CustomerAnswered hears when a business writes to a person in the app
+	// (taskiem-for-everyone §9: the browser chat's SMS fallback, stream B);
+	// nil tells no one.
+	CustomerAnswered CustomerAnswerHook
+	// closedReplyFault, when set, fails the closed reply after it is
+	// claimed (tests: a failure keeps the customer's message).
+	closedReplyFault func() error
+	// OrderReadInline reads a customer's message for an order before the
+	// webhook answers, not in the background (tests).
+	OrderReadInline bool
+	// OrderTransfers, when set, says whether a business can take an order's
+	// payment by transfer on its page (tests); else its payment rail does.
+	OrderTransfers func(ctx context.Context, tenant uuid.UUID) bool
+
+	// DiaryWindow is how long changes wait to be told together on the
+	// chat apps (chat_changes.go); 0 is a minute.
+	DiaryWindow time.Duration
+	// BriefingClock is the time the morning briefing reads (time.Now when
+	// nil; tests set it to before or after 8am Lagos).
+	BriefingClock func() time.Time
+	diary         diaryQueue
 	// chatGate caps the open Chat page streams (chat_stream.go).
 	chatGate chatStreamGate
+	// liveGate caps the open live connections of You (people_live.go), per
+	// person and per server.
+	liveGate chatStreamGate
+	// pageGate caps the open pages kept up to date (pages_live.go).
+	pageGate chatStreamGate
+	// pageActorGate caps them per person or API key.
+	pageActorGate chatStreamGate
+	// PageLiveRecheck is how often an open page signs its viewer in again
+	// (zero: thirty seconds; tests set it shorter).
+	PageLiveRecheck time.Duration
+	// PageLiveEvery is how often an open page asks what changed (zero: two
+	// seconds; tests set it shorter).
+	PageLiveEvery time.Duration
 	// ChatStreamPing is how often an open chat stream says something when it
 	// has nothing to say (zero: ten seconds).
 	ChatStreamPing time.Duration
@@ -76,6 +131,13 @@ type Server struct {
 	// AllowSignup enables POST /v1/signup (self-serve tenants; off by default
 	// until Phase 4).
 	AllowSignup bool
+	// AppMinVersion is the lowest phone app version this server serves
+	// (TASKIEM_APP_MIN_VERSION, GET /v1/app/config); empty is the first.
+	AppMinVersion string
+	// SupportEmail is where people write to Taskiem (TASKIEM_SUPPORT_EMAIL):
+	// told by GET /v1/app/config, and shown on the privacy notice and the
+	// page saying how to delete an account. Empty: not shown.
+	SupportEmail string
 	// SignupPerAddress is how many signups one client address may make a
 	// day, across every replica (TASKIEM_SIGNUP_PER_ADDRESS); 0 is the
 	// default (5), negative is no limit.
@@ -98,6 +160,9 @@ type Server struct {
 	// termsAsked are the people asked about, or agreed to, the current
 	// terms since start: chat does not look them up again.
 	termsAsked sync.Map
+	// oldColumnsChecked are the businesses whose workflows were checked
+	// for the catalogue's old stock columns since start (stock_oldcolumns.go).
+	oldColumnsChecked sync.Map
 	// DocsURL is where the web app's help links point (TASKIEM_DOCS_URL);
 	// empty shows the in-product help only.
 	DocsURL string
@@ -125,6 +190,10 @@ type Server struct {
 	// the workers the api builds (repair's reconcile check): a step whose
 	// connector keeps or reads run files needs it. nil gives them none.
 	RunFiles *runfiles.Service
+	// Push sends a notification to the browsers a member allowed when a chat
+	// message comes and the app is closed (push.go, docs/spec/chat-push.md). Nil,
+	// or with no keys, it is off.
+	Push *push.Sender
 	// Moderator checks storefront images before they may be shown (S8);
 	// nil records them as unreviewed.
 	Moderator storefront.Moderator
@@ -189,10 +258,14 @@ type Server struct {
 	// LoginBurst is how many sign-in attempts an address may make at once
 	// (then one every six seconds); default 10.
 	LoginBurst int
+	// AppLinks is which phone apps this server's links and passkeys belong
+	// to (applinks.go); empty serves no well-known files.
+	AppLinks AppLinks
 	// WebAuthn is the relying party for passkeys; empty turns them off.
 	WebAuthn webauthn.Config
 	// RequireAdminPasskeys holds members with administrative permissions to
-	// passkeys (spec 13.2: on by default in production).
+	// passkeys in every business, whatever their settings (passkey_rule.go;
+	// off by default since docs/spec/optional-passkeys.md).
 	RequireAdminPasskeys bool
 	// Done, when closed, ends long-lived streams so shutdown is prompt.
 	Done <-chan struct{}
@@ -204,6 +277,9 @@ type Server struct {
 	// AnchorKey is the public key audit anchors are signed with, published
 	// to tenants so they can check anchors themselves.
 	AnchorKey ed25519.PublicKey
+	// RetiredAnchorKeys are earlier anchor keys' public halves: anchors
+	// made before the key was changed verify with them.
+	RetiredAnchorKeys []ed25519.PublicKey
 	// WhatsApp is the platform number (spec 11); nil turns the channel off.
 	WhatsApp *whatsapp.Platform
 	// WhatsAppPublic answers numbers bound to no one; nil sends how to link.
@@ -222,6 +298,37 @@ type Server struct {
 	ReachKeys *forms.Keys
 	ReachHost string
 	Messages  *sender.Queue
+	// CodeSMS texts a person their own sign-in code (phone_signin.go), with
+	// no tenant and no outbox; nil when no SMS provider is configured, and
+	// codes then go by WhatsApp only.
+	CodeSMS interface {
+		SendCode(ctx context.Context, number, text string) error
+	}
+	// ChatLinks are businesses' chat links (customer_links.go,
+	// engine/chatlinks); nil or without a key: none.
+	ChatLinks *chatlinks.Links
+	// PhoneIndex finds a person's storefront orders by their verified
+	// phone (engine/phoneindex); nil: none are found.
+	PhoneIndex *phoneindex.Index
+	// People is finding people and what each may see of another
+	// (people.go, engine/people); nil: one with no key (no links, contact
+	// matching or adding contacts).
+	People *people.People
+	// peopleDefault is finding people without a key, when People is nil.
+	peopleOnce    sync.Once
+	peopleDefault *people.People
+	// Answered tells a person in the browser chat that a business answered
+	// them (engine/chatlinks.Tell); nil tells no one.
+	Answered chatlinks.Teller
+	// AppGetURL is where people get the Taskiem app (TASKIEM_APP_GET_URL):
+	// the chat link's page and the shared number point there; "" leaves
+	// it out.
+	AppGetURL string
+	// UpdateChatTemplate: the taskiem_update_chat template, which carries
+	// "Reply in the Taskiem app" outside WhatsApp's 24 hours, is approved
+	// (TASKIEM_WA_UPDATE_CHAT_TEMPLATE); until then the link goes only in
+	// messages inside the window (docs/spec/taskiem-for-everyone.md §12).
+	UpdateChatTemplate bool
 	// Riders are the businesses' own riders (dispatch D1); nil: none.
 	Riders *riders.Riders
 	// Dispatch is their deliveries (D2 to D5); nil: none. ProofStore, when
@@ -300,6 +407,10 @@ type Server struct {
 	previewAnyPort bool
 	bg             sync.WaitGroup
 	bgActive       atomic.Int64 // work running after its request was answered (reset emails)
+	// groupPushing: group messages' pushes being queued after their send
+	// committed (people_group_messages.go); groupTickRuns: the live
+	// connection's recomputing of a group's ticks (people_group_live.go).
+	groupPushing, groupTickRuns atomic.Int64
 }
 
 // Handler builds the router.
@@ -308,11 +419,16 @@ func (s *Server) Handler() http.Handler {
 		s.Logger = slog.Default()
 	}
 	s.initCodeLeases() // the per-tenant code share across replicas (codegate.go)
-	s.chatHooks()      // what the channels send is kept in the history (chat_history.go)
+	if s.Store != nil && s.Store.Saved == nil {
+		s.Store.Saved = s.savedForRuns // saved things a run reads (saved_runs.go)
+	}
+	s.chatHooks() // what the channels send is kept in the history (chat_history.go)
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, s.securityHeaders, s.hsts, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	r.Get("/readyz", s.ready)
+	r.Get("/.well-known/assetlinks.json", s.assetLinks)
+	r.Get("/.well-known/apple-app-site-association", s.appleSiteAssociation)
 	if s.Status != nil && s.Status.Page != nil {
 		// The public status page: no session, no tenant data, cacheable.
 		r.Get("/status", s.Status.Page.HTML)
@@ -343,6 +459,16 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/passkey", s.passkeyLogin)
 		r.Post("/auth/password/forgot", s.forgotPassword)
 		r.Post("/auth/password/reset", s.resetPassword)
+		r.Post("/auth/chat/start", s.chatSigninStart) // signing in with the chat (chat_signin.go)
+		r.Post("/auth/chat/verify", s.chatSigninVerify)
+		r.Post("/auth/phone/start", s.phoneStart) // the phone way in (phone_signin.go)
+		r.Post("/auth/phone/verify", s.phoneVerify)
+		r.Post("/auth/phone/create", s.phoneCreate)
+		r.Post("/signup/app/code", s.appSignupCode) // signing up in the app as on WhatsApp (app_signup.go)
+		r.Post("/signup/app/verify", s.appSignupVerify)
+		r.Post("/signup/app/turn", s.appSignupTurn)
+		r.Post("/auth/chat/link/peek", s.chatSigninLinkPeek)
+		r.Post("/auth/chat/link", s.chatSigninLink)
 		r.Post("/auth/invitation/options", s.invitationLinkOptions) // invitation links (invitationlinks.go)
 		r.Post("/auth/invitation/accept", s.acceptInvitationLink)
 		r.Post("/auth/sso/discover", s.ssoDiscover)
@@ -364,6 +490,11 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		r.Get("/signup", s.signupOptions)
+		r.Get("/app/config", s.appConfig)                      // the phone app's config (app_config.go)
+		r.Get("/chat-links/{code}", s.getChatLinkCard)         // a business's card for its chat link (customer_links.go)
+		s.peoplePublicRoutes(r)                                // a person's card at their link (people.go)
+		s.groupPublicRoutes(r)                                 // a group's preview at its link (people_groups.go)
+		r.Get("/transparency/lawful-requests", s.lawfulCounts) // the published count of lawful requests (lawful.go)
 		if s.AllowSignup {
 			r.Post("/signup", s.signup) // self-serve signup (onboarding.go)
 		}
@@ -374,6 +505,8 @@ func (s *Server) Handler() http.Handler {
 		r.Route("/embed/{app}", s.embedRoutes)
 		r.Group(func(r chi.Router) {
 			r.Use(s.authenticate)
+			// An unchanged answer is a 304 to an app that kept it (etag.go).
+			r.Use(etagJSON)
 			r.With(s.partnerPlan).Route("/partner", s.partnerRoutes) // partner admin API (partner.go)
 			r.Route("/billing", s.billingRoutes)                     // plans and subscriptions (billing.go)
 			r.Route("/keys", s.keyRoutes)                            // encryption keys and BYOK (keys.go)
@@ -381,10 +514,14 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me", s.me)
 			r.Post("/me/terms", s.answerTerms) // agreeing to the terms (onboarding.go)
 			r.Post("/me/password", s.changePassword)
+			r.Put("/me/chat-signin", s.setChatSignin)   // signing in with the chat, on or off (chat_signin.go)
+			r.Put("/me/passkey-only", s.setPasskeyOnly) // only sign in with my passkey (passkey_rule.go)
 			r.Post("/me/email/verify", s.verifyEmail)
 			r.Post("/me/email/verify/resend", s.resendVerification)
-			r.Post("/me/email", s.addEmail)       // Add your email (chat_doors.go)
-			r.Post("/me/chat-link", s.linkChat)   // a chat linked by an emailed link (chat_doors.go)
+			r.Post("/me/email", s.addEmail)     // Add your email (chat_doors.go)
+			r.Post("/me/chat-link", s.linkChat) // a chat linked by an emailed link (chat_doors.go)
+			r.Post("/me/chat-link/preview", s.previewChatLink)
+			r.Post("/me/chat-link/refuse", s.refuseChatLink)
 			r.Get("/onboarding", s.getOnboarding) // the getting-started checklist (onboarding.go)
 			r.With(s.need(PermWorkflowEdit)).Post("/onboarding/dismiss", s.dismissOnboarding)
 			r.Route("/agent", s.agentRoutes) // field agents' own work (agents.go)
@@ -394,6 +531,35 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me/invitations", s.myInvitations)
 			r.Post("/me/invitations/{tenant}/accept", s.acceptInvitation)
 			r.Post("/me/invitations/{tenant}/decline", s.declineInvitation)
+			r.Get("/me/businesses", s.listBusinesses) // the switcher (switch.go)
+			r.Post("/me/switch", s.switchBusiness)
+			r.Post("/me/phone/start", s.phoneChangeStart) // changing your phone (phone_signin.go)
+			r.Post("/me/phone/verify", s.phoneChangeVerify)
+			r.Post("/auth/second-proof/email/start", s.secondProofEmailStart) // second proofs (second_proof.go)
+			r.Post("/auth/second-proof/email/verify", s.secondProofEmailVerify)
+			r.Post("/auth/second-proof/pin", s.secondProofPin)
+			r.Post("/auth/second-proof/password", s.secondProofPassword)
+			r.Post("/auth/second-proof/passkey/options", s.secondProofPasskeyOptions)
+			r.Post("/auth/second-proof/passkey", s.secondProofPasskey)
+			r.Post("/me/start", s.startSomething)                // a business or workflows (start.go)
+			s.customerDoorRoutes(r)                              // a person's chats with businesses (customer_door.go)
+			s.customerToolRoutes(r)                              // a business's tools for its customers (tools_customers_door.go)
+			s.discoverRoutes(r)                                  // the public finding businesses (discover.go)
+			r.Get("/me/storefront-orders", s.myStorefrontOrders) // a person's own orders, by their phone (customer_links.go)
+			r.Post("/me/storefront-orders/confirm", s.confirmStorefrontOrders)
+			s.personOrderRoutes(r)              // Orders on You (person_orders.go)
+			s.personAddressRoutes(r)            // saved addresses (person_addresses.go)
+			s.personSavedRoutes(r)              // the person's own saved things (saved.go)
+			s.personSavedKindRoutes(r)          // kinds the person makes (saved_kinds.go)
+			s.personSavedFileRoutes(r)          // the person's saved files (saved_files.go)
+			s.personAccountRoutes(r)            // deleting the account, photo, pushes, privacy (person_account.go)
+			s.peopleRoutes(r)                   // finding people, contacts, the person's link, privacy towards people (people.go)
+			s.peopleChatRoutes(r)               // chats between people (people_chats.go)
+			s.groupRoutes(r)                    // groups of people (people_groups.go)
+			s.basketRoutes(r)                   // ordering together (people_baskets.go)
+			s.peopleSafetyRoutes(r)             // the person's standing and appeals (people_safety.go)
+			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
+			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)
 			r.Post("/me/passkeys/options", s.passkeyRegisterOptions)
 			r.Post("/me/passkeys", s.passkeyRegister)
@@ -404,6 +570,10 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/me/whatsapp/verify", s.verifyWhatsAppBinding)
 			r.Delete("/me/whatsapp", s.unbindWhatsApp)
 			r.Put("/me/whatsapp/pin", s.setWhatsAppPin)
+			// The person's PIN, set at sign-up and reset with a passkey (pin_me.go).
+			r.Get("/me/pin", s.getMePin)
+			r.Put("/me/pin", s.putMePin)
+			r.Delete("/me/pin", s.removeWhatsAppPin)
 			r.Delete("/me/whatsapp/pin", s.removeWhatsAppPin)
 			r.Get("/me/telegram", s.getTelegram)
 			r.Post("/me/telegram", s.startTelegramLink)
@@ -421,6 +591,14 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermSecretManage), s.tenantWide).Post("/whatsapp/number/templates/{name}/submit", s.submitWhatsAppTemplate)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/whatsapp/public-menu", s.putWhatsAppPublicMenu)
 			r.With(s.need(PermWorkflowRead)).Get("/reach", s.getReach)
+			// The business's chat link (customer_links.go, docs/spec/taskiem-for-everyone.md §8.2).
+			r.With(s.need(PermOrders)).Get("/customers/chat-link", s.getChatLink)
+			r.With(s.need(PermOrders)).Get("/customers/chat-link/qr", s.chatLinkQR)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/customers/chat-link", s.newChatLink)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/customers/chat-settings", s.putChatSettings)
+			// Discover's listing (discover.go, docs/spec/taskiem-for-everyone.md §10).
+			r.With(s.need(PermStorefrontManage)).Get("/settings/discover", s.getDiscoverSettings)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/settings/discover", s.putDiscoverSettings)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/reach/page", s.newReachPage)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Delete("/reach/contacts/{id}", s.removeReachContact)
 			r.With(s.need(PermAlertManage)).Get("/whatsapp/outbox", s.listWhatsAppOutbox)
@@ -436,14 +614,14 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermPIIReveal)).Get("/languages/transcripts", s.getTranscripts)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/ussd/channels/{provider}", s.putUSSDChannel)
 			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/ussd/channels/{provider}", s.deleteUSSDChannel)
-			r.With(s.need(PermMemberManage)).Delete("/members/{user}/passkeys", s.resetPasskeys)
+			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/members/{user}/passkeys", s.resetPasskeys)
 			r.With(s.need(PermMemberManage)).Get("/scim", s.getSCIM)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSCIM, false)).Put("/scim", s.putSCIM)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSCIM, false)).Put("/scim", s.putSCIM)
 			r.With(s.need(PermMemberManage)).Get("/sso", s.listSSO)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Post("/sso", s.createSSO)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Put("/sso/{id}", s.updateSSO)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Post("/sso/{id}/domains", s.addSSODomain)
-			r.With(s.need(PermMemberManage)).Post("/sso/domains/{domain}/verify", s.verifySSODomain)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSSO, false)).Post("/sso", s.createSSO)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSSO, false)).Put("/sso/{id}", s.updateSSO)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSSO, false)).Post("/sso/{id}/domains", s.addSSODomain)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/sso/domains/{domain}/verify", s.verifySSODomain)
 			r.Get("/connectors", s.listConnectors)
 			r.Get("/capabilities", s.listCapabilities)
 			r.With(s.need(PermWorkflowRead)).Get("/connector-drift", s.listDrift)
@@ -494,6 +672,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/refresh", s.refreshStorefrontCatalogue)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/make", s.makeStorefrontTable)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/rows/{row}/photo", s.setStorefrontItemPhoto)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/catalogue/rows/{row}/photo", s.removeStorefrontItemPhoto)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/catalogue/rows/{row}/photo/main", s.mainStorefrontItemPhoto)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/media", s.uploadStorefrontMedia)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/trust", s.getStorefrontTrust) // trust and safety (trust.go)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/verification", s.requestBusinessVerification)
@@ -513,24 +693,36 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/storefront/fronts/{id}/items/{row}", s.patchFrontItem)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/fronts/{id}/items/{row}", s.deleteFrontItem)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts/{id}/items/{row}/photo", s.setFrontItemPhoto)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/fronts/{id}/items/{row}/photo", s.removeFrontItemPhoto)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/fronts/{id}/items/{row}/photo/main", s.mainFrontItemPhoto)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts/{id}/actions", s.addFrontAction)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/form", s.putActionForm)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
 			s.invoiceRoutes(r)
-			s.linkRoutes(r)        // business links (links.go)
-			s.billRoutes(r)        // their bills (bills.go)
-			s.linkOrderRoutes(r)   // their orders (link_orders.go)
-			s.linkChatRoutes(r)    // their conversations (link_chat.go)
-			s.taskiemChatRoutes(r) // the Taskiem conversation on the web (chat_history.go)
-			s.priceListRoutes(r)   // price lists and item links (price_lists.go)
-			s.schoolRoutes(r)      // the Schools area (schools.go)
-			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
-			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
+			s.linkRoutes(r)         // business links (links.go)
+			s.profileRoutes(r)      // a business's profile and gallery (business_profile.go)
+			s.exploreRoutes(r)      // finding a business by browsing (explore.go)
+			s.billRoutes(r)         // their bills (bills.go)
+			s.paymentRoutes(r)      // paying people (payments.go)
+			s.paymentBatchRoutes(r) // paying several (payment_batches.go)
+			s.linkOrderRoutes(r)    // their orders (link_orders.go)
+			s.tradeDealRoutes(r)    // their price deliberation (trade_deals.go)
+			s.linkChatRoutes(r)     // their conversations (link_chat.go)
+			s.linkBookingRoutes(r)  // booking their services from it (link_bookings.go)
+			s.customerChatRoutes(r) // customers' conversations (customer_chat.go)
+			s.customerAppRoutes(r)  // customers in the app: blocks, files, offers (customer_app.go)
+			s.orderDraftRoutes(r)   // orders read from them (order_drafts.go)
+			s.taskiemChatRoutes(r)  // the Taskiem conversation on the web (chat_history.go)
+			s.priceListRoutes(r)    // price lists and item links (price_lists.go)
+			s.schoolRoutes(r)       // the Schools area (schools.go)
+			r.With(s.need(PermOrders)).Get("/storefront/orders", s.listStorefrontOrders)
+			r.With(s.need(PermOrders)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
+			r.With(s.need(PermOrders), s.need(PermSavedManage), s.need(PermPIIReveal), s.tenantWide).Post("/storefront/orders/{reference}/save-customer", s.saveOrderCustomer)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refunded", s.markStorefrontRefunded)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/quote", s.quoteStorefrontOrder)
 			// The business's own riders (riders.go, dispatch D1).
-			r.With(s.need(PermStorefrontManage)).Get("/riders", s.listRiders)
+			r.With(s.need(PermOrders)).Get("/riders", s.listRiders)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders", s.addRider)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/riders/{id}", s.updateRider)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/retire", s.retireRider)
@@ -544,11 +736,20 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/remit", s.riderRemit)
 			// Stock by chat's web and API door (stock.go, docs/spec/stock.md).
 			r.With(s.need(PermTableRead)).Get("/stock", s.getStock)
+			r.With(s.need(PermTableRead)).Get("/stock/stock-items", s.getStockItems)
 			r.With(s.need(PermTableRead)).Get("/stock/movements", s.listStockMovements)
+			r.With(s.need(PermWorkflowRead)).Get("/stock/old-columns", s.getStockOldColumns)
 			r.With(s.need(PermStorefrontManage), s.need(PermTableEdit), s.tenantWide).Post("/stock/setup", s.setupStock)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/items", s.addStockItem)
 			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/items/{id}", s.patchStockItem)
+			r.With(s.need(PermTableEdit), s.tenantWide).Put("/stock/products/{id}/counted-by", s.putCountedBy)
+			r.With(s.need(PermTableEdit), s.tenantWide).Delete("/stock/products/{id}/counted-by", s.deleteCountedBy)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements", s.moveStock)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements/grid", s.moveStockGrid)
+			r.With(s.need(PermTableEdit), s.tenantWide).Put("/stock/items/{id}/variants", s.setStockVariants)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/group", s.groupStockItems)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/items/{id}/variants/photo", s.setPhotoOfChoice)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/stock/items/{id}/variants/photo", s.clearPhotoOfChoice)
 			r.With(s.need(PermTableRead)).Get("/stock/sales", s.getSales)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/sales", s.recordSale)
 			// Counts and shrinkage (stock_counts.go, K4).
@@ -572,11 +773,22 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/cancel", s.cancelPurchase)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/{id}/receive", s.receivePurchase)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/pay", s.payPurchase)
+			// What a business buys, U1 (stock_purchases_u1.go): a line's
+			// treatment, the memory of a supplier's items, Things we have.
+			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/purchases/{id}/lines/{position}", s.setPurchaseLine)
+			r.With(s.need(PermTableRead)).Get("/stock/suppliers/{id}/items", s.listSupplierItems)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/stock/suppliers/{id}/items", s.putSupplierItem)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/stock/suppliers/{id}/items", s.deleteSupplierItem)
+			r.With(s.need(PermTableRead)).Get("/things", s.listThings)
+			r.With(s.need(PermTableRead)).Get("/things/{id}", s.getThing)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/things", s.addThing)
+			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/things/{id}", s.patchThing)
 			// Deliveries with riders (dispatch.go, D2 to D4).
-			r.With(s.need(PermStorefrontManage)).Get("/deliveries", s.listDeliveries)
-			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)
-			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/offer", s.offerOrder)
-			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/release", s.releaseOrder)
+			r.With(s.need(PermOrders)).Get("/deliveries", s.listDeliveries)
+			r.With(s.need(PermOrders)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)
+			r.With(s.need(PermOrders), s.tenantWide).Post("/storefront/orders/{reference}/offer", s.offerOrder)
+			r.With(s.need(PermOrders), s.tenantWide).Post("/storefront/orders/{reference}/release", s.releaseOrder)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/confirm", s.confirmOrder) // the rider's fee (dispatch_confirm.go)
 			r.With(s.need(PermStorefrontManage)).Get("/dispatch/settings", s.getDispatchSettings)
 			r.With(s.need(PermStorefrontManage)).Get("/dispatch/workflow", s.getDeliveriesOn)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.need(PermWorkflowPublish), s.tenantWide).Post("/dispatch/workflow", s.turnOnDeliveries)
@@ -601,6 +813,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/bookings", s.listStorefrontBookings)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/bookings/{reference}/cancel", s.cancelStorefrontBooking)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/bookings/{reference}/move", s.moveStorefrontBooking)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/bookings/{reference}/times", s.storefrontBookingTimes)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/domains", s.listStorefrontDomains)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains", s.addStorefrontDomain)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains/{id}/verify", s.verifyStorefrontDomain)
@@ -634,6 +847,16 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/code/compile", s.compileCode)
 
 			r.With(s.need(PermRunStart)).Post("/workflows/{wf}/runs", s.startRun)
+			// Your tools (decision 0073, made tools M1).
+			r.With(s.need(PermRunStart)).Get("/tools", s.listTools)
+			// A code scanned from the phone's home screen (device fields D2).
+			r.With(s.need(PermRunStart)).Get("/scan/offers", s.scanOffers)
+			r.With(s.need(PermRunStart)).Post("/tools/{command}/read", s.readToolRoute)
+			r.With(s.need(PermRunStart)).Post("/tools/{command}/start", s.startToolRoute)
+			r.With(s.need(PermRunStart)).Post("/tools/{command}/confirm", s.confirmToolRoute)
+			r.With(s.need(PermRunStart)).Put("/tools/{command}/settings", s.setToolSettings)
+			r.With(s.need(PermRunStart)).Post("/tools/buttons/{button}", s.pressButtonRoute)
+			r.Get("/runs/{run}/answer", s.runAnswer)
 			r.With(s.need(PermRunRead)).Get("/runs", s.listRuns)
 			r.With(s.need(PermRunRead)).Get("/dashboard", s.dashboard)
 			r.With(s.need(PermRunRead)).Get("/runs/{run}", s.getRun)
@@ -649,6 +872,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/notifications/read", s.readNotifications)
 			r.Get("/me/notification-settings", s.getNotificationSettings)
 			r.Put("/me/notification-settings", s.putNotificationSettings)
+			s.pushRoutes(r) // the browsers a person allowed to be pushed to (push.go)
 
 			r.With(s.need(PermConnectionManage)).Get("/connections", s.listConnections)
 			r.With(s.need(PermConnectionManage)).Post("/connections", s.createConnection)
@@ -656,14 +880,33 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermConnectionManage)).Post("/connections/{id}/check", s.checkSavedConnection)
 			r.With(s.need(PermWorkflowRead)).Get("/connection-names", s.listConnectionNames)
 			r.With(s.need(PermWorkflowEdit)).Post("/sheets/resolve", s.resolveSpreadsheet)
+			r.With(s.need(PermMemberManage)).Get("/settings/security", s.getSecurity) // who must sign in with a passkey (passkey_rule.go)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/security", s.putSecurity)
 			r.Get("/settings/advanced", s.getAdvanced) // the Advanced switch (advanced.go)
-			r.With(s.need(PermMemberManage)).Put("/settings/advanced", s.putAdvanced)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/advanced", s.putAdvanced)
+			r.Get("/settings/chat-tools", s.getChatTools) // chat tools (chat_tools.go)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/chat-tools", s.putChatTools)
+			// Reading photos with AI, where an owner turned it on (photo_ai.go).
+			r.Get("/settings/ai-photo-reading", s.getAIPhotoReading)
+			r.With(s.tenantWide).Put("/settings/ai-photo-reading", s.putAIPhotoReading)
+			r.Post("/photo-text", s.readPhotoAI)
+			r.Post("/chat-diary", s.postChatDiary)
+			r.Get("/chat-alerts", s.getChatAlerts)
+			r.Post("/chat-alerts/later", s.postChatAlertLater)
+			r.Get("/chat-alerts/match-options", s.getMatchOptions)
+			r.Get("/chat-briefing", s.getChatBriefing)
+			r.With(s.need(PermTableRead)).Get("/chat-handover", s.getChatHandover)
+			r.With(s.need(PermTableRead)).Post("/chat-handover", s.postChatHandover)
+			r.Post("/chat-tools/request", s.postChatToolRequest)
 			r.Get("/settings/areas", s.getAreas) // which parts of Taskiem the business uses (areas.go)
 			r.With(s.tenantWide).Put("/settings/areas", s.putAreas)
 			r.Get("/settings/schools", s.getSchoolSettings) // the Schools area's switch (schools.go)
 			r.With(s.tenantWide).Put("/settings/schools", s.putSchoolSettings)
 			r.With(s.tenantWide).Post("/settings/schools/wallet", s.createSchoolWallet) // the school's wallet (schools_wallet.go)
 			r.Group(s.receiveMoneyRoutes)                                               // receive money with Taskiem (receive_money.go)
+			r.Group(s.savedKindRoutes)                                                  // kinds a business makes (saved_kinds.go)
+			r.Group(s.savedFileRoutes)                                                  // a business's saved files (saved_files.go)
+			r.Group(s.savedRoutes)                                                      // saved things, the bank list and the name check (saved.go)
 			r.Get("/settings/brand", s.getBrand)                                        // how public pages look (brand.go)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/settings/brand", s.putBrand)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/settings/brand/preview", s.previewBrand)
@@ -675,6 +918,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermConnectionManage)).Put("/connections/{id}/credentials", s.mergeConnectionCredentials)
 			r.With(s.need(PermConnectionManage)).Delete("/connections/{id}", s.deleteConnection)
 			r.Group(s.tablesRoutes) // data tables (datatables.go)
+			r.Group(s.pageRoutes)   // the business's own pages (pages.go)
 			r.With(s.need(PermSecretManage)).Get("/secrets", s.listSecrets)
 			r.With(s.need(PermAuditRead)).Get("/secrets/reads", s.listSecretReads)
 			r.With(s.need(PermSecretManage)).Put("/secrets/{env}/{name}", s.putSecret)
@@ -689,6 +933,36 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage)).Get("/invitations", s.listInvitations)
 			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/invitations/{user}", s.cancelInvitation)
 			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/members/{user}/roles/{role}", s.revokeRole)
+			// Staff by phone (staff.go).
+			r.With(s.need(PermMemberManage)).Get("/staff", s.listStaff)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/staff/invites", s.inviteStaff)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/staff/invites/{id}/send", s.resendStaffInvite)
+			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/staff/invites/{id}", s.cancelStaffInvite)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/staff/{user}/remove", s.removeStaff)
+			r.With(s.need(PermMemberManage)).Get("/staff/clock", s.staffClockDay)
+			// Tasks for staff (staff_tasks.go): anyone sees and does their
+			// own; those who run the business give them and see everyone's.
+			r.Get("/staff/tasks", s.listTasks)
+			r.With(s.need(PermTaskGive), s.tenantWide).Post("/staff/tasks", s.giveTask)
+			r.With(s.tenantWide).Post("/staff/tasks/{id}/take", s.takeTask)
+			r.With(s.tenantWide).Post("/staff/tasks/{id}/done", s.doneTask)
+			r.With(s.tenantWide).Post("/staff/tasks/{id}/cant", s.cantTask)
+			r.With(s.need(PermTaskGive), s.tenantWide).Post("/staff/tasks/{id}/remind", s.remindTask)
+			r.With(s.need(PermTaskGive), s.tenantWide).Post("/staff/tasks/{id}/give", s.passTask)
+			r.With(s.need(PermTaskGive), s.tenantWide).Delete("/staff/tasks/{id}", s.cancelTask)
+			r.With(s.need(PermTaskGive), s.tenantWide).Delete("/staff/task-repeats/{id}", s.stopRepeat)
+			// One person's figures (staff_figures.go): anyone's for those
+			// who run the business, one's own for anyone.
+			r.Get("/staff/{user}/figures", s.getStaffFigures)
+			r.With(s.need(PermMemberManage)).Get("/staff/{user}", s.getStaff)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/profile", s.putStaffProfile)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/pay-account", s.putStaffAccount)
+			// Payroll is Payrolla's (payroll.go): its runs in Taskiem's screens,
+			// and staff linked to its employees.
+			r.With(s.need(PermPayrollRead)).Get("/payroll", s.getPayroll)
+			r.With(s.need(PermPayrollRead)).Get("/payroll/runs/{run}", s.getPayrollRun)
+			r.With(s.need(PermPayrollRead)).Get("/payroll/staff", s.getPayrollStaff)
+			r.With(s.need(PermPayrollRead), s.tenantWide).Put("/staff/{user}/payrolla", s.putStaffPayrolla)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)
@@ -696,7 +970,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermRoleManage), s.tenantWide).Delete("/roles/{name}", s.deleteRole)
 			r.With(s.need(PermMemberManage)).Get("/api-keys", s.listKeys)
 			r.With(s.need(PermMemberManage)).Post("/api-keys", s.createKey)
-			r.With(s.need(PermMemberManage)).Delete("/api-keys/{id}", s.revokeKey)
+			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/api-keys/{id}", s.revokeKey)
 
 			r.With(s.need(PermAuditRead), s.tenantWide).Get("/audit", s.listAudit)
 			r.With(s.need(PermAuditRead), s.tenantWide).Get("/audit/verify", s.verifyAudit)
@@ -734,6 +1008,12 @@ func (s *Server) Handler() http.Handler {
 	})
 	if s.Static != nil {
 		r.Handle("/*", s.Static)
+	} else {
+		// A chat link's page, where no web app is served here to show it
+		// (customer_links.go).
+		r.Get("/m/{code}", s.chatLinkHTML)
+		// A person's link's page (people.go).
+		r.Get("/p/{code}", s.personLinkHTML)
 	}
 	return r
 }
@@ -969,6 +1249,11 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
+// limitIP is the client's address as per-address limits key it: an IPv4
+// address as is, an IPv6 address cut to its /64, which one subscriber
+// holds whole (formguard.ClientKey, as the public host's limits).
+func limitIP(r *http.Request) string { return formguard.ClientKey(clientIP(r)) }
+
 // loginLimiter paces sign-in attempts by key: "login:" and an address, or
 // "login-email:" and an email.
 func (s *Server) loginLimiter(key string) *rate.Limiter {
@@ -1000,13 +1285,26 @@ const maxLimiters = 100_000
 
 // limiter is a token bucket per key: one token every interval, up to burst.
 func (s *Server) limiter(key string, every time.Duration, burst int) *rate.Limiter {
+	l, _ := s.limiterFor(key, every, burst, true)
+	return l
+}
+
+// ownLimiter is limiter for a key whose bucket must never be shared with
+// other keys: when maxLimiters are in use it answers ok false (no bucket)
+// instead of the kind's shared one, and the caller limits another way
+// (typing marks: people_search.go).
+func (s *Server) ownLimiter(key string, every time.Duration, burst int) (*rate.Limiter, bool) {
+	return s.limiterFor(key, every, burst, false)
+}
+
+func (s *Server) limiterFor(key string, every time.Duration, burst int, share bool) (*rate.Limiter, bool) {
 	ls := &s.limiters
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	now := time.Now()
 	if e, ok := ls.m[key]; ok {
 		e.last = now
-		return e.l
+		return e.l, true
 	}
 	if ls.m == nil {
 		ls.m, ls.shared = map[string]*limiterEntry{}, map[string]*rate.Limiter{}
@@ -1020,17 +1318,20 @@ func (s *Server) limiter(key string, every time.Duration, burst int) *rate.Limit
 		ls.swept = now
 	}
 	if len(ls.m) >= maxLimiters {
+		if !share {
+			return nil, false
+		}
 		kind, _, _ := strings.Cut(key, ":")
 		l, ok := ls.shared[kind]
 		if !ok {
 			l = rate.NewLimiter(rate.Every(every), burst)
 			ls.shared[kind] = l
 		}
-		return l
+		return l, true
 	}
 	e := &limiterEntry{l: rate.NewLimiter(rate.Every(every), burst), last: now, full: max(every*time.Duration(burst), time.Minute)}
 	ls.m[key] = e
-	return e.l
+	return e.l, true
 }
 
 // tx runs fn in a transaction scoped to the caller's tenant.

@@ -42,7 +42,7 @@ Send outputs include `message_id`, `chat_id` (as a string), `date` and Telegram'
 
 ## Receiving updates
 
-The trigger is `update`. **Taskiem sets the bot's webhook itself, while a published workflow starts on it** (connector/v1 `registration: connection_when_used`, [decision 0021](../decisions/0021-remote-trigger-registration.md); [decision 0062](../decisions/0062-customer-assistant.md) C7). Setting a bot's webhook stops whatever else read its updates (another system's webhook, or `getUpdates` polling), so:
+The trigger is `update`. **Taskiem sets the bot's webhook itself, while a published workflow starts on it** (connector/v1 `registration: connection_when_used`, [decision 0021](../decisions/0021-remote-trigger-registration.md); [decision 0074](../decisions/0074-customer-assistant.md) C7). Setting a bot's webhook stops whatever else read its updates (another system's webhook, or `getUpdates` polling), so:
 
 - **A bot used only to send is never touched.** Saving or checking the connection sets nothing; nor does publishing a workflow whose steps only send with it.
 - **The first published workflow on the `update` trigger sets the webhook** for its connection (the trigger's `connection`, or the environment's only Telegram connection when it names none; with several and none named, the subscription fails with "several connections" until one is named). Each publish of such a workflow sets it again, which also repairs it.
@@ -56,7 +56,7 @@ A webhook can still be set by hand (`set_webhook`, with the connection's `webhoo
 
 Telegram only delivers to ports 443, 80, 88 and 8443, over HTTPS with a valid certificate. Each delivery is checked against the `X-Telegram-Bot-Api-Secret-Token` header (scheme `header_secret`, compared in constant time).
 
-**What a customer sends** (decision 0062, P1): who wrote (`from` and `chat` ids, names, usernames) and what they wrote (text, captions, contacts, locations, button data) are declared personal data, sealed in run history and readable by the run's steps. `get_file` downloads a file from an update into the run's files (up to a bot's 20 MB); `send_voice`, `send_audio` take a run file; `send_chat_action` shows typing or recording ([Files in runs](../files.md)).
+**What a customer sends** (decision 0074, P1): who wrote (`from` and `chat` ids, names, usernames) and what they wrote (text, captions, contacts, locations, button data) are declared personal data, sealed in run history and readable by the run's steps. `get_file` downloads a file from an update into the run's files (up to a bot's 20 MB); `send_voice`, `send_audio` take a run file; `send_chat_action` shows typing or recording ([Files in runs](../files.md)).
 
 | | |
 | --- | --- |

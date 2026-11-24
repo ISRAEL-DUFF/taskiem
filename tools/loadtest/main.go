@@ -12,7 +12,8 @@
 // processes (api, edge, orchestrator, scheduler, workers), sends webhooks
 // at a series of rates through the edge, and reads the SLIs of engine/slo
 // from the processes' own /metrics; -mode chaos runs failure scenarios
-// against the same set-up. See docs/performance.md.
+// against the same set-up; -mode people runs the stage 5b people chats
+// and groups load (people.go). See docs/performance.md.
 //
 //	go build -o /tmp/taskiem ./cmd/taskiem
 //	go run ./tools/loadtest -mode cluster -bin /tmp/taskiem -rates 10,20,40 -stage 60s
@@ -76,9 +77,9 @@ func (s *started) mark(run, step string) {
 
 func main() {
 	dsn := flag.String("dsn", os.Getenv("TASKIEM_TEST_DATABASE_URL"), "superuser DSN; a fresh database is created next to it")
-	mode := flag.String("mode", "latency", "latency (open-loop arrivals at -rate), throughput (all -runs at once), cluster (the binary's roles in separate processes, rate stages) or chaos (failure scenarios against the same)")
+	mode := flag.String("mode", "latency", "latency (open-loop arrivals at -rate), throughput (all -runs at once), cluster (the binary's roles in separate processes, rate stages), chaos (failure scenarios against the same) or people (people chats, groups and live connections, people.go)")
 	rate := flag.Float64("rate", 500, "latency mode: offered steps/s")
-	duration := flag.Duration("duration", 30*time.Second, "latency mode: how long to offer load")
+	duration := flag.Duration("duration", 30*time.Second, "latency and people modes: how long to offer load")
 	runs := flag.Int("runs", 4000, "throughput mode: runs")
 	tenants := flag.Int("tenants", 20, "tenants")
 	steps := flag.Int("steps", 5, "sequential steps per run")
@@ -87,6 +88,7 @@ func main() {
 	conns := flag.Int("conns", 64, "pool size")
 	keep := flag.Bool("keep", false, "keep the database afterwards")
 	co := clusterFlags()
+	po := peopleFlags()
 	flag.Parse()
 	if *dsn == "" {
 		log.Fatal("-dsn or TASKIEM_TEST_DATABASE_URL required")
@@ -94,6 +96,10 @@ func main() {
 	ctx := context.Background()
 	dbDSN, drop := freshDB(ctx, *dsn, *keep)
 	defer drop()
+	if *mode == "people" {
+		runPeople(ctx, dbDSN, po, co, duration)
+		return
+	}
 	if *mode == "cluster" || *mode == "chaos" {
 		runCluster(ctx, *mode, dbDSN, *tenants, co)
 		return

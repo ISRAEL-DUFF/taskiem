@@ -15,7 +15,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/connectors/notify"
+	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/telegram"
@@ -160,12 +162,8 @@ func (s *Server) reachStopStart(ctx context.Context, ch chatChannel, channel, ad
 	if !s.Reach.Ready() {
 		return false, nil
 	}
-	word := strings.Trim(strings.ToLower(strings.TrimSpace(text)), "/ .!")
-	if i := strings.IndexByte(word, '@'); i > 0 {
-		word = word[:i] // /stop@bot
-	}
 	l := s.chooseLang(ctx, ch.OwnTenant(), addr, "").Tag
-	switch word {
+	switch reachWord(text) {
 	case "stop", "unsubscribe":
 		name, err := s.Reach.Stop(ctx, channel, addr)
 		if err != nil {
@@ -185,21 +183,162 @@ func (s *Server) reachStopStart(ctx context.Context, ch chatChannel, channel, ad
 	return false, nil
 }
 
+// reachWord reads a message as the opt-out's words: "stop", "unsubscribe"
+// or "start" ("/stop", "/stop@bot", "STOP."), or "" for anything else.
+func reachWord(text string) string {
+	word := strings.Trim(strings.ToLower(strings.TrimSpace(text)), "/ .!")
+	if i := strings.IndexByte(word, '@'); i > 0 {
+		word = word[:i] // /stop@bot
+	}
+	switch word {
+	case "stop", "unsubscribe", "start":
+		return word
+	}
+	return ""
+}
+
+// memberStopStart is STOP and START from someone with a Taskiem account
+// of their own, who may take another business's updates like anyone
+// else: the opt-out is theirs too. It comes before the conversation,
+// whatever state that is in. STOP stops the business that reached them
+// most recently, as it does for everyone, and drops what they were in the
+// middle of (the conversation's own "stop"); START undoes the latest
+// stop. false when no business reaches them (STOP) or none was stopped
+// (START): the words are then the conversation's.
+func (s *Server) memberStopStart(ctx context.Context, c *chat, user uuid.UUID) (bool, error) {
+	channel := c.ch.Name()
+	if !s.Reach.Ready() || c.in.Type != "text" || (channel != reach.WhatsApp && channel != reach.Telegram) {
+		return false, nil
+	}
+	// A business's own number speaks to its team about its work; those
+	// outside it are its customers there (waUnbound).
+	if c.wa != nil && c.wa.Own() {
+		return false, nil
+	}
+	word := reachWord(c.in.Text)
+	if c.start {
+		word = "start"
+	}
+	switch word {
+	case "stop", "unsubscribe":
+		name, err := s.Reach.Stop(ctx, channel, c.addr)
+		if err != nil || name == "" {
+			return false, err
+		}
+		dropped, err := s.dropSessions(ctx, c, user)
+		if err != nil {
+			return true, err
+		}
+		key := "reach.stopped"
+		if dropped {
+			key = "reach.stopped_dropped"
+		}
+		return true, s.waSay(ctx, c.ch, c.addr, "", c.t(key, "business", name))
+	case "start":
+		name, err := s.Reach.Resume(ctx, channel, c.addr)
+		if err != nil || name == "" {
+			return false, err
+		}
+		return true, s.waSay(ctx, c.ch, c.addr, "", c.t("reach.resumed", "business", name))
+	}
+	return false, nil
+}
+
+// dropSessions drops what the person was in the middle of in this chat,
+// in each of their businesses; true when something was.
+func (s *Server) dropSessions(ctx context.Context, c *chat, user uuid.UUID) (bool, error) {
+	if len(c.tenants) == 0 {
+		return false, nil
+	}
+	ids := make([]uuid.UUID, len(c.tenants))
+	for i, t := range c.tenants {
+		ids[i] = t.ID
+	}
+	dropped := false
+	err := db.InTenantTx(ctx, s.Store.Pool, ids, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `DELETE FROM chat_sessions WHERE tenant_id = ANY ($1) AND number = $2 AND user_id = $3`, ids, c.addr, user)
+		dropped = tag.RowsAffected() > 0
+		return err
+	})
+	return dropped, err
+}
+
 // reachAbout answers anything else from an address that businesses
 // reach: who they are and how to stop. false when none reaches it.
 func (s *Server) reachAbout(ctx context.Context, ch chatChannel, channel, addr string) (bool, error) {
 	if !s.Reach.Ready() {
 		return false, nil
 	}
-	names, err := s.Reach.Businesses(ctx, channel, addr)
-	if err != nil || len(names) == 0 {
+	list, err := s.Reach.BusinessList(ctx, channel, addr)
+	if err != nil || len(list) == 0 {
 		return false, err
 	}
 	if !s.limiter("reach-about:"+addr, 10*time.Minute, 2).Allow() {
 		return true, nil
 	}
 	l := s.chooseLang(ctx, ch.OwnTenant(), addr, "").Tag
+	// Each business that takes chats points them to its chat link, once a
+	// day (docs/spec/taskiem-for-everyone.md §12); the fixed answer
+	// otherwise.
+	lines, err := s.reachChatLinks(ctx, channel, addr, list, l)
+	if err != nil {
+		return true, err
+	}
+	if len(lines) > 0 {
+		return true, s.waSay(ctx, ch, addr, "", strings.Join(lines, "\n"))
+	}
+	names := make([]string, len(list))
+	for i, b := range list {
+		names[i] = b.Name
+	}
 	return true, s.waSay(ctx, ch, addr, "", tr(l, "reach.about", "businesses", strings.Join(names, ", ")))
+}
+
+// reachChatLinks are "To chat with {business}, open {link}" for each
+// business reaching addr that takes chats and has not said so to it in
+// the last day.
+func (s *Server) reachChatLinks(ctx context.Context, channel, addr string, list []reach.Reacher, l lang.Tag) ([]string, error) {
+	if !s.ChatLinks.Ready() {
+		return nil, nil
+	}
+	key := s.Reach.AddressHash(channel, addr)
+	var lines []string
+	for _, b := range list {
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{b.Tenant}, func(tx pgx.Tx) error {
+			st, err := chatlinks.SettingsTx(ctx, tx, b.Tenant)
+			if err != nil || !st.TakesChats {
+				return err
+			}
+			took, err := chatlinks.TakeNoticeTx(ctx, tx, b.Tenant, chatlinks.NoticeOutsiderLink, key, 24*time.Hour)
+			if err != nil || !took {
+				return err
+			}
+			link, err := s.ChatLinks.LinkFor(ctx, tx, b.Tenant)
+			if err != nil || link == "" {
+				return err
+			}
+			lines = append(lines, tr(l, "reach.chat_link", "business", b.Name, "link", link))
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return lines, nil
+}
+
+// reachReplyLink is the business's chat link for the end of an update to
+// an outsider (§12): when it offers its link in updates and takes chats;
+// "" otherwise. In tx, the business's scope.
+func (s *Server) reachReplyLink(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (string, error) {
+	if !s.ChatLinks.Ready() {
+		return "", nil
+	}
+	st, err := chatlinks.SettingsTx(ctx, tx, tenant)
+	if err != nil || !st.UpdatesLink || !st.TakesChats {
+		return "", err
+	}
+	return s.ChatLinks.LinkFor(ctx, tx, tenant)
 }
 
 // reachAudit records a person outside the business linking a chat app.
@@ -242,10 +381,14 @@ func (s *Server) sendReachItem(ctx context.Context, it whatsapp.OutboxItem) erro
 	if err != nil {
 		return s.reachFallback(ctx, it, business, in, err)
 	}
-	var addr, offer string
+	var addr, offer, chatLink string
 	var offerButton *whatsapp.Button
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
 		if addr, err = s.Reach.AddressTx(ctx, tx, it.Tenant, t); err != nil {
+			return err
+		}
+		// "Reply in the Taskiem app" (§12 of docs/spec/taskiem-for-everyone.md).
+		if chatLink, err = s.reachReplyLink(ctx, tx, it.Tenant); err != nil {
 			return err
 		}
 		// An update to a business on Taskiem offers it a link, the first
@@ -278,6 +421,17 @@ func (s *Server) sendReachItem(ctx context.Context, it whatsapp.OutboxItem) erro
 	tpl := whatsapp.TplUpdate
 	m := whatsapp.Message{Text: ch.Prefix(business) + body, Tenant: it.Tenant, Template: &tpl,
 		Vars: map[string]string{"tenant": business, "about": about, "message": head}}
+	if chatLink != "" {
+		// In the text, which goes inside WhatsApp's 24 hours and always on
+		// Telegram; outside the window only in its own template, once it
+		// is approved.
+		m.Text += "\n\n" + tr(s.chooseLang(ctx, it.Tenant, addr, "").Tag, "reach.reply_in_app", "link", chatLink)
+		if s.UpdateChatTemplate && it.Channel == reach.WhatsApp {
+			chat := whatsapp.TplUpdateChat
+			m.Template = &chat
+			m.Vars["chat"] = chatLink
+		}
+	}
 	if offerButton != nil {
 		m.Text += "\n\n" + offer
 		m.Buttons = []whatsapp.Button{*offerButton}

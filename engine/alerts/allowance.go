@@ -10,7 +10,7 @@ import (
 )
 
 // AllowanceKind is the alert at 80 % and 100 % of a monthly allowance
-// (decision 0062 L10): the owners hear before an assistant stops
+// (decision 0074 L10): the owners hear before an assistant stops
 // answering, not only when it has.
 const AllowanceKind = "allowance"
 

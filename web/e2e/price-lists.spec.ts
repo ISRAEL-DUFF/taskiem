@@ -70,7 +70,7 @@ test("a seller's price list, its items and who sees it", async ({ page }) => {
   await axeBoth(page, "a price list's items");
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toHaveCount(0);
-  expect(saved).toEqual({ items: [{ item_id: "r1", price_kobo: 4_200_000, min_quantity: 5, available: true }] });
+  expect(saved).toEqual({ items: [{ item_id: "r1", price_kobo: 4_200_000, min_quantity: 5, available: true, breaks: [] }] });
 
   // Shared with Ada's Kitchen.
   await page.getByRole("button", { name: /^Share/ }).click();
@@ -103,9 +103,14 @@ test("a supplier's prices, ordered from", async ({ page }) => {
     ),
   );
   await page.route("**/v1/item-links/l1", (route) => route.fulfill(json({ item_links: [] })));
+  await page.route("**/v1/stock/stock-items", (route) =>
+    route.fulfill(json({ keeps_stock: true, value_kobo: 0, low: 0, items: [{ id: "si1", name: "Rice", unit: "bag", category: "", count: 3, cost_kobo: null, low_level: null, target_level: null, supplier_id: null, supplier: "", group_of: "", group_name: "", low: false, suggest: null, value_kobo: 0, retired: false, sold_as: [] }] })),
+  );
+  await page.route("**/v1/money/labels**", (route) => route.fulfill(json({ labels: [], suggestions: [] })));
+  await page.route("**/v1/things**", (route) => route.fulfill(json({ things: [] })));
   await page.route("**/v1/supplier-prices/l1/order", async (route) => {
     ordered = route.request().postDataJSON();
-    return route.fulfill(json({ purchase: { id: "p1" } }, 201));
+    return route.fulfill(json({ purchase: { id: "p1", lines: [] } }, 201));
   });
 
   await page.goto("/storefront/suppliers/l1/prices");
@@ -115,15 +120,17 @@ test("a supplier's prices, ordered from", async ({ page }) => {
   await expect(rows.nth(1)).toContainText("not available now");
   await axeBoth(page, "a supplier's prices");
 
-  // Too few, then enough; which of ours it is, said once.
+  // Too few, then enough; how to treat it, said once: added to our Rice.
   await page.getByLabel("How many Rice, 50 kg").fill("2");
   await expect(rows.first()).toContainText("at least 5");
   await page.getByLabel("How many Rice, 50 kg").fill("10");
-  await expect(page.getByRole("button", { name: "Draft the order" })).toBeDisabled();
-  await rows.first().getByRole("combobox").selectOption("a1");
+  const q = page.getByTestId("treat");
+  await expect(q).toContainText("Rice, 50 kg from Dangote Stores");
+  await q.getByRole("radio", { name: /Add to stock/ }).check();
+  await q.getByLabel("Which stock item?").selectOption("si1");
   await expect(page.getByText("Total ₦420,000")).toBeVisible();
   await axeBoth(page, "ordering from a supplier's prices");
   await page.getByRole("button", { name: "Draft the order" }).click();
   await expect(page).toHaveURL(/\/purchases\/p1$/);
-  expect(ordered).toEqual({ lines: [{ seller_item_id: "r1", quantity: 10, item_id: "a1" }] });
+  expect(ordered).toEqual({ lines: [{ seller_item_id: "r1", quantity: 10, treatment: "stock", stock_item_id: "si1" }] });
 });

@@ -12,9 +12,15 @@ cd "$root"
 # -tags e2e builds in the test-only commands (the demo school below), into
 # a binary of its own so that bin/taskiem stays what make build made.
 taskiem=bin/taskiem-e2e
-go build -tags e2e -o "$taskiem" ./cmd/taskiem
+# CI builds it once for all the shards (.github/workflows/ci.yml, web-build).
+if [ -z "${TASKIEM_E2E_PREBUILT:-}" ] || [ ! -x "$taskiem" ]; then
+  go build -tags e2e -o "$taskiem" ./cmd/taskiem
+fi
 export TASKIEM_DATABASE_URL="$dsn"
 export TASKIEM_LOCAL_KMS_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+# Chat push (docs/spec/chat-push.md): a key pair, so the notifications switch shows.
+# The browsers' own push service is not reached: the tests stand in for it.
+eval "$("$taskiem" push keys --subject mailto:e2e@taskiem.test | grep '^TASKIEM_VAPID' | sed 's/^/export /')"
 "$taskiem" migrate >/dev/null
 TASKIEM_BOOTSTRAP_PASSWORD='correct horse battery' "$taskiem" bootstrap --tenant "E2E" --email owner@e2e.test --name Owner >/dev/null
 # The E2E tenant is also a partner (embed.spec.ts embeds the builder).
@@ -35,6 +41,11 @@ psql "$dsn" -v ON_ERROR_STOP=1 -q \
 # to enrol a passkey (bin/ is not committed).
 TASKIEM_PUBLIC_URL=http://localhost:18080 "$taskiem" operators add ops@taskiem.test --name Ops | grep -o 'http://.*/ops/enrol#.*' >"$root/bin/e2e-ops-enrol.txt"
 "$taskiem" catalogue reviewers add ops@taskiem.test >/dev/null
+# Two moderators for ops-people.spec.ts: a lawful request is approved by a
+# second operator, never the one who recorded it.
+for m in mod1 mod2; do
+  TASKIEM_PUBLIC_URL=http://localhost:18080 "$taskiem" operators add "$m@taskiem.test" --name "$m" | grep -o 'http://.*/ops/enrol#.*' >"$root/bin/e2e-ops-$m-enrol.txt"
+done
 export TASKIEM_LISTEN=127.0.0.1:18080 TASKIEM_METRICS_LISTEN=127.0.0.1:19090 TASKIEM_WEB_DIR="$root/web/dist" TASKIEM_SECURE_COOKIES=false
 # Passkeys need a host name: the passkey test browses http://localhost:18080.
 export TASKIEM_PUBLIC_URL=http://localhost:18080 TASKIEM_REQUIRE_ADMIN_PASSKEYS=false

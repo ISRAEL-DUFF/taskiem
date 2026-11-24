@@ -1,3 +1,12 @@
+import type { ToolKey } from "../lib/tools";
+import { useSavedPicks } from "./SavedPicks";
+import { shareQuestion } from "../lib/saved";
+import { SavedCardView } from "./SavedCard";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
+import { docMentions, refSources, type ChatRef } from "../lib/refs";
+import { RefCard } from "./ChatRefCard";
+import { BillTransferLive } from "./PayByTransfer";
+import { PayChip, PayFromMessages, PayListBar, PhotoAccountItems } from "./PayChip";
 import {
   useCallback,
   useEffect,
@@ -6,7 +15,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import {
@@ -15,8 +24,10 @@ import {
   cardLine,
   cardSub,
   clock,
+  dayLabel,
   fileSize,
   fileURL,
+  isTransferPaid,
   merge,
   previewLine,
   REACTIONS,
@@ -28,15 +39,37 @@ import {
   type LinkMessage,
   type LinkPreview,
   type Reaction,
+  logoSrc,
 } from "../lib/linkchat";
-import { Icon } from "../icons";
+import { Icon, TaskiemMark } from "../icons";
 import { MentionText } from "./Mentions";
+import { ChatAvatar } from "./ChatAvatar";
+import { ContactInfo } from "./ContactInfo";
+import { useConfirm } from "./ConfirmSheet";
+import { DealActions, DealHistory } from "./ChatDeal";
+import { useChatTools } from "../lib/useChatTools";
+import { cardKicker, cardStatus, isDiary, stepsFor } from "../lib/cardframe";
+import { DiaryLine, Sheet } from "../kit";
+import {
+  chime,
+  isGoodMoment,
+  isNews,
+  primeSound,
+  soundOn,
+} from "../lib/moments";
+import { LiveCard, liveMention, type Live } from "./ChatLiveCard";
+import { formatPrice, thumb, type Catalogue } from "../lib/storefront";
+import type { StockItem, StockView } from "../lib/stock";
+import type { Service } from "../lib/bookings";
 import {
   BUSINESS_FILES,
   ComposerView,
   useComposer,
   type Sending,
 } from "./ChatComposer";
+import type { OrderStart } from "./ChatBuyer";
+import type { ExtraTile } from "./ChatTools";
+import { InvoiceAdd } from "./ChatMoney";
 import { priceWords, type PriceItem } from "../lib/pricelists";
 import { firstUnread, startsRun } from "../lib/thread";
 import { useThread } from "../lib/useThread";
@@ -57,9 +90,17 @@ import {
 import { ThreadJump } from "./ThreadParts";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
-import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
+import { ChatSearchPanel } from "./ChatSearch";
+import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
+import { ReadMore, useFold } from "./ReadMore";
 import { useChatLive } from "./ChatLive";
-import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
+import {
+  linkedLine,
+  headLine,
+  type BusinessLink,
+  type LinkCard,
+  type LinkRole,
+} from "../lib/links";
 import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
 
 // The conversation with a linked business (business links L3; §5.5): the
@@ -70,6 +111,8 @@ import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
 // the clock, as WhatsApp's does, with the time in words on hover.
 
 const EVERY_MS = 3000;
+/** How long a saved star is held against copies read before it. */
+const STAR_HOLD_MS = 15_000;
 /** The six reactions, in words (for the screen reader and the tooltip). */
 const REACTION_NAMES: Record<string, string> = {
   "👍": "thumbs up",
@@ -87,17 +130,127 @@ const PAGE = 50;
 /** What can be done from a card, while it is its document's newest:
  * accept or decline a new order, accept a change, say all came, settle a
  * query, pay a bill (§5.5). */
-function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
+function CardActions({
+  card,
+  onDone,
+  onOpenDoc,
+}: {
+  card: DocCard;
+  onDone: () => void;
+  onOpenDoc?: (card: DocCard, from: DOMRect) => void;
+}) {
   const { can } = useAuth();
   const act = useAction();
+  const { confirm, node: confirmNode } = useConfirm();
   const id = encodeURIComponent(card.id ?? card.reference);
   const go = (path: string, done: string) =>
     void act.run(async () => (await post(path), onDone()), done);
   const who = <span className="sr-only"> {card.reference}</span>;
   let buttons: ReactNode = null;
   switch (`${card.doc}:${card.event}`) {
+    // A deal (phase 7): the buyer's offer or counter at the seller, the
+    // seller's counter at the buyer.
+    case "order:offered":
+    case "order:countered":
+      return <DealActions card={card} side="seller" onDone={onDone} />;
+    case "purchase:change":
+      if (card.was_kobo !== undefined)
+        return <DealActions card={card} side="buyer" onDone={onDone} />;
+      break;
+  }
+  // A delivery of ours to make (docs/spec/chat-riders.md): each step from
+  // the card, as the rider's WhatsApp button would take it.
+  if (card.doc === "delivery" && can("storefront.manage|order.handle")) {
+    const step = (s: string, done: string) => (
+      <button
+        type="button"
+        className="small primary"
+        disabled={act.busy}
+        onClick={() => go(`/v1/trade-orders/${id}/${s}`, done)}
+      >
+        {done}
+        {who}
+      </button>
+    );
+    switch (card.event) {
+      case "offered":
+        buttons = (
+          <>
+            {step("accept", "Accept")}
+            <button
+              type="button"
+              className="small"
+              disabled={act.busy}
+              onClick={() =>
+                go(`/v1/trade-orders/${id}/cant`, `Passed on ${card.reference}`)
+              }
+            >
+              Can&apos;t{who}
+            </button>
+          </>
+        );
+        break;
+      case "accepted":
+        buttons = step("picked_up", "Picked up");
+        break;
+      case "picked_up":
+        buttons = step("arrived", "Arrived");
+        break;
+      case "arrived":
+        buttons = step("delivered", "Delivered");
+        break;
+    }
+  }
+  // Our rider's delivery, done: our word pays the fee (phase 4), by bank
+  // through the payout, or handed over in cash.
+  if (
+    card.doc === "dispatch" &&
+    card.event === "delivered" &&
+    can("storefront.manage")
+  ) {
+    const ref = encodeURIComponent(card.reference);
+    buttons = (
+      <>
+        <button
+          type="button"
+          className="small primary"
+          disabled={act.busy}
+          onClick={() =>
+            void act.run(
+              async () => (
+                await post(`/v1/storefront/orders/${ref}/confirm`, {}),
+                onDone()
+              ),
+              `Confirmed ${card.reference}`,
+            )
+          }
+        >
+          Confirm, pay the fee{who}
+        </button>
+        <button
+          type="button"
+          className="small"
+          disabled={act.busy}
+          onClick={() =>
+            void act.run(
+              async () => (
+                await post(`/v1/storefront/orders/${ref}/confirm`, {
+                  how: "cash",
+                }),
+                onDone()
+              ),
+              `${card.reference} paid in cash`,
+            )
+          }
+        >
+          Paid in cash{who}
+        </button>
+      </>
+    );
+  }
+  switch (`${card.doc}:${card.event}`) {
     case "order:ordered":
-      if (can("storefront.manage"))
+      if (can("storefront.manage|order.handle"))
         buttons = (
           <>
             <button
@@ -117,8 +270,12 @@ function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
               type="button"
               className="small"
               disabled={act.busy}
-              onClick={() =>
-                confirm(`Decline ${card.reference}?`) &&
+              onClick={async () =>
+                (await confirm({
+                  title: `Decline ${card.reference}?`,
+                  ok: "Decline",
+                  danger: true,
+                })) &&
                 go(
                   `/v1/trade-orders/${id}/decline`,
                   `${card.reference} declined`,
@@ -173,7 +330,22 @@ function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
       break;
     case "bill:bill":
       if (can("invoice.manage"))
-        buttons = (
+        buttons = onOpenDoc ? (
+          // Chat tools: the bill opens in place, Pay leads to their checkout.
+          <button
+            type="button"
+            className="small primary"
+            onClick={(e) =>
+              onOpenDoc(card, e.currentTarget.getBoundingClientRect())
+            }
+          >
+            Pay
+            {card.amount_kobo !== undefined
+              ? ` ${formatPrice(card.amount_kobo)}`
+              : ""}
+            {who}
+          </button>
+        ) : (
           <Link className="button small primary" to={cardHref(card)}>
             Pay{who}
           </Link>
@@ -188,9 +360,19 @@ function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
       data-testid="card-actions"
     >
       {buttons}
+      {confirmNode}
       {!!act.error && <ErrorBox error={act.error} />}
     </span>
   );
+}
+
+/** A bill's newest card, once an account number was given for it: the
+ * number as it is now, for those who may pay bills (the payments flow,
+ * part 1). */
+function ChatTransfer({ seller, reference }: { seller: string; reference: string }) {
+  const { can } = useAuth();
+  if (!can("invoice.manage")) return null;
+  return <BillTransferLive seller={seller} reference={reference} />;
 }
 
 /** A message's photo, voice note or PDF: this business's own copy, from
@@ -259,20 +441,49 @@ function MediaAndFiles({
   messages: LinkMessage[];
   other: string;
 }) {
+  const [open, setOpen] = useState(false);
   const kept = messages.filter((m) => m.attachment).reverse();
   if (kept.length === 0) return null;
+  // Closed: a strip of the latest pictures; open: every picture, voice note and file.
+  const strip = kept.filter((m) => m.attachment?.kind === "photo").slice(0, 4);
   return (
-    <section className="chat-info-media" aria-label="Media and files">
-      <h4>Media and files ({kept.length})</h4>
-      <ul>
-        {kept.map((m) => (
-          <li key={m.id}>
-            {m.attachment && (
-              <AttachmentView m={m} a={m.attachment} other={other} />
-            )}
-          </li>
-        ))}
-      </ul>
+    <section className="info-media" aria-label="Media and files">
+      <button
+        type="button"
+        className="info-row"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        data-testid="info-media"
+      >
+        <Icon name="image" />
+        <span className="info-row-main">
+          <span className="info-row-label">Media and files</span>
+        </span>
+        <span className="info-count">{kept.length}</span>
+        <Icon name="chevron" className={open ? "turned" : undefined} />
+      </button>
+      {!open && strip.length > 0 && (
+        <ul className="info-thumbs">
+          {strip.map((m) => (
+            <li key={m.id}>
+              {m.attachment && (
+                <AttachmentView m={m} a={m.attachment} other={other} />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && (
+        <ul className="info-media-all">
+          {kept.map((m) => (
+            <li key={m.id}>
+              {m.attachment && (
+                <AttachmentView m={m} a={m.attachment} other={other} />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -426,33 +637,48 @@ function Bubble({
   onReply,
   canReply,
   latest = false,
+  current,
+  settled,
   onDone = () => undefined,
   onForward,
+  onSaveAs,
+  onSavePhoto,
   onHide,
   onJump,
   flash = false,
-  onShow,
   first = true,
   onReact,
   onStar,
   onInfo,
   onRetry,
   onDiscard,
+  arrive = false,
+  cheer = false,
+  live,
+  onOpenDoc,
+  refs,
 }: {
   m: LinkMessage;
   other: string;
   onReply: (m: LinkMessage) => void;
   canReply: boolean;
   latest?: boolean;
+  /** The newest card of the same document: where it is now. */
+  current?: DocCard;
+  /** A number given for a bill: the later card saying it was paid into. */
+  settled?: DocCard;
   onDone?: () => void;
   onForward?: (m: LinkMessage) => void;
+  /** Save as… on its words (saved objects S1, part 4). */
+  onSaveAs?: (text: string) => void;
+  /** Save the account on a photo (reading account details from photos):
+   * given where the conversation fetches it. */
+  onSavePhoto?: (url: string) => void;
   onHide?: (m: LinkMessage) => void;
   /** Goes to the message a quote quotes. */
   onJump?: (id: string) => void;
   /** Shown for a moment after a jump lands on it. */
   flash?: boolean;
-  /** A search result: shows it in the conversation, around it. */
-  onShow?: (id: string) => void;
   /** Starts a run of one sender's messages: it has the tail and the name. */
   first?: boolean;
   /** React to it with an emoji (the same one again takes the reaction back). */
@@ -464,104 +690,139 @@ function Bubble({
   /** Not sent: tries again, or gives up on the message. */
   onRetry?: (clientId: string) => void;
   onDiscard?: (clientId: string) => void;
+  /** A card that just arrived: it slides in with a little bounce. */
+  arrive?: boolean;
+  /** A good moment: a short burst around it. */
+  cheer?: boolean;
+  /** Chat tools: a tagged product or service shows as a live card. */
+  live?: Live;
+  /** Chat tools: a card of our order or bill opens it in a sheet. */
+  onOpenDoc?: (card: DocCard, from: DOMRect) => void;
+  /** An invoice, bill or order the message names shows as a card, read
+   * as this side has it (the conversation's link). */
+  refs?: {
+    link: string;
+    openTool?: (k: ToolKey, from?: DOMRect, start?: { rowId?: string }) => void;
+  };
 }) {
   const card = m.kind === "card" ? m.card : undefined;
+  const fold = useFold(m.body ?? "");
   const local = m.local;
+  // A photo has Pay this account (from the other side, as the chip under
+  // words is) and Save the account: fetched with the session, read on
+  // this device.
+  const photo = !card && !local && m.attachment?.kind === "photo" && !!onSavePhoto;
   const hasMenu =
     !local &&
     (!!(onReact || onStar || onInfo) ||
       canReply ||
+      photo ||
       (!card && !!(onForward || onHide || m.body)));
   const mineEmoji = m.reactions?.find((r) => r.mine)?.emoji;
-  const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
+  const what = card
+    ? cardLine(card, m.mine, other, { settled })
+    : previewLine(m, other);
   // The time and ticks sit in the corner of the last line of text (the text
   // keeps room for them); with a photo only, a link preview or a card they
   // have a row of their own.
-  const inline =
-    !card && !!m.body && !m.preview && !onShow && local !== "failed";
+  const inline = !card && !!m.body && !m.preview && local !== "failed";
   return (
     <BubbleShell
       id={m.id}
       mine={m.mine}
       first={first}
       testid={card ? "chat-card" : "chat-message"}
-      className={`${card ? "card-bubble" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}`.trim()}
+      className={`${card ? "card-bubble" : ""}${arrive ? " tk-arrive" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}${local === "failed" ? " failed" : ""}`.trim()}
       what={what}
-      asResult={!!onShow}
       onReply={canReply ? () => onReply(m) : undefined}
+      quickReact={!!onReact}
       menu={
         hasMenu
-          ? (close) => (
-              <>
-                {onReact && (
-                  <span
-                    className="reaction-picker"
-                    role="group"
-                    aria-label="React"
+          ? (close, more) => ({
+              onPick: onReact
+                ? (e: string) => (close(), onReact(m, e))
+                : undefined,
+              reactions: onReact ? (
+                <span
+                  className="reaction-picker"
+                  role="group"
+                  aria-label="React"
+                >
+                  {REACTIONS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      className="react-pick"
+                      aria-pressed={mineEmoji === e}
+                      aria-label={`React with ${REACTION_NAMES[e]}`}
+                      title={REACTION_NAMES[e]}
+                      onClick={() => (close(), onReact(m, e))}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="react-pick react-more"
+                    aria-label="More reactions"
+                    title="More reactions"
+                    onClick={more.pick}
                   >
-                    {REACTIONS.map((e) => (
-                      <button
-                        key={e}
-                        type="button"
-                        className="react-pick"
-                        aria-pressed={mineEmoji === e}
-                        aria-label={`React with ${REACTION_NAMES[e]}`}
-                        title={REACTION_NAMES[e]}
-                        onClick={() => (close(), onReact(m, e))}
+                    <Icon name="plus" />
+                  </button>
+                </span>
+              ) : undefined,
+              actions: (
+                <>
+                  {onInfo && (
+                    <PopItem icon="info" onClick={() => (close(), onInfo(m))}>
+                      Message info
+                    </PopItem>
+                  )}
+                  {canReply && (
+                    <PopItem icon="reply" onClick={() => (close(), onReply(m))}>
+                      Reply
+                    </PopItem>
+                  )}
+                  {!card && m.body && <CopyItem text={m.body} />}
+                  {!card && m.body && onSaveAs && <SaveAsItem text={m.body} onSave={onSaveAs} close={close} />}
+                  {photo && onSavePhoto && (
+                    <PhotoAccountItems
+                      url={fileURL(m)}
+                      message={m.id}
+                      close={close}
+                      saveAccount={onSavePhoto}
+                      payable={!m.mine}
+                    />
+                  )}
+                  {!card && onForward && (
+                    <PopItem
+                      icon="forward"
+                      onClick={() => (close(), onForward(m))}
+                    >
+                      Forward
+                    </PopItem>
+                  )}
+                  {onStar && (
+                    <PopItem icon="star" onClick={() => (close(), onStar(m))}>
+                      {m.starred ? "Unstar" : "Star"}
+                    </PopItem>
+                  )}
+                  {!card && onHide && (
+                    <>
+                      <div className="pop-sep" role="separator" />
+                      <PopItem
+                        icon="trash"
+                        danger
+                        onClick={() => (close(), onHide(m))}
                       >
-                        {e}
-                      </button>
-                    ))}
-                  </span>
-                )}
-                {canReply && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onReply(m))}
-                  >
-                    Reply
-                  </button>
-                )}
-                {!card && m.body && <CopyItem text={m.body} />}
-                {!card && onForward && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onForward(m))}
-                  >
-                    Forward
-                  </button>
-                )}
-                {onStar && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onStar(m))}
-                  >
-                    {m.starred ? "Unstar" : "Star"}
-                  </button>
-                )}
-                {onInfo && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onInfo(m))}
-                  >
-                    Info
-                  </button>
-                )}
-                {!card && onHide && (
-                  <button
-                    type="button"
-                    className="small danger"
-                    onClick={() => (close(), onHide(m))}
-                  >
-                    Delete for me
-                  </button>
-                )}
-              </>
-            )
+                        Delete for me
+                      </PopItem>
+                    </>
+                  )}
+                </>
+              ),
+            })
           : undefined
       }
       after={
@@ -571,39 +832,30 @@ function Bubble({
               className="chat-failed"
               role="alert"
               data-testid="chat-failed"
+              title={`Not sent. ${m.localError ?? ""}`}
             >
-              <span className="bang" aria-hidden="true">
-                !
-              </span>
-              <span className="why">Not sent. {m.localError}</span>
+              <span className="sr-only">Not sent. {m.localError}</span>
               <button
                 type="button"
-                className="small"
+                className="fail-act"
+                aria-label="Retry"
+                title="Try again"
                 onClick={() => onRetry?.(m.id.replace("local-", ""))}
               >
-                Retry
+                <Icon name="retry" />
               </button>
               <button
                 type="button"
-                className="small"
+                className="fail-act"
+                aria-label="Delete"
+                title="Delete"
                 onClick={() => onDiscard?.(m.id.replace("local-", ""))}
               >
-                Delete
+                <Icon name="trash" />
               </button>
             </span>
           )}
           <span className={`stamp${inline ? " inline" : ""}`}>
-            {onShow && (
-              <button
-                type="button"
-                className="reply-btn"
-                data-testid="chat-show"
-                onClick={() => onShow(m.id)}
-              >
-                Show
-                <span className="sr-only"> in the conversation</span>
-              </button>
-            )}
             {m.starred && (
               <span className="starred" role="img" aria-label="Starred">
                 <Icon name="star" />
@@ -618,6 +870,11 @@ function Bubble({
             {local === "sending" && (
               <span className="ticks pending" role="img" aria-label="Sending">
                 <Icon name="clock" />
+              </span>
+            )}
+            {local === "failed" && (
+              <span className="ticks failed" role="img" aria-label="Not sent">
+                <span aria-hidden="true">!</span>
               </span>
             )}
             {m.mine && !card && !local && <Ticks read={!!m.read_at} />}
@@ -648,8 +905,10 @@ function Bubble({
         </>
       }
     >
+      {/* The boards draw no sender's name in a business's conversation;
+          it is still said to a screen reader. */}
       {first && !m.mine && !card && m.sender_name && (
-        <span className="who">{m.sender_name}</span>
+        <span className="sr-only">{m.sender_name}: </span>
       )}
       {m.forwarded && (
         <span className="forwarded" data-testid="chat-forwarded">
@@ -664,35 +923,82 @@ function Bubble({
           title="Go to the message"
           onClick={() => onJump(m.reply?.pair_id ?? "")}
         >
-          {m.reply.mine ? "You" : other}:{" "}
-          {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          <span className="quote-who">{m.reply.mine ? "You" : other}</span>
+          <span className="quote-text">
+            {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          </span>
         </button>
       )}
       {m.reply && !onJump && (
         <span className="quote" data-testid="chat-quote">
-          {m.reply.mine ? "You" : other}:{" "}
-          {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          <span className="quote-who">{m.reply.mine ? "You" : other}</span>
+          <span className="quote-text">
+            {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          </span>
         </span>
       )}
+      {cheer && <span className="tk-cheer" aria-hidden="true" />}
       {card ? (
-        <>
-          <span className="card-title">{cardLine(card, m.mine, other)}</span>
-          {cardSub(card) && <span className="block hint">{cardSub(card)}</span>}
-          <span className="row-actions" style={{ marginTop: 4 }}>
-            <Link to={cardHref(card)} className="button small">
-              Open<span className="sr-only"> {card.reference}</span>
+        <CardFrame
+          card={card}
+          now={current}
+          title={what}
+        >
+          {onOpenDoc && (card.doc === "purchase" || card.doc === "bill") ? (
+            <button
+              type="button"
+              className="button small view"
+              onClick={(e) =>
+                onOpenDoc(
+                  card,
+                  e.currentTarget
+                    .closest(".tk-chatcard")
+                    ?.getBoundingClientRect() ??
+                    e.currentTarget.getBoundingClientRect(),
+                )
+              }
+            >
+              {card.doc === "purchase" ? "View order" : "View invoice"}
+              <span className="sr-only"> {card.reference}</span>
+            </button>
+          ) : (
+            <Link to={cardHref(card)} className="button small view">
+              {card.doc === "delivery" || card.doc === "dispatch"
+                ? "View delivery"
+                : card.doc === "order" || card.doc === "purchase"
+                  ? "View order"
+                  : "View invoice"}
+              <span className="sr-only"> {card.reference}</span>
             </Link>
-          </span>
-          {latest && !m.mine && <CardActions card={card} onDone={onDone} />}
-        </>
-      ) : (
+          )}
+          {latest &&
+            (!m.mine || card.doc === "delivery" || card.doc === "dispatch") && (
+              <CardActions card={card} onDone={onDone} onOpenDoc={onOpenDoc} />
+            )}
+        </CardFrame>
+      ) : null}
+      {card && latest && card.doc === "bill" && card.event === "transfer" && (
+        <ChatTransfer seller={other} reference={card.reference} />
+      )}
+      {card ? null : (
         <>
           {m.attachment && (
             <AttachmentView m={m} a={m.attachment} other={other} />
           )}
+          {live && liveMention(m.mentions) && (
+            <LiveCard
+              m={
+                liveMention(m.mentions) as NonNullable<
+                  ReturnType<typeof liveMention>
+                >
+              }
+              live={live}
+            />
+          )}
           {m.body && (
             <span className="text">
-              <MentionText text={m.body} mentions={m.mentions} />
+              <MentionText text={fold.shown} mentions={m.mentions} />
+              {fold.folded && <ReadMore onClick={fold.more} />}
               {inline && (
                 <span
                   className={`stamp-gap${m.mine ? " mine" : ""}`}
@@ -701,12 +1007,168 @@ function Bubble({
               )}
             </span>
           )}
+          {!m.mine && !local && m.body && <PayChip text={m.body} message={m.id} />}
+          {refs &&
+            docMentions(m.mentions).map((x) => (
+              <RefCard
+                key={`${x.kind}:${x.name}`}
+                url={`/v1/link-chats/${encodeURIComponent(refs.link)}/card?kind=${x.kind}&name=${encodeURIComponent(x.name)}`}
+                openTool={refs.openTool}
+              />
+            ))}
+          {(m.mentions ?? []).map((x) =>
+            x.kind === "saved" && x.saved ? <SavedCardView key={`saved:${x.name}`} card={x.saved} mine={m.mine} saveTo="business" /> : null,
+          )}
           {m.preview && <PreviewCard p={m.preview} />}
         </>
       )}
     </BubbleShell>
   );
 }
+
+/** The card frame (chat-tools.md §3): the document's kind and reference,
+ * its state as a pill, what it is, an order's progress, and its buttons. */
+function CardFrame({
+  card,
+  now,
+  title,
+  children,
+}: {
+  card: DocCard;
+  /** The document's newest card, when this one is older: its status shows. */
+  now?: DocCard;
+  title: string;
+  children: ReactNode;
+}) {
+  const st = cardStatus(now ?? card);
+  const steps = stepsFor(card);
+  return (
+    <article className="tk-chatcard" aria-label={cardKicker(card)}>
+      <span className="tk-chatcard-top">
+        <span className="tk-kicker">{cardKicker(card)}</span>
+        <span className={`tk-pill ${st.tone}`}>{st.word}</span>
+      </span>
+      <span className="card-title">{title}</span>
+      {cardSub(card) && (
+        <span className="tk-chatcard-sub">{cardSub(card)}</span>
+      )}
+      {card.deal && <DealHistory card={card} />}
+      {st.step !== undefined && (
+        <span className="tk-progress">
+          <span
+            className="tk-progress-bar"
+            role="img"
+            aria-label={`${steps[st.step]}: step ${st.step + 1} of ${steps.length}`}
+          >
+            {steps.map((w, i) => (
+              <span key={w} className={i <= (st.step ?? -1) ? "done" : ""} />
+            ))}
+          </span>
+          <span className="tk-progress-words" aria-hidden="true">
+            {steps.map((w, i) => (
+              <span key={w} className={i === st.step ? "now" : ""}>
+                {w}
+              </span>
+            ))}
+          </span>
+        </span>
+      )}
+      <span className="tk-chatcard-actions">{children}</span>
+    </article>
+  );
+}
+
+/** Diary lines (chat-tools.md §3): changes we made ourselves, told as
+ * lines; several made close together are one line, the newest, under
+ * which the earlier ones unfold. */
+/** What Taskiem answered a "@Taskiem" typed in this conversation, kept on
+ * our side only (the business never sees it): the words asked, the
+ * answer, and the way to the Taskiem chat. */
+function TaskiemNote({ m }: { m: LinkMessage }) {
+  const asked = (m.asked ?? "").replace(/(^|\s)@taskiem\b[,:]?\s*/i, "$1").trim();
+  return (
+    <div className="tk-taskiem-note" data-testid="taskiem-note" data-msg={m.id}>
+      <div className="tk-taskiem-note-head">
+        <span className="tk-taskiem-note-mark" aria-hidden="true">
+          <TaskiemMark />
+        </span>
+        <span className="tk-taskiem-note-who">Taskiem · only you see this</span>
+        <span className="tk-taskiem-note-when">{fmtTime(m.created_at)}</span>
+      </div>
+      {asked && <p className="tk-taskiem-note-asked">You asked: {asked}</p>}
+      <p className="tk-taskiem-note-answer">{m.body}</p>
+      <Link className="tk-taskiem-note-open" to="/chat?with=taskiem">
+        Open Taskiem chat
+      </Link>
+    </div>
+  );
+}
+
+function DiaryRun({
+  run,
+  other,
+  fresh,
+}: {
+  run: LinkMessage[];
+  other: string;
+  /** Arrived while the conversation is open: it lands, lit in lime. */
+  fresh: (m: LinkMessage) => boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  // The newest change shows; the ones before it fold under it.
+  const lead = run[run.length - 1];
+  if (!lead) return null;
+  const rest = run.slice(0, -1);
+  const line = (m: LinkMessage, more?: ReactNode) =>
+    (m.card || m.kind === "diary") && (
+      <DiaryLine
+        key={m.id}
+        msg={m.id}
+        to={m.card ? cardHref(m.card) : undefined}
+        fresh={fresh(m)}
+        more={more}
+        when={
+          <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
+            You, {clock(m.created_at)}
+          </time>
+        }
+      >
+        {m.card ? (
+          <>
+            {cardLine(m.card, true, other)}
+            {cardSub(m.card) && (
+              <span className="tk-diary-sub"> {cardSub(m.card)}</span>
+            )}
+          </>
+        ) : (
+          (m.body ?? "")
+        )}
+      </DiaryLine>
+    );
+  return (
+    <>
+      {open && rest.map((m) => line(m))}
+      {line(
+        lead,
+        rest.length > 0 && (
+          <button
+            type="button"
+            className="tk-diary-more"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            {open
+              ? "Fold"
+              : `and ${rest.length} earlier ${rest.length === 1 ? "change" : "changes"}`}
+          </button>
+        ),
+      )}
+    </>
+  );
+}
+
+/** Diary lines made within this long of each other are one line. */
+const DIARY_RUN_MS = 5 * 60_000;
 
 /** One conversation: its stream, following it while open, and the
  * composer. */
@@ -715,6 +1177,7 @@ export function ConversationPane({
   onBack,
   onChanged,
   others = [],
+  roles = {},
   link,
   onEndLink,
   focus,
@@ -722,6 +1185,8 @@ export function ConversationPane({
   conv: Conversation;
   onBack: () => void;
   onChanged: () => void;
+  /** How we trade with each linked business, by link (the picker's lines). */
+  roles?: Record<string, LinkRole>;
   /** The link with this business, for the contact panel. */
   link?: BusinessLink;
   /** Ends the link (only for a member who may manage links). */
@@ -734,8 +1199,34 @@ export function ConversationPane({
   const { can } = useAuth();
   const write = can("chat.trade") && conv.state === "active";
   const [messages, setMessages] = useState<LinkMessage[]>();
+  // Stars being saved: a copy of a message read before the star was saved
+  // (the live stream's look after a read mark, a refresh on its way) must
+  // not take the star back off. Held until the server's copy agrees, and
+  // for at most STAR_HOLD_MS once saved (a change from elsewhere then wins).
+  const starring = useRef(new Map<string, { on: boolean; savedAt?: number }>());
+  const keepStars = useCallback((list: LinkMessage[]) => {
+    if (starring.current.size === 0) return list;
+    return list.map((m) => {
+      const s = starring.current.get(m.id);
+      if (!s) return m;
+      const agrees = !!m.starred === s.on;
+      if (
+        s.savedAt !== undefined &&
+        (agrees || Date.now() - s.savedAt > STAR_HOLD_MS)
+      ) {
+        starring.current.delete(m.id);
+        return m;
+      }
+      return agrees ? m : { ...m, starred: s.on };
+    });
+  }, []);
   const [typing, setTyping] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  // Invoice them, from the tools (business-chat-tools.md §3).
+  const [invoicing, setInvoicing] = useState(false);
+  const navigate = useNavigate();
+  const openOrder = useRef<(start: OrderStart) => void>(() => {});
+  const logo = conv.logo ? logoSrc(conv.business) : undefined;
   // The business's card (area, what it sells), as its public page shows
   // it: found by the same search, so only a business that lets others find
   // it has one.
@@ -763,46 +1254,224 @@ export function ConversationPane({
   const [forwarding, setForwarding] = useState<LinkMessage>();
   const typedAt = useRef(0);
   const [error, setError] = useState<unknown>();
-  const items = useLoad(
+  const chatTools = useChatTools();
+  // A diary line kept: what is newer is pulled in (set once pull exists).
+  const afterDiary = useRef<() => void>(() => undefined);
+  const priced = useLoad(
     () =>
-      get<{ items: PriceItem[] }>(`/v1/link-chats/${conv.link}/items`).then(
-        (r) => r.items,
-        () => [] as PriceItem[],
+      get<{ items: PriceItem[]; whose?: "ours" | "theirs" }>(
+        `/v1/link-chats/${conv.link}/items`,
+      ).catch(() => ({ items: [] as PriceItem[], whose: undefined })),
+    [conv.link],
+  );
+  const items = { data: priced.data?.items };
+  // What "/invoice" and "/order" offer: what is between us and them only.
+  const shared = useLoad(
+    () =>
+      get<{ refs: ChatRef[] }>(
+        `/v1/link-chats/${encodeURIComponent(conv.link)}/refs`,
+      ).then(
+        (r) => refSources(r.refs ?? []),
+        () => refSources([]),
       ),
     [conv.link],
   );
+  // Live cards read our own stock, and the picker offers our own services
+  // (chat tools; each only to those who may see it).
+  const ownStock = useLoad(
+    () =>
+      chatTools && can("table.read")
+        ? get<StockView>("/v1/stock").then(
+            (r) => r.items,
+            () => [] as StockItem[],
+          )
+        : Promise.resolve([] as StockItem[]),
+    [chatTools],
+  );
+  const ownServices = useLoad(
+    () =>
+      chatTools && can("storefront.manage")
+        ? get<{ items: Service[] }>("/v1/storefront/services").then(
+            (r) => r.items.filter((x) => x.available),
+            () => [] as Service[],
+          )
+        : Promise.resolve([] as Service[]),
+    [chatTools],
+  );
+  // Our own products' photos, for cards of our own items.
+  const ownPhotos = useLoad(
+    () =>
+      chatTools && can("storefront.manage") && priced.data?.whose === "ours"
+        ? get<Catalogue>("/v1/storefront/catalogue").then(
+            (r) =>
+              Object.fromEntries(
+                r.items
+                  .map((it) => [it.id, thumb(it.photo)])
+                  .filter((x): x is [string, string] => !!x[1]),
+              ),
+            () => ({}) as Record<string, string>,
+          )
+        : Promise.resolve({} as Record<string, string>),
+    [chatTools, priced.data?.whose],
+  );
+  // We buy from them: the Order sheet (drafting needs table.edit; sending
+  // and the supplier, storefront.manage), and our orders and bills with them.
+  const supplies =
+    chatTools &&
+    priced.data?.whose === "theirs" &&
+    can("table.edit") &&
+    can("storefront.manage");
+  const liveNow: Live = {
+    photos: ownPhotos.data,
+    items: priced.data?.items ?? [],
+    whose: priced.data?.whose ?? "",
+    stock: ownStock.data ?? [],
+    link: conv.link,
+    // Without leave to order, Order is the prices page, as before.
+    onOrder: supplies
+      ? (itemId, from) => c.openTool("order", from, { order: { itemId } })
+      : undefined,
+  };
+  const openDoc = (card: DocCard, from: DOMRect) =>
+    c.openTool(card.doc === "purchase" ? "purchases" : "bills", from, {
+      rowId: card.id,
+    });
+  const priceItems = (items.data ?? [])
+    .filter((it) => it.available)
+    .map((it) => ({
+      kind: "item" as const,
+      id: it.item_id,
+      name: it.name,
+      sub: priceWords(it),
+      category: it.category,
+      words: it.description,
+    }));
+  // What "#" and "/product" tag: theirs, with chat tools (§4); without, the
+  // list between us as before.
+  const tagItems =
+    chatTools && priced.data?.whose !== "theirs" ? [] : priceItems;
+  // Ours, about them (§3): what is owed each way, an invoice to them, an
+  // offer on their items. The rest of ours is in the Taskiem chat.
+  const businessTiles: ExtraTile[] = chatTools
+    ? [
+        ...(supplies
+          ? [
+              {
+                key: "offer",
+                title: "Make an offer",
+                icon: "tag",
+                line: "Your price for an order",
+                onPick: () => openOrder.current({ offer: true }),
+              },
+            ]
+          : []),
+        ...(can("invoice.manage")
+          ? [
+              {
+                key: "invoice-them",
+                title: "Invoice them",
+                icon: "invoices",
+                line: `A new invoice to ${conv.name}`,
+                onPick: () => setInvoicing(true),
+              },
+            ]
+          : []),
+        ...(can("invoice.read")
+          ? [
+              {
+                key: "statement",
+                title: "Statement",
+                icon: "money",
+                line: "What is owed each way",
+                onPick: () =>
+                  navigate(`/links/${encodeURIComponent(conv.link)}/statement`),
+              },
+            ]
+          : []),
+      ]
+    : [];
+  // Saved things by @name (saved objects S1): a text's words into the box;
+  // the rest named as tags, each shared as a card with the message.
+  const savedTexts = useSavedPicks("share");
   const c = useComposer<LinkMessage>({
     draftKey: conv.link,
     rules: BUSINESS_FILES,
     enabled: write,
     sources: {
+      // With chat tools, the business we are talking to is not offered:
+      // it gets the message already.
       "@": others
-        .filter((o) => o.state === "active")
-        .map((o) => ({ kind: "business" as const, id: o.link, name: o.name })),
-      "#": (items.data ?? [])
-        .filter((it) => it.available)
-        .map((it) => ({
-          kind: "item" as const,
-          id: it.item_id,
-          name: it.name,
-          sub: priceWords(it),
+        .filter(
+          (o) =>
+            o.state === "active" &&
+            !(chatTools && (o.link === conv.link || !can("chat.trade"))),
+        )
+        .map((o) => ({
+          kind: "business" as const,
+          id: o.link,
+          name: o.name,
+          sub: chatTools ? linkedLine(roles[o.link]) : undefined,
         })),
+      // Our own services are not offered in a business's conversation
+      // with chat tools: what we offer them goes by Share my prices and
+      // Make an offer (business-chat-tools.md §4).
+      services: (chatTools ? [] : (ownServices.data ?? [])).map((x) => ({
+        kind: "service" as const,
+        id: x.id,
+        name: x.name,
+        sub: [
+          x.price_kobo != null ? formatPrice(x.price_kobo) : "Price on the day",
+          x.duration_minutes ? `${x.duration_minutes} min` : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+      // Theirs, with chat tools (§4); without, the list between us as before.
+      "#": tagItems,
+      // "/product" is "#"'s items; a customer is never named to another
+      // business.
+      refs: { ...shared.data, product: tagItems },
+      // A category opens where it can be seen: their list, to order from
+      // (supplies), or our own products (table.read); otherwise none is
+      // offered, as a tap would open nothing of theirs.
+      categories:
+        (priced.data?.whose === "theirs" && supplies) ||
+        (priced.data?.whose === "ours" && can("table.read"))
+          ? undefined
+          : [],
+      // Saved texts (saved objects S1): their words into the box.
+      saved: savedTexts.saved, savedComplete: savedTexts.complete, wantSaved: savedTexts.want, savedAsTags: true,
+      saveNamed: (name) => saveAs.named(name),
     },
     replyLine: (r) => previewLine(r, conv.name),
     closes: [infoOpen, !!forwarding],
+    grouped: chatTools ? { taskiem: true } : undefined,
+    tools: chatTools,
+    diaryWhere: conv.link,
+    extras: chatTools ? businessTiles : undefined,
+    onDiary: () => afterDiary.current(),
+    scope: chatTools
+      ? { link: conv.link, name: conv.name, supplies: !!supplies }
+      : undefined,
     // We are typing: the other side's typing line, told at most every 3 s.
     onType: (v) => {
+      // "/pro" opens the tools and "@Taskiem" asks Taskiem: neither reaches
+      // them, so they are not told we are typing.
+      if (chatTools && (/^\//.test(v) || /(^|[\s,(])@taskiem\b/i.test(v)))
+        return;
       const now = Date.now();
       if (v.trim() && now - typedAt.current > 3000) {
         typedAt.current = now;
         post(`${path}/typing`).catch(() => undefined);
       }
     },
-    onSend: (s) => sendMessage(s),
+    onSend: (s) => void shareThenSend(s),
   });
+  openOrder.current = (start) =>
+    c.openTool("order", undefined, { order: start });
   const { setReply } = c;
-  const [q, setQ] = useState("");
-  const [found, setFound] = useState<LinkMessage[]>();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchButton = useRef<HTMLButtonElement>(null);
   const act = useAction();
   const path = `/v1/link-chats/${conv.link}`;
   // The thread's scrolling, as WhatsApp Web's: older messages load as the
@@ -854,15 +1523,17 @@ export function ConversationPane({
       );
       setTyping(!!out.typing);
       if (after && out.messages.length === 0) return;
-      setMessages((cur) => merge(cur ?? [], out.messages));
+      setMessages((cur) => merge(cur ?? [], keepStars(out.messages)));
       await markRead(out.messages);
       // A full page: there may be more after it (the reader was away).
       const newest = out.messages[out.messages.length - 1];
       if (after && out.messages.length >= PAGE && newest)
         await pull(newest.created_at);
     },
-    [path, markRead],
+    [path, markRead, keepStars],
   );
+  afterDiary.current = () => void pull(last).catch(setError);
+
   // Open at the newest page (the first unread is marked), or, from a
   // search result or a quote, at that message.
   const openNewest = useCallback(async () => {
@@ -874,9 +1545,9 @@ export function ConversationPane({
     setDetached(false);
     setHasOlder(out.messages.length >= PAGE);
     setUnread(firstUnread(out.messages));
-    setMessages(out.messages);
+    setMessages(keepStars(out.messages));
     await markRead(out.messages);
-  }, [path, markRead]);
+  }, [path, markRead, keepStars]);
   const openAt = useCallback(
     async (id: string) => {
       const out = await get<{ messages: LinkMessage[] }>(
@@ -891,7 +1562,7 @@ export function ConversationPane({
       setDetached(at >= 0 && out.messages.length - at - 1 >= PAGE - half);
       setHasOlder(at >= half);
       setUnread(undefined);
-      setMessages(out.messages);
+      setMessages(keepStars(out.messages));
     },
     [path],
   );
@@ -913,7 +1584,7 @@ export function ConversationPane({
       if (out.messages.length < PAGE) setHasOlder(false);
       if (out.messages.length > 0) {
         thread.keepPlace();
-        setMessages((cur) => merge(cur ?? [], out.messages));
+        setMessages((cur) => merge(cur ?? [], keepStars(out.messages)));
       }
     } catch (e) {
       setError(e);
@@ -932,19 +1603,30 @@ export function ConversationPane({
         setError(new Error("That message is no longer here.")),
       );
   };
-  // A search result: close the search, then go to the message in place.
-  const [showing, setShowing] = useState<string>();
-  const showFound = (id: string) => {
-    setQ("");
-    setFound(undefined);
-    setShowing(id);
+  // A search result: the thread goes to the message (on a phone the panel
+  // closes to show it; on a computer it stays beside the thread).
+  const onPhone = () => window.matchMedia?.("(max-width: 899px)").matches;
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    requestAnimationFrame(() => searchButton.current?.focus());
+  }, []);
+  const jumpFound = (id: string) => {
+    jump(id);
+    if (onPhone()) closeSearch();
   };
-  useEffect(() => {
-    if (!showing || found) return;
-    setShowing(undefined);
-    jump(showing);
-    // jump is stable enough: it reads the thread's refs and openAt.
-  }, [showing, found]);
+  // A day: the first message of it, or after it.
+  const jumpToDay = async (day: string) => {
+    const start = new Date(`${day}T00:00:00`);
+    if (Number.isNaN(start.getTime())) return false;
+    const before = new Date(start.getTime() - 1).toISOString();
+    const out = await get<{ messages: LinkMessage[] }>(
+      `${path}/messages?after=${encodeURIComponent(before)}&limit=1`,
+    );
+    const first = out.messages[0];
+    if (!first) return false;
+    jumpFound(first.id);
+    return true;
+  };
   // The live stream brings what changes as it happens; while it is open the
   // polling only reconciles (and says so by being slow), and without it the
   // page polls as it did.
@@ -961,7 +1643,7 @@ export function ConversationPane({
           const m = e.message;
           // Not into a window away from the newest page: it would leave a gap.
           if (!detachedNow.current)
-            setMessages((cur) => (cur ? merge(cur, [m]) : cur));
+            setMessages((cur) => (cur ? merge(cur, keepStars([m])) : cur));
           // Read (once for a burst of them: a conversation of hundreds arriving
           // together asks once, not hundreds of times).
           if (
@@ -998,7 +1680,8 @@ export function ConversationPane({
         // The newest page again: our ticks, and the other side's reactions.
         if (document.visibilityState !== "visible" || detached) return;
         get<{ messages: LinkMessage[] }>(`${path}/messages`).then(
-          (out) => setMessages((cur) => merge(cur ?? [], out.messages)),
+          (out) =>
+            setMessages((cur) => merge(cur ?? [], keepStars(out.messages))),
           () => undefined,
         );
       },
@@ -1014,11 +1697,33 @@ export function ConversationPane({
   useEffect(
     () =>
       onSent((link, m) => {
-        if (link === conv.link) setMessages((cur) => merge(cur ?? [], [m]));
+        if (link === conv.link)
+          setMessages((cur) => merge(cur ?? [], keepStars([m])));
         onChanged();
       }),
     [conv.link, onChanged],
   );
+  // A message naming saved things: what is sensitive in them is shared only
+  // after a yes, asked here (the server's question, the server refusing
+  // without it) since the outbox sends later; on a no, the words come back.
+  // A pick the list does not know (it failed or is still loading) is asked
+  // about too; confirm is sent only after a yes.
+  const shareThenSend = async (s: Sending<LinkMessage>) => {
+    const refs = (s.mentions ?? []) as { kind: string; saved?: { id: string; owner: string; confirm: boolean } }[];
+    for (const r of refs) {
+      if (r.kind !== "saved" || !r.saved) continue;
+      const pick = (savedTexts.saved ?? []).find((x) => x.id === r.saved?.id);
+      if (pick && !pick.savedSensitive) continue;
+      const known = s.picked?.find((p) => p.kind === "saved" && p.id === r.saved?.id);
+      const title = pick ? shareQuestion(pick, conv.name) : shareQuestion({ name: `@${known?.name ?? "it"}`, words: known?.words, savedKind: known?.savedKind }, conv.name);
+      if (!(await confirm({ title, ok: "Share" }))) {
+        c.restore(s);
+        return;
+      }
+      r.saved.confirm = true;
+    }
+    sendMessage(s);
+  };
   const sendMessage = (s: Sending<LinkMessage>) => {
     const { file, reply } = s;
     const o: Outgoing = {
@@ -1079,13 +1784,20 @@ export function ConversationPane({
       setMessages((cur) =>
         cur?.map((x) => (x.id === m.id ? { ...x, starred } : x)),
       );
+    starring.current.set(m.id, { on });
     mark(on);
     (on
       ? put(`${path}/messages/${m.id}/star`)
       : del(`${path}/messages/${m.id}/star`)
     ).then(
-      () => undefined,
+      () => {
+        // Saved: what arrives from now on agrees, and ends the hold.
+        if (starring.current.get(m.id)?.on === on)
+          starring.current.set(m.id, { on, savedAt: Date.now() });
+        mark(on);
+      },
       (e: unknown) => {
+        starring.current.delete(m.id);
         mark(!on);
         setError(actionError(e));
       },
@@ -1096,8 +1808,19 @@ export function ConversationPane({
     body: { muted?: boolean; archived?: boolean; pinned?: boolean },
     done: string,
   ) => void act.run(async () => (await put(path, body), onChanged()), done);
-  const hide = (m: LinkMessage) => {
-    if (!confirm("Delete this message for your business? They keep theirs."))
+  const { confirm, node: confirmNode } = useConfirm();
+  // Save as… on a message (saved objects S1, part 4): the business's for
+  // whoever may manage them, else one's own.
+  const saveAs = useSaveAs({ business: true, onSaved: () => savedTexts.reload() });
+  const hide = async (m: LinkMessage) => {
+    if (
+      !(await confirm({
+        title: "Delete this message?",
+        body: "It goes from your business's side. They keep theirs.",
+        ok: "Delete for me",
+        danger: true,
+      }))
+    )
       return;
     void act.run(async () => {
       await post(`${path}/messages/${m.id}/hide`);
@@ -1105,27 +1828,94 @@ export function ConversationPane({
       onChanged();
     }, "Deleted for you");
   };
-  const search = (v: string) => {
-    setQ(v);
-    if (v.trim().length < 2) return setFound(undefined);
-    get<{ messages: LinkMessage[] }>(
-      `${path}/messages?q=${encodeURIComponent(v.trim())}`,
-    ).then((r) => setFound(r.messages), setError);
-  };
-  const shown = found ?? threadItems;
-  // A card's actions are offered on its document's newest card only.
+  const shown = threadItems;
+  // What arrives while the conversation is open lands with its motion;
+  // what was there already, or loads from further back, just shows.
+  const openedNewest = useRef<string | undefined>(undefined);
+  if (shown && shown.length > 0 && openedNewest.current === undefined)
+    openedNewest.current = shown[shown.length - 1]?.created_at ?? "";
+  const fresh = (m: LinkMessage) =>
+    openedNewest.current !== undefined && m.created_at > openedNewest.current;
+  // News that arrives while the conversation is open: a sound (unless
+  // switched off) for an order or a payment, and a burst for a good moment.
+  const told = useRef(new Set<string>());
+  useEffect(() => {
+    if (chatTools && soundOn()) primeSound();
+  }, [chatTools]);
+  const [cheer, setCheer] = useState<string>();
+  useEffect(() => {
+    if (!chatTools || !shown) return;
+    const today = new Date().toDateString();
+    let firstOrder = !shown.some(
+      (m) =>
+        !m.mine &&
+        m.card &&
+        (m.card.event === "ordered" || m.card.event === "auto_accepted") &&
+        new Date(m.created_at).toDateString() === today &&
+        !fresh(m),
+    );
+    for (const m of shown) {
+      if (!m.card || !fresh(m) || told.current.has(m.id)) continue;
+      told.current.add(m.id);
+      if (isNews(m.card, m.mine) && soundOn()) chime();
+      if (isGoodMoment(m.card, m.mine, firstOrder)) {
+        setCheer(m.id);
+        window.setTimeout(() => setCheer(undefined), 900);
+      }
+      if (m.card.event === "ordered" || m.card.event === "auto_accepted")
+        firstOrder = false;
+    }
+  }, [shown, chatTools]);
+  // Diary lines made close together on one day are one line (its first).
+  const runs = useMemo(() => {
+    const lead = new Map<string, LinkMessage[]>();
+    const member = new Set<string>();
+    let run: LinkMessage[] | undefined;
+    for (const m of shown ?? []) {
+      const diary =
+        m.kind === "diary" ||
+        (chatTools && !!m.card && isDiary(m.card, m.mine));
+      const last = run?.[run.length - 1];
+      if (
+        diary &&
+        run &&
+        last &&
+        dayLabel(last.created_at) === dayLabel(m.created_at) &&
+        Date.parse(m.created_at) - Date.parse(last.created_at) <= DIARY_RUN_MS
+      ) {
+        run.push(m);
+        member.add(m.id);
+      } else if (diary) {
+        run = [m];
+        lead.set(m.id, run);
+      } else run = undefined;
+    }
+    return { lead, member };
+  }, [shown, chatTools]);
+  // A card's actions are offered on its document's newest card only, and
+  // every card of a document shows where it is now (its newest card's
+  // status): an order accepted since it arrived no longer reads "New".
   const newest = new Set<string>();
-  const seen = new Set<string>();
+  const now = new Map<string, DocCard>();
+  // A number given for a bill stops reading "paying" once a later card
+  // says it was paid into (in full or in part).
+  const paidLater = new Map<string, DocCard>();
+  const settled = new Map<string, DocCard>();
   for (const m of [...(messages ?? [])].reverse()) {
     if (m.kind !== "card" || !m.card) continue;
     const key = `${m.card.doc}:${m.card.reference}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (isTransferPaid(m.card) && !paidLater.has(key))
+      paidLater.set(key, m.card);
+    const paid = paidLater.get(key);
+    if (m.card.event === "transfer" && paid) settled.set(m.id, paid);
+    if (now.has(key)) continue;
+    now.set(key, m.card);
     newest.add(m.id);
   }
   return (
+    <PayFromMessages chat={{ kind: "link", id: conv.link, name: conv.name }}>
     <section
-      className="chat-pane"
+      className={`chat-pane${searchOpen ? " with-side" : ""}`}
       aria-label={`Conversation with ${conv.name}`}
       data-testid="chat-pane"
       onKeyDown={c.onPaneKeyDown}
@@ -1137,27 +1927,63 @@ export function ConversationPane({
         avatar={
           <button
             type="button"
-            className="chat-avatar"
+            className="chat-avatar-btn"
             aria-label={`About ${conv.name}`}
             aria-expanded={infoOpen}
-            onClick={() => setInfoOpen(!infoOpen)}
+            onClick={() => {
+              setSearchOpen(false);
+              setInfoOpen(!infoOpen);
+            }}
           >
-            {conv.name.slice(0, 1).toUpperCase()}
+            <ChatAvatar name={conv.name} logo={logo} />
           </button>
         }
-        title={
+        title={conv.name}
+        subtitle={
+          (connected ? live.typing.has(conv.link) : typing) ? (
+            <span className="typing" data-testid="chat-typing">
+              typing…
+            </span>
+          ) : link ? (
+            headLine(link.role)
+          ) : undefined
+        }
+        actions={
           <>
-            {conv.name}
-            {(connected ? live.typing.has(conv.link) : typing) && (
-              <span className="typing" data-testid="chat-typing">
-                typing…
-              </span>
+            {supplies && write && (
+              <button
+                type="button"
+                className="tk-head-order"
+                data-testid="chat-order"
+                onClick={(e) =>
+                  c.openTool("order", e.currentTarget.getBoundingClientRect())
+                }
+              >
+                Order
+              </button>
             )}
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Search this conversation"
+              aria-expanded={searchOpen}
+              ref={searchButton}
+              data-testid="chat-search-open"
+              onClick={() => {
+                setInfoOpen(false);
+                setSearchOpen(!searchOpen);
+              }}
+            >
+              <Icon name="search" />
+            </button>
           </>
         }
         items={(close) => (
           <>
-            <button type="button" onClick={() => (close(), setInfoOpen(true))}>
+            <button
+              type="button"
+              onClick={() => (close(), setSearchOpen(false), setInfoOpen(true))}
+            >
               Contact info
             </button>
             {can("chat.trade") && (
@@ -1206,65 +2032,61 @@ export function ConversationPane({
           </>
         )}
       />
-      <div
-        className="filters"
-        role="search"
-        aria-label={`Search the conversation with ${conv.name}`}
-        style={{ padding: "8px 12px 0" }}
-      >
-        <label className="search">
-          <span className="sr-only">Search this conversation</span>
-          <Icon name="search" />
-          <input
-            type="search"
-            placeholder="Search"
-            value={q}
-            onChange={(e) => search(e.target.value)}
-            data-testid="chat-search"
-          />
-        </label>
-      </div>
       <ErrorBox error={error ?? act.error ?? c.fileError} />
       <ChatStream
         items={shown}
         thread={thread}
-        hasOlder={hasOlder && !found}
+        hasOlder={hasOlder}
         prefix="chat"
         keyOf={(m) => m.id}
         startsRun={startsRun}
-        unread={found ? undefined : unread}
-        empty={
-          found
-            ? "No messages say that."
-            : `No messages yet. Say hello to ${conv.name}.`
+        unread={unread}
+        empty={`No messages yet. Say hello to ${conv.name}.`}
+        render={(m, { first }) =>
+          runs.member.has(m.id) ? null : m.kind === "taskiem" ? (
+            <TaskiemNote m={m} />
+          ) : runs.lead.has(m.id) ? (
+            <DiaryRun
+              run={runs.lead.get(m.id) ?? [m]}
+              other={conv.name}
+              fresh={fresh}
+            />
+          ) : (
+            <Bubble
+              m={m}
+              other={conv.name}
+              canReply={write && !m.local}
+              onRetry={retry}
+              onDiscard={discard}
+              onReply={setReply}
+              onSaveAs={saveAs.fromWords}
+              onSavePhoto={saveAs.fromPhoto}
+              onJump={jump}
+              first={first}
+              flash={flashId === m.id}
+              latest={newest.has(m.id)}
+              current={m.card && now.get(`${m.card.doc}:${m.card.reference}`)}
+              settled={settled.get(m.id)}
+              onDone={() => pull(last).catch(setError)}
+              onForward={
+                write && others.some((o) => o.state === "active")
+                  ? setForwarding
+                  : undefined
+              }
+              onHide={can("chat.trade") ? hide : undefined}
+              onReact={write && !m.local ? react : undefined}
+              onStar={m.local ? undefined : star}
+              onInfo={m.local ? undefined : setInfo}
+              arrive={!!m.card && fresh(m)}
+              cheer={cheer === m.id}
+              live={chatTools ? liveNow : undefined}
+              onOpenDoc={chatTools ? openDoc : undefined}
+              refs={{ link: conv.link, openTool: chatTools ? c.openTool : undefined }}
+            />
+          )
         }
-        render={(m, { first }) => (
-          <Bubble
-            m={m}
-            other={conv.name}
-            canReply={write && !m.local}
-            onRetry={retry}
-            onDiscard={discard}
-            onReply={setReply}
-            onJump={found ? undefined : jump}
-            onShow={found ? showFound : undefined}
-            first={first}
-            flash={flashId === m.id}
-            latest={newest.has(m.id)}
-            onDone={() => pull(last).catch(setError)}
-            onForward={
-              write && others.some((o) => o.state === "active")
-                ? setForwarding
-                : undefined
-            }
-            onHide={can("chat.trade") ? hide : undefined}
-            onReact={write && !m.local ? react : undefined}
-            onStar={m.local ? undefined : star}
-            onInfo={m.local ? undefined : setInfo}
-          />
-        )}
         overlay={
-          !found && (thread.away || detached) ? (
+          thread.away || detached ? (
             <ThreadJump
               detached={detached}
               count={thread.newCount}
@@ -1273,6 +2095,23 @@ export function ConversationPane({
           ) : undefined
         }
       />
+      {invoicing && (
+        <Sheet
+          title={`Invoice ${conv.name}`}
+          onClose={() => setInvoicing(false)}
+          testid="invoice-them"
+        >
+          <InvoiceAdd
+            to={{ name: conv.name, key: `link:${conv.business}` }}
+            onCancel={() => setInvoicing(false)}
+            onSaved={() => {
+              setInvoicing(false);
+              afterDiary.current();
+            }}
+          />
+        </Sheet>
+      )}
+      <PayListBar />
       {write ? (
         <ComposerView
           c={c}
@@ -1306,110 +2145,51 @@ export function ConversationPane({
           onSent={onChanged}
         />
       )}
-      {infoOpen && (
-        <aside
-          className="chat-info"
-          aria-label={`About ${conv.name}`}
-          data-testid="chat-info"
-        >
-          <div className="chat-info-head">
-            <h3>Contact info</h3>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Close contact info"
-              onClick={() => setInfoOpen(false)}
-            >
-              <Icon name="close" />
-            </button>
-          </div>
-          <div className="chat-info-body">
-            <span className="chat-avatar big" aria-hidden="true">
-              {conv.name.slice(0, 1).toUpperCase()}
-            </span>
-            <p className="chat-info-name">{conv.name}</p>
-            {link && <p className="hint">{roleLine(link.role)}</p>}
-            {link?.state === "active" && link.answered_at && (
-              <p className="hint">Linked {fmtTime(link.answered_at)}</p>
-            )}
-            {card && (card.area || card.tagline || card.items.length > 0) && (
-              <section
-                className="chat-info-card"
-                aria-label="About the business"
-              >
-                {card.tagline && <p>{card.tagline}</p>}
-                {card.area && <p className="hint">{card.area}</p>}
-                {card.items.length > 0 && (
-                  <ul className="chat-info-items">
-                    {card.items.slice(0, 5).map((it) => (
-                      <li key={it.name}>{it.name}</li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            )}
-            {conv.state !== "active" && (
-              <p className="hint">The link has ended.</p>
-            )}
-            {can("chat.trade") && (
-              <div className="chat-info-actions">
-                <button
-                  type="button"
-                  disabled={act.busy}
-                  onClick={() =>
-                    settings(
-                      { pinned: !conv.pinned },
-                      conv.pinned ? "Unpinned" : "Pinned",
-                    )
-                  }
-                >
-                  {conv.pinned ? "Unpin this chat" : "Pin this chat"}
-                </button>
-                <button
-                  type="button"
-                  disabled={act.busy}
-                  onClick={() =>
-                    settings(
-                      { muted: !conv.muted },
-                      conv.muted ? "Unmuted" : "Muted",
-                    )
-                  }
-                >
-                  {conv.muted ? "Unmute notifications" : "Mute notifications"}
-                </button>
-                <button
-                  type="button"
-                  disabled={act.busy}
-                  onClick={() =>
-                    settings(
-                      { archived: !conv.archived },
-                      conv.archived ? "Unarchived" : "Archived",
-                    )
-                  }
-                >
-                  {conv.archived ? "Unarchive this chat" : "Archive this chat"}
-                </button>
-                {link && link.state === "active" && onEndLink && (
-                  <button
-                    type="button"
-                    className="danger"
-                    disabled={act.busy}
-                    onClick={() =>
-                      confirm(
-                        `End the link with ${link.name}? What passed between you stays on both sides.`,
-                      ) && onEndLink(link)
-                    }
-                  >
-                    End link
-                  </button>
-                )}
-              </div>
-            )}
-            <MediaAndFiles messages={messages ?? []} other={conv.name} />
-          </div>
-        </aside>
+      {searchOpen && (
+        <ChatSearchPanel
+          name={conv.name}
+          path={path}
+          onClose={closeSearch}
+          onJump={jumpFound}
+          onDate={jumpToDay}
+        />
       )}
+      {infoOpen && (
+        <ContactInfo
+          conv={conv}
+          logo={logo}
+          link={link}
+          card={card}
+          canManage={can("chat.trade")}
+          busy={act.busy}
+          media={<MediaAndFiles messages={messages ?? []} other={conv.name} />}
+          onClose={() => setInfoOpen(false)}
+          onSetting={settings}
+          onEndLink={
+            link && link.state === "active" && onEndLink
+              ? async () => {
+                  if (
+                    await confirm({
+                      title: `End the link with ${link.name}?`,
+                      body: "What passed between you stays on both sides.",
+                      ok: "End link",
+                      danger: true,
+                    })
+                  )
+                    onEndLink(link);
+                }
+              : undefined
+          }
+          onSearch={() => {
+            setInfoOpen(false);
+            setSearchOpen(true);
+          }}
+        />
+      )}
+      {confirmNode}
+      {saveAs.node}
     </section>
+    </PayFromMessages>
   );
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +42,7 @@ func (s *Server) linkRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Post("/links/{id}/{answer}", s.answerLink)
 	r.With(manage, s.tenantWide).Delete("/links/sent/{id}", s.cancelBlindLink)
 	r.Get("/links/code/{code}", s.linkByCode)
+	r.Get("/links/{business}/logo", s.linkLogo)
 	r.Get("/link-settings", s.getLinkSettings)
 	r.With(manage, s.tenantWide).Put("/link-settings", s.putLinkSettings)
 	r.Get("/link-settings/qr", s.linkQR)
@@ -109,12 +111,10 @@ func (s *Server) searchLinks(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkErr(err))
 		return
 	}
-	// One word that names no business found may be a storefront's address
-	// (as "link <address>" in chat): the one row that sends a request to
-	// whoever uses it, the same whether or not anyone does.
-	if len(out.Results) == 0 && links.LooksLikeAddress(q) {
-		out.Blind = &blindOffer{Kind: "address", Shown: links.Address(q)}
-	}
+	// A name that finds no one finds no one: the page says so. The one row
+	// that sends a request blind is for a phone number (above); a request to
+	// a storefront's address is asked in chat (`link <address>`), so a name
+	// that merely looks like an address is never offered as one.
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -221,6 +221,7 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 			shown = links.Mask("phone", blind.Phone)
 		}
 		out.Sent, out.Message = true, tr(lang.EN, "link.blind_sent", "shown", shown)
+		s.diaryChange(r.Context(), p, linkWords("asked", shown))
 		writeJSON(w, http.StatusAccepted, out)
 		return
 	}
@@ -231,6 +232,7 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 		// blind one of ours stood is the case the definer makes; it
 		// shows as sent.
 		out.Sent, out.Message = true, tr(lang.EN, "link.sent", "name", name)
+		s.diaryChange(r.Context(), p, linkWords("asked", name))
 		writeJSON(w, http.StatusAccepted, out)
 		return
 	}
@@ -241,6 +243,7 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 		out.Message = tr(lang.EN, "link.they_asked", "name", out.Link.Name)
 	default:
 		out.Sent, out.Message = true, tr(lang.EN, "link.sent", "name", out.Link.Name)
+		s.diaryChange(r.Context(), p, linkWords("asked", out.Link.Name))
 	}
 	writeJSON(w, http.StatusCreated, out)
 }
@@ -255,14 +258,31 @@ func (s *Server) answerLink(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var l links.Link
 	var other uuid.UUID
+	var name string
 	shown := true
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		// Its name before the answer, for the diary line (a declined or
+		// cancelled one is no longer to be read after).
+		if before, err := links.GetTx(r.Context(), tx, id); err == nil {
+			name = before.Name
+		}
 		if other, err = links.AnswerTx(r.Context(), tx, id, answer, links.Actor{Type: p.ActorType(), ID: p.Actor()}); err != nil {
 			return err
+		}
+		if answer == links.End {
+			// Both sides are told which orders and invoices were still open
+			// between them: ending leaves those as they are.
+			if err := s.tellLinkEndedOpen(r.Context(), tx, p, id, other, name); err != nil {
+				return err
+			}
 		}
 		if l, err = links.GetTx(r.Context(), tx, id); errors.Is(err, links.ErrNotFound) {
 			// Declined, cancelled or unblocked: no longer shown.
 			shown, err = false, nil
+		}
+		if err == nil && answer == links.Accept && s.Riders.Ready() {
+			// A rider of ours whose business this is (docs/spec/chat-riders.md).
+			_, err = s.Riders.ClaimLinkedTx(r.Context(), tx, p.TenantID)
 		}
 		return err
 	}); err != nil {
@@ -270,6 +290,13 @@ func (s *Server) answerLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.tellLinkAnswered(r.Context(), other, id, answer)
+	s.claimLinkedRiders(r.Context(), other, answer)
+	if answer == links.Accept {
+		s.shopsDue(r.Context(), id, p.TenantID, other)
+	}
+	if name != "" {
+		s.diaryChange(r.Context(), p, linkWords(answer, name))
+	}
 	if !shown {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -578,6 +605,22 @@ func (s *Server) linkAnswerButtonsTx(ctx context.Context, tx pgx.Tx, l lang.Tag,
 // tellLinkAnswered tells the other side what it may know of an answer: an
 // acceptance, or the end of a link. A decline, a block or a cancel is
 // never told.
+// claimLinkedRiders names, on the other side of a link just accepted, the
+// rider whose business accepted it (docs/spec/chat-riders.md, phase 2).
+func (s *Server) claimLinkedRiders(ctx context.Context, other uuid.UUID, answer string) {
+	if answer != links.Accept || !s.Riders.Ready() {
+		return
+	}
+	s.background(ctx, "link riders", func(ctx context.Context) {
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{other}, func(tx pgx.Tx) error {
+			_, err := s.Riders.ClaimLinkedTx(ctx, tx, other)
+			return err
+		}); err != nil {
+			s.Logger.Warn("links: naming a linked rider", "tenant", other, "err", err)
+		}
+	})
+}
+
 func (s *Server) tellLinkAnswered(ctx context.Context, other, id uuid.UUID, answer string) {
 	if answer != links.Accept && answer != links.End {
 		return
@@ -737,10 +780,92 @@ func (s *Server) issueLinkAccounts(ctx context.Context, id, other uuid.UUID) {
 	}
 }
 
+// tellLinkEndedOpen writes, into both sides' conversations of a link p's
+// business has just ended, which orders and invoices were still open
+// between them (links.OpenDocsTx); nothing when none were. In English, as
+// the conversation's other lines from Taskiem are.
+func (s *Server) tellLinkEndedOpen(ctx context.Context, tx pgx.Tx, p *Principal, link, other uuid.UUID, otherName string) error {
+	open, err := links.OpenDocsTx(ctx, tx, p.TenantID, link, other)
+	if err != nil || !open.Any() {
+		return err
+	}
+	var me string
+	if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&me); err != nil {
+		return err
+	}
+	// A few of each by name, the rest counted: the line stays short.
+	some := func(id string, refs []string) string {
+		if len(refs) == 0 {
+			return ""
+		}
+		const show = 4
+		if len(refs) > show {
+			return tr(lang.EN, id+"_more", "refs", strings.Join(refs[:show], ", "), "more", strconv.Itoa(len(refs)-show))
+		}
+		return tr(lang.EN, id, "refs", strings.Join(refs, ", "))
+	}
+	var parts []string
+	for _, part := range []string{some("link.ended_open.orders", open.Orders), some("link.ended_open.invoices", open.Invoices)} {
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	list := strings.Join(parts, "; ")
+	fit := func(text string) string {
+		if r := []rune(text); len(r) > 300 {
+			return string(r[:299]) + "…"
+		}
+		return text
+	}
+	mine := fit(tr(lang.EN, "link.ended_open.mine", "name", otherName, "list", list))
+	theirs := fit(tr(lang.EN, "link.ended_open.theirs", "name", me, "list", list))
+	return links.TellEndedTx(ctx, tx, p.TenantID, link, mine, theirs, links.Sender{ID: p.Actor()})
+}
+
 // boolOrder sorts true first.
 func boolOrder(b bool) int {
 	if b {
 		return 0
 	}
 	return 1
+}
+
+// linkWords is a link's step as a diary line (chat tools phase 6): "Asked
+// Kola's Bakery to link", "Linked with Kola's Bakery".
+func linkWords(step, name string) string {
+	switch step {
+	case "asked":
+		return fmt.Sprintf("Asked %s to link", name)
+	case "accept":
+		return fmt.Sprintf("Linked with %s", name)
+	case "decline":
+		return fmt.Sprintf("Said no to linking with %s", name)
+	case "cancel":
+		return fmt.Sprintf("Took back the request to link with %s", name)
+	case "end":
+		return fmt.Sprintf("Ended the link with %s", name)
+	case "block":
+		return fmt.Sprintf("Blocked %s", name)
+	case "unblock":
+		return fmt.Sprintf("Unblocked %s", name)
+	}
+	return ""
+}
+
+// shopsDue puts a link just made active on both sides' lists to mirror:
+// each sees what the other offers it from now (its shared list, else its
+// storefront; docs/spec/business-chat-tools.md §2). The worker writes the
+// copies; a failure here is logged, and the next storefront change
+// mirrors the link anyway.
+func (s *Server) shopsDue(ctx context.Context, link uuid.UUID, sides ...uuid.UUID) {
+	for _, t := range sides {
+		if t == uuid.Nil {
+			continue
+		}
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t}, func(tx pgx.Tx) error {
+			return links.PricesDueTx(ctx, tx, t, link)
+		}); err != nil {
+			s.Logger.Warn("links: putting a new link's prices to mirror", "tenant", t, "link", link, "err", err)
+		}
+	}
 }

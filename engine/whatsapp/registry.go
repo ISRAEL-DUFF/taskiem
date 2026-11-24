@@ -230,10 +230,21 @@ func (p *Platform) record(ctx context.Context, q querier, name, metaID, status, 
 	if metaID != "" {
 		mid = &metaID
 	}
+	if !p.Own() {
+		// The platform number's rows have no tenant; tenants may read but
+		// not write them, so they are written through a definer that works
+		// only outside any tenant scope (migration 00353).
+		_, err := q.Exec(ctx, `SELECT taskiem_wa_platform_template_record($1, $2, $3, $4, $5, $6, $7)`,
+			p.WABA, name, p.Config.Language, mid, status, clip(reason, 1000), submittedAt)
+		return err
+	}
+	// An own number's row is its tenant's: the upsert never moves a row
+	// between owners (row-level security refuses another owner's row).
 	_, err := q.Exec(ctx, `INSERT INTO whatsapp_templates (waba_id, name, language, tenant_id, meta_id, status, reason, submitted_at, checked_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
-		ON CONFLICT (waba_id, name, language) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, meta_id = COALESCE(EXCLUDED.meta_id, whatsapp_templates.meta_id),
-		  status = EXCLUDED.status, reason = EXCLUDED.reason, submitted_at = COALESCE(EXCLUDED.submitted_at, whatsapp_templates.submitted_at), checked_at = now(), updated_at = now()`,
+		ON CONFLICT (waba_id, name, language) DO UPDATE SET meta_id = COALESCE(EXCLUDED.meta_id, whatsapp_templates.meta_id),
+		  status = EXCLUDED.status, reason = EXCLUDED.reason, submitted_at = COALESCE(EXCLUDED.submitted_at, whatsapp_templates.submitted_at), checked_at = now(), updated_at = now()
+		WHERE whatsapp_templates.tenant_id = EXCLUDED.tenant_id`,
 		p.WABA, name, p.Config.Language, p.tenantRef(), mid, status, clip(reason, 1000), submittedAt)
 	return err
 }

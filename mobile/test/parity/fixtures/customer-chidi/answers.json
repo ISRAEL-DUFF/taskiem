@@ -1,0 +1,85 @@
+{
+ "at": "2026-11-11T14:10:17.292Z",
+ "answers": {
+  "/v1/me": {
+   "file": "000.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/billing/status": {
+   "file": "001.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/settings/chat-tools": {
+   "file": "002.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links": {
+   "file": "003.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats/01a1caf1-bffd-7bf6-b932-a1e10d4b7bab/messages": {
+   "file": "004.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats?archived=1": {
+   "file": "018.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats/01a1caf1-bffd-7bf6-b932-a1e10d4b7bab": {
+   "file": "006.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats": {
+   "file": "019.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-settings": {
+   "file": "008.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/form-requests": {
+   "file": "009.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/notifications/count": {
+   "file": "010.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/taskiem-chat?after=*": {
+   "file": "011.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats/unread": {
+   "file": "012.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats": {
+   "file": "017.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/onboarding": {
+   "file": "015.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats/01a1caf1-bffd-7bf6-b932-a1e10d4b7bab/orders": {
+   "file": "020.json",
+   "status": 200,
+   "type": "application/json"
+  }
+ }
+}

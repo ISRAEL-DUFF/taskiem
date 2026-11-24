@@ -22,7 +22,7 @@ export function fieldsToComplete(c: ConnectorInfo | undefined): ConnectorInfo["a
   // A grant with a refresh token (Google) is complete as it is.
   if (Object.values(c.auth.oauth2.fields_from_token ?? {}).includes("refresh_token")) return [];
   const filled = new Set([...Object.keys(c.auth.oauth2.fields_from_token ?? {}), ...Object.keys(c.auth.oauth2.platform_client_fields ?? {})]);
-  return c.auth.fields.filter((f) => f.required === false && !filled.has(f.key));
+  return c.auth.fields.filter((f) => f.required === false && !filled.has(f.key) && f.generate !== "webhook_token");
 }
 
 /** Whether a step using the connector needs a connection: not for one
@@ -81,10 +81,22 @@ export function keyProblem(f: AuthField, value: string, mode = ""): string {
   return `that does not look like your ${label}: it starts with ${starts.join(" or ")}`;
 }
 
-/** Fields shown first (required) and under More options (optional). */
+/** Fields shown first (required) and under More options (optional). A
+ * field the server makes (generate: webhook_token) is never shown: nobody
+ * types it, and the server refuses one that is given. */
 export function splitFields(c: ConnectorInfo | undefined): { main: AuthField[]; more: AuthField[] } {
-  const fields = c?.auth.fields ?? [];
+  const fields = (c?.auth.fields ?? []).filter((f) => f.generate !== "webhook_token");
   return { main: fields.filter((f) => f.required !== false), more: fields.filter((f) => f.required === false) };
+}
+
+/** A webhook address carrying the token Taskiem made for a connection just
+ * saved (POST /v1/connections, webhooks): shown once, to paste into the
+ * provider's dashboard. */
+export interface ConnectionWebhook {
+  trigger: string;
+  title: string;
+  url: string;
+  where: string;
 }
 
 /**

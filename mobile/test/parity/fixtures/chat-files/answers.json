@@ -1,0 +1,110 @@
+{
+ "at": "2026-11-11T13:00:01.079Z",
+ "answers": {
+  "/v1/me": {
+   "file": "000.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/billing/status": {
+   "file": "001.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/settings/chat-tools": {
+   "file": "002.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats": {
+   "file": "003.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats?archived=1": {
+   "file": "004.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-settings": {
+   "file": "005.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links": {
+   "file": "006.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats/unread": {
+   "file": "007.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats": {
+   "file": "029.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/taskiem-chat?after=*": {
+   "file": "009.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/form-requests": {
+   "file": "010.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/notifications/count": {
+   "file": "011.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/onboarding": {
+   "file": "012.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links/01a1cab0-01b5-70d2-9e11-0bedb6b78b8f/logo": {
+   "file": "015.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/link-chats/828e255f-dc0f-4dd3-bb19-0ba2764778d3/refs": {
+   "file": "017.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/828e255f-dc0f-4dd3-bb19-0ba2764778d3/items": {
+   "file": "018.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/storefront/services": {
+   "file": "019.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/stock": {
+   "file": "020.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/828e255f-dc0f-4dd3-bb19-0ba2764778d3/messages": {
+   "file": "022.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/chat-alerts": {
+   "file": "023.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/828e255f-dc0f-4dd3-bb19-0ba2764778d3/files/01a1cab1-8692-7ada-ad37-401792c5f005": {
+   "file": "025.img",
+   "status": 200,
+   "type": "image/jpeg"
+  }
+ }
+}

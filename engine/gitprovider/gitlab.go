@@ -124,7 +124,8 @@ func (g *gitlab) Propose(ctx context.Context, branch, title, body string, files 
 }
 
 func (g *gitlab) VerifyPush(h http.Header, body []byte, secret string) (*Push, error) {
-	if subtle.ConstantTimeCompare([]byte(h.Get("X-Gitlab-Token")), []byte(secret)) != 1 {
+	// An empty secret would equal an absent header: it verifies nothing.
+	if secret == "" || subtle.ConstantTimeCompare([]byte(h.Get("X-Gitlab-Token")), []byte(secret)) != 1 {
 		return nil, ErrSignature
 	}
 	if h.Get("X-Gitlab-Event") != "Push Hook" {
@@ -134,6 +135,15 @@ func (g *gitlab) VerifyPush(h http.Header, body []byte, secret string) (*Push, e
 		Ref         string `json:"ref"`
 		After       string `json:"after"`
 		CheckoutSHA string `json:"checkout_sha"`
+		Before      string `json:"before"`
+		UserEmail   string `json:"user_email"`
+		Username    string `json:"user_username"`
+		Total       int    `json:"total_commits_count"`
+		Commits     []struct {
+			Author struct {
+				Email string `json:"email"`
+			} `json:"author"`
+		} `json:"commits"`
 	}
 	if err := json.Unmarshal(body, &p); err != nil {
 		return nil, err
@@ -145,5 +155,16 @@ func (g *gitlab) VerifyPush(h http.Header, body []byte, secret string) (*Push, e
 	if commit == "" {
 		commit = p.After
 	}
-	return &Push{Branch: strings.TrimPrefix(p.Ref, "refs/heads/"), Commit: commit}, nil
+	out := &Push{Branch: strings.TrimPrefix(p.Ref, "refs/heads/"), Commit: commit}
+	if !zeroCommit(p.Before) {
+		out.Before = p.Before
+	}
+	out.People = addPerson(out.People, "pusher", p.UserEmail, p.Username)
+	for _, c := range p.Commits {
+		out.People = addPerson(out.People, "author", c.Author.Email, "")
+	}
+	// GitLab lists only the newest commits of a large push, and does not
+	// say whether a push was forced; the count tells a cut list.
+	out.Complete = len(p.Commits) > 0 && p.Total == len(p.Commits)
+	return out, nil
 }

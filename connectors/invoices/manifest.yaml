@@ -218,7 +218,7 @@ actions:
       phone. found is false for a number with none. For a customer
       assistant: the number comes from the trigger (trigger.guard.sender),
       never from what the customer or a model says, so it only ever tells
-      a person their own invoices (decision 0062 D4).
+      a person their own invoices (decision 0074 D4).
     class: read
     input:
       type: object

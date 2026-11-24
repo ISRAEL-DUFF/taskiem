@@ -24,7 +24,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
-// The readers of what a business's assistant knows (decision 0062 D12,
+// The readers of what a business's assistant knows (decision 0074 D12,
 // docs/knowledge.md): each kind of knowledge source read as titled text.
 // Personal data is kept out: a data table's personal columns (and its
 // phone and email columns) are never read; a sheet's columns headed as

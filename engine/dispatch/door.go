@@ -181,6 +181,21 @@ func (d *Dispatch) remitTx(ctx context.Context, tx pgx.Tx, tenant, rider uuid.UU
 		}
 		entry = &id
 	}
+	if entry != nil {
+		// The entry is used up as an invoice's or an order's part uses it
+		// (taskiem_money_entry_counted counts rider parts): it must have
+		// that much left, checked under its lock.
+		if _, err := tx.Exec(ctx, moneylog.EntryLockSQL, *entry); err != nil {
+			return 0, err
+		}
+		why, err := moneylog.EntryHas(ctx, tx, tenant, *entry, amount)
+		if err != nil {
+			return 0, err
+		}
+		if why != "" {
+			return 0, fmt.Errorf("%w: %s", ErrInvalid, why)
+		}
+	}
 	rows, err := tx.Query(ctx, `SELECT id, amount_kobo - paid_kobo FROM rider_remittances WHERE tenant_id = $1 AND rider_id = $2 AND settled_at IS NULL
 		ORDER BY created_at FOR UPDATE`, tenant, rider)
 	if err != nil {
@@ -252,6 +267,16 @@ func (d *Dispatch) MatchRemittances(ctx context.Context, tx pgx.Tx, tenant uuid.
 	}
 	n := 0
 	for _, h := range hits {
+		// What is left of the transfer, under the lock every count of an
+		// entry takes: a counter sale may have taken it, or part of it.
+		if _, err := tx.Exec(ctx, moneylog.EntryLockSQL, h.entry); err != nil {
+			return n, err
+		}
+		if left, ok, err := moneylog.EntryLeft(ctx, tx, h.entry); err != nil {
+			return n, err
+		} else if ok {
+			h.amount = min(h.amount, left)
+		}
 		var owed int64
 		if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(amount_kobo - paid_kobo), 0) FROM rider_remittances WHERE tenant_id = $1 AND rider_id = $2 AND settled_at IS NULL`,
 			tenant, h.rider).Scan(&owed); err != nil {

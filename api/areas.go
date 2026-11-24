@@ -35,6 +35,9 @@ var areaPaths = []struct {
 }{
 	{"/v1/storefront/orders", areas.Orders},
 	{"/v1/trade-orders", areas.Orders},
+	{"/v1/customer-chats", areas.Orders},
+	{"/v1/customers", areas.Orders}, // the chat link customers start conversations from (customer_links.go)
+	{"/v1/order-drafts", areas.Orders},
 
 	{"/v1/storefront", areas.Storefront},
 	{"/v1/riders", areas.Storefront},
@@ -45,6 +48,7 @@ var areaPaths = []struct {
 	{"/v1/price-lists", areas.Stock},
 	{"/v1/link-prices", areas.Stock},
 	{"/v1/supplier-prices", areas.Stock},
+	{"/v1/trade-floors", areas.Stock}, // a product's lowest price for deals, beside its price lists
 	{"/v1/item-links", areas.Stock},
 
 	{"/v1/invoices", areas.Money},
@@ -56,6 +60,8 @@ var areaPaths = []struct {
 	{"/v1/links", areas.Links},
 	{"/v1/link-settings", areas.Links},
 	{"/v1/link-chats", areas.Links},
+	{"/v1/business-profile", areas.Links},
+	{"/v1/explore", areas.Links},
 }
 
 // areaOfPath names the area a request path belongs to, if any.
@@ -168,13 +174,14 @@ func (s *Server) putAreas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var affected []areas.UsedBy
-	var after areas.State
+	var before, after areas.State
 	err := s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		if err := lockAreas(ctx, tx, p.TenantID); err != nil {
 			return err
 		}
-		before, err := areas.Load(ctx, tx, p.TenantID)
+		var err error
+		before, err = areas.Load(ctx, tx, p.TenantID)
 		if err != nil {
 			return err
 		}
@@ -229,7 +236,10 @@ func (s *Server) putAreas(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 		}
-		return auditTx(r, tx, "settings.areas", p.TenantID.String(), map[string]any{"changes": changes})
+		if err := auditTx(r, tx, "settings.areas", p.TenantID.String(), map[string]any{"changes": changes}); err != nil {
+			return err
+		}
+		return followKindTx(r, tx, p.TenantID, after)
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -241,6 +251,11 @@ func (s *Server) putAreas(w http.ResponseWriter, r *http.Request) {
 			"affected": affected,
 		})
 		return
+	}
+	// Customer chats are part of Orders: the shop's Chat with us follows it
+	// (taskiem-for-everyone §8.2), published again from the page as it is.
+	if before.On(areas.Orders) != after.On(areas.Orders) {
+		s.republishForChat(r)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"areas": areaRows(after)})
 }
@@ -277,24 +292,26 @@ func schoolsNeedMoney(r *http.Request, tx pgx.Tx, p *Principal) error {
 }
 
 // chatAreas says which parts of Taskiem the business behind a chat uses,
-// read once for a message. A read that fails shows everything: the
-// handlers behind it still refuse what is off.
+// read once for a message. A read that fails shows nothing: the chat's
+// handlers act on the business's stock, shop and money themselves, with
+// no gate behind them, so what cannot be known to be on is treated as
+// off for this message, and the failure is logged. The next message reads
+// again. A chat with no business yet has nothing turned off.
 func (s *Server) chatAreas(ctx context.Context, c *chat) areas.State {
 	if c.areaState != nil {
 		return c.areaState
 	}
 	st := areas.State{}
-	for _, a := range areas.All {
-		st[a] = true
-	}
-	if c.tenant.ID != uuid.Nil {
-		var loaded areas.State
-		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) (err error) {
-			loaded, err = areas.Load(ctx, tx, c.tenant.ID)
-			return err
-		}); err == nil {
-			st = loaded
+	if c.tenant.ID == uuid.Nil {
+		for _, a := range areas.All {
+			st[a] = true
 		}
+	} else if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) (err error) {
+		st, err = areas.Load(ctx, tx, c.tenant.ID)
+		return err
+	}); err != nil {
+		s.Logger.Warn("chat: reading what the business uses; its parts are taken as off for this message", "tenant", c.tenant.ID, "err", err)
+		st = areas.State{}
 	}
 	c.areaState = st
 	return st
@@ -350,4 +367,22 @@ func (s *Server) templatesOfAreasOn(ctx context.Context, tenant uuid.UUID, list 
 		}
 	}
 	return kept
+}
+
+// followKindTx keeps what the tenant is in step with its areas
+// (taskiem-for-everyone §18.2): any area on makes a workflows workspace a
+// business; every area off makes a business a workflows workspace. Nothing
+// else changes, and the change is audited.
+func followKindTx(r *http.Request, tx pgx.Tx, tenant uuid.UUID, st areas.State) error {
+	kind := areas.TenantKind(st)
+	var was string
+	err := tx.QueryRow(r.Context(), `UPDATE tenants t SET kind = $2 FROM (SELECT kind FROM tenants WHERE id = $1 FOR UPDATE) old
+		WHERE t.id = $1 AND t.kind <> $2 RETURNING old.kind`, tenant, kind).Scan(&was)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return auditTx(r, tx, "tenant.kind", tenant.String(), map[string]any{"from": was, "to": kind})
 }

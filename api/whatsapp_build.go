@@ -125,7 +125,7 @@ func (s *Server) waStartBuild(ctx context.Context, c *chat, goal string) error {
 	if !s.limiter("wa-build:"+c.addr, 20*time.Second, 3).Allow() || !s.limiter("ai-build:"+c.tenant.ID.String(), 20*time.Second, 5).Allow() {
 		return c.say(ctx, s, c.t("wa.build.too_many"))
 	}
-	who := aiActor{tenant: c.tenant.ID, actor: c.p.Actor(), actorType: c.p.ActorType(), ip: c.ch.Name()}
+	who := aiActor{tenant: c.tenant.ID, actor: c.p.Actor(), actorType: c.p.ActorType(), ip: c.ch.Name(), user: c.p.UserID}
 	ch, wa, addr, tenant, user := c.ch, c.wa, c.addr, c.tenant, c.p.UserID
 	ready := make(chan struct{})
 	req := aiBuildReq{Goal: goal}

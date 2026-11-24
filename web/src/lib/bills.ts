@@ -3,6 +3,7 @@
 // reads in a row and on its page.
 
 import { naira, type InvoiceLine } from "./invoices";
+import type { BillTransfer } from "./paybytransfer";
 
 export type BillStatus = "open" | "paying" | "part_paid" | "paid" | "disputed" | "void";
 
@@ -13,7 +14,9 @@ export interface Bill {
   supplier_name: string;
   /** The supplier's invoice number. */
   reference: string;
-  lines: InvoiceLine[];
+  /** A line raised from our order's line carries their item and our order
+   * (what a business buys §8): its label and treatment are that line's. */
+  lines: (InvoiceLine & { seller_item_id?: string; purchase_id?: string })[];
   amount_kobo: number;
   /** What the supplier's match has counted paid. */
   paid_kobo: number;
@@ -27,11 +30,17 @@ export interface Bill {
   /** A payment from Taskiem under way, and what the bank confirmed was sent. */
   paying_kobo: number;
   sent_kobo: number;
+  /** Of what was sent, what the supplier has not counted yet: not due again. */
+  uncounted_kobo: number;
   /** The account number the supplier issued this business, and its bank. */
   pay_account_number?: string;
   pay_bank_name?: string;
   /** The supplier's invoice page: a card or a transfer. */
   pay_link?: string;
+  /** How it can be paid now: transfer, taskiem, checkout, in that order. */
+  ways_to_pay?: string[];
+  /** Its account number for paying by transfer (those who may pay bills only). */
+  transfer?: BillTransfer | null;
   mirrored_at: string;
   created_at: string;
 }

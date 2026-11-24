@@ -84,7 +84,7 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 			"auth": map[string]any{"spf": "pass", "dkim": []any{"example.com"}, "dmarc": "", "aligned": true}}
 	}
 	if g, ok := def.Trigger.Config["guard"]; ok && def.Trigger.Type == "connector_event" && g != false && g != nil {
-		// A customer's message the guard lets through (decision 0062 V6):
+		// A customer's message the guard lets through (decision 0074 V6):
 		// trigger.guard as a guarded run gets it.
 		conn, _ := def.Trigger.Config["connector"].(string)
 		name, _ := def.Trigger.Config["connection"].(string)
@@ -236,7 +236,7 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 				answers := map[string]any{}
 				if st.Form != nil {
 					// Through JSON, so numbers are float64 as sample reads them.
-					raw, _ := json.Marshal(st.Form.Schema)
+					raw, _ := json.Marshal(wd.AnswerSchema(st.Form.Schema))
 					if a, ok := sample(rawAny(raw), types, nil, 0).(map[string]any); ok {
 						answers = a
 					}

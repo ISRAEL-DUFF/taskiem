@@ -3,6 +3,7 @@
 // /v1/supplier-prices, /v1/item-links): the API's shapes and how a price
 // reads.
 
+import { breakWords, type Break } from "./deals";
 import { formatPrice } from "./storefront";
 
 export interface PriceItem {
@@ -10,11 +11,39 @@ export interface PriceItem {
   item_id: string;
   name: string;
   unit?: string;
+  /** The seller's category for it ("Sneakers"). */
+  category?: string;
+  /** The seller's words for it (its storefront description), for search. */
+  description?: string;
   price_kobo: number;
   min_quantity: number;
   available: boolean;
   /** This buyer's own price, not the list's (the seller's view). */
   overridden?: boolean;
+  /** Lower prices from a quantity up (none on a buyer's own price). */
+  breaks?: Break[];
+  /** A product sold in sizes and colours, listed once: its choices and its
+   * sizes on sale, each ordered on its own item, at the product's price
+   * unless it has its own; breaks and the minimum count them together. */
+  choices?: { name: string; values: string[] }[];
+  sizes?: PriceSize[];
+  /** On a linked business's storefront: its photo's addresses by width,
+   * shown through GET /v1/link-chats/{link}/photo, and how many are left
+   * where the storefront counts them. */
+  photo?: Record<string, string>;
+  left?: number;
+}
+
+export interface PriceSize {
+  item_id: string;
+  /** Written out in full: "Air Max 90 – 42, Black". */
+  name: string;
+  variant: Record<string, string>;
+  /** Its own price on the list; absent, the product's. */
+  price_kobo?: number;
+  available: boolean;
+  /** How many of this size are left, on a linked business's storefront. */
+  left?: number;
 }
 
 export interface PriceList {
@@ -34,19 +63,45 @@ export interface SupplierPrices {
   updated_at: string;
 }
 
+/** What the business remembers of a linked supplier's item (what a
+ * business buys §6): how it is treated when ordered. */
 export interface ItemLink {
-  link: string;
-  item_id: string;
+  link_id: string;
   seller_item_id: string;
-  seller_item: string;
+  /** The supplier's name for it. */
+  name: string;
+  treatment: "record" | "stock" | "track";
+  /** For stock: the stock item it goes into, and its name. */
+  stock_item_id?: string;
+  stock_item?: string;
+  uses: number;
+  label_id?: string;
+  label?: string;
+  updated_by: string;
+  updated_at: string;
+}
+
+/** Which of our own items (a product, or a material) a remembered item
+ * goes into: the first counted by its stock item. */
+export function ownLinked<T extends { id: string; stock_item_id?: string }>(
+  links: ItemLink[] | undefined,
+  sellerItem: string,
+  own: T[] | undefined,
+): string | undefined {
+  const l = links?.find((x) => x.seller_item_id === sellerItem);
+  if (!l?.stock_item_id) return undefined;
+  return own?.find((x) => x.stock_item_id === l.stock_item_id)?.id;
 }
 
 /** A price as a buyer reads it: "₦45,000 a bag · at least 5". */
 export function priceWords(
-  it: Pick<PriceItem, "price_kobo" | "unit" | "min_quantity" | "available">,
+  it: Pick<PriceItem, "price_kobo" | "unit" | "min_quantity" | "available"> & {
+    breaks?: Break[];
+  },
 ): string {
   const parts = [formatPrice(it.price_kobo) + (it.unit ? ` a ${it.unit}` : "")];
   if (it.min_quantity > 1) parts.push(`at least ${it.min_quantity}`);
+  if (it.breaks?.length) parts.push(breakWords(it));
   if (!it.available) parts.push("not available now");
   return parts.join(" · ");
 }
@@ -60,4 +115,77 @@ export function lineProblem(it: PriceItem, quantity: string): string {
   if (!it.available) return "not available now";
   if (Number(q) < it.min_quantity) return `at least ${it.min_quantity}`;
   return "";
+}
+
+/** The price list a product's form shows (the DeskSeller board): the one
+ * shared with the business whose conversation it was opened from, the one
+ * that holds the product, else the first. */
+export function listFor(
+  lists: PriceList[],
+  itemId: string,
+  link?: string,
+): PriceList | undefined {
+  const holds = (l: PriceList) => l.items.some((x) => x.item_id === itemId);
+  const shared = (l: PriceList) => !!link && l.links.includes(link);
+  return (
+    lists.find((l) => shared(l) && holds(l)) ??
+    lists.find(shared) ??
+    lists.find(holds) ??
+    lists[0]
+  );
+}
+
+/** A list's items as PUT /v1/price-lists/{id}/items takes them, with one
+ * product at a new price (added, at least 1 and on sale, if it was not
+ * there). */
+export function itemsWithPrice(
+  list: PriceList,
+  itemId: string,
+  kobo: number,
+): {
+  item_id: string;
+  price_kobo: number;
+  min_quantity: number;
+  available: boolean;
+  breaks?: Break[];
+  sizes?: { item_id: string; price_kobo: number }[];
+}[] {
+  const out: ReturnType<typeof itemsWithPrice> = list.items.map((x) => ({
+    item_id: x.item_id,
+    price_kobo: x.item_id === itemId ? kobo : x.price_kobo,
+    min_quantity: x.min_quantity,
+    available: x.available,
+    // Breaks stay while still under the new price.
+    breaks:
+      x.item_id === itemId
+        ? x.breaks?.filter((b) => b.price_kobo < kobo)
+        : x.breaks,
+    ...ownSizePrices(x),
+  }));
+  if (!list.items.some((x) => x.item_id === itemId))
+    out.push({ item_id: itemId, price_kobo: kobo, min_quantity: 1, available: true });
+  return out;
+}
+
+/** "Rivers Foods Ltd, Mama Ngozi Stores", or that it is shared with no one. */
+export function sharedWords(ids: string[], names: Map<string, string>): string {
+  const shown = ids.map((id) => names.get(id)).filter((n): n is string => !!n);
+  return shown.length ? shown.join(", ") : "No one yet";
+}
+
+/** A list as a label: "Trade price list", but "Trade prices" and "VIP
+ * price list" as they are (the word is not said twice). */
+export function listLabel(name: string): string {
+  return /\bprices?\b|\bprice list\b/i.test(name) ? name : `${name} price list`;
+}
+
+/** A listed product's sizes with a price of their own, as the API takes
+ * them back: kept when the list is saved again. */
+export function ownSizePrices(
+  it: PriceItem,
+): { sizes?: { item_id: string; price_kobo: number }[] } {
+  const own = (it.sizes ?? []).filter((z) => (z.price_kobo ?? 0) > 0);
+  return own.length
+    ? { sizes: own.map((z) => ({ item_id: z.item_id, price_kobo: z.price_kobo ?? 0 })) }
+    : {};
 }

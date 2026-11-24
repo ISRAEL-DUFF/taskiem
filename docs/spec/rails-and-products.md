@@ -144,7 +144,7 @@ Each capability has one input and one output shape, defined by Taskiem in `schem
 | `collect_push` | `amount_kobo`, `currency`, `msisdn`, `description` | `payment_id`, `status` | idempotent or reconcilable |
 | `get_payment` | `payment_id` (as `collect_link` answered it, or as a payment event carried it) | `status` (`paid` \| `pending` \| `failed` \| `refunded`), `amount_kobo`, `currency`, `paid_at` | read |
 | `virtual_account` | `customer {name, email, phone, bvn}` | `account_number`, `bank_name`, `account_name`, `reference` (what `virtual_account.credited` carries) | idempotent preferred; unsafe allowed and declared |
-| `customer_balance` | `account` (the customer's own wallet or account at the rail), `currency` (default NGN) | `available_kobo`, `currency` | read. iswallet (a customer wallet), Mono (a customer's linked bank account); [decision 0062](../decisions/0062-customer-assistant.md) V9 |
+| `customer_balance` | `account` (the customer's own wallet or account at the rail), `currency` (default NGN) | `available_kobo`, `currency` | read. iswallet (a customer wallet), Mono (a customer's linked bank account); [decision 0074](../decisions/0074-customer-assistant.md) V9 |
 | `customer_transactions` | `account`, `since` (RFC 3339) | `transactions[] {at, direction (in \| out), amount_kobo, narration}`, `truncated` | read. iswallet, Mono (its newest 50, those since `since`) |
 | `refund` | `payment_id`, `amount_kobo` (optional: partial), `reason` | `refund_id`, `status` (`refunded` \| `pending` \| `failed`), `amount_kobo` | idempotent or reconcilable |
 
@@ -302,7 +302,7 @@ What each rail's `capabilities` block will declare in R1 (✓), declare later (l
 
 - Flutterwave has no action that creates a payment; `collect_link` needs Flutterwave Standard's payment link endpoint added.
 - Remita and Interswitch send no payout events; settlement is by lookup (§4.5).
-- Paystack's `transfer` can answer `otp` when the business has OTP on transfers turned on; the capability maps it to `failed` with reason `otp_enabled` and the connection check warns: *"Turn off OTP for transfers in your Paystack dashboard so Taskiem can pay."*
+- Paystack's `transfer` can answer `otp` when the business has OTP on transfers turned on; the capability maps it to `pending` with reason `otp_enabled` (a transfer waiting for a code is not a failed one, and reporting it failed would have it paid again) and the connection check warns: *"Turn off OTP for transfers in your Paystack dashboard so Taskiem can pay."*
 
 ---
 
@@ -311,6 +311,8 @@ What each rail's `capabilities` block will declare in R1 (✓), declare later (l
 Every template here is written once with capability steps, tested on every rail that declares its capabilities (§10), and plain enough for the no-technical-steps rule: no ids, kobo or expressions for the owner to type.
 
 ### 5.1 Run payroll
+
+**Deleted 22 November 2026:** payroll in Taskiem is Payrolla's ([decision 0044](../decisions/0044-rails-and-products.md), its note). Kept below as the record of what was built.
 
 The dogfood flow, rebuilt for any business and any rail. File: `templates/library/run-payroll.json` (flow code: `templates/library/run-payroll.flow.ts` if the library takes flow code by then).
 
@@ -524,7 +526,7 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 **Built** (first pull request): the capability set, rule 16 and its validation, the conformance suite (`conntest.RunCapabilities`, cases in `connectors/<rail>/testdata/capabilities/`), the SDK's capability types (`Capability<Name>Input`, `Capability<Name>Output`, `CAPABILITY_RAILS`), and the blocks for Paystack, iswallet, Moniepoint, Flutterwave and Anchor as §4.7 lists them, with these differences found on the way:
 
 - iswallet does not declare `list_banks`: its bank list's fields are not documented, so the mapping cannot be checked.
-- Paystack's OTP case is mapped (`failed`, reason `otp_enabled`), but the connection check's warning is not built: Paystack has no endpoint that says whether OTP is on.
+- Paystack's OTP case is mapped (`pending`, reason `otp_enabled`), but the connection check's warning is not built: Paystack has no endpoint that says whether OTP is on.
 - Moniepoint's two-factor transfers answer `pending` with reason `needs_otp`; Flutterwave's transfers waiting for approval in its dashboard answer `pending` with reason `needs_approval`.
 - A payout Paystack does not know is a `not_found` error from `get_payout`, not a status.
 
@@ -551,6 +553,8 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 - In a composite, an earlier call (Paystack's recipient) handles its failure with a copy of the step's `on_error`, its steps renamed `<id>__<name>` and reading that call's error; a `foreach` then reports the failure under the call's id (`pay__recipient`).
 
 ### R3: Run payroll (M)
+
+**Deleted 22 November 2026** (see §5.1).
 
 **Problem.** Taskiem's best payroll code is wired to one partner's payload and one rail.
 
@@ -605,6 +609,8 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 - **The embed launch token waits for R6**, where the view that uses it is built.
 
 ### R6: App views (L; needs R0-3)
+
+**Not to be built for Payrolla (22 November 2026):** Taskiem runs payroll in its own screens over Payrolla's API rather than embedding Payrolla's ([the request](../integrations/payrolla-api-requests.md); build plan P4). What follows stays as written for other products.
 
 **Build:** the `views` manifest block and rule 17; the per-tenant `frame-src` (§6.3); the view panel on the connection page, "Open in …" on run pages and the approval inbox, the `view` step or action field; postMessage handling (declared origins and events only, able to complete a waiting step); the new-tab fallback; chat links; Payrolla's views.
 

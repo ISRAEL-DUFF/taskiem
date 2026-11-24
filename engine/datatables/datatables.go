@@ -58,6 +58,15 @@ const (
 	RenewBefore = 14 * 24 * time.Hour
 	// RenewEvery is how often the renewal job runs.
 	RenewEvery = 6 * time.Hour
+	// RenewedDays is how long a renewed token lasts. Xenibase documents no
+	// way to revoke an API token, so the token a renewal replaces works
+	// until its own expiry, and a token minted and then not stored (the
+	// vault write failed) cannot be withdrawn. A renewed token therefore
+	// lasts only what renewal needs: RenewBefore, in which a failing
+	// renewal is retried and its alert acted on, and a month of use. A
+	// leaked token is then good for at most this long, and a replaced one
+	// for RenewBefore.
+	RenewedDays = 45
 	// callTimeout bounds one management API call.
 	callTimeout = 20 * time.Second
 )
@@ -478,7 +487,7 @@ type Table struct {
 	// sweep deletes them; nil keeps them until deleted.
 	KeepDays *int `json:"keep_days,omitempty"`
 	// KeepWithConversations keeps rows as long as the business keeps its
-	// conversations with customers (conversation_days, decision 0062 V5):
+	// conversations with customers (conversation_days, decision 0074 V5):
 	// the conversations table's memory goes with its runs and files.
 	KeepWithConversations bool `json:"keep_with_conversations,omitempty"`
 }

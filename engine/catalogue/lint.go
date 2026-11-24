@@ -186,6 +186,9 @@ func Lint(raw []byte, opt LintOptions) (*connector.Manifest, []Finding) {
 			add("error", p+"/pii", "%q holds personal data: declare it under pii so Taskiem seals it in run history", f)
 		}
 	}
+	for _, use := range m.PlatformAppUses() {
+		add("error", "/"+strings.NewReplacer(".", "/", "[", "/", "]", "").Replace(use), "Taskiem's own OAuth apps are for its built-in connectors: a connector here cannot name one, or copy its id or secret into a connection")
+	}
 	for name, t := range m.Triggers {
 		if t.Verify == nil || t.Verify.Scheme == "none" {
 			add("error", "/triggers/"+name+"/verify", "a trigger must verify its deliveries with a signature or secret scheme")

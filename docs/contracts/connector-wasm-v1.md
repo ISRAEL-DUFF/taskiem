@@ -1,6 +1,6 @@
 # Contract: WebAssembly connector ABI `taskiem-connector/v1`
 
-A tenant's own connector is a [connector/v1 manifest](connector-v1.md) and a WebAssembly module that implements its actions (spec 6). The engine (`engine/wasmconn`, on wazero) runs every call in a fresh instance: memory capped, the call's deadline enforced, no filesystem, no environment, and no network except through the host function below. Go authors use [`sdk/connectorsdk`](../connector-sdk.md), which implements this ABI; the contract is here for other languages.
+A tenant's own connector is a [connector/v1 manifest](connector-v1.md) and a WebAssembly module that implements its actions (spec 6). The engine (`engine/wasmconn`, on wazero) runs every call in a fresh instance: memory capped, the call's deadline enforced (at most 30 seconds, also when the caller sets none, such as the poller), no filesystem, no environment, and no network except through the host function below. Go authors use [`sdk/connectorsdk`](../connector-sdk.md), which implements this ABI; the contract is here for other languages.
 
 ## Module
 
@@ -55,7 +55,7 @@ Messages are masked for personal data before they are recorded.
 | `input_read` | `(ptr: i32)` | Copies the request JSON to `ptr` |
 | `http_request` | `(ptr: i32, len: i32) -> i32` | Sends the request JSON at `ptr`; returns the length of the response JSON |
 | `http_response_read` | `(ptr: i32)` | Copies the last response JSON to `ptr` |
-| `log` | `(ptr: i32, len: i32)` | Appends a line to the step's log (masked; 16 KiB per call). Standard output and error go there too |
+| `log` | `(ptr: i32, len: i32)` | Appends a line to the step's log (personal data masked and the call's secret values, the connection's secret fields and the step's secrets, replaced with `[secret]`; a line is cut at 2 KiB, and a call keeps 100 lines and 16 KiB in all). Standard output and error go there too |
 
 The host never calls into the module while a host function runs.
 

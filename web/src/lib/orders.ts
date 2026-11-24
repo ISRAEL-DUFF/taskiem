@@ -106,7 +106,11 @@ export interface Order {
   reference: string;
   /** The front the submission came from (fronts F3). */
   front_id?: string;
-  kind: FormKind | "trade";
+  kind: FormKind | "trade" | "app";
+  /** Made by a person in the Taskiem app (an app order, a booking made
+   * there, or an order confirmed in their app conversation): "Write to
+   * them in the app" answers for it. */
+  in_app?: boolean;
   status: OrderStatus;
   customer: Customer;
   basket: OrderLine[] | null;
@@ -285,7 +289,7 @@ export interface ActionForm {
   payOnDelivery: boolean;
   /** The delivery areas as typed: a name and a fee in naira. */
   zones: { name: string; fee: string }[];
-  /** A booking's deposit in per cent; blank is the full price. */
+  /** A booking's or an order's deposit in per cent; blank is the full price. */
   deposit: string;
   /** Whether a customer cancelling a paid booking keeps their deposit back. */
   keepDeposit: boolean;
@@ -359,6 +363,15 @@ export function actionRequest(kind: FormKind, f: ActionForm): ActionRequest {
   const zones = zoneList(f.zones);
   if (f.delivery && zones.length > 0) options.zones = zones;
   if (f.delivery && f.payOnDelivery) options.pay_on_delivery = true;
+  const deposit = Number(f.deposit.trim());
+  if (
+    f.payment !== "none" &&
+    f.deposit.trim() &&
+    Number.isInteger(deposit) &&
+    deposit >= 1 &&
+    deposit <= 99
+  )
+    options.deposit_percent = deposit;
   return {
     enabled: f.enabled,
     label: f.label.trim(),
@@ -383,7 +396,7 @@ export function actionProblem(kind: FormKind, f: ActionForm): string | null {
     if (z) return z;
   }
   if (
-    kind === "booking" &&
+    (kind === "booking" || kind === "order") &&
     f.payment !== "none" &&
     f.deposit.trim() &&
     !/^(100|[1-9][0-9]?)$/.test(f.deposit.trim())
@@ -502,12 +515,13 @@ export function ordersPath(filter: string, front = ""): string {
   return qs ? `/v1/storefront/orders?${qs}` : "/v1/storefront/orders";
 }
 
-export const KIND_LABEL: Record<FormKind | "trade", string> = {
+export const KIND_LABEL: Record<FormKind | "trade" | "app", string> = {
   order: "Order",
   enquiry: "Question",
   callback: "Call-back",
   booking: "Booking",
   trade: "From a linked business",
+  app: "Order in the app",
   hire: "Hire",
   space: "Space booking",
   tickets: "Tickets",
@@ -569,7 +583,7 @@ export function orderWhat(
 export function orderTotal(o: Pick<Order, "kind" | "total_kobo">): string {
   if (o.kind === "booking")
     return o.total_kobo > 0 ? formatPrice(o.total_kobo) : "Price on the day";
-  return o.kind === "order" ? formatPrice(o.total_kobo) : "—";
+  return o.kind === "order" || o.kind === "app" ? formatPrice(o.total_kobo) : "—";
 }
 
 /** The line a price_changed order carries: the new total, and what is no longer offered. */
@@ -595,7 +609,7 @@ export function paymentSummary(
       : "";
     return `${when}${deposit} · ${o.paid_at ? "paid" : "not paid"}`;
   }
-  if (o.kind === "order" && o.payment === "on_delivery") return `Pays at the door · ${o.paid_at ? "paid" : "not paid"}`;
+  if ((o.kind === "order" || o.kind === "app") && o.payment === "on_delivery") return `Pays at the door · ${o.paid_at ? "paid" : "not paid"}`;
   if (o.kind !== "order" || o.payment === "none") return "No online payment";
   const when =
     o.payment === "at_order" ? "Pays when ordering" : "Pays after you accept";

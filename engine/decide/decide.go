@@ -49,17 +49,23 @@ func Decide(def *wd.Definition, h []history.Event) ([]NewEvent, error) {
 
 // facts are what the history says about one step instance.
 type facts struct {
-	scheduled     map[int]history.ScheduledPayload // by attempt
-	firstSchedAt  time.Time
-	lastAttempt   int
-	outcome       map[int]string // attempt -> StepCompleted | StepFailed
-	failures      map[int]history.Error
-	retries       map[int]bool // attempt -> RetryScheduled for it
-	completed     bool
-	output        any
-	skipped       bool
-	cancelled     bool
-	intents       map[int]bool // attempts that recorded EffectIntent
+	scheduled    map[int]history.ScheduledPayload // by attempt
+	firstSchedAt time.Time
+	lastAttempt  int
+	outcome      map[int]string // attempt -> StepCompleted | StepFailed
+	failures     map[int]history.Error
+	retries      map[int]bool // attempt -> RetryScheduled for it
+	completed    bool
+	output       any
+	skipped      bool
+	cancelled    bool
+	intents      map[int]bool // attempts that recorded EffectIntent
+	// exposed: a write of this step may have taken effect at the provider
+	// and nothing has yet said whether it did. Set by a failure that may
+	// have been applied, or that asks for a reconcile; cleared when the
+	// worker moves to a new key (group) or a failure settles it.
+	exposed       bool
+	group         int // highest attempt group an intent was recorded for
 	control       *history.ControlStartedPayload
 	winner        string
 	timerFired    []timerFact
@@ -86,6 +92,7 @@ type decider struct {
 	started               history.RunStartedPayload
 	trigger               any
 	env                   map[string]any
+	saved                 map[string]any
 	runInfo               map[string]any
 	policies              map[string]snapshot
 	terminal              bool
@@ -93,6 +100,17 @@ type decider struct {
 	cancel                *history.CancelPayload // a person cancelled the run, reversing it
 	compStarted, compDone bool
 	out                   []NewEvent
+	// fault is the first event this pass could not record (a payload that
+	// cannot be written as JSON, or one that does not apply). It is not
+	// possible for the engine's own types; if it happens the decision is
+	// an error, not a crash: nothing it decided is recorded.
+	fault error
+
+	// stopping is set while decide looks again at steps that will start
+	// nothing more: those of a failing scope, or of a run that timed out.
+	// A retry that was due there is not scheduled; the step is given up,
+	// or, if an attempt may have taken effect, settled (taskProgress).
+	stopping bool
 
 	memo map[string]status
 }
@@ -135,6 +153,10 @@ func (d *decider) apply(typ, inst string, attempt int, raw json.RawMessage, seq 
 		d.env, _ = m["env"].(map[string]any)
 		if d.env == nil {
 			d.env = map[string]any{}
+		}
+		d.saved, _ = m["saved"].(map[string]any)
+		if d.saved == nil {
+			d.saved = map[string]any{}
 		}
 		d.runInfo, _ = m["run"].(map[string]any)
 		d.policies = map[string]snapshot{}
@@ -204,6 +226,12 @@ func (d *decider) apply(typ, inst string, attempt int, raw json.RawMessage, seq 
 		}
 	case history.EffectIntent:
 		f.intents[attempt] = true
+		// A new key is sent only once the one before is known not to have
+		// taken effect (a reconcile found nothing, or an operator said so).
+		var p history.IntentPayload
+		if json.Unmarshal(raw, &p) == nil && p.AttemptGroup > f.group {
+			f.group, f.exposed = p.AttemptGroup, false
+		}
 	case history.StepCancelled:
 		f.cancelled = true
 	case history.StepCompleted:
@@ -229,7 +257,17 @@ func (d *decider) apply(typ, inst string, attempt int, raw json.RawMessage, seq 
 		}
 		f.outcome[attempt] = typ
 		f.failures[attempt] = p.Error
-		if p.Error.Next == "fail" {
+		switch {
+		case p.Error.MaybeApplied || p.Error.Next == "reconcile":
+			f.exposed = true
+		case p.Error.Next == "fail" && p.Error.Settles():
+			f.exposed = false
+		}
+		// A failure for good is the step's last word, unless an earlier
+		// attempt may have taken effect and this failure does not say what
+		// became of it (a 4xx after a timeout): taskProgress then parks the
+		// step for an operator instead.
+		if p.Error.Next == "fail" && !f.exposed {
 			e := p.Error
 			f.finalFailure = &e
 		}
@@ -274,16 +312,20 @@ func (d *decider) apply(typ, inst string, attempt int, raw json.RawMessage, seq 
 
 // emit records a new event and folds it into the facts immediately.
 func (d *decider) emit(typ, inst string, attempt int, payload any) {
+	if d.fault != nil {
+		return // the decision is already an error: nothing more is recorded
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
-		panic(fmt.Sprintf("decide: marshal %s payload: %v", typ, err))
+		d.fault = fmt.Errorf("decide: marshal %s payload: %w", typ, err)
+		return
 	}
 	if payload == nil {
 		raw = nil
 	}
 	d.out = append(d.out, NewEvent{Type: typ, StepID: inst, Attempt: attempt, Payload: payload})
 	if err := d.apply(typ, inst, attempt, raw, d.seq+1); err != nil {
-		panic(fmt.Sprintf("decide: apply own %s: %v", typ, err))
+		d.fault = fmt.Errorf("decide: apply own %s: %w", typ, err)
 	}
 }
 
@@ -320,13 +362,15 @@ func (d *decider) run() {
 		return
 	}
 	top := scope{steps: d.def.Steps}
+	d.stopping = d.runTimeout
 	done, failedTop, why := d.scope(top, !d.runTimeout)
+	d.stopping = false
 	switch {
 	case d.runTimeout || failedTop:
 		if d.runTimeout && why == nil {
 			why = &history.Error{Kind: "timeout", Message: "run exceeded settings.timeout", Next: "fail"}
 		}
-		if d.inFlight() {
+		if d.unsettled() {
 			return
 		}
 		d.compensate(why)
@@ -373,6 +417,14 @@ func (d *decider) scope(sc scope, canStart bool) (done, failedScope bool, why *h
 			}
 		}
 	}
+	if failing && !d.stopping {
+		// Nothing more starts here. Look again at the steps still open, so
+		// that one whose retry was due is given up or settled rather than
+		// left waiting for a retry nobody will schedule.
+		d.stopping = true
+		st = statuses(false)
+		d.stopping = false
+	}
 	done = true
 	for _, s := range st {
 		if s == running || s == parked || (s == pending && !failing) {
@@ -402,7 +454,7 @@ func (d *decider) failureOf(inst string) *history.Error {
 // status computes (and, when start is set, advances) one step instance.
 func (d *decider) status(sc scope, s *wd.Step, start bool) status {
 	inst := sc.prefix + s.ID
-	key := inst + "|" + strconv.FormatBool(start)
+	key := inst + "|" + strconv.FormatBool(start) + "|" + strconv.FormatBool(d.stopping)
 	if st, ok := d.memo[key]; ok {
 		return st
 	}
@@ -637,12 +689,31 @@ func (d *decider) taskProgress(s *wd.Step, inst string, f *facts, start bool) st
 		return completed
 	}
 	e := f.failures[n]
-	switch e.Next {
-	case "park":
+	if e.Next == "park" {
 		return parked
-	case "retry", "reconcile":
-	default:
-		return failed
+	}
+	// Nothing new starts where decide is stopping (a failing scope, a run
+	// that timed out), so a retry that is due is not scheduled. A step
+	// that never reached a provider is given up. One that may have keeps
+	// its next attempt, marked to settle only: the worker reconciles it,
+	// or sends again under the same key, and the run then reverses it or
+	// parks. Waiting for a retry nobody schedules would hang the scope.
+	settle := !start && d.stopping
+	if settle && !f.exposed && e.Next == "retry" {
+		return d.finalise(inst, f, e, "not retried: the steps around it are stopping")
+	}
+	return d.nextAttempt(s, inst, f, e, start || settle, settle)
+}
+
+// nextAttempt schedules the attempt after a failed one (when sched is set),
+// or gives the step up when its retries are spent. settle marks the new
+// attempt as one that only settles what earlier attempts left.
+func (d *decider) nextAttempt(s *wd.Step, inst string, f *facts, e history.Error, sched, settle bool) status {
+	n := f.lastAttempt
+	if e.Next != "retry" && e.Next != "reconcile" {
+		// A worker's failure for good that apply did not take as the step's
+		// last word: an earlier attempt may have taken effect.
+		return d.finalise(inst, f, e, "not retried")
 	}
 	r := retryPolicy(s)
 	// A step resumed after its tenant key returned (decision 0019) was
@@ -660,15 +731,21 @@ func (d *decider) taskProgress(s *wd.Step, inst string, f *facts, start bool) st
 	if r.maxDuration > 0 && d.now.Add(delay).Sub(f.firstSchedAt) > r.maxDuration && !e.Resumed() {
 		return d.finalise(inst, f, e, "retry budget exhausted")
 	}
-	if !start {
+	if !sched {
 		return running
 	}
-	at := d.now.Add(delay)
+	d.schedule(inst, f, d.now.Add(delay), settle)
+	return running
+}
+
+// schedule records the step's next attempt, with the first one's payload.
+func (d *decider) schedule(inst string, f *facts, at time.Time, settle bool) {
+	n := f.lastAttempt
 	p := f.scheduled[1]
 	p.AvailableAt = history.FormatTime(at)
+	p.Settle = settle
 	d.emit(history.RetryScheduled, inst, n+1, history.RetryPayload{At: history.FormatTime(at)})
 	d.emit(history.StepScheduled, inst, n+1, p)
-	return running
 }
 
 // finalise records that a worker failure is final, so later passes and
@@ -678,12 +755,13 @@ func (d *decider) taskProgress(s *wd.Step, inst string, f *facts, start bool) st
 func (d *decider) finalise(inst string, f *facts, e history.Error, why string) status {
 	e.Message = e.Message + " (" + why + ")"
 	e.Next = "fail"
+	park := f.exposed
 	for _, fe := range f.failures {
-		if fe.MaybeApplied {
-			e.Next, e.MaybeApplied = "park", true
-			e.Message += "; an earlier attempt may have taken effect"
-			break
-		}
+		park = park || fe.MaybeApplied
+	}
+	if park {
+		e.Next, e.MaybeApplied = "park", true
+		e.Message += "; an earlier attempt may have taken effect"
 	}
 	d.emit(history.StepFailed, inst, f.lastAttempt, history.FailedPayload{Error: e})
 	if e.Next == "park" {
@@ -792,6 +870,9 @@ func (d *decider) branchProgress(sc scope, s *wd.Step, inst string, f *facts, st
 	child := scope{prefix: sc.prefix, steps: steps, iter: sc.iter}
 	done, failedChild, why := d.scope(child, start)
 	if !done {
+		if d.stopping && !d.busy(child) {
+			return pending // see stalled
+		}
 		return running
 	}
 	if failedChild {
@@ -836,16 +917,26 @@ func (d *decider) foreachProgress(sc scope, s *wd.Step, inst string, f *facts, s
 			allDone = false
 		}
 	}
-	if anyFailed {
+	busy := func() bool {
 		for i, it := range items {
 			if d.busy(scope{prefix: fmt.Sprintf("%s%s[%d].", sc.prefix, s.ID, i), steps: s.Foreach.Steps, iter: &iteration{item: it, index: i, parent: sc.iter}}) {
-				return running
+				return true
 			}
+		}
+		return false
+	}
+	if anyFailed {
+		// Nothing more starts in any iteration: as in a failing scope.
+		if d.whileStopping(busy) {
+			return running
 		}
 		d.failChild(inst, why)
 		return failed
 	}
 	if !allDone {
+		if d.stopping && !busy() {
+			return pending // see stalled
+		}
 		return running
 	}
 	outs := make([]any, len(items))
@@ -900,21 +991,34 @@ func (d *decider) parallelProgress(sc scope, s *wd.Step, inst string, f *facts, 
 			return d.parallelSettle(sc, s, inst, name)
 		}
 	}
+	busy := func() bool {
+		for _, b := range cfg.Branches {
+			if d.busy(scope{prefix: sc.prefix, steps: b.Steps, iter: sc.iter}) {
+				return true
+			}
+		}
+		return false
+	}
 	switch {
 	case joinAny && failures == len(cfg.Branches):
 		d.failChild(inst, why)
 		return failed
 	case joinAny:
+		if d.stopping && !busy() {
+			return pending // see stalled
+		}
 		return running
 	case failures > 0:
-		for _, b := range cfg.Branches {
-			if d.busy(scope{prefix: sc.prefix, steps: b.Steps, iter: sc.iter}) {
-				return running
-			}
+		// Nothing more starts in any branch: as in a failing scope.
+		if d.whileStopping(busy) {
+			return running
 		}
 		d.failChild(inst, why)
 		return failed
 	case !allDone:
+		if d.stopping && !busy() {
+			return pending // see stalled
+		}
 		return running
 	}
 	out := map[string]any{}
@@ -953,7 +1057,7 @@ func (d *decider) parallelSettle(sc scope, s *wd.Step, inst, winner string) stat
 			}
 			d.emit(history.StepCancelled, li, 0, map[string]any{"reason": "parallel " + inst + ": branch " + winner + " finished first"})
 		}
-		if cancelledPending(lf) {
+		if d.cancelledPending(li, lf) {
 			waiting = true
 		}
 	}
@@ -985,16 +1089,69 @@ func waitsForChild(f *facts) bool {
 
 // cancelledPending reports whether a cancelled step may still take effect:
 // a write whose intent was recorded and whose outcome is not yet known, or
-// one parked for an operator.
-func cancelledPending(f *facts) bool {
+// one parked for an operator. A write that an earlier attempt may have
+// applied, with nothing now under way to find out (it was waiting for a
+// retry, or its last attempt has just failed), is not forgotten: decide
+// schedules an attempt that only settles it, or parks the step when its
+// retries are spent, and waits.
+func (d *decider) cancelledPending(inst string, f *facts) bool {
 	if f.completed || f.finalFailure != nil {
 		return false
 	}
 	n := f.lastAttempt
-	if f.outcome[n] == "" {
-		return f.intents[n]
+	p, ok := f.scheduled[n]
+	if !ok || p.Kind != history.KindTask {
+		return false
 	}
-	return f.failures[n].Next == "park"
+	e, reported := f.failures[n]
+	switch {
+	case !reported && (f.intents[n] || p.Settle):
+		return true // under way, or settling: a worker will report
+	case reported && e.Next == "park":
+		return true // an operator will
+	case !f.exposed:
+		return false // nothing of it reached a provider, or that is settled
+	}
+	_, id := history.SplitInstance(inst)
+	s := d.def.Step(id)
+	if s == nil {
+		return false
+	}
+	if !reported {
+		// Its last attempt was withdrawn before it started: this one
+		// takes its place, at once.
+		d.schedule(inst, f, d.now, true)
+		return true
+	}
+	st := d.nextAttempt(s, inst, f, e, true, true)
+	return st == running || st == parked
+}
+
+// unsettled reports whether a run that is failing must still wait: for a
+// task with a worker or still to be claimed, for a step parked for an
+// operator, or for a cancelled step whose write may still take effect.
+// Ending the run before then would leave money that moved unaccounted for.
+func (d *decider) unsettled() bool {
+	for _, inst := range append([]string(nil), d.order...) {
+		f := d.facts[inst]
+		if f.completed || f.finalFailure != nil {
+			continue
+		}
+		n := f.lastAttempt
+		if p, ok := f.scheduled[n]; !ok || p.Kind != history.KindTask {
+			continue
+		}
+		if f.cancelled {
+			if d.cancelledPending(inst, f) {
+				return true
+			}
+			continue
+		}
+		if e, reported := f.failures[n]; !reported || e.Next == "park" {
+			return true
+		}
+	}
+	return false
 }
 
 // inLosingBranch reports whether instance li lives inside a branch other
@@ -1027,6 +1184,11 @@ func (d *decider) inLosingBranch(li, prefix string, p *wd.Step, winner string) b
 // busy reports whether a scope has a step in flight (running or parked).
 // A failing control step waits only for those: steps that have not started
 // never will.
+//
+// Stalled: where decide is stopping, a branch, foreach or parallel step
+// with steps left to start and none in flight will never finish. It
+// reports pending, as a step that has not started does, so the failing
+// scope around it does not wait for it for ever.
 func (d *decider) busy(sc scope) bool {
 	for _, s := range sc.steps {
 		if st := d.status(sc, s, false); st == running || st == parked {
@@ -1062,11 +1224,23 @@ func (d *decider) onError(sc scope, s *wd.Step, inst string, start bool) status 
 	done, failedChild, _ := d.scope(child, start)
 	switch {
 	case !done:
+		if d.stopping && !d.busy(child) {
+			return failed // stalled: the flow will not finish, so nothing handled the failure
+		}
 		return running
 	case failedChild:
 		return failed
 	}
 	return handled
+}
+
+// whileStopping runs fn as decide does for a failing scope: retries that
+// are due are given up or settled, not waited for (taskProgress).
+func (d *decider) whileStopping(fn func() bool) bool {
+	was := d.stopping
+	d.stopping = true
+	defer func() { d.stopping = was }()
+	return fn()
 }
 
 // outputs collects the outputs of a scope's settled steps, keyed by step id.
@@ -1089,21 +1263,6 @@ func (d *decider) outputs(sc scope) map[string]any {
 		}
 	}
 	return out
-}
-
-func (d *decider) inFlight() bool {
-	for _, inst := range d.order {
-		f := d.facts[inst]
-		if f.cancelled && !f.intents[f.lastAttempt] {
-			continue // its task was withdrawn before it could start
-		}
-		if len(f.scheduled) > 0 && f.outcome[f.lastAttempt] == "" && !f.completed {
-			if p := f.scheduled[f.lastAttempt]; p.Kind == history.KindTask {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // compensate runs compensating actions for completed steps in reverse
@@ -1134,7 +1293,7 @@ func (d *decider) cancelRun() {
 		if s := d.def.Step(id); !f.cancelled && s != nil && d.begun(s, f) {
 			d.emit(history.StepCancelled, inst, 0, map[string]any{"reason": "run cancelled by " + d.cancel.By})
 		}
-		if cancelledPending(f) || waitsForChild(f) {
+		if d.cancelledPending(inst, f) || waitsForChild(f) {
 			waiting = true
 		}
 	}
@@ -1190,14 +1349,15 @@ func (d *decider) compensations(insts []string) bool {
 		_, id := history.SplitInstance(inst)
 		s := d.def.Step(id)
 		if len(f.scheduled) == 0 {
-			in, err := engine.Resolve(s.Compensate.Input, d.activationFor(inst), true)
+			in, kept, err := engine.ResolveKeeping(s.Compensate.Input, d.activationFor(inst))
 			if err != nil {
 				d.fail(cinst, "expression", err)
 				return false
 			}
 			d.emit(history.StepScheduled, cinst, 1, history.ScheduledPayload{
-				Kind: history.KindTask, Queue: "connector", Connector: s.Connector, Action: s.Compensate.Action,
-				Input: in, KeyStep: cinst, Compensates: inst, AvailableAt: history.FormatTime(d.now),
+				// The connection the step itself used: the account its effect is on.
+				Kind: history.KindTask, Queue: "connector", Connector: s.Connector, Action: s.Compensate.Action, Connection: s.Connection,
+				Input: in, SecretPaths: kept, KeyStep: cinst, Compensates: inst, AvailableAt: history.FormatTime(d.now),
 			})
 			return false
 		}
@@ -1250,6 +1410,7 @@ func (d *decider) activation(sc scope, _ map[string]any) map[string]any {
 		"steps":   steps,
 		"run":     d.runRoot(sc),
 		"env":     d.env,
+		"saved":   d.saved,
 	}
 	if sc.iter != nil {
 		act["item"] = sc.iter.item
@@ -1295,50 +1456,39 @@ func (d *decider) waitUntil(s *wd.Step, act map[string]any) (time.Time, error) {
 
 func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (history.ScheduledPayload, error) {
 	p := history.ScheduledPayload{Kind: history.KindTask, Queue: s.Queue(), KeyStep: inst}
+	// The expressions left for the worker are recorded by place
+	// (SecretPaths): a value that only reads like one is never evaluated.
 	var err error
 	switch s.Type {
 	case "connector":
 		p.Connector, p.Action, p.Connection = s.Connector, s.Action, s.Connection
-		p.Input, err = engine.Resolve(orEmpty(s.Input), act, true)
+		p.Input, p.SecretPaths, err = engine.ResolveKeeping(orEmpty(s.Input), act)
 		if err == nil && s.Capability != nil {
-			p.Input, p.Capability, err = capabilityInput(s, p.Input, act)
+			p.Input, p.SecretPaths, p.Capability, err = capabilityInput(s, p.Input, p.SecretPaths, act)
 		}
 	case "http":
-		c := s.HTTP
-		cfg := map[string]any{"method": c.Method, "url": c.URL}
-		if c.Headers != nil {
-			cfg["headers"] = c.Headers
-		}
-		if c.Query != nil {
-			cfg["query"] = c.Query
-		}
-		if c.Body != nil {
-			cfg["body"] = c.Body
-		}
-		if c.Class != "" {
-			cfg["class"] = c.Class
-		}
-		if c.IdempotencyHeader != "" {
-			cfg["idempotency_header"] = c.IdempotencyHeader
-		}
-		p.Input, err = engine.Resolve(cfg, act, true)
+		p.Input, p.SecretPaths, err = engine.ResolveKeeping(httpConfig(s.HTTP), act)
 	case "ai":
 		// The question as it leaves: the prompt (an expression is
 		// evaluated) and the input. The worker masks personal data in both
 		// and reads the rest of the step from the definition.
 		var prompt, in any
+		var keptPrompt, keptIn []string
 		if s.AI != nil {
-			prompt, err = engine.Resolve(s.AI.Prompt, act, true)
+			prompt, keptPrompt, err = engine.ResolveKeeping(s.AI.Prompt, act)
 		}
 		if err == nil {
-			in, err = engine.Resolve(orEmpty(s.Input), act, true)
+			in, keptIn, err = engine.ResolveKeeping(orEmpty(s.Input), act)
 		}
 		q := map[string]any{"prompt": prompt, "input": in}
-		// The conversation parts (decision 0062 V4), only when the step
+		secretPaths := append(under("/input", keptIn), under("/prompt", keptPrompt)...)
+		// The conversation parts (decision 0074 V4), only when the step
 		// has them, so a step without them schedules as it always did.
 		if err == nil && s.AI != nil {
 			if s.AI.System != "" {
-				q["system"], err = engine.Resolve(s.AI.System, act, true)
+				var kept []string
+				q["system"], kept, err = engine.ResolveKeeping(s.AI.System, act)
+				secretPaths = append(secretPaths, under("/system", kept)...)
 			}
 			for _, part := range []struct {
 				key string
@@ -1349,18 +1499,23 @@ func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (hist
 				}
 				var v any
 				if err = json.Unmarshal(part.raw, &v); err == nil {
-					q[part.key], err = engine.Resolve(v, act, true)
+					var kept []string
+					q[part.key], kept, err = engine.ResolveKeeping(v, act)
+					secretPaths = append(secretPaths, under("/"+part.key, kept)...)
 				}
 				// Only the last turns are sent: only they are kept with
 				// the scheduled step, however long the conversation.
 				if list, ok := q[part.key].([]any); ok && part.key == "history" && len(list) > wd.AIMaxHistory {
-					q[part.key] = list[len(list)-wd.AIMaxHistory:]
+					drop := len(list) - wd.AIMaxHistory
+					q[part.key] = list[drop:]
+					secretPaths = shiftHistoryPaths(secretPaths, drop)
 				}
 			}
 		}
 		p.Input = q
+		p.SecretPaths = secretPaths
 	default:
-		p.Input, err = engine.Resolve(orEmpty(s.Input), act, true)
+		p.Input, p.SecretPaths, err = engine.ResolveKeeping(orEmpty(s.Input), act)
 	}
 	if err != nil {
 		return p, err
@@ -1378,8 +1533,10 @@ func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (hist
 
 // capabilityInput maps an expanded step's capability input to its
 // action's input through the rail's mapping, which may read the outputs
-// of the composite's earlier steps.
-func capabilityInput(s *wd.Step, in any, act map[string]any) (any, *history.CapabilityScheduled, error) {
+// of the composite's earlier steps. kept is where the capability input
+// holds secret expressions; the places the mapping carried them to are
+// returned with the action's input.
+func capabilityInput(s *wd.Step, in any, kept []string, act map[string]any) (any, []string, *history.CapabilityScheduled, error) {
 	all, _ := act["steps"].(map[string]any)
 	steps := map[string]any{}
 	for name, id := range s.Capability.Steps {
@@ -1389,13 +1546,13 @@ func capabilityInput(s *wd.Step, in any, act map[string]any) (any, *history.Capa
 	}
 	out, err := capability.ResolveMapping(s.Capability.Input, in, nil, steps)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s input: %w", s.Capability.Uses, err)
+		return nil, nil, nil, fmt.Errorf("%s input: %w", s.Capability.Uses, err)
 	}
 	cs := &history.CapabilityScheduled{Uses: s.Capability.Uses, Input: in}
 	if len(steps) > 0 {
 		cs.Steps = steps
 	}
-	return out, cs, nil
+	return out, mappedSecretPaths(s.Capability.Input, in, kept, steps, out), cs, nil
 }
 
 func orEmpty(m map[string]any) map[string]any {

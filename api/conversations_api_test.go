@@ -78,7 +78,7 @@ func (f *chatFake) count() int {
 	return len(f.sent)
 }
 
-// The conversations page (decision 0062 V7): what a customer said and what
+// The conversations page (decision 0074 V7): what a customer said and what
 // was answered, masked until revealed; answering by hand through the same
 // connection, once per request; pausing the assistant for one customer;
 // the month's numbers; and Talk to it here, which sends nothing.

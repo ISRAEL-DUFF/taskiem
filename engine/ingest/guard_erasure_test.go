@@ -12,7 +12,7 @@ import (
 
 // Erasing a customer erases what they said in the runs their messages
 // started (their words are sealed under them), and a customer erased who
-// writes again is answered afresh (decision 0062 P2).
+// writes again is answered afresh (decision 0074 P2).
 func TestCustomerGuardErasure(t *testing.T) {
 	g := newGuardWorld(t, `true`, "")
 	const ada = "2348031234567"
@@ -41,7 +41,7 @@ func TestCustomerGuardErasure(t *testing.T) {
 		t.Fatal("the customer's words are sealed under a subject of their own only, not inside the customer's")
 	}
 	// Inside the customer's envelope, their words are under a subject of
-	// their own too, so erasing either erases them (decision 0062 P2).
+	// their own too, so erasing either erases them (decision 0074 P2).
 	if inner := innerSubject(t, g, run, "trigger", "guard", "text"); !strings.HasPrefix(inner, "other:") {
 		t.Fatalf("the words inside the customer's envelope are under %q, want their own other: subject", inner)
 	}

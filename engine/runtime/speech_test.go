@@ -19,7 +19,7 @@ import (
 )
 
 // A customer's WhatsApp voice note is heard by speech@1, answered, spoken
-// and sent back as a voice note (decision 0062, plan V3): the words heard
+// and sent back as a voice note (decision 0074, plan V3): the words heard
 // are sealed in the run's history, the seconds counted, and only file
 // references travel between steps.
 func TestWhatsAppVoiceReplyThroughSpeech(t *testing.T) {

@@ -6,9 +6,13 @@ import {
   Route,
   Routes,
   useLocation,
+  useNavigate,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { PageBoundary } from "./PageBoundary";
+import { safeNext } from "./lib/safePath";
+import { useOpenFromPush } from "./lib/pushOpen";
+import { PushNotices } from "./pages/PushNotices";
 import { Login } from "./pages/Login";
 import { Workflows } from "./pages/Workflows";
 import { NewWorkflow } from "./pages/NewWorkflow";
@@ -23,8 +27,23 @@ import { Audit } from "./pages/Audit";
 import { Alerts } from "./pages/Alerts";
 import { Dashboard } from "./pages/Dashboard";
 import { Members } from "./pages/Members";
+import { Staff } from "./pages/Staff";
+import { StaffPerson } from "./pages/StaffPerson";
+import { Tasks } from "./pages/Tasks";
 import { Policies } from "./pages/Policies";
-import { Account, Invitations, Passkeys } from "./pages/Account";
+import { Account, Passkeys } from "./pages/Account";
+import { ChatOnYou, SecondProofElsewhere, SecondProofPage, YouApp } from "./pages/You";
+import { AccountDeleted } from "./pages/YouAccount";
+import { TransparencyPage } from "./pages/Transparency";
+import { DeleteAccountPage, PrivacyPage } from "./pages/Legal";
+import { PeopleOnYou, PersonLinkPage } from "./pages/People";
+import { GroupLinkPage } from "./pages/Groups";
+import { ChatLinkPage } from "./pages/ChatLinkPage";
+import { CustomerChatSettings } from "./pages/CustomerChatSettings";
+import { DiscoverSettings } from "./pages/DiscoverSettings";
+import { signedInTo } from "./pages/WayIn";
+import { StartSomething } from "./pages/StartSomething";
+import { Switcher } from "./pages/Switch";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
 import {
@@ -38,6 +57,7 @@ import {
 } from "./ui";
 import { Reports } from "./pages/Reports";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
+import { SignInLink } from "./pages/SignInLink";
 import { AcceptInvitation } from "./pages/AcceptInvitation";
 import { Handoff } from "./pages/Handoff";
 import { Templates } from "./pages/Templates";
@@ -51,6 +71,8 @@ import { Keys } from "./pages/Keys";
 import { TablePage, Tables } from "./pages/Tables";
 import { Knowledge, KnowledgeSourcePage } from "./pages/Knowledge";
 import { ConversationPage, Conversations } from "./pages/Conversations";
+import { PageScreen, Pages, pageIcon } from "./pages/Pages";
+import { PageEditor } from "./pages/PageEditor";
 import { Storefront } from "./pages/Storefront";
 import { Look } from "./pages/Look";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
@@ -90,6 +112,8 @@ import {
   MoneyOverview,
   MoneyStatements,
 } from "./pages/Money";
+import { MoneyLabels } from "./pages/MoneyLabels";
+import { ThingPage, ThingsPage } from "./pages/Things";
 import {
   SchoolClasses,
   SchoolFamilies,
@@ -124,14 +148,25 @@ import {
 import { get } from "./api";
 import { AgentApp, AgentWorkspace, useAgentSession } from "./pages/Agent";
 import { Home } from "./pages/Home";
+import { SearchEverywhere } from "./pages/SearchEverywhere";
 import { Bell, useBellCount } from "./Bell";
 import { Toaster } from "./toast";
 import { NotificationSettings } from "./pages/NotificationSettings";
 import { PaymentsSettings } from "./pages/ReceiveMoney";
+import { SavedPage } from "./pages/Saved";
+import { PaymentPage, PaymentsPage } from "./pages/Payments";
+import { ToolPage } from "./pages/MadeToolSheet";
+import { BatchPage, PayListPage } from "./pages/PayBatch";
+import { CollectedListPage } from "./pages/PayCollect";
+import { PayrollPage, PayrollRunPage, PayrollStaffPage } from "./pages/Payroll";
 import { brandFile } from "./brand";
-import { ChatLiveProvider, NotifyBanner } from "./pages/ChatLive";
+import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
+import { PasskeyNudge } from "./pages/PasskeyNudge";
+import { useCustomerUnread } from "./pages/CustomerChat";
+import { useTaskiemUnread } from "./lib/taskiemSeen";
 import { standalone, useInstall } from "./install";
-import { PULL_AT, pullRefreshes, pullShown } from "./lib/pull";
+import { BusinessProfilePage } from "./pages/BusinessProfile";
+import { PULL_AT, insideScroller, pullRefreshes, pullShown } from "./lib/pull";
 
 export function App() {
   return (
@@ -169,15 +204,19 @@ function AreaOff({ area, owner }: { area: AreaKey; owner: boolean }) {
 }
 
 function EnrolPasskey() {
-  const { logout, loginWithPasskey } = useAuth();
+  const { me, logout, loginWithPasskey } = useAuth();
   const [added, setAdded] = useState(false);
   const act = useAction();
   return (
     <div className="login card" style={{ maxWidth: 640 }}>
       <h1>Add a passkey</h1>
       <p>
-        Administrators sign in to Taskiem with a passkey: your device's
-        fingerprint, face or PIN. Add one to continue.
+        {me?.passkey_reason === "business"
+          ? "This business requires its administrators to sign in with a passkey"
+          : me?.passkey_reason === "personal"
+            ? "You chose to sign in only with your passkey"
+            : "Administrators sign in to this Taskiem with a passkey"}
+        : your device's fingerprint, face or PIN. Add one to continue.
       </p>
       {added ? (
         <>
@@ -194,25 +233,6 @@ function EnrolPasskey() {
       ) : (
         <Passkeys onAdded={() => setAdded(true)} />
       )}
-      <p>
-        <button onClick={() => void logout()}>Sign out</button>
-      </p>
-    </div>
-  );
-}
-
-/** Someone with an account but no organisation, signed in to answer the
- * invitations waiting for them; nothing else is open to them. */
-function InviteeHome() {
-  const { me, logout, refresh } = useAuth();
-  return (
-    <div className="login card" style={{ maxWidth: 720 }}>
-      <h1>Welcome back{me?.user?.name ? `, ${me.user.name}` : ""}</h1>
-      <p>
-        You do not belong to an organisation on Taskiem yet. Accept an
-        invitation to join one.
-      </p>
-      <Invitations always onJoined={() => void refresh()} />
       <p>
         <button onClick={() => void logout()}>Sign out</button>
       </p>
@@ -239,12 +259,12 @@ function Shell() {
           />
         </div>
         <p className="auth-line">
-          Orders, payments and approvals for your business, in one place.
+          Chat with the businesses you buy from, and run your own.
         </p>
         <ul className="auth-points">
-          <li>Send invoices and see when they are paid</li>
-          <li>Take orders and bookings on your own page</li>
-          <li>Approve payments from your phone</li>
+          <li>Order, book and pay businesses in a chat</li>
+          <li>Run your own business: orders, invoices, approvals</li>
+          <li>Automate work with workflows</li>
         </ul>
       </aside>
       <main className="auth-main">{page}</main>
@@ -253,6 +273,8 @@ function Shell() {
   // Password recovery works signed in or out.
   if (loc.pathname === "/forgot-password") return alone(<ForgotPassword />);
   if (loc.pathname === "/reset-password") return alone(<ResetPassword />);
+  // A link "sign in" sends in chat: signs in after its button.
+  if (loc.pathname === "/signin") return alone(<SignInLink />);
   // An emailed invitation link, for someone with no account yet.
   if (loc.pathname === "/accept-invitation") return alone(<AcceptInvitation />);
   // A connect link sent from chat: no sign-in, the link is the authority.
@@ -261,6 +283,13 @@ function Shell() {
   if (loc.pathname === "/slack/added") return alone(<SlackAdded />);
   // An email added from chat, confirmed signed in or not.
   if (loc.pathname === "/confirm-email") return alone(<ConfirmEmail />);
+  // A deleted account (You's settings): said signed in or, after it, out.
+  if (loc.pathname === "/account-deleted") return alone(<AccountDeleted />);
+  // The published count of lawful requests (people-chatting §8.5), for anyone.
+  if (loc.pathname === "/transparency") return alone(<TransparencyPage />);
+  // The privacy notice and how to delete an account (Google Play asks both), for anyone.
+  if (loc.pathname === "/privacy") return alone(<PrivacyPage />);
+  if (loc.pathname === "/delete-account") return alone(<DeleteAccountPage />);
   if (/^\/c\/[A-Za-z0-9_-]{32}$/.test(loc.pathname))
     return alone(
       <Routes>
@@ -268,8 +297,35 @@ function Shell() {
       </Routes>,
     );
   if (me === undefined) return alone(<Skeleton rows={3} />);
+  // A business's chat link (taskiem-for-everyone §8.2, §9): its card,
+  // signed out or in a business; on You it is You's own page.
+  if (/^\/m\/[A-Za-z0-9]{4,40}\/?$/.test(loc.pathname) && !(me && (me.personal || (me.tenant_id === null && !me.gate_only))))
+    return alone(
+      <Routes>
+        <Route path="/m/:code" element={<ChatLinkPage />} />
+      </Routes>,
+    );
+  // A person's link (people-chatting §5.2): their card, signed out or in a
+  // business; on You it is You's own page.
+  if (/^\/p\/[A-Za-z0-9]{4,40}\/?$/.test(loc.pathname) && !(me && (me.personal || (me.tenant_id === null && !me.gate_only))))
+    return alone(
+      <Routes>
+        <Route path="/p/:code" element={<PersonLinkPage />} />
+      </Routes>,
+    );
+  // A group's link (people-chatting §9, A4): its name, photo and count,
+  // signed out or in a business; on You it is You's own page.
+  if (/^\/g\/[A-Za-z0-9]{4,40}\/?$/.test(loc.pathname) && !(me && (me.personal || (me.tenant_id === null && !me.gate_only))))
+    return alone(
+      <Routes>
+        <Route path="/g/:code" element={<GroupLinkPage />} />
+      </Routes>,
+    );
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);
+    // A second proof's link opened where nobody is signed in: it proves
+    // only the browser that asked for it. Its token goes no further.
+    if (loc.pathname === "/second-proof") return alone(<SecondProofElsewhere />);
     // A business's link code (business links): sign in, or sign up first.
     if (/^\/l\/[A-Za-z0-9]{8}$/.test(loc.pathname))
       return alone(<LinkCodeSignedOut />);
@@ -282,17 +338,30 @@ function Shell() {
       />
     );
   }
-  if (me.invitations_only) return alone(<InviteeHome />);
-  if (me.enrol_passkey) return alone(<EnrolPasskey />);
+  // The person's own side (You): a session in no business, invitations
+  // waiting or not (taskiem-for-everyone §7).
+  if (me.personal || (me.tenant_id === null && !me.gate_only)) {
+    if (loc.pathname === "/login" || loc.pathname === "/signup")
+      return <Navigate to={signedInTo(loc.search, "/you")} replace />;
+    return <YouApp />;
+  }
+  // An enrol-only session may confirm its email: until then its password
+  // adds no passkey.
+  if (me.enrol_passkey)
+    return alone(
+      loc.pathname === "/verify-email" ? <VerifyEmail /> : <EnrolPasskey />,
+    );
   // The gate role: one screen, whatever the address; the server refuses every other route.
   if (me.gate_only) return <GateHome />;
+  // Where this business or workspace starts (taskiem-for-everyone §18.2).
+  const opens = me.tenant_kind === "workflows" ? "/workflows" : "/home";
   if (loc.pathname === "/login")
     return (
       <Navigate
-        to={
-          new URLSearchParams(loc.search).get("next") ||
-          (me.field_agent ? "/agent" : "/home")
-        }
+        to={safeNext(
+          new URLSearchParams(loc.search).get("next"),
+          me.field_agent ? "/agent" : opens,
+        )}
         replace
       />
     );
@@ -305,7 +374,17 @@ function Shell() {
       loc.pathname === "/workflows")
   )
     return <Navigate to="/agent" replace />;
-  if (loc.pathname === "/signup") return <Navigate to="/start" replace />;
+  if (loc.pathname === "/signup")
+    return (
+      <Navigate
+        to={signedInTo(
+          loc.search,
+          me.tenant_kind === "workflows" ? "/workflows" : "/start",
+          false,
+        )}
+        replace
+      />
+    );
   // Field agents (docs/agents.md): their own pages, and a business's page
   // and tables while they work in it.
   if (loc.pathname === "/agent" || loc.pathname.startsWith("/agent/"))
@@ -320,6 +399,7 @@ function Shell() {
 
 function SignedIn() {
   const { me, can, logout } = useAuth();
+  const navigate = useNavigate();
   const onboarding = useOnboarding().data;
   // The drawer (narrow screens): closes on navigation and on Escape, keeps
   // Tab inside while open, and gives focus back to the menu button.
@@ -327,8 +407,10 @@ function SignedIn() {
   const navRef = useRef<HTMLElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   useScrollableTables(mainRef);
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const off = areaOffFor(pathname, me?.areas);
+  // A tapped notification: its page, in its business.
+  const pushOpen = useOpenFromPush();
   useEffect(() => setDrawer(false), [pathname]);
   // A row of tabs wider than a phone scrolls sideways: bring the open one into view.
   useEffect(() => {
@@ -385,6 +467,18 @@ function SignedIn() {
       live = false;
     };
   }, [pathname]);
+  // The business's own pages pinned to the menu, under Your pages (pages §9).
+  const [pinned, setPinned] = useState<{ name: string; title: string; icon: string }[]>([]);
+  useEffect(() => {
+    let live = true;
+    get<{ pages: { name: string; title: string; icon: string; pinned: boolean }[] }>("/v1/pages").then(
+      (r) => live && setPinned(r.pages.filter((p) => p.pinned)),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [pathname]);
   // The bell: a person's notifications and approvals waiting (N12).
   const bell = useBellCount(!!me?.user, pathname);
   const install = useInstall();
@@ -423,6 +517,10 @@ function SignedIn() {
       "money",
       invoiceAccess(can).see && areaOn(me.areas, "money"),
     ],
+    // Paying people from the business's payments account (pages/Payments.tsx).
+    ["/payments", "Pay people", "send", can("money.pay")],
+    // Payroll, read from Payrolla (pages/Payroll.tsx).
+    ["/payroll", "Payroll", "billing", can("payroll.read")],
     // Linked suppliers' invoices (business links, pages/Bills.tsx).
     [
       "/bills",
@@ -441,12 +539,18 @@ function SignedIn() {
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
     ["/runs", "Activity", "activity", can("run.read")],
     ["/tables", "Tables", "tables", can("table.read")],
-    // What the assistant answers customers from (decision 0062 D12).
+    // What the assistant answers customers from (decision 0074 D12).
     ["/knowledge", "What your assistant knows", "templates", can("secret.manage")],
     // What customers said to the assistant, and answering them (V7).
     ["/conversations", "Conversations", "chat", can("conversation.read")],
+    // The business's own screens (pages/Pages.tsx).
+    ["/pages", "Pages", "dashboard", true],
     // Other businesses on Taskiem (business links, pages/Links.tsx).
     ["/chat", "Chat", "chat", true],
+    // The people of the business (pages/Staff.tsx).
+    ["/staff", "Staff", "members", can("member.manage")],
+    // Tasks for staff (pages/Tasks.tsx): everyone has their own.
+    ["/tasks", "Tasks", "check", true],
     [
       "/approvals",
       "Approvals",
@@ -488,7 +592,7 @@ function SignedIn() {
     ],
     [
       "/settings/areas",
-      "What your business uses",
+      me.tenant_kind === "workflows" ? "What you use" : "What your business uses",
       "settings",
       me.roles.includes("owner"),
     ],
@@ -506,7 +610,7 @@ function SignedIn() {
     <NavLink
       key={to}
       to={to}
-      end={to === "/settings" || to === "/forms" || to === "/storefront"}
+      end={to === "/settings" || to === "/forms" || to === "/storefront" || to === "/pages"}
     >
       <Icon name={icon} />
       {label}
@@ -514,9 +618,11 @@ function SignedIn() {
     </NavLink>
   );
   // The tab bar on a phone: what an owner opens most, four at most, then Menu.
+  // Chat is one of them, as WhatsApp's Chats is the first of its own.
   const quick = (
     [
       ["/home", "Home", "home", true],
+      ["/chat", "Chat", "chat", true],
       [
         "/money",
         "Money",
@@ -535,18 +641,25 @@ function SignedIn() {
   ).filter(([, , , ok]) => ok);
   const name = me.user?.name || me.user?.email || "API key";
   const business = me.tenant_name || "Taskiem";
+  // The switcher: a person (not an API key or a field agent's business)
+  // moves between You and their businesses (taskiem-for-everyone §6).
+  const switcher = !!me.user && Array.isArray(me.businesses);
+  const startSomething = () => navigate("/start-something");
   // The workflow builder fills the window: the menu shrinks to a rail of
   // icons on a computer, and the top and tab bars give way on a phone.
   const building =
     /^\/workflows\/[^/]+$/.test(pathname) && pathname !== "/workflows/new";
   // The chat fills the window the same way, as WhatsApp Web does.
   const chatting = pathname === "/chat";
+  // On a phone the list and a conversation are separate screens: the tab bar
+  // is the list's, and gives way to the conversation, as WhatsApp's does.
+  const chatOpen = chatting && !!new URLSearchParams(search).get("with");
   return (
     <ChatLiveProvider>
       <div
         className={
           chatting
-            ? "shell builder-mode chat-mode"
+            ? `shell builder-mode chat-mode${chatOpen ? " chat-open" : ""}`
             : building
               ? "shell builder-mode"
               : "shell"
@@ -565,7 +678,11 @@ function SignedIn() {
               width={26}
               height={26}
             />
-            <span>{business}</span>
+            {switcher ? (
+              <Switcher testid="switcher-top" onStart={startSomething} />
+            ) : (
+              <span>{business}</span>
+            )}
           </span>
           {me.user && <Bell count={bell} onChange={bell.reload} />}
         </header>
@@ -591,10 +708,21 @@ function SignedIn() {
               width={26}
               height={26}
             />
-            <span className="brand-name">
-              <strong>{business}</strong>
-              <span>Taskiem</span>
-            </span>
+            {switcher ? (
+              <span className="brand-name">
+                {/* On a phone the top bar has the switcher; the drawer keeps the name. */}
+                <span className="nav-switcher">
+                  <Switcher testid="switcher" onStart={startSomething} />
+                </span>
+                <strong className="nav-name-phone">{business}</strong>
+                <span>Taskiem</span>
+              </span>
+            ) : (
+              <span className="brand-name">
+                <strong>{business}</strong>
+                <span>Taskiem</span>
+              </span>
+            )}
             {me.user && (
               <span className="nav-bell">
                 <Bell count={bell} onChange={bell.reload} />
@@ -609,6 +737,14 @@ function SignedIn() {
             </button>
           </div>
           {daily.filter(([, , , ok]) => ok).map(link)}
+          {pinned.length > 0 && (
+            <>
+              <div className="section" id="nav-your-pages">
+                Your pages
+              </div>
+              {pinned.map((p) => link([`/pages/${p.name}`, p.title, pageIcon(p.icon), true]))}
+            </>
+          )}
           {more.length > 0 && (
             <>
               <button
@@ -675,15 +811,49 @@ function SignedIn() {
         >
           <BillingBanner />
           <TermsBanner />
+          <PushNotices open={pushOpen} onSignOut={() => void logout()} />
           <NotifyBanner />
+          <PasskeyNudge />
+          {/* Keyed by the address: a page for another :id (an invoice, a run)
+              starts afresh, its keys, notices and streams with it. */}
           <div className="page" key={`${pathname}#${fresh}`}>
             <PageBoundary>
               {off ? (
                 <AreaOff area={off} owner={me.roles.includes("owner")} />
               ) : (
                 <Routes>
-                  <Route path="/" element={<Navigate to="/home" replace />} />
+                  <Route
+                    path="/"
+                    element={
+                      <Navigate
+                        to={
+                          me.tenant_kind === "workflows" ? "/workflows" : "/home"
+                        }
+                        replace
+                      />
+                    }
+                  />
                   <Route path="/home" element={<Home />} />
+                  <Route path="/search" element={<SearchEverywhere />} />
+                  <Route
+                    path="/start-something"
+                    element={<StartSomething />}
+                  />
+                  <Route path="/second-proof" element={<SecondProofPage />} />
+                  <Route path="/you/chats/:id" element={<ChatOnYou />} />
+                  <Route path="/you/people/*" element={<PeopleOnYou />} />
+                  <Route path="/you/groups/*" element={<PeopleOnYou />} />
+                  <Route
+                    path="/you"
+                    element={
+                      <Navigate
+                        to={
+                          me.tenant_kind === "workflows" ? "/workflows" : "/home"
+                        }
+                        replace
+                      />
+                    }
+                  />
                   <Route path="/workflows" element={<Workflows />} />
                   <Route path="/workflows/new" element={<NewWorkflow />} />
                   <Route path="/workflows/:id" element={<Editor />} />
@@ -694,6 +864,9 @@ function SignedIn() {
                   <Route path="/conversations" element={<Conversations />} />
                   <Route path="/conversations/view" element={<ConversationPage />} />
                   <Route path="/tables/:id" element={<TablePage />} />
+                  <Route path="/pages" element={<Pages />} />
+                  <Route path="/pages/:name" element={<PageScreen />} />
+                  <Route path="/pages/:name/edit" element={<PageEditor />} />
                   <Route path="/storefront" element={<Storefront />} />
                   <Route path="/storefront/look" element={<Look />} />
                   <Route
@@ -737,6 +910,10 @@ function SignedIn() {
                     path="/settings/links"
                     element={<LinkedBusinessesPage />}
                   />
+                  <Route
+                    path="/settings/links/profile"
+                    element={<BusinessProfilePage />}
+                  />
                   <Route path="/l/:code" element={<LinkCodePage />} />
                   <Route path="/bills" element={<BillsPage />} />
                   <Route path="/bills/:id" element={<BillPage />} />
@@ -779,6 +956,17 @@ function SignedIn() {
                   />
                   <Route path="/money/entries" element={<MoneyEntries />} />
                   <Route path="/money/fees" element={<MoneyFees />} />
+                  <Route path="/payments" element={<PaymentsPage />} />
+                  <Route path="/payments/several" element={<PayListPage />} />
+                  <Route path="/payments/several/list" element={<CollectedListPage />} />
+                  <Route path="/payments/batches/:id" element={<BatchPage />} />
+                  <Route path="/payments/:id" element={<PaymentPage />} />
+                  <Route path="/payroll" element={<PayrollPage />} />
+                  <Route path="/payroll/runs/:run" element={<PayrollRunPage />} />
+                  <Route path="/payroll/staff" element={<PayrollStaffPage />} />
+                  <Route path="/money/labels" element={<MoneyLabels />} />
+                  <Route path="/money/things" element={<ThingsPage />} />
+                  <Route path="/money/things/:id" element={<ThingPage />} />
                   <Route path="/schools" element={<Schools />} />
                   <Route path="/schools/import" element={<SchoolImport />} />
                   <Route
@@ -853,16 +1041,26 @@ function SignedIn() {
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/runs" element={<Runs />} />
                   <Route path="/runs/:id" element={<RunPage />} />
+                  <Route path="/tools/:command" element={<ToolPage />} />
                   <Route path="/approvals" element={<Approvals />} />
                   <Route path="/connections" element={<Connections />} />
                   <Route path="/catalogue" element={<Catalogue />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/settings/billing" element={<Billing />} />
+                  <Route
+                    path="/settings/customers"
+                    element={<CustomerChatSettings />}
+                  />
+                  <Route
+                    path="/settings/discover"
+                    element={<DiscoverSettings />}
+                  />
                   <Route path="/settings/areas" element={<Areas />} />
                   <Route
                     path="/settings/payments"
                     element={<PaymentsSettings />}
                   />
+                  <Route path="/settings/saved" element={<SavedPage />} />
                   <Route path="/settings/keys" element={<Keys />} />
                   <Route
                     path="/settings/notifications"
@@ -871,6 +1069,9 @@ function SignedIn() {
                   <Route path="/alerts" element={<Alerts />} />
                   <Route path="/audit" element={<Audit />} />
                   <Route path="/members" element={<Members />} />
+                  <Route path="/staff" element={<Staff />} />
+                  <Route path="/staff/:user" element={<StaffPerson />} />
+                  <Route path="/tasks" element={<Tasks />} />
                   <Route path="/policies" element={<Policies />} />
                   <Route path="/account" element={<Account />} />
                   <Route path="/handoff" element={<Handoff />} />
@@ -899,6 +1100,7 @@ function SignedIn() {
             <NavLink key={to} to={to}>
               <span className="tab-icon">
                 <Icon name={icon} />
+                {to === "/chat" && <ChatTabCount />}
               </span>
               {label}
             </NavLink>
@@ -918,6 +1120,25 @@ function SignedIn() {
         </nav>
       </div>
     </ChatLiveProvider>
+  );
+}
+
+/** The unread count on the Chat tab (conversations and Taskiem's own). */
+function ChatTabCount() {
+  const { me, can } = useAuth();
+  const { unread } = useChatLive();
+  const taskiem = useTaskiemUnread();
+  // Customers waiting for an answer (customers' conversations).
+  const customers = useCustomerUnread(
+    can("storefront.manage|order.handle") && areaOn(me?.areas, "orders"),
+  );
+  const n = unread + taskiem + customers;
+  if (n <= 0) return null;
+  return (
+    <span className="tab-count">
+      <span aria-hidden="true">{n > 99 ? "99+" : n}</span>
+      <span className="sr-only">{n} unread</span>
+    </span>
   );
 }
 
@@ -954,7 +1175,8 @@ function PullToRefresh({ onRefresh }: { onRefresh: () => void }) {
       start =
         window.scrollY <= 0 &&
         e.touches.length === 1 &&
-        !t?.closest(".modal, .nav.drawer, .canvas, .bell-panel")
+        !t?.closest(".modal, .nav.drawer, .canvas, .bell-panel") &&
+        !insideScroller(t)
           ? (e.touches[0]?.clientY ?? null)
           : null;
       dy = 0;

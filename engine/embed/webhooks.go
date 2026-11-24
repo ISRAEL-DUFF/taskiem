@@ -110,8 +110,10 @@ func (h *Webhooks) Tick(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	var errs []error
-	for _, p := range partners {
+	// Partners take turns a few at a time (as alerts do): one partner's
+	// hanging endpoint holds one place, not every other partner's events.
+	return alerts.EachTenant(ctx, partners, func(ctx context.Context, p uuid.UUID) error {
+		var errs []error
 		if h.Limits != nil {
 			if err := h.Thresholds(ctx, p); err != nil {
 				errs = append(errs, fmt.Errorf("partner %s: usage: %w", p, err))
@@ -120,8 +122,8 @@ func (h *Webhooks) Tick(ctx context.Context) error {
 		if err := h.Deliver(ctx, p); err != nil {
 			errs = append(errs, fmt.Errorf("partner %s: deliver: %w", p, err))
 		}
-	}
-	return errors.Join(errs...)
+		return errors.Join(errs...)
+	})
 }
 
 // Percents at which usage.threshold events are sent, once per period.
@@ -235,44 +237,54 @@ type Message struct {
 	Data        json.RawMessage `json:"data"`
 }
 
-// Deliver sends a partner's due deliveries. Each is claimed first (so two
-// schedulers never send one at once) and sent outside any transaction.
+// Deliver sends a partner's due deliveries, one at a time, each claimed
+// just before it is sent (as alerts.Alerter.Deliver does): two schedulers
+// never send one, even when a slow endpoint makes the turn long, and the
+// outcome is recorded only while the claim is still this scheduler's.
+// Sent outside any transaction.
 func (h *Webhooks) Deliver(ctx context.Context, partner uuid.UUID) error {
-	var due []delivery
-	err := db.InTenantTx(ctx, h.Pool, []uuid.UUID{partner}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `UPDATE partner_webhook_deliveries d SET next_attempt_at = now() + interval '5 minutes', attempts = d.attempts + 1
-			WHERE d.id IN (SELECT id FROM partner_webhook_deliveries WHERE tenant_id = $1 AND status = 'pending' AND next_attempt_at <= now()
-			  ORDER BY next_attempt_at LIMIT 50 FOR UPDATE SKIP LOCKED)
-			RETURNING d.id, d.app_id, d.event, d.sub_tenant_id, d.payload, d.created_at, d.attempts`, partner)
+	start := time.Now()
+	for range alerts.DeliverBatch {
+		if time.Since(start) > alerts.DeliverBudget {
+			return nil
+		}
+		var d delivery
+		err := db.InTenantTx(ctx, h.Pool, []uuid.UUID{partner}, func(tx pgx.Tx) error {
+			// The pick is materialised: as an IN subquery the planner may
+			// rescan it, and each rescan skips the row just locked.
+			//nolint:misspell // MATERIALIZED is the SQL keyword
+			return tx.QueryRow(ctx, `WITH c AS MATERIALIZED (SELECT id FROM partner_webhook_deliveries WHERE tenant_id = $1 AND status = 'pending' AND next_attempt_at <= now()
+				  ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED)
+				UPDATE partner_webhook_deliveries d SET next_attempt_at = now() + interval '5 minutes', attempts = d.attempts + 1
+				FROM c WHERE d.id = c.id
+				RETURNING d.id, d.app_id, d.event, d.sub_tenant_id, d.payload, d.created_at, d.attempts`, partner).
+				Scan(&d.id, &d.app, &d.event, &d.sub, &d.payload, &d.createdAt, &d.attempts)
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil //nolint:nilerr // nothing more is due
+		}
 		if err != nil {
 			return err
 		}
-		due, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (delivery, error) {
-			var d delivery
-			return d, r.Scan(&d.id, &d.app, &d.event, &d.sub, &d.payload, &d.createdAt, &d.attempts)
-		})
-		return err
-	})
-	if err != nil {
-		return err
-	}
-	for _, d := range due {
 		code, sendErr := h.send(ctx, partner, d)
-		err := db.InTenantTx(ctx, h.Pool, []uuid.UUID{partner}, func(tx pgx.Tx) error {
+		err = db.InTenantTx(ctx, h.Pool, []uuid.UUID{partner}, func(tx pgx.Tx) error {
 			var status *int
 			if code > 0 {
 				status = &code
 			}
 			switch {
 			case sendErr == nil:
-				_, err := tx.Exec(ctx, `UPDATE partner_webhook_deliveries SET status = 'delivered', delivered_at = now(), last_status = $2, last_error = NULL WHERE id = $1`, d.id, status)
+				_, err := tx.Exec(ctx, `UPDATE partner_webhook_deliveries SET status = 'delivered', delivered_at = now(), last_status = $2, last_error = NULL
+					WHERE id = $1 AND status = 'pending' AND attempts = $3`, d.id, status, d.attempts)
 				return err
 			case d.attempts >= MaxAttempts:
-				_, err := tx.Exec(ctx, `UPDATE partner_webhook_deliveries SET status = 'failed', last_status = $2, last_error = $3 WHERE id = $1`, d.id, status, truncate(sendErr.Error()))
+				_, err := tx.Exec(ctx, `UPDATE partner_webhook_deliveries SET status = 'failed', last_status = $2, last_error = $3
+					WHERE id = $1 AND status = 'pending' AND attempts = $4`, d.id, status, truncate(sendErr.Error()), d.attempts)
 				return err
 			default:
-				_, err := tx.Exec(ctx, `UPDATE partner_webhook_deliveries SET last_status = $2, last_error = $3, next_attempt_at = now() + make_interval(secs => $4) WHERE id = $1`,
-					d.id, status, truncate(sendErr.Error()), Backoff(d.attempts).Seconds())
+				_, err := tx.Exec(ctx, `UPDATE partner_webhook_deliveries SET last_status = $2, last_error = $3, next_attempt_at = now() + make_interval(secs => $4)
+					WHERE id = $1 AND status = 'pending' AND attempts = $5`,
+					d.id, status, truncate(sendErr.Error()), Backoff(d.attempts).Seconds(), d.attempts)
 				return err
 			}
 		})

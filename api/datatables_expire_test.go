@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// A table that keeps its rows for a time (decision 0062 V5): set when it
+// A table that keeps its rows for a time (decision 0074 V5): set when it
 // is made or later, shown on the table, and its older rows deleted by the
 // sweep, exactly those, oldest first; a conversations table follows how
 // long the business keeps conversations, within the plan.
@@ -74,7 +74,7 @@ func TestRowExpiry(t *testing.T) {
 
 // Erasing a customer by their number deletes what they said to the
 // business's assistant, in whichever form the number was written, and
-// leaves other customers' conversations (decision 0062 V5, P2).
+// leaves other customers' conversations (decision 0074 V5, P2).
 func TestErasingACustomerDeletesTheirConversation(t *testing.T) {
 	w := newTablesWorld(t)
 	owner := w.tenant(t, "Mama Put", "owner@mamaput.test")

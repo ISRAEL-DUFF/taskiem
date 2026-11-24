@@ -76,14 +76,15 @@ func TestPriceLists(t *testing.T) {
 		t.Fatalf("the buyer's own price: %v", p)
 	}
 
-	// Ordering from the list: the item said once, then linked.
+	// Ordering from the list: how the item is treated, said once, then
+	// remembered (what a business buys §6).
 	buyer.must(409, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 10}}},
 		"Idempotency-Key", "o0")
 	buyer.must(200, "PUT", "/v1/stock/suppliers/"+sup+"/link", map[string]any{"link_id": link})
 	code, out := buyer.do("POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 10}}},
 		"Idempotency-Key", "o1")
-	if code != 422 || out["code"] != "item_unlinked" || out["item"].(map[string]any)["item_id"] != sRice {
-		t.Fatalf("which of yours: %d %v", code, out)
+	if l := out["purchase"].(map[string]any)["lines"].([]any)[0].(map[string]any); code != 201 || l["unconfirmed"] != true || l["seller_item_id"] != sRice {
+		t.Fatalf("unremembered, a suggestion to confirm: %d %v", code, out)
 	}
 	buyer.must(400, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 2, "item_id": rice}}},
 		"Idempotency-Key", "o2")
@@ -91,11 +92,13 @@ func TestPriceLists(t *testing.T) {
 		"Idempotency-Key", "o3")
 	x := buyer.must(201, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 10, "item_id": rice}}},
 		"Idempotency-Key", "o4")["purchase"].(map[string]any)
-	if x["total_kobo"] != float64(40000000) || x["lines"].([]any)[0].(map[string]any)["item_id"] != rice {
-		t.Fatalf("drafted at the list's price: %v", x)
+	if l := x["lines"].([]any)[0].(map[string]any); x["total_kobo"] != float64(40000000) || l["item_id"] != sRice || l["treatment"] != "stock" || l["stock_item_id"] == nil ||
+		l["unconfirmed"] != nil {
+		t.Fatalf("drafted at the list's price, into the rice's stock item: %v", x)
 	}
-	if ls := buyer.must(200, "GET", "/v1/item-links/"+link, nil)["item_links"].([]any); len(ls) != 1 || ls[0].(map[string]any)["seller_item_id"] != sRice {
-		t.Fatalf("linked: %v", ls)
+	if ls := buyer.must(200, "GET", "/v1/item-links/"+link, nil)["item_links"].([]any); len(ls) != 1 || ls[0].(map[string]any)["seller_item_id"] != sRice ||
+		ls[0].(map[string]any)["treatment"] != "stock" {
+		t.Fatalf("remembered: %v", ls)
 	}
 	ref := buyer.must(200, "POST", "/v1/stock/purchases/"+x["id"].(string)+"/send", nil)["purchase"].(map[string]any)["reference"].(string)
 	drainLinked(t, w.world)
@@ -115,9 +118,12 @@ func TestPriceLists(t *testing.T) {
 	if o := seller.must(200, "GET", "/v1/trade-orders/"+ref, nil)["order"].(map[string]any); o["total_kobo"] != float64(40000000) {
 		t.Errorf("the seller's order kept its price: %v", o)
 	}
-	// Reordered with no item said: linked once.
-	buyer.must(201, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 5}}},
-		"Idempotency-Key", "o5")
+	// Reordered with nothing said: as remembered.
+	again := buyer.must(201, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 5}}},
+		"Idempotency-Key", "o5")["purchase"].(map[string]any)["lines"].([]any)[0].(map[string]any)
+	if again["treatment"] != "stock" || again["unconfirmed"] != nil {
+		t.Fatalf("reordered as remembered: %v", again)
+	}
 
 	// In chat.
 	if r := w.say(t, buyerOn, "prices from dangote"); !strings.Contains(r, "Rice, 50 kg") || !strings.Contains(r, "₦41,000") || !strings.Contains(r, "(at least 5)") ||
@@ -137,19 +143,25 @@ func TestPriceLists(t *testing.T) {
 		t.Fatalf("no such supplier: %q", r)
 	}
 
-	// Withdrawn: gone from the buyer, and nothing is ordered from it.
+	// Withdrawn: the list is gone from the buyer, who sees the seller's
+	// storefront in its place (business-chat-tools.md §2), and orders from
+	// it at the storefront's prices.
 	seller.must(200, "PUT", "/v1/price-lists/"+list+"/links", map[string]any{"links": []string{}})
-	if got := buyer.must(200, "GET", "/v1/supplier-prices", nil)["suppliers"].([]any); len(got) != 0 {
+	if got := buyer.must(200, "GET", "/v1/supplier-prices", nil)["suppliers"].([]any); len(got) != 1 || got[0].(map[string]any)["name"] != "Storefront prices" {
 		t.Fatalf("withdrawn: %v", got)
 	}
-	buyer.must(409, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 5}}},
-		"Idempotency-Key", "o6")
-	buyer.must(204, "DELETE", "/v1/item-links/"+link+"/"+rice, nil)
+	// Ordered now from the storefront, at the storefront's price.
+	if po := buyer.must(201, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 5}}},
+		"Idempotency-Key", "o6")["purchase"].(map[string]any); po["total_kobo"] != float64(22500000) {
+		t.Fatalf("ordered from the storefront: %v", po)
+	}
+	buyer.must(204, "DELETE", "/v1/item-links/"+link+"/"+sRice, nil)
+	buyer.must(404, "DELETE", "/v1/item-links/"+link+"/"+sRice, nil)
 	// Shared again, then the list deleted: gone again.
 	seller.must(200, "PUT", "/v1/price-lists/"+list+"/links", map[string]any{"links": []string{sellerLink}})
 	prices()
 	seller.must(200, "DELETE", "/v1/price-lists/"+list, nil)
-	if got := buyer.must(200, "GET", "/v1/supplier-prices", nil)["suppliers"].([]any); len(got) != 0 {
+	if got := buyer.must(200, "GET", "/v1/supplier-prices", nil)["suppliers"].([]any); len(got) != 1 || got[0].(map[string]any)["name"] != "Storefront prices" {
 		t.Fatalf("deleted: %v", got)
 	}
 	// Only the business's own: a buyer cannot read the seller's lists.

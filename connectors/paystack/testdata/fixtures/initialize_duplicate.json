@@ -1,0 +1,13 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/transaction/initialize"
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "status": false,
+   "message": "Duplicate Transaction Reference"
+  }
+ }
+}

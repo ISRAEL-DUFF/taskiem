@@ -77,3 +77,34 @@ func memberID(t *testing.T, c *client, email string) string {
 	t.Fatalf("no member %s", email)
 	return ""
 }
+
+// TestChangingARoleNeedsStanding: editing a role changes it for everyone
+// who holds it, so it takes the standing to grant (and so take away) the
+// role as it stands: an admin cannot strip billing.manage from an
+// owner-made role. Widening a role members hold grants them permissions,
+// so it also needs member.manage (finding F71).
+func TestChangingARoleNeedsStanding(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	adm := addMember(t, w, owner, "adm", "admin")
+	owner.must(201, "PUT", "/v1/roles/finance", map[string]any{"permissions": []string{"billing.manage", "invoice.manage"}})
+	bk := addMember(t, w, owner, "bk", "finance")
+
+	adm.must(403, "PUT", "/v1/roles/finance", map[string]any{"permissions": []string{"invoice.manage"}})
+	adm.must(403, "PUT", "/v1/roles/finance", map[string]any{"description": "just the words", "permissions": []string{"billing.manage", "invoice.manage"}})
+	if perms := toJSON(bk.must(200, "GET", "/v1/me", nil)["permissions"]); !strings.Contains(perms, "billing.manage") {
+		t.Fatalf("the holder lost billing.manage: %s", perms)
+	}
+	owner.must(200, "PUT", "/v1/roles/finance", map[string]any{"permissions": []string{"invoice.manage"}})
+
+	// What the admin holds, the admin may still change.
+	adm.must(201, "PUT", "/v1/roles/runner", map[string]any{"permissions": []string{"run.read", "run.start"}})
+	adm.must(200, "PUT", "/v1/roles/runner", map[string]any{"permissions": []string{"run.read"}})
+
+	// Role managers who cannot manage members do not widen a held role.
+	owner.must(201, "PUT", "/v1/roles/rolemgr", map[string]any{"permissions": []string{"role.manage", "run.read", "run.start"}})
+	mgr := addMember(t, w, owner, "mgr", "rolemgr")
+	owner.must(201, "POST", "/v1/members", map[string]any{"email": "bk@acme.test", "roles": []string{"runner"}})
+	mgr.must(403, "PUT", "/v1/roles/runner", map[string]any{"permissions": []string{"run.read", "run.start"}})
+	mgr.must(200, "PUT", "/v1/roles/runner", map[string]any{"description": "Reads runs", "permissions": []string{"run.read"}})
+}

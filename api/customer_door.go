@@ -1,0 +1,1346 @@
+package api
+
+import (
+	"context"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/israel-duff/taskiem/engine/chatlinks"
+	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/peoplesafety"
+	"github.com/israel-duff/taskiem/engine/storefront"
+)
+
+// The customer door, the person's side (docs/spec/taskiem-for-everyone.md
+// §8, §14, §15; migration 00452). A person chats with a business from
+// their own side (You): their copy of each conversation is theirs
+// (person_conversations, person_messages, person_files), read in their
+// own scope with no business in it. Whatever reaches the business (a
+// message, a read mark, their shop, their orders, placing an order or a
+// booking, paying) goes through taskiem_customer_enter: one business, one
+// action of a fixed list, refused when the business blocked them or
+// turned the area off, audited in the business's chain. These routes are
+// the person's own: a personal session reaches them, and so does a
+// business session, for the same person (never an API key).
+
+// The person's limits (§15): new conversations an hour and a day, and
+// messages in one conversation a minute; lower in an account's first week.
+var (
+	personChatsPerHour      = 10
+	personChatsPerDay       = 30
+	personMessagesPerMinute = 20
+	newPersonDivisor        = 2
+)
+
+// customerDoorRoutes are the person's routes (personalRoutes lists them).
+func (s *Server) customerDoorRoutes(r chi.Router) {
+	r.Get("/me/chats", s.listPersonChats)
+	r.Post("/me/chats", s.startPersonChat)
+	r.Get("/me/chats/{id}", s.getPersonChat)
+	r.Put("/me/chats/{id}", s.putPersonChat)
+	r.Get("/me/chats/{id}/messages", s.personMessages)
+	r.Post("/me/chats/{id}/messages", s.sendPersonMessage)
+	r.Post("/me/chats/{id}/files", s.sendPersonFile)
+	r.Get("/me/chats/{id}/files/{message}", s.personFile)
+	r.Post("/me/chats/{id}/read", s.readPersonChat)
+	r.Post("/me/chats/{id}/typing", s.personTyping)
+	r.Post("/me/chats/{id}/block", s.blockBusiness)
+	r.Delete("/me/chats/{id}/block", s.blockBusiness)
+	r.Post("/me/chats/{id}/report", s.reportBusiness)
+	r.Get("/me/chats/{id}/shop", s.doorShop)
+	r.Get("/me/chats/{id}/services", s.doorServices)
+	r.Get("/me/chats/{id}/services/{service}/times", s.doorServiceTimes)
+	r.Get("/me/chats/{id}/orders", s.doorOrders)
+	r.Post("/me/chats/{id}/orders", s.doorPlaceOrder)
+	r.Post("/me/chats/{id}/bookings", s.doorBook)
+	r.Get("/me/chats/{id}/orders/{reference}/pay", s.doorPay)
+	r.Get("/me/chats/{id}/invoices/{invoice}/transfer", s.getCustomerTransfer)
+	r.Post("/me/chats/{id}/invoices/{invoice}/transfer", s.askCustomerTransfer)
+}
+
+// The door's refusals, in plain words.
+var (
+	errDoorBlocked    = errors.New("this business is not taking messages from you")
+	errDoorOff        = errors.New("this business has turned this off")
+	errDoorNone       = errors.New("no such conversation")
+	errDoorYouBlocked = errors.New("you blocked this business: unblock it to write to them")
+)
+
+// doorErr reads the door's refusals.
+func doorErr(err error) error {
+	var pe *pgconn.PgError
+	if !errors.As(err, &pe) {
+		return err
+	}
+	switch {
+	case pe.Hint == "blocked":
+		return errDoorBlocked
+	case pe.Hint == "area_off":
+		return errDoorOff
+	case pe.Hint == "earlier":
+		return errOrderEarlier
+	case pe.Code == "P0002":
+		return errDoorNone
+	}
+	return err
+}
+
+// personFail answers the person's routes' refusals.
+func (s *Server) personFail(w http.ResponseWriter, r *http.Request, err error) {
+	var se customerSendErr
+	switch {
+	case errors.As(err, &se):
+		writeErr(w, se.code, se.msg)
+	case errors.Is(err, errDoorBlocked):
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": "This business is not taking messages from you.", "blocked": true})
+	case errors.Is(err, errDoorYouBlocked):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "You blocked this business. Unblock it to write to them.", "you_blocked": true})
+	case errors.Is(err, errDoorOff):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "This business has turned this off for now. Ask them here in the chat.", "area_off": true})
+	case errors.Is(err, errOrderEarlier):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "This order was made with your number before it was on your account, so it cannot be paid or opened here. Chat with the business about it.", "earlier": true})
+	case errors.Is(err, errDoorNone), errors.Is(err, pgx.ErrNoRows):
+		writeErr(w, http.StatusNotFound, "not found")
+	default:
+		s.fail(w, r, err)
+	}
+}
+
+// personOf is the person a request is for: a person's own session, or a
+// business session's person; never an API key, a field agent or an
+// embed app's user.
+func personOf(r *http.Request) (uuid.UUID, error) {
+	p := principalFrom(r.Context())
+	if p == nil || p.UserID == uuid.Nil || p.KeyID != uuid.Nil || p.EndUser != nil || p.Agent != nil || p.Invitee {
+		return uuid.Nil, customerSendErr{http.StatusForbidden, "This is for a person signed in to their own account."}
+	}
+	return p.UserID, nil
+}
+
+// enterTx goes through the door into one business for one action.
+func enterTx(ctx context.Context, tx pgx.Tx, person, tenant uuid.UUID, action string, detail map[string]any) error {
+	raw, _ := json.Marshal(detail)
+	_, err := tx.Exec(ctx, `SELECT taskiem_customer_enter($1, $2, $3, $4)`, person, tenant, action, raw)
+	return doorErr(err)
+}
+
+// personChat is one of the person's conversations, as their side shows it.
+type personChat struct {
+	ID       uuid.UUID `json:"id"`
+	Business uuid.UUID `json:"business"`
+	Name     string    `json:"name"`
+	Last     string    `json:"last"`
+	LastMine bool      `json:"last_mine"`
+	LastAt   time.Time `json:"last_at"`
+	Unread   int       `json:"unread"`
+	Muted    bool      `json:"muted"`
+	Archived bool      `json:"archived"`
+	// Blocked: you blocked the business; BlockedYou: it is not taking
+	// your messages.
+	Blocked    bool `json:"blocked"`
+	BlockedYou bool `json:"blocked_you"`
+	// Offers is your answer to "Get offers from {business}?": unasked,
+	// yes or no. AskOffers: ask it now (once, at the first chat or order).
+	Offers    string `json:"offers"`
+	AskOffers bool   `json:"ask_offers"`
+	// OffersRefused: the answer to offers was not taken, since the
+	// business is not taking messages from you (the rest of a PUT was).
+	OffersRefused bool `json:"offers_refused,omitempty"`
+	// One conversation only: whether they are typing, and their hours'
+	// line (open now, closes at 18:00) when they keep hours.
+	Typing *bool      `json:"typing,omitempty"`
+	Hours  *chatHours `json:"hours,omitempty"`
+	// One conversation only: the business's photo, and what it has proved
+	// (§15: shown in the conversation's header).
+	Photo    *links.Photo   `json:"photo,omitempty"`
+	Verified *businessTrust `json:"verified,omitempty"`
+	// Notice is said once, on starting: what the business sees of you,
+	// and that Taskiem may read business conversations to help (§14).
+	Notice string `json:"notice,omitempty"`
+	// Lines are where this conversation runs: the app, and WhatsApp once
+	// your chats with the business on its own WhatsApp number from your
+	// phone are shown here too (§11).
+	Lines []string `json:"lines"`
+}
+
+// chatHours is a business's opening line under its name.
+type chatHours struct {
+	Open bool   `json:"open"`
+	Line string `json:"line"`
+}
+
+// personMessage is one message of the person's copy.
+type personMessage struct {
+	ID         uuid.UUID       `json:"id"`
+	Mine       bool            `json:"mine"`
+	Kind       string          `json:"kind"`
+	Body       string          `json:"body"`
+	SenderName string          `json:"sender_name,omitempty"`
+	Card       *customerCard   `json:"card,omitempty"`
+	Attachment *chatAttachment `json:"attachment,omitempty"`
+	// Offer: marked Offer, with Stop offers under it (§15).
+	Offer bool `json:"offer,omitempty"`
+	// WarnTransfer: the business's message asks for a transfer to an
+	// account (warnTransfer); the app warns that paying is only ever
+	// through Taskiem's pay links (§15).
+	WarnTransfer bool `json:"warn_transfer,omitempty"`
+	// Line: in the app, or on WhatsApp (a message on the business's own
+	// WhatsApp number, shown here since it was yours, §11).
+	Line      string     `json:"line"`
+	ReadAt    *time.Time `json:"read_at"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+const personChatCols = `c.id, c.tenant_id, c.last_message_at, c.muted, c.archived, c.blocked_at IS NOT NULL, c.business_blocked_at IS NOT NULL, c.offers,
+	c.offers_asked_at IS NOT NULL, c.whatsapp_since IS NOT NULL,
+	(SELECT count(*) FROM person_messages m WHERE m.person_id = c.person_id AND m.conversation_id = c.id AND NOT m.mine AND m.read_at IS NULL),
+	COALESCE((SELECT m.body FROM person_messages m WHERE m.person_id = c.person_id AND m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1), ''),
+	COALESCE((SELECT m.mine FROM person_messages m WHERE m.person_id = c.person_id AND m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1), false)`
+
+func scanPersonChat(r pgx.Row) (personChat, error) {
+	var c personChat
+	var asked, whatsapp bool
+	err := r.Scan(&c.ID, &c.Business, &c.LastAt, &c.Muted, &c.Archived, &c.Blocked, &c.BlockedYou, &c.Offers, &asked, &whatsapp, &c.Unread, &c.Last, &c.LastMine)
+	c.Lines = []string{lineApp}
+	if whatsapp {
+		c.Lines = append(c.Lines, lineWhatsApp)
+	}
+	// Asked once (§15): not again once answered, or shown and passed over;
+	// never while either side blocked the other.
+	c.AskOffers = c.Offers == "unasked" && !asked && !c.Blocked && !c.BlockedYou
+	return c, err
+}
+
+// namesTx fills in the businesses' names.
+func namesTx(ctx context.Context, tx pgx.Tx, chats []personChat) error {
+	ids := make([]uuid.UUID, len(chats))
+	for i, c := range chats {
+		ids[i] = c.Business
+	}
+	rows, err := tx.Query(ctx, `SELECT tenant_id, name FROM taskiem_customer_business_names($1)`, ids)
+	if err != nil {
+		return err
+	}
+	names := map[uuid.UUID]string{}
+	for rows.Next() {
+		var id uuid.UUID
+		var n string
+		if err := rows.Scan(&id, &n); err != nil {
+			rows.Close()
+			return err
+		}
+		names[id] = n
+	}
+	rows.Close()
+	for i := range chats {
+		chats[i].Name = names[chats[i].Business]
+		if chats[i].Name == "" {
+			chats[i].Name = "A business"
+		}
+	}
+	return rows.Err()
+}
+
+// nameOneTx fills in one conversation's business's name.
+func nameOneTx(ctx context.Context, tx pgx.Tx, c *personChat) error {
+	list := []personChat{*c}
+	if err := namesTx(ctx, tx, list); err != nil {
+		return err
+	}
+	c.Name = list[0].Name
+	return nil
+}
+
+// personChatTx is one of the person's conversations, by its id.
+func personChatTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, idText string) (personChat, error) {
+	id, err := uuid.Parse(idText)
+	if err != nil {
+		return personChat{}, errDoorNone
+	}
+	c, err := scanPersonChat(tx.QueryRow(ctx, `SELECT `+personChatCols+` FROM person_conversations c WHERE c.person_id = $1 AND c.id = $2`, person, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return c, errDoorNone
+	}
+	return c, err
+}
+
+// listPersonChats is GET /v1/me/chats: the person's conversations with
+// businesses, the latest first (archived ones with ?archived=1).
+func (s *Server) listPersonChats(w http.ResponseWriter, r *http.Request) {
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	archived := r.URL.Query().Get("archived") == "1"
+	out := []personChat{}
+	err = db.InPersonTx(r.Context(), s.Store.Pool, person, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `SELECT `+personChatCols+` FROM person_conversations c WHERE c.person_id = $1 AND c.archived = $2
+			ORDER BY c.last_message_at DESC LIMIT 200`, person, archived)
+		if err != nil {
+			return err
+		}
+		if out, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (personChat, error) { return scanPersonChat(r) }); err != nil {
+			return err
+		}
+		return namesTx(r.Context(), tx, out)
+	})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	var unread int
+	for _, c := range out {
+		unread += c.Unread
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"chats": out, "unread": unread})
+}
+
+// personNewWeek is whether the person's account is in its first week, when
+// their limits are lower (§15).
+func personNewWeek(ctx context.Context, tx pgx.Tx, person uuid.UUID) (bool, error) {
+	var created time.Time
+	if err := tx.QueryRow(ctx, `SELECT created_at FROM users WHERE id = $1`, person).Scan(&created); err != nil {
+		return false, err
+	}
+	return time.Since(created) < 7*24*time.Hour, nil
+}
+
+func limitFor(n int, newWeek bool) int {
+	if newWeek {
+		return max(1, n/newPersonDivisor)
+	}
+	return n
+}
+
+// startPersonChat is POST /v1/me/chats {business_id | code}: opens the
+// person's conversation with a business (from its chat link, its shop,
+// Discover, or an order they placed), or answers the one they have. The
+// business's thread is made in the app line, sealed under the subject of
+// the person's phone in that business; the person needs a phone.
+func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	var in struct {
+		BusinessID *uuid.UUID `json:"business_id"`
+		Code       string     `json:"code"`
+		// From: where the person came from (link, shop, discover, order,
+		// or a card shared with them in a chat with a person: shared).
+		From string `json:"from"`
+	}
+	if err := decodeBody(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	via := in.From
+	if via == "code" {
+		writeErr(w, http.StatusBadRequest, "from is link, shop, discover, order or shared")
+		return
+	}
+	var tenant uuid.UUID
+	detail := map[string]any{}
+	switch {
+	case in.BusinessID != nil && in.Code == "":
+		tenant = *in.BusinessID
+	case in.BusinessID == nil && in.Code != "":
+		t, err := s.chatCodes().ResolveChatCode(ctx, strings.TrimSpace(in.Code))
+		switch {
+		case errors.Is(err, ErrChatCodeReplaced):
+			writeJSON(w, http.StatusGone, map[string]any{"error": "This link no longer works. Ask the business for its new link.", "link_replaced": true})
+			return
+		case errors.Is(err, ErrChatCodeUnknown):
+			writeErr(w, http.StatusNotFound, "This link does not open a chat with any business.")
+			return
+		case err != nil:
+			s.fail(w, r, err)
+			return
+		}
+		tenant, via = t, "code"
+		if s.ChatLinks.Ready() {
+			detail["code_hash"] = hex.EncodeToString(s.ChatLinks.Hash(chatlinks.Clean(in.Code)))
+		}
+	default:
+		writeErr(w, http.StatusBadRequest, "give a business_id or a chat link's code")
+		return
+	}
+	switch via {
+	case "", "link", "shop", "discover", "order", "shared", "code":
+	default:
+		writeErr(w, http.StatusBadRequest, "from is link, shop, discover, order or shared")
+		return
+	}
+	if !s.limiter("person-chat-start:"+person.String(), 6*time.Second, 10).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "Too many tries. Wait a moment and try again.")
+		return
+	}
+	out, fresh, err := s.openBusinessChat(ctx, person, tenant, via, detail)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	code := http.StatusOK
+	if fresh {
+		code = http.StatusCreated
+	}
+	writeJSON(w, code, out)
+}
+
+// openBusinessChat finds the person's chat with a business, or starts it
+// (fresh) through the door, within their limits on new chats: the
+// handler's, and ordering together's when the placer has none yet.
+func (s *Server) openBusinessChat(ctx context.Context, person, tenant uuid.UUID, via string, detail map[string]any) (personChat, bool, error) {
+	var phone *string
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_phone_of($1)`, person).Scan(&phone); err != nil {
+		return personChat{}, false, err
+	}
+	var out personChat
+	fresh := false
+	start := func(tx pgx.Tx) error {
+		var id uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT id FROM person_conversations WHERE person_id = $1 AND tenant_id = $2`, person, tenant).Scan(&id)
+		if err == nil {
+			if out, err = personChatTx(ctx, tx, person, id.String()); err != nil {
+				return err
+			}
+			return nameOneTx(ctx, tx, &out)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if phone == nil {
+			return customerSendErr{http.StatusConflict, "Add your phone number first: businesses need it for your orders and deliveries."}
+		}
+		newWeek, err := personNewWeek(ctx, tx, person)
+		if err != nil {
+			return err
+		}
+		// One start at a time for a person, so starts at once are counted
+		// one after the other against the limit.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('person-chat-start:' || $1::text, 0))`, person); err != nil {
+			return err
+		}
+		// The chats a business opened by writing first are not the
+		// person's new chats.
+		var hour, day int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE created_at > now() - interval '1 hour'), count(*) FILTER (WHERE created_at > now() - interval '1 day')
+			FROM person_conversations WHERE person_id = $1 AND NOT by_business`, person).Scan(&hour, &day); err != nil {
+			return err
+		}
+		if hour >= limitFor(personChatsPerHour, newWeek) || day >= limitFor(personChatsPerDay, newWeek) {
+			return customerSendErr{http.StatusTooManyRequests, "You have started many new chats today. Try again later."}
+		}
+		var name string
+		if err := tx.QueryRow(ctx, `SELECT name FROM users WHERE id = $1`, person).Scan(&name); err != nil {
+			return err
+		}
+		detail["via"] = via
+		// A confirmed storefront order of theirs with the business opens
+		// it too: the door checks it through the phone index (00462).
+		if key := s.PhoneIndex.DoorKey(); key != nil {
+			detail["index_key"] = hex.EncodeToString(key)
+		}
+		if err := enterTx(ctx, tx, person, tenant, "customer.start", detail); err != nil {
+			return err
+		}
+		// A business that turned chats off takes no new ones (§8.2).
+		if st, err := chatlinks.SettingsTx(ctx, tx, tenant); err != nil {
+			return err
+		} else if !st.TakesChats {
+			return customerSendErr{http.StatusConflict, "This business is not taking chats in Taskiem right now."}
+		}
+		thread, _, err := s.appThreadTx(ctx, tx, tenant, person, *phone, name)
+		if err != nil {
+			return err
+		}
+		var answer *bool
+		if err := tx.QueryRow(ctx, `SELECT answer FROM customer_offer_consents WHERE tenant_id = $1 AND person_id = $2`, tenant, person).Scan(&answer); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		offers := "unasked"
+		if answer != nil {
+			offers = map[bool]string{true: "yes", false: "no"}[*answer]
+		}
+		var bname string
+		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&bname); err != nil {
+			return err
+		}
+		id = uuid.Must(uuid.NewV7())
+		if _, err := tx.Exec(ctx, `INSERT INTO person_conversations (id, person_id, tenant_id, offers) VALUES ($1, $2, $3, $4)`, id, person, tenant, offers); err != nil {
+			return err
+		}
+		// The business's WhatsApp thread of their verified phone, if it
+		// has one, is the same customer's (§11): the lines are joined. In a
+		// savepoint: if joining fails, the chat starts all the same (the
+		// next message, or the sweep, joins them).
+		s.savepoint(ctx, tx, "customer door: joining the lines", func(sp pgx.Tx) error {
+			_, err := s.joinAppTx(ctx, sp, tenant, thread, false)
+			return err
+		})
+		fresh = true
+		if out, err = personChatTx(ctx, tx, person, id.String()); err != nil {
+			return err
+		}
+		out.Name = bname
+		out.Notice = bname + " will see your name and phone number, for your orders and deliveries. Messages with businesses can be read by Taskiem to help with your orders."
+		return nil
+	}
+	err := db.InPersonTx(ctx, s.Store.Pool, person, start)
+	if isUnique(err) {
+		// Started twice at once: the other start made it; answer it.
+		fresh = false
+		err = db.InPersonTx(ctx, s.Store.Pool, person, start)
+	}
+	return out, fresh, err
+}
+
+// getPersonChat is GET /v1/me/chats/{id}: one conversation, with the
+// business's opening line and whether it is typing.
+func (s *Server) getPersonChat(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	var out personChat
+	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		var err error
+		if out, err = personChatTx(ctx, tx, person, chi.URLParam(r, "id")); err != nil {
+			return err
+		}
+		if err := nameOneTx(ctx, tx, &out); err != nil {
+			return err
+		}
+		var typing bool
+		if err := tx.QueryRow(ctx, `SELECT taskiem_customer_typing_of($1, $2, 'business')`, out.Business, person).Scan(&typing); err != nil {
+			return err
+		}
+		out.Typing = &typing
+		return nil
+	})
+	if err == nil {
+		s.businessHead(ctx, person, &out)
+	}
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// businessTrust is what a business has proved, for the conversation's
+// header (§15, fraud): its phone, a check of the business itself, a
+// payment provider connected (it is paid through Taskiem's pay links),
+// and how long it has been on Taskiem.
+type businessTrust struct {
+	Phone    bool `json:"phone"`
+	Business bool `json:"business"`
+	Payments bool `json:"payments"`
+	// Months on Taskiem, whole months since it was made.
+	Months int `json:"months"`
+}
+
+// paymentConnectors are the connectors that take a customer's money for
+// a business (a pay link's card or transfer).
+var paymentConnectors = []string{"paystack", "flutterwave", "moniepoint", "interswitch", "opay", "opaybusiness", "remita"}
+
+// businessHead fills the conversation's header, read through the door:
+// the business's opening line (open now, closes at 18:00) when it keeps
+// hours, its photo, and what it has proved. Left out when the door is
+// shut (the business blocked the person).
+func (s *Server) businessHead(ctx context.Context, person uuid.UUID, c *personChat) {
+	tenant := c.Business
+	_ = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		if err := enterTx(ctx, tx, person, tenant, "customer.chat", map[string]any{"read": "header"}); err != nil {
+			return err
+		}
+		card, err := chatlinks.CardTx(ctx, tx, tenant, s.previewDomain(), time.Now())
+		if err != nil {
+			return err
+		}
+		c.Photo = card.Photo
+		v, err := verificationOf(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		trust := businessTrust{Phone: v.Phone, Business: v.Business}
+		var since time.Time
+		if err := tx.QueryRow(ctx, `SELECT t.created_at, EXISTS (SELECT 1 FROM connections c WHERE c.tenant_id = t.id AND c.environment = 'prod'
+			AND c.status = 'active' AND c.connector = ANY ($2)) FROM tenants t WHERE t.id = $1`, tenant, paymentConnectors).Scan(&since, &trust.Payments); err != nil {
+			return err
+		}
+		trust.Months = monthsSince(since, time.Now())
+		c.Verified = &trust
+		h, known, err := businessHoursTx(ctx, tx, tenant)
+		if err != nil || !known {
+			return err
+		}
+		now := time.Now()
+		open, _ := h.OpenNow(now)
+		out := &chatHours{Open: open, Line: "Closed now"}
+		if open {
+			out.Line = "Open now"
+			if c := closingAt(h, now); c != "" {
+				out.Line = "Open now, closes at " + c
+			}
+		} else if _, ok := nextOpening(h, now); ok {
+			// "Closed now. Opens tomorrow at 09:00"
+			out.Line = "Closed now. Opens " + strings.TrimSuffix(strings.TrimPrefix(closedWords(h, now), "We're closed now. We open "), " and will answer then.")
+		}
+		c.Hours = out
+		return nil
+	})
+}
+
+// monthsSince is how many whole months have passed from since to now.
+func monthsSince(since, now time.Time) int {
+	m := (now.Year()-since.Year())*12 + int(now.Month()) - int(since.Month())
+	if now.Day() < since.Day() {
+		m--
+	}
+	return max(0, m)
+}
+
+// closingAt is when the opening of today's hours that holds t closes, or
+// "" when none of today's does.
+func closingAt(h storefront.Hours, t time.Time) string {
+	t = t.In(storefront.Lagos)
+	mins := t.Hour()*60 + t.Minute()
+	at := func(s string) int {
+		if len(s) != 5 {
+			return -1
+		}
+		hh, _ := strconv.Atoi(s[:2])
+		mm, _ := strconv.Atoi(s[3:])
+		return hh*60 + mm
+	}
+	for _, sp := range h.Days[(int(t.Weekday())+6)%7] {
+		o, c := at(sp.Open), at(sp.Close)
+		if o >= 0 && mins >= o && (c <= o || mins < c) {
+			return sp.Close
+		}
+	}
+	return ""
+}
+
+// putPersonChat is PUT /v1/me/chats/{id} {muted, archived, offers}: the
+// person's own settings for a conversation, and their answer to offers,
+// which the business records with when it was given (§15).
+func (s *Server) putPersonChat(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	var in struct {
+		Muted    *bool `json:"muted"`
+		Archived *bool `json:"archived"`
+		Offers   *bool `json:"offers"`
+		// OffersAsked: "Get offers from {business}?" was shown and passed
+		// over; it is not asked again (§15).
+		OffersAsked *bool `json:"offers_asked"`
+	}
+	if err := decodeBody(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if in.Muted == nil && in.Archived == nil && in.Offers == nil && in.OffersAsked == nil {
+		writeErr(w, http.StatusBadRequest, "muted, archived, offers or offers_asked is required")
+		return
+	}
+	var out personChat
+	offersRefused := false
+	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		c, err := personChatTx(ctx, tx, person, chi.URLParam(r, "id"))
+		if err != nil {
+			return err
+		}
+		// The person's own settings: theirs whatever the business did.
+		asked := in.OffersAsked != nil && *in.OffersAsked
+		if _, err := tx.Exec(ctx, `UPDATE person_conversations SET muted = COALESCE($3, muted), archived = COALESCE($4, archived),
+			offers_asked_at = CASE WHEN $5 THEN COALESCE(offers_asked_at, now()) ELSE offers_asked_at END WHERE person_id = $1 AND id = $2`,
+			person, c.ID, in.Muted, in.Archived, asked); err != nil {
+			return err
+		}
+		if in.Offers != nil {
+			// The answer is recorded with the business, through the door:
+			// a business that blocked the person takes no answer, and only
+			// this part is refused.
+			sp, err := tx.Begin(ctx)
+			if err != nil {
+				return err
+			}
+			err = s.recordOffersTx(ctx, sp, person, c, *in.Offers)
+			switch {
+			case errors.Is(err, errDoorBlocked):
+				if err := sp.Rollback(ctx); err != nil {
+					return err
+				}
+				offersRefused = true
+			case err != nil:
+				return err
+			default:
+				if err := sp.Commit(ctx); err != nil {
+					return err
+				}
+			}
+		}
+		if out, err = personChatTx(ctx, tx, person, c.ID.String()); err != nil {
+			return err
+		}
+		return nameOneTx(ctx, tx, &out)
+	})
+	if err == nil && offersRefused && in.Muted == nil && in.Archived == nil && in.OffersAsked == nil {
+		err = errDoorBlocked
+	}
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	if offersRefused {
+		out.OffersRefused = true
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// recordOffersTx keeps the person's answer to offers in their copy and,
+// through the door, with the business, with when it was given (§15).
+func (s *Server) recordOffersTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, c personChat, yes bool) error {
+	if _, err := tx.Exec(ctx, `UPDATE person_conversations SET offers = $3, offers_at = now(), offers_asked_at = COALESCE(offers_asked_at, now())
+		WHERE person_id = $1 AND id = $2`, person, c.ID, map[bool]string{true: "yes", false: "no"}[yes]); err != nil {
+		return err
+	}
+	if err := enterTx(ctx, tx, person, c.Business, "customer.chat", map[string]any{"offers": yes}); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO customer_offer_consents (tenant_id, person_id, answer) VALUES ($1, $2, $3)
+		ON CONFLICT (tenant_id, person_id) DO UPDATE SET answer = EXCLUDED.answer, answered_at = now()`, c.Business, person, yes)
+	return err
+}
+
+// personMessages is GET /v1/me/chats/{id}/messages: a page of the
+// person's copy, the latest last: 50 before ?before (a message), or the
+// latest 50. Their own copy only: nothing of the business is read.
+func (s *Server) personMessages(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	out := []personMessage{}
+	more := false
+	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		c, err := personChatTx(ctx, tx, person, chi.URLParam(r, "id"))
+		if err != nil {
+			return err
+		}
+		q := `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line FROM person_messages WHERE person_id = $1 AND conversation_id = $2`
+		args := []any{person, c.ID}
+		if b, err := uuid.Parse(r.URL.Query().Get("before")); err == nil {
+			q += ` AND (created_at, id) < (SELECT created_at, id FROM person_messages WHERE person_id = $1 AND id = $3)`
+			args = append(args, b)
+		}
+		rows, err := tx.Query(ctx, q+` ORDER BY created_at DESC, id DESC LIMIT 51`, args...)
+		if err != nil {
+			return err
+		}
+		list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (personMessage, error) {
+			var m personMessage
+			if err := r.Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line); err != nil {
+				return m, err
+			}
+			m.WarnTransfer = !m.Mine && ((m.Kind != "card" && warnTransfer(m.Body)) || savedNamesAccount(m.Card))
+			m.Card = maskCustomerCard(m.Mine, m.Card)
+			return m, nil
+		})
+		if err != nil {
+			return err
+		}
+		if len(list) > 50 {
+			more, list = true, list[:50]
+		}
+		for i := len(list) - 1; i >= 0; i-- {
+			out = append(out, list[i])
+		}
+		return nil
+	})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"messages": out, "more": more})
+}
+
+// sendPersonMessage is POST /v1/me/chats/{id}/messages {text, client_id}
+// or {card, client_id}: the person writes to the business, or shares one
+// of their own saved things as a card (saved objects S1, part 3; asked
+// first, as 409 confirm_share, before what is sensitive). Kept in both copies in one
+// transaction through the door; the business's people who handle orders
+// are told; a business closed by its hours answers once a day.
+func (s *Server) sendPersonMessage(w http.ResponseWriter, r *http.Request) {
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	var in struct {
+		Text     string `json:"text"`
+		ClientID string `json:"client_id"`
+		Card     *struct {
+			Type  string      `json:"type"`
+			Saved *savedShare `json:"saved"`
+		} `json:"card"`
+	}
+	if err := decodeBody(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if in.Card != nil {
+		s.sendPersonSaved(w, r, person, in.Card.Type, in.Card.Saved, in.ClientID)
+		return
+	}
+	in.Text = strings.TrimSpace(in.Text)
+	if in.Text == "" || len([]rune(in.Text)) > 4000 {
+		writeErr(w, http.StatusBadRequest, "the message is required (up to 4,000 characters)")
+		return
+	}
+	if len(in.ClientID) > 80 {
+		writeErr(w, http.StatusBadRequest, "client_id is up to 80 characters")
+		return
+	}
+	m, fresh, err := s.personSend(r.Context(), person, chi.URLParam(r, "id"), in.Text, in.ClientID, nil, nil)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	code := http.StatusCreated
+	if !fresh {
+		code = http.StatusOK
+	}
+	writeJSON(w, code, m)
+}
+
+// sendPersonFile is POST /v1/me/chats/{id}/files: a photo, voice note or
+// PDF to the business (multipart: file; text, a caption; client_id).
+// Scanned for malware and checked before either copy is kept (§8.5); the
+// business keeps its copy in its own storage, the person theirs.
+func (s *Server) sendPersonFile(w http.ResponseWriter, r *http.Request) {
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	f, err := s.readChatFile(w, r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	defer func() { _ = r.MultipartForm.RemoveAll() }()
+	text := strings.TrimSpace(r.FormValue("text"))
+	if len([]rune(text)) > 4000 {
+		writeErr(w, http.StatusBadRequest, "a caption is up to 4,000 characters")
+		return
+	}
+	if text == "" {
+		text = map[string]string{"photo": "Photo", "voice": "Voice note", "file": "File"}[media.ChatKind(f.Type)]
+	}
+	clientID := r.FormValue("client_id")
+	if len(clientID) > 80 {
+		writeErr(w, http.StatusBadRequest, "client_id is up to 80 characters")
+		return
+	}
+	m, fresh, err := s.personSend(r.Context(), person, chi.URLParam(r, "id"), text, clientID, f, nil)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	code := http.StatusCreated
+	if !fresh {
+		code = http.StatusOK
+	}
+	writeJSON(w, code, m)
+}
+
+// personRepeat is the person's message under clientID, if they sent one.
+func personRepeat(ctx context.Context, tx pgx.Tx, person, conv uuid.UUID, clientID string) (*personMessage, error) {
+	if clientID == "" {
+		return nil, nil
+	}
+	var m personMessage
+	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line FROM person_messages
+		WHERE person_id = $1 AND conversation_id = $2 AND client_id = $3`, person, conv, clientID).
+		Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	m.Card = maskCustomerCard(m.Mine, m.Card)
+	return &m, err
+}
+
+// personSend writes the person's message (and file, or card) to both
+// copies through the door, in one transaction; fresh is false for a repeat
+// of a client_id.
+func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text, clientID string, f *sentFile, card *customerCard) (personMessage, bool, error) {
+	out := personMessage{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, Line: lineApp}
+	if f != nil {
+		out.Kind, out.Attachment = "media", f.view()
+	}
+	if card != nil {
+		out.Kind, out.Card = "card", card
+	}
+	var tenant uuid.UUID
+	var bizFile map[string]any
+	var again *personMessage
+	if f != nil {
+		// The business's copy, in its own storage, before the transaction
+		// (which holds the business's audit chain once the door is open);
+		// removed again if the message is not kept.
+		var c personChat
+		if err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+			var err error
+			c, err = personChatTx(ctx, tx, person, chatID)
+			return err
+		}); err != nil {
+			return out, false, err
+		}
+		if c.Blocked {
+			return out, false, errDoorYouBlocked
+		}
+		if c.BlockedYou {
+			return out, false, errDoorBlocked
+		}
+		bf, err := s.Media.PutChatFile(ctx, c.Business, f.Data)
+		if err != nil {
+			return out, false, chatFileErr(err)
+		}
+		tenant = c.Business
+		bizFile = map[string]any{"kind": out.Attachment.Kind, "type": bf.Type, "size": bf.Size, "name": f.Name, "path": bf.Path}
+	}
+	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		c, err := personChatTx(ctx, tx, person, chatID)
+		if err != nil {
+			return err
+		}
+		if bizFile != nil && c.Business != tenant {
+			return errDoorNone
+		}
+		tenant = c.Business
+		// The conversation held until this transaction ends: messages sent
+		// at once are counted one after the other against the limit.
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM person_conversations WHERE person_id = $1 AND id = $2 FOR UPDATE`, person, c.ID); err != nil {
+			return err
+		}
+		if again, err = personRepeat(ctx, tx, person, c.ID, clientID); err != nil || again != nil {
+			return err
+		}
+		if c.Blocked {
+			return errDoorYouBlocked
+		}
+		newWeek, err := personNewWeek(ctx, tx, person)
+		if err != nil {
+			return err
+		}
+		// The app's messages only: those shown from WhatsApp are not sent here.
+		var n int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM person_messages WHERE person_id = $1 AND conversation_id = $2 AND mine AND line = 'app' AND created_at > now() - interval '1 minute'`,
+			person, c.ID).Scan(&n); err != nil {
+			return err
+		}
+		if n >= limitFor(personMessagesPerMinute, newWeek) {
+			return customerSendErr{http.StatusTooManyRequests, "You are sending messages very fast. Wait a moment and try again."}
+		}
+		if err := enterTx(ctx, tx, person, tenant, "customer.chat", map[string]any{"message": out.ID, "kind": out.Kind}); err != nil {
+			return err
+		}
+		var thread uuid.UUID
+		var subject string
+		if err := tx.QueryRow(ctx, `SELECT id, subject_id FROM customer_conversations WHERE tenant_id = $1 AND person_id = $2 AND line = 'app'`,
+			tenant, person).Scan(&thread, &subject); err != nil {
+			return err
+		}
+		// Writing in the app joins the business's WhatsApp thread of their
+		// verified phone, when it has one and they are not joined (§11). In
+		// a savepoint: if joining fails, the message is kept all the same.
+		s.savepoint(ctx, tx, "customer door: joining the lines", func(sp pgx.Tx) error {
+			_, err := s.joinAppTx(ctx, sp, tenant, thread, false)
+			return err
+		})
+
+		if out.CreatedAt, _, err = s.writeAppMessageTx(ctx, tx, appMessage{id: out.ID, tenant: tenant, thread: thread, subject: subject, person: person,
+			fromPerson: true, kind: out.Kind, text: text, card: card, bizFile: bizFile, personFile: f, clientID: clientID}); err != nil {
+			return err
+		}
+		// The bell, and the closed reply, each in a savepoint: if either
+		// fails, the customer's message is kept.
+		s.savepoint(ctx, tx, "customer door: telling the bell", func(sp pgx.Tx) error {
+			return s.tellCustomerMessageTx(ctx, sp, tenant, thread)
+		})
+		s.savepoint(ctx, tx, "customer door: the closed reply", func(sp pgx.Tx) error {
+			return s.closedReplyTx(ctx, sp, tenant, thread, person, subject)
+		})
+		return nil
+	})
+	if (err != nil || again != nil) && bizFile != nil {
+		s.dropChatFile(ctx, tenant, bizFile["path"].(string))
+	}
+	if again != nil {
+		return *again, false, nil
+	}
+	if err != nil {
+		if isUnique(err) && clientID != "" {
+			var m *personMessage
+			if e := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+				c, err := personChatTx(ctx, tx, person, chatID)
+				if err != nil {
+					return err
+				}
+				m, err = personRepeat(ctx, tx, person, c.ID, clientID)
+				return err
+			}); e == nil && m != nil {
+				return *m, false, nil
+			}
+		}
+		return out, false, err
+	}
+	return out, true, nil
+}
+
+// sendPersonSaved shares one of the person's own saved things with the
+// business as a card (saved objects S1, part 3): asked first before what
+// is sensitive, in the words "Share Mum's account details with Bola
+// Stores?"; the share in the person's own log.
+func (s *Server) sendPersonSaved(w http.ResponseWriter, r *http.Request, person uuid.UUID, kind string, sh *savedShare, clientID string) {
+	if kind != "saved" {
+		writeErr(w, http.StatusBadRequest, "Only a saved thing is shared as a card here.")
+		return
+	}
+	if sh == nil {
+		writeErr(w, http.StatusBadRequest, "Choose the saved thing to share.")
+		return
+	}
+	if sh.Owner == "" {
+		sh.Owner = "mine"
+	}
+	if sh.Owner != "mine" {
+		writeErr(w, http.StatusBadRequest, "Only your own saved things are shared here.")
+		return
+	}
+	if len(clientID) > 80 {
+		writeErr(w, http.StatusBadRequest, "client_id is up to 80 characters")
+		return
+	}
+	var chat personChat
+	err := db.InPersonTx(r.Context(), s.Store.Pool, person, func(tx pgx.Tx) error {
+		var err error
+		if chat, err = personChatTx(r.Context(), tx, person, chi.URLParam(r, "id")); err != nil {
+			return err
+		}
+		return nameOneTx(r.Context(), tx, &chat)
+	})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	if chat.Blocked {
+		s.personFail(w, r, errDoorYouBlocked)
+		return
+	}
+	c, rec, err := s.savedCardFor(r, person, uuid.Nil, *sh, chat.Name)
+	if err != nil {
+		if !shareConfirmFail(w, err) {
+			s.personFail(w, r, err)
+		}
+		return
+	}
+	m, fresh, err := s.personSend(r.Context(), person, chat.ID.String(), c.Title, clientID, nil, &customerCard{Type: "saved", Title: c.Title, Saved: &c})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	code := http.StatusCreated
+	if !fresh {
+		code = http.StatusOK
+	} else {
+		s.recordShare(r, rec)
+	}
+	m.Card = maskCustomerCard(true, m.Card)
+	writeJSON(w, code, m)
+}
+
+// savepoint runs fn in a savepoint of tx: what it did is kept when it
+// succeeds, and undone and logged when it fails; tx goes on either way.
+func (s *Server) savepoint(ctx context.Context, tx pgx.Tx, what string, fn func(pgx.Tx) error) {
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		s.Logger.Warn(what, "err", err)
+		return
+	}
+	if err := fn(sp); err != nil {
+		s.Logger.Warn(what, "err", err)
+		if err := sp.Rollback(ctx); err != nil {
+			s.Logger.Warn(what+": undoing", "err", err)
+		}
+		return
+	}
+	if err := sp.Commit(ctx); err != nil {
+		s.Logger.Warn(what+": keeping", "err", err)
+	}
+}
+
+// personFile is GET /v1/me/chats/{id}/files/{message}: the person's own
+// copy of a message's file.
+func (s *Server) personFile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	var data []byte
+	var ctype, name, kind string
+	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		c, err := personChatTx(ctx, tx, person, chi.URLParam(r, "id"))
+		if err != nil {
+			return err
+		}
+		msg, err := uuid.Parse(chi.URLParam(r, "message"))
+		if err != nil {
+			return errDoorNone
+		}
+		return tx.QueryRow(ctx, `SELECT f.data, f.type, f.name, m.attachment->>'kind' FROM person_files f JOIN person_messages m ON m.id = f.message_id AND m.person_id = f.person_id
+			WHERE f.person_id = $1 AND m.conversation_id = $2 AND f.message_id = $3`, person, c.ID, msg).Scan(&data, &ctype, &name, &kind)
+	})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	serveChatFile(w, data, ctype, name, kind)
+}
+
+// readPersonChat is POST /v1/me/chats/{id}/read: the person read the
+// business's messages; the business's copy shows them read.
+func (s *Server) readPersonChat(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		c, err := personChatTx(ctx, tx, person, chi.URLParam(r, "id"))
+		if err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `UPDATE person_messages SET read_at = now() WHERE person_id = $1 AND conversation_id = $2 AND NOT mine AND read_at IS NULL RETURNING id`,
+			person, c.ID)
+		if err != nil {
+			return err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil || len(ids) == 0 || c.BlockedYou {
+			return err
+		}
+		if err := enterTx(ctx, tx, person, c.Business, "customer.chat", map[string]any{"read": len(ids)}); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE customer_messages SET read_at = COALESCE(read_at, now()), delivery = 'read' WHERE tenant_id = $1 AND id = ANY ($2) AND mine`,
+			c.Business, ids)
+		return err
+	})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// personTyping is POST /v1/me/chats/{id}/typing: the person is typing,
+// for the business's typing line, for a few seconds.
+func (s *Server) personTyping(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		c, err := personChatTx(ctx, tx, person, chi.URLParam(r, "id"))
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `SELECT taskiem_customer_typing($1, $2, 'person')`, c.Business, person)
+		return typingErr(err, errDoorYouBlocked)
+	})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// blockBusiness is POST (block) and DELETE (unblock) /v1/me/chats/{id}/block:
+// the person stops the business writing to them (§8.3). Nothing is
+// deleted; the business's thread says "This customer has stopped messages".
+func (s *Server) blockBusiness(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	block := r.Method == http.MethodPost
+	var out personChat
+	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		c, err := personChatTx(ctx, tx, person, chi.URLParam(r, "id"))
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE person_conversations SET blocked_at = CASE WHEN $3 THEN COALESCE(blocked_at, now()) END WHERE person_id = $1 AND id = $2`,
+			person, c.ID, block); err != nil {
+			return err
+		}
+		if err := enterTx(ctx, tx, person, c.Business, "customer.block", map[string]any{"blocked": block}); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE customer_conversations SET person_blocked_at = CASE WHEN $3 THEN COALESCE(person_blocked_at, now()) END
+			WHERE tenant_id = $1 AND person_id = $2 AND line = 'app'`, c.Business, person, block); err != nil {
+			return err
+		}
+		if out, err = personChatTx(ctx, tx, person, c.ID.String()); err != nil {
+			return err
+		}
+		return nameOneTx(ctx, tx, &out)
+	})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// reportBusiness is POST /v1/me/chats/{id}/report {reason, note, consent}:
+// the conversation reported to Taskiem's moderators, with its last 20
+// messages, which go only with the person's consent (§15).
+func (s *Server) reportBusiness(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	var in struct {
+		Reason  string `json:"reason"`
+		Note    string `json:"note"`
+		Consent bool   `json:"consent"`
+	}
+	if err := decodeBody(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	switch in.Reason {
+	case "spam", "scam", "abuse", "other":
+	default:
+		writeErr(w, http.StatusBadRequest, "reason is spam, scam, abuse or other")
+		return
+	}
+	in.Note = strings.TrimSpace(in.Note)
+	if len([]rune(in.Note)) > 1000 {
+		writeErr(w, http.StatusBadRequest, "a note is up to 1,000 characters")
+		return
+	}
+	if !in.Consent {
+		writeErr(w, http.StatusBadRequest, "A report sends the last 20 messages to Taskiem's moderators: agree to send them (consent) to report.")
+		return
+	}
+	if !s.limiter("person-report:"+person.String(), 2*time.Hour, 12).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "You have sent many reports. Try again later.")
+		return
+	}
+	id := uuid.Must(uuid.NewV7())
+	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		c, err := personChatTx(ctx, tx, person, chi.URLParam(r, "id"))
+		if err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT mine, kind, body, offer, created_at FROM person_messages WHERE person_id = $1 AND conversation_id = $2
+			ORDER BY created_at DESC LIMIT 20`, person, c.ID)
+		if err != nil {
+			return err
+		}
+		type sent struct {
+			FromYou bool      `json:"from_customer"`
+			Kind    string    `json:"kind"`
+			Body    string    `json:"body"`
+			Offer   bool      `json:"offer,omitempty"`
+			At      time.Time `json:"at"`
+		}
+		msgs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (sent, error) {
+			var m sent
+			return m, r.Scan(&m.FromYou, &m.Kind, &m.Body, &m.Offer, &m.At)
+		})
+		if err != nil {
+			return err
+		}
+		if msgs == nil {
+			msgs = []sent{}
+		}
+		raw, _ := json.Marshal(msgs)
+		// Sealed under the report's own key, as a people report is; kept
+		// plain only on a server with no key service (none seals then).
+		if s.Vault == nil {
+			_, err = tx.Exec(ctx, `INSERT INTO customer_reports (id, person_id, tenant_id, reason, note, consent, messages) VALUES ($1, $2, $3, $4, $5, true, $6)`,
+				id, person, c.Business, in.Reason, in.Note, raw)
+			return err
+		}
+		box, err := peoplesafety.NewBox(ctx, s.Vault, peoplesafety.CustomerReportPurpose(id), id)
+		if err != nil {
+			return err
+		}
+		sealed, err := box.Seal(peoplesafety.MessagesRow, raw)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO customer_reports (id, person_id, tenant_id, reason, note, consent, messages, sealed, box_key, kms_key, message_count)
+			VALUES ($1, $2, $3, $4, $5, true, '[]', $6, $7, $8, $9)`, id, person, c.Business, in.Reason, in.Note, sealed, box.Sealed, box.KMSKey, len(msgs))
+		return err
+	})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "messages_sent": true,
+		"said": "Thank you. Taskiem's moderators will look at this conversation. You can also block this business."})
+}
+
+// doorOnce runs fn through the door for one action, in the person's own
+// transaction, which is kept: every entry is audited (§8.4).
+func (s *Server) doorOnce(ctx context.Context, person uuid.UUID, chatID, action string, detail map[string]any, fn func(tx pgx.Tx, c personChat) error) error {
+	return db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		c, err := personChatTx(ctx, tx, person, chatID)
+		if err != nil {
+			return err
+		}
+		if err := enterTx(ctx, tx, person, c.Business, action, detail); err != nil {
+			return err
+		}
+		return fn(tx, c)
+	})
+}

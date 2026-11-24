@@ -76,6 +76,8 @@ Page views never reach Xenibase. Taskiem keeps a copy of the mapped columns of e
 - when the owner presses **Refresh**;
 - every 15 minutes for every published storefront, which catches rows changed in Xenibase, in workflows or from chat.
 
+Each business's scheduled refresh has at most 5 minutes, so a slow table or model does not hold up the others' refreshes or the [trust checks](moderation.md), which run on their own every few minutes.
+
 If the table cannot be read, the old copy stays, the page keeps showing it, and the error is shown to the owner.
 
 ### Stock
@@ -83,7 +85,7 @@ If the table cannot be read, the old copy stays, the page keeps showing it, and 
 Mapping an integer **stock** column tracks how many of each item are left:
 - the page shows an item with none left as **sold out**, and the order form refuses it;
 - the form offers no more of an item than is left, and refuses an order for more;
-- **accepting** an order lowers the stock in the table (never below zero), and the copy at once.
+- **accepting** an order lowers the stock in the table (never below zero), and the copy at once. Where the business [keeps stock](stock.md), an accepted order that is then declined, cancelled, left refund due or not paid for in time puts back what it took, once; an order its rider delivered does not.
 
 The table is changed only while it still holds the count that was read, so two orders accepted at the same moment both count; each change carries an Idempotency-Key and is recorded on the order before it is sent, so a retried step changes the stock once. An order accepted with too little left lowers it to zero, and its note says which items were short (`decide` returns them as `short`). Declining or cancelling puts nothing back: change the table if the items return to the shelf. Where Taskiem keeps the shop's [stock](stock.md), each lowering is a stock movement (reason `order`), recorded before it is sent, so the count can always be explained, and the Stock page adds sales at the counter, suppliers and purchase orders, counts and shrinkage. Stock is lowered only on Accept, so an order paid when ordering holds none while it waits. A catalogue holds at most 500 items, and the plan's `storefront_items` ([moderation](moderation.md#plans)).
 
@@ -130,7 +132,7 @@ Saving a form re-publishes a published page, so its buttons match.
 
    The public host holds no key to the vault, so it cannot seal personal data itself.
 2. **Taskiem records it.** Within a second, the `api` role takes it from the inbox:
-   - seals the customer's details under their personal-data subject (erasing the customer erases them);
+   - seals the customer's details under their personal-data subject (erasing the customer erases them; and once an order has ended, they are erased after the storefront's retention, 12 months unless `retention_days` says otherwise);
    - records the order with a reference such as `AK-7QX4KD`;
    - deletes the inbox row.
 3. **Paid when ordering:** on a Paystack form, a checkout page is made at once. The customer's status page takes them to it, and Paystack sends them back.
@@ -161,6 +163,7 @@ The **storefront** platform connector (`storefront@1`, no connection needed) is 
 | `decide` | `accept`, `decline`, `complete` or `cancel` the order (`reference`, optional `note`). Accepting lowers the [stock](#stock), returning the items that were `short`. A decision the order's status does not allow fails the step |
 | `payment_link` | The checkout page for an accepted order paid after acceptance, made once. The run can then wait for the `storefront.payment` signal, correlated by the reference, whose payload's `status` is `paid` or `expired`, with `amount_kobo` (what the link asked) and `balance_kobo` (what is still to pay). On an order paid before, it asks for what is left (or `amount_kobo`, when given) with a page of its own: a balance, or a late fee ([part payments](#part-payments)) |
 | `notify_customer` | An SMS, and an email when there is one, to the order's customer (`reference`, `text`, optional `subject`). `{link}` in the text becomes the customer's status link, where they confirm new prices or move and cancel a booking; no run sees the link itself |
+| `recent_customers` | The customers who ordered or booked in the last `days` (7 unless said, up to 31), each once, the newest first, with their name, phone and email (personal data, sealed in the run) and how many orders were theirs; declined, cancelled and expired orders do not count. With a saved text, "every Monday, send `@price-list` to last week's customers" (saved objects S3) |
 | `get_booking` | A booking's status, service and time (`when`, as customers read it), when its reminders fall (`remind_day_at`, `remind_hours_at`, and whether each is still to come) and its payment page |
 | `issue_tickets` | A paid ticket order's codes, one per seat (`AK-7QX4KD-2`): `codes`, `count`, `event` and `when`. Asked again, the same codes |
 | `offer_place` | Gives a name on a full class's waiting list its place when one is free (fails while it is still full); the order is then accepted and paid after acceptance, for a `payment_link` step |

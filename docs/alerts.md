@@ -34,7 +34,7 @@ Rules stay for everything else: other channels (Slack, a webhook, a shared inbox
 
 **Send test** delivers a test message straight away and reports the error if it fails; an organisation sends at most 10 test messages at once, then one every 6 minutes (`429` with `Retry-After`). Email channels need a confirmed email in an organisation that signed itself up ([onboarding](onboarding.md#confirming-the-email)). Calls to Slack and webhooks go through the egress guard: private and metadata addresses are refused.
 
-**Verifying a webhook.** The `Taskiem-Signature` header is `t=<unix seconds>,v1=<hex>`, where `v1` is HMAC-SHA256 with the signing key over `<t>.<raw body>`. Compare in constant time and refuse a `t` more than five minutes old. `Taskiem-Alert-Id` is the same on every retry of one alert, so use it to drop duplicates.
+**Verifying a webhook.** The `Taskiem-Signature` header is `t=<unix seconds>,v1=<hex>`, where `v1` is HMAC-SHA256 with the signing key over `<t>.<raw body>`. Compare in constant time and refuse a `t` more than five minutes old. `Taskiem-Alert-Id` is the same on every retry of one alert, so use it to drop duplicates. Answer within 15 seconds: a post with no answer by then is cut off and retried with backoff (one minute, then 4, 16, 64, up to six hours, eight attempts), and an organisation's deliveries get 30 seconds per pass of the scheduler, so a slow endpoint delays only its own organisation's alerts.
 
 ## Rules
 

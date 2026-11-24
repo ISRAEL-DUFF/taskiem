@@ -113,6 +113,21 @@ func TestStorefrontBookings(t *testing.T) {
 		t.Fatalf("kind=order: %v", l)
 	}
 
+	// The free times to move it to: the other booking's time is not
+	// offered, its own is not either, and the day asked for is shown.
+	times := owner.must(200, "GET", "/v1/storefront/bookings/"+first+"/times?day="+day.Format(time.DateOnly), nil)
+	if times["day"] != day.Format(time.DateOnly) || len(times["days"].([]any)) == 0 {
+		t.Fatalf("times: %v", times)
+	}
+	for _, x := range times["times"].([]any) {
+		at, _ := time.Parse(time.RFC3339, x.(string))
+		if at.Equal(day.Add(10*time.Hour)) || at.Equal(day.Add(11*time.Hour)) {
+			t.Fatalf("offered a taken time %v: %v", at, times["times"])
+		}
+	}
+	owner.must(400, "GET", "/v1/storefront/bookings/"+first+"/times?day=soon", nil)
+	owner.must(404, "GET", "/v1/storefront/bookings/AD-NOPE00/times", nil)
+
 	// The owner moves and cancels from the web app as from chat.
 	owner.must(409, "POST", "/v1/storefront/bookings/"+first+"/move", map[string]any{"starts_at": day.Add(11 * time.Hour)})
 	moved := owner.must(200, "POST", "/v1/storefront/bookings/"+first+"/move", map[string]any{"starts_at": day.Add(14 * time.Hour)})["booking"].(map[string]any)

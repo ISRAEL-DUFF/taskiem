@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type InputHTMLAttributes, type ReactNode, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import { onScreen, toast } from "./toast";
 import { ApiError } from "./api";
 import { Icon } from "./icons";
 import { redact } from "./lib/timeline";
 import { whenWords } from "./lib/time";
+import { useSheetDrag } from "./lib/sheetDrag";
 
 /** Loads data, reloads on demand, and optionally polls while `poll` is true. */
 export function useLoad<T>(load: () => Promise<T>, deps: unknown[], poll = false): { data: T | undefined; error: unknown; reload: () => void } {
@@ -74,12 +75,64 @@ export function Json({ value }: { value: unknown }) {
 /** A labelled field. data-technical marks one an owner meets only under
  * Advanced (no-technical-steps N5: the gate's word test leaves it out). */
 export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode; "data-technical"?: boolean }) {
+  const id = useId();
   return (
     <label className="field">
-      <span>{label}</span>
-      {children}
+      <span id={id}>{label}</span>
+      <FieldLabel.Provider value={id}>{children}</FieldLabel.Provider>
       {hint && <div className="hint">{hint}</div>}
     </label>
+  );
+}
+
+/** The id of the label text of the field an input is in (Field, KitField):
+ * a control with a button beside it (PasswordInput) is named by that text
+ * alone, not by the label's whole content. */
+export const FieldLabel = createContext<string | undefined>(undefined);
+
+/** A password box with Show and Hide beside it, so what was typed can be
+ * checked before it is sent (sign-up above all). Hidden again when the form
+ * is sent, so a browser never offers to keep it as plain text. */
+export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  const [shown, setShown] = useState(false);
+  const labelId = useContext(FieldLabel);
+  const id = useId();
+  const box = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const form = box.current?.form;
+    if (!form) return;
+    const hide = () => setShown(false);
+    form.addEventListener("submit", hide);
+    return () => form.removeEventListener("submit", hide);
+  }, []);
+  return (
+    <span className="pw-box">
+      <input
+        {...props}
+        ref={box}
+        id={props.id ?? id}
+        type={shown ? "text" : "password"}
+        aria-labelledby={props["aria-labelledby"] ?? labelId}
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+      />
+      <button
+        type="button"
+        className="pw-toggle"
+        aria-controls={props.id ?? id}
+        title={shown ? "Hide the password" : "Show the password"}
+        onClick={(e) => {
+          // A click inside the field's label would otherwise focus the box
+          // after the button: keep the press on the button.
+          e.preventDefault();
+          setShown((v) => !v);
+        }}
+      >
+        <Icon name={shown ? "eye-off" : "eye"} />
+        <span>{shown ? "Hide" : "Show"}</span>
+      </button>
+    </span>
   );
 }
 
@@ -149,11 +202,26 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const id = useId();
+  // Closed from inside (Esc, a tap outside, pulled down): it leaves with
+  // its motion first. Its own buttons close it at once, as they decide.
+  const [leaving, setLeaving] = useState(false);
+  const shut = () => {
+    if (leaving) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return onClose();
+    setLeaving(true);
+    window.setTimeout(onClose, 200);
+  };
   // A modal opened from inside this one is on top and owns the keys.
-  useFocusTrap(ref, true, onClose, () => !ref.current?.querySelector(".modal"));
+  useFocusTrap(ref, true, shut, () => !ref.current?.querySelector(".modal"));
+  const drag = useSheetDrag(ref, onClose);
+  // Only a dialog without fields can be pulled down to close: one being
+  // filled in is never thrown away by a slip of the thumb.
+  const [fields, setFields] = useState(true);
+  useEffect(() => setFields(!!ref.current?.querySelector('input:not([type="hidden"]), textarea, select')), []);
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} ref={ref}>
+    <div className={`modal-backdrop${leaving ? " leaving" : ""}`} onMouseDown={(e) => e.target === e.currentTarget && shut()}>
+      <div className={`modal${leaving ? " leaving" : ""}`} role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} ref={ref}>
+        {!fields && <div className="modal-grab" aria-hidden="true" {...drag} />}
         <h2 id={id} style={{ marginTop: 0 }}>
           {title}
         </h2>

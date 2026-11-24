@@ -218,6 +218,12 @@ func (s *Invoices) bookByCustomer(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	return c, err
 }
 
+// BookCustomerByCustomer reads the book's record for a customer id (a
+// phone's subject, or key:book:…): ErrNotFound when the book has none.
+func (s *Invoices) BookCustomerByCustomer(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, customerID string) (BookCustomer, error) {
+	return s.bookByCustomer(ctx, tx, tenant, customerID)
+}
+
 // BookCustomerByRef reads the customer a chat's pick names (Ref): a record
 // of the book, or a customer of a sent invoice, as kept in the book when
 // they are by now.

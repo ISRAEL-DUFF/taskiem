@@ -128,7 +128,7 @@ type eventConfig struct {
 	// event the trigger sends (sends).
 	whenUsed bool
 	sends    []string
-	// guard is the customer guard (decision 0062 V6), on a trigger whose
+	// guard is the customer guard (decision 0074 V6), on a trigger whose
 	// manifest reads its events as customers' messages.
 	guard *assistant.Config
 }

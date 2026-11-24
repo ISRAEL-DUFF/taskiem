@@ -465,14 +465,12 @@ func (s *Server) templateHolds(ctx context.Context, tenant uuid.UUID) map[string
 		return holds
 	}
 	holds[templates.WhenNoSheetsStock] = !sheets
-	if _, err := s.stockShopOf(ctx, tenant); err == nil {
-		holds[templates.WhenKeepsStock] = true
-	}
-	var sales bool
+	var keeps, sales bool
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_sales WHERE tenant_id = $1)`, tenant).Scan(&sales)
-	}); err == nil && sales {
-		holds[templates.WhenRecordsSales] = true
+		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_items WHERE tenant_id = $1 AND retired_at IS NULL),
+			EXISTS (SELECT 1 FROM stock_sales WHERE tenant_id = $1)`, tenant).Scan(&keeps, &sales)
+	}); err == nil {
+		holds[templates.WhenKeepsStock], holds[templates.WhenRecordsSales] = keeps, sales
 	}
 	return holds
 }

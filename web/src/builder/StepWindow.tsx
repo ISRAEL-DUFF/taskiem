@@ -85,8 +85,9 @@ export function StepWindow(p: Props) {
           <section className="stepwin-in" aria-label="What came in">
             <h3>What came in</h3>
             <p className="hint">{p.result ? "From the test with sample data. Drag a field into a setting." : "Test it to see sample values here. You can drag a field into a setting."}</p>
-            {p.sources.length === 0 && <p className="hint">Nothing yet: this is the first step.</p>}
-            {groupsOf(p.sources).map((g) => (
+            {/* What came before; the business's saved things are in each setting's picker, not here. */}
+            {p.sources.filter((s) => !s.group).length === 0 && <p className="hint">Nothing yet: this is the first step.</p>}
+            {groupsOf(p.sources.filter((s) => !s.group)).map((g) => (
               <div key={g.from} className="in-group">
                 <span className="in-from">{g.from}</span>
                 {g.items.map((f) => (

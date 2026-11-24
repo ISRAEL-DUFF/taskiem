@@ -97,7 +97,7 @@ A workflow can start when a row of a table is added, changed or deleted: the `xe
 
 ### A conversation's memory
 
-The known table **`conversations`** is where an assistant answering customers keeps what was said ([decision 0062](decisions/0062-customer-assistant.md) V5). It has one row per message:
+The known table **`conversations`** is where an assistant answering customers keeps what was said ([decision 0074](decisions/0074-customer-assistant.md) V5). It has one row per message:
 
 | Column | Holds | Personal |
 | --- | --- | --- |
@@ -144,7 +144,7 @@ A person whose number is linked can send `tables` for the list, `add to <table>`
 
 ## Personal data
 
-Columns of type `phone` and `email`, and any column flagged `personal`, are personal data. The table page and the rows API return them as they are to people with `table.read` (the page is the record). In a run, a step that writes or reads a data table (`xenibase@1`'s row actions) has those columns sealed cell by cell in the run's history ([decision 0062](decisions/0062-customer-assistant.md) V5): in rows written and read, a row's `set`, and every filter value on such a table. Read back, they are known as personal for the rest of the run and masked before an AI model sees them. The connector also declares whole rows personal, so they are masked in run outputs, in chat and in logs; they never appear in audit details, and the AI builder sees names and types, never rows. Keep the `table.read` permission to the people who should see the records.
+Columns of type `phone` and `email`, and any column flagged `personal`, are personal data. The table page and the rows API return them as they are to people with `table.read` (the page is the record). In a run, a step that writes or reads a data table (`xenibase@1`'s row actions) has those columns sealed cell by cell in the run's history ([decision 0074](decisions/0074-customer-assistant.md) V5): in rows written and read, a row's `set`, and every filter value on such a table. Read back, they are known as personal for the rest of the run and masked before an AI model sees them. The connector also declares whole rows personal, so they are masked in run outputs, in chat and in logs; they never appear in audit details, and the AI builder sees names and types, never rows. Keep the `table.read` permission to the people who should see the records.
 
 ## Limits
 
@@ -201,7 +201,9 @@ Each step is recorded before the next, so a process that dies half way leaves a 
 
 ### Token renewal
 
-Xenibase tokens expire. The `scheduler` role renews, every six hours, the token of every platform-provisioned project whose token expires within 14 days: a new one minted with the platform token replaces the connection's credentials (`connection.credentials_replace` in the audit log, with `table.project.token_renewed`). A renewal that fails is logged at error and raised to the organisation as an alert (`data_tables_token`, once a day) so its owners know the table will stop working when the token does; the usual cause is a platform token that expired or lost the `admin` scope. Own projects are never renewed.
+Xenibase tokens expire. The `scheduler` role renews, every six hours, the token of every platform-provisioned project whose token expires within 14 days: a new one minted with the platform token replaces the connection's credentials (`connection.credentials_replace` in the audit log, with `table.project.token_renewed`). A renewed token lasts 45 days (less when the platform's token has less left), so after the first year a project's token turns over about once a month.
+
+**The replaced token is not revoked.** Xenibase's published API has no way to revoke or delete an API token (only OAuth tokens, `POST /api/v1/oauth/revoke`), so the token a renewal replaces keeps working until its own expiry, at most 14 days later, and renewal cannot cut off a leaked token: a leaked renewed token is good for up to 45 days, and a project's first token for up to a year. A token minted whose storing then fails is never used and cannot be withdrawn either; it is logged at error and expires by itself, and the next tick mints another. Until Xenibase offers a revoke call ([partner tracker](partner-tracker.md), P1-G5), a token known to have leaked is revoked by hand in Xenibase's console, and the next tick replaces it when it expires within 14 days. A renewal that fails is logged at error and raised to the organisation as an alert (`data_tables_token`, once a day) so its owners know the table will stop working when the token does; the usual cause is a platform token that expired or lost the `admin` scope. Own projects are never renewed.
 
 ### Bringing your own project
 

@@ -211,6 +211,11 @@ func (s *Server) waVerifyCode(ctx context.Context, user uuid.UUID, code, channel
 	if len(code) != 6 || strings.Trim(code, "0123456789") != "" {
 		return "", errWaCodeWrong
 	}
+	// The number bound until now: its PIN does not pass to another.
+	var before *string
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT number FROM taskiem_wa_binding($1)`, user).Scan(&before); err != nil {
+		return "", err
+	}
 	var outcome string
 	var number *string
 	if err := s.Store.Pool.QueryRow(ctx, `SELECT outcome, number FROM taskiem_wa_otp_verify($1, $2, $3)`, user, code, waOTPMaxFailures).Scan(&outcome, &number); err != nil {
@@ -227,8 +232,20 @@ func (s *Server) waVerifyCode(ctx context.Context, user uuid.UUID, code, channel
 	default:
 		return "", errWaCodeGone
 	}
-	err := s.auditEverywhere(ctx, user, "whatsapp.bind", map[string]any{"number": whatsapp.MaskNumber(*number), "channel": channel, "ip": ip})
-	return *number, err
+	// The PIN goes with the number: a new number starts without one (F53).
+	removed := false
+	if before != nil && *before != *number {
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_wa_pin_remove($1)`, user).Scan(&removed); err != nil {
+			return *number, err
+		}
+	}
+	if err := s.auditEverywhere(ctx, user, "whatsapp.bind", map[string]any{"number": whatsapp.MaskNumber(*number), "channel": channel, "ip": ip}); err != nil {
+		return *number, err
+	}
+	if removed {
+		return *number, s.auditEverywhere(ctx, user, "whatsapp.pin.remove", map[string]any{"reason": "number_changed", "channel": channel, "ip": ip})
+	}
+	return *number, nil
 }
 
 // unbindWhatsApp removes the caller's number.
@@ -263,6 +280,8 @@ func (s *Server) unbindWhatsApp(w http.ResponseWriter, r *http.Request) {
 type tenantRef struct {
 	ID   uuid.UUID
 	Name string
+	// Kind is business or workflows (start.go).
+	Kind string
 }
 
 // tenantsOf lists a person's active tenants, by name.
@@ -273,13 +292,13 @@ func (s *Server) tenantsOf(ctx context.Context, user uuid.UUID) ([]tenantRef, er
 	}
 	var out []tenantRef
 	err := db.InTenantTx(ctx, s.Store.Pool, ids, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id, name FROM tenants WHERE id = ANY ($1) ORDER BY lower(name), id`, ids)
+		rows, err := tx.Query(ctx, `SELECT id, name, kind FROM tenants WHERE id = ANY ($1) ORDER BY lower(name), id`, ids)
 		if err != nil {
 			return err
 		}
 		out, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (tenantRef, error) {
 			var t tenantRef
-			return t, r.Scan(&t.ID, &t.Name)
+			return t, r.Scan(&t.ID, &t.Name, &t.Kind)
 		})
 		return err
 	})

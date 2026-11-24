@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/experimental"
 	wsp1 "github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 )
 
@@ -39,6 +41,40 @@ type Runtime struct {
 	handle   *Handle
 	context  *Context
 	registry *ProxyRegistry
+	memCap   *capAllocator
+}
+
+// capAllocator backs one runtime's linear memory with a buffer reserved up
+// to its cap, so growth never copies, and refuses to grow past the cap
+// (Taskiem fork: Option.MaxMemory).
+type capAllocator struct {
+	limit uint64
+	buf   []byte
+	hit   atomic.Bool
+}
+
+func (a *capAllocator) Allocate(_, maxBytes uint64) experimental.LinearMemory {
+	a.limit = min(a.limit, maxBytes)
+	a.buf = make([]byte, 0, a.limit)
+	return a
+}
+
+func (a *capAllocator) Reallocate(size uint64) []byte {
+	if size > a.limit {
+		a.hit.Store(true)
+		return nil
+	}
+	a.buf = a.buf[:size]
+	return a.buf
+}
+
+func (a *capAllocator) Free() { a.buf = nil }
+
+// MemoryExhausted reports whether the script asked for linear memory past
+// Option.MaxMemory (Taskiem fork), so a caller can tell an out-of-memory
+// failure from a script error however QuickJS reported it.
+func (r *Runtime) MemoryExhausted() bool {
+	return r != nil && r.memCap != nil && r.memCap.hit.Load()
 }
 
 func createGlobalCompiledModule(
@@ -155,8 +191,14 @@ func New(options ...Option) (runtime *Runtime, err error) {
 	if option.Walltime != nil {
 		modConfig = modConfig.WithWalltime(option.Walltime, 1)
 	}
+	instCtx := option.Context
+	if option.MaxMemory > 0 {
+		// Taskiem fork: this runtime's own memory cap (Option.MaxMemory).
+		runtime.memCap = &capAllocator{limit: uint64(option.MaxMemory) &^ 0xffff} //nolint:gosec // positive
+		instCtx = experimental.WithMemoryAllocator(instCtx, runtime.memCap)
+	}
 	if runtime.module, err = runtime.wrt.InstantiateModule(
-		option.Context,
+		instCtx,
 		compiledQJSModule,
 		modConfig,
 	); err != nil {

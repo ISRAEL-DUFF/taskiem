@@ -8,7 +8,13 @@ import (
 )
 
 // CSP is the Content-Security-Policy sent with every response.
-const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+const CSP = "default-src 'self'; script-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+
+// OCRCSP is CSP for the browser's photo reader (/ocr/ in the web app):
+// its worker compiles WebAssembly, which a worker may do only under its
+// own response's policy ('wasm-unsafe-eval'; still no eval). The app's
+// pages are not given it.
+const OCRCSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 // AppCSP is CSP that may also frame frames, origins like
 // https://forms.example.com: the public host's previews of a look (N13).
@@ -25,6 +31,20 @@ func Set(h http.Header) {
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("X-Frame-Options", "DENY")
 	h.Set("Content-Security-Policy", CSP)
+}
+
+// AnswerCSP is the Content-Security-Policy of answers from the hooks
+// path, whose text a workflow or a connector may have chosen: a browser
+// that opens one gets a sandboxed document with its own empty origin, so
+// it runs no script, loads nothing, reads no cookie of this origin, and
+// cannot be framed.
+const AnswerCSP = "sandbox; default-src 'none'; frame-ancestors 'none'"
+
+// SetAnswer writes the headers of an answer from the hooks path: Set's,
+// with AnswerCSP in place of the application's policy.
+func SetAnswer(h http.Header) {
+	Set(h)
+	h.Set("Content-Security-Policy", AnswerCSP)
 }
 
 // Headers is middleware that sets the security headers on every response.

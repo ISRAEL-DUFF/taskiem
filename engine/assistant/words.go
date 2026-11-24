@@ -8,7 +8,7 @@ import (
 )
 
 // The words a customer controls the assistant with, in the five
-// languages (decision 0062 P3, D13). A message is one of them when, folded
+// languages (decision 0074 P3, D13). A message is one of them when, folded
 // (lower case, no tone marks) and without punctuation, it is exactly one
 // of the phrases: "stop" is, "please don't stop the delivery" is not.
 // Drafts until native speakers review them, like the messages

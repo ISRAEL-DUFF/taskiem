@@ -112,10 +112,6 @@ func (w *Worker) CheckReconcile(ctx context.Context, ref RunRef, step string) (*
 	if spec.Idempotency != nil {
 		p.field = spec.Idempotency.Field
 	}
-	field := p.field
-	if field == "" || strings.HasPrefix(field, "header:") {
-		field = "reference"
-	}
 	rep := &ReconcileReport{Step: step, Connector: conn.Ref(), Action: p.sched.Action, Reconcile: spec.Reconcile}
 	creds, err := w.credentials(ctx, p)
 	if err != nil {
@@ -126,10 +122,15 @@ func (w *Worker) CheckReconcile(ctx context.Context, ref RunRef, step string) (*
 	if err != nil {
 		return nil, err
 	}
+	input, err := w.reconcileInput(ctx, p, key)
+	if err != nil {
+		rep.Error = pii.Redact(p.taint.RedactText(scrubText(err.Error(), p.scrub)))
+		return rep, nil
+	}
 	rctx, cancel := context.WithTimeout(ctx, w.CallTimeout)
 	defer cancel()
-	resp, err := conn.Actions[spec.Reconcile].Execute(rctx, connector.Request{Input: map[string]any{field: key}, Credentials: creds, IdempotencyKey: key,
-		Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Rotate: w.rotate(p)})
+	resp, err := conn.Actions[spec.Reconcile].Execute(rctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: key, Reconciling: true,
+		Attempt: p.c.attempt, Secrets: p.scrub, Logger: w.stepLogger(p), HTTP: hc, Rotate: w.rotate(p)})
 	switch {
 	case err == nil:
 		rep.Found, rep.Output = true, MaskPersonal(resp.Output)

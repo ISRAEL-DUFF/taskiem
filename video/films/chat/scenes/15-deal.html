@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>15 · The owner's OK on a deal</title>
+<link rel="stylesheet" href="../../../kit/kit.css">
+<script src="../../../kit/kit.js"></script>
+<script>window.scene = { duration: 7000 };</script>
+<style>
+/* Scene 15 (video/script.md): Tunde, the cashier, accepts Rivers Foods'
+   counter of ₦820,000; it is under Ada's lowest price (₦830,000 for 20),
+   so it waits; Ada's Needs your OK card arrives; she agrees; the deal is a
+   line in the chat. The deal card as the app draws it (chat-tools.md §9). */
+@keyframes in-up { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+@keyframes rise { from { opacity: 0; transform: translateY(22px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes step { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+@keyframes float-in { from { opacity: 0; transform: translateY(60px) scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes toast { 0% { opacity: 0; transform: translate(-50%, 16px); } 10%, 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, 0); } }
+@keyframes gone { to { opacity: 0; max-height: 0; margin: 0; padding-top: 0; padding-bottom: 0; } }
+@keyframes show { from { opacity: 0; } to { opacity: 1; } }
+@keyframes land { 0% { opacity: 0; transform: translateY(-12px) scale(.96); background: #c8f169; } 40% { opacity: 1; transform: none; background: #c8f169; } 100% { background: rgba(255,255,255,.92); } }
+@keyframes wait { 0%, 100% { box-shadow: 0 0 0 0 rgba(13,59,46,.0); } 50% { box-shadow: 0 0 0 6px rgba(13,59,46,.12); } }
+
+.caption > * { animation: in-up .7s var(--ease) both; }
+.phone { animation: show .6s var(--ease) both; }
+.thread li { animation: step .45s var(--ease) both; }
+.float { animation: float-in .7s var(--spring) both; animation-delay: 2.6s; }
+.asking { animation: gone .35s var(--ease) both; animation-delay: 4.7s; overflow: hidden; }
+.agreed { animation: show .4s var(--ease) both; animation-delay: 4.8s; }
+.toast { animation: toast 2.2s var(--ease) both; animation-delay: 1.9s; }
+.dline { animation: land 1.8s var(--ease) both; animation-delay: 5.1s; }
+.dealcard { animation: wait 1.6s 2.0s 2 both; }
+
+/* The deal card, as the app draws it. */
+.dealcard { align-self: stretch; border-radius: 18px; background: #fff; padding: 14px; box-shadow: 0 1px 2px rgba(14,26,20,.1); }
+.kick { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+.title { margin-top: 6px; font-weight: 700; font-size: 15px; line-height: 1.3; }
+.csub { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.thread { list-style: none; margin: 10px 0 0; padding: 0 0 0 12px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--muted); }
+.thread li[data-by="us"] { color: var(--pine); }
+.thread li:last-child { font-weight: 700; color: var(--ink); }
+.lapse { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.acts .btn { flex: 1 1 0; white-space: nowrap; }
+.acts .btn.pine { flex: 1 0 100%; }
+.toast { position: absolute; left: 50%; bottom: 96px; padding: 10px 16px; border-radius: 14px; background: var(--ink); color: #fff; font-size: 13px; font-weight: 600; width: 330px; text-align: center; z-index: 4; }
+.dline { align-self: center; font-size: 13px; font-weight: 600; color: var(--pine); padding: 6px 12px; border-radius: 999px; }
+
+/* Ada's card, floating beside Tunde's phone. */
+.float { right: 640px; top: 690px; }
+.caption .sub { max-width: 600px; }
+.portrait .float { right: auto; left: 50%; top: 1540px; width: 600px; margin-left: -300px; }
+.square .caption { top: 70px; transform: none; }
+.square .float { right: auto; left: 40px; top: 600px; width: 500px; }
+.float .from { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--muted); }
+.float .tile { width: 52px; height: 52px; border-radius: 14px; background: var(--warn-bg); color: var(--warn-ink); display: grid; place-items: center; flex: none; }
+.float h3 { margin: 0; font-size: 21px; line-height: 1.25; }
+.float p { margin: 4px 0 0; color: var(--muted); font-size: 16px; }
+.float .btn { min-height: 54px; font-size: 17px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="caption">
+    <span class="kicker" style="animation-delay:.1s">6 · Deals</span>
+    <h1 class="headline" style="animation-delay:.25s">Staff deal within <em>your limits</em>.</h1>
+    <p class="sub" style="animation-delay:.45s">Under your lowest price, an offer waits for you. One tap, and it is agreed.</p>
+  </div>
+
+  <div class="phone"><div class="island"></div><div class="screen"><div class="app">
+    <header>
+      <div class="avatar lime">RF</div>
+      <div class="who"><b>Rivers Foods Ltd</b><span>Buys from you · linked</span></div>
+    </header>
+    <main class="chat">
+      <div class="day">Today</div>
+      <div class="bubble">Can you do better on the 20 party packs? We order every month.<time>10:12</time></div>
+      <article class="dealcard" aria-label="Order P‑7QX4KD">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span class="kick">ORDER · P‑7QX4KD</span><span class="pill warn">Counter</span>
+        </div>
+        <div class="title">Rivers Foods Ltd countered on order P‑7QX4KD</div>
+        <div class="csub">₦820,000 · was ₦860,000</div>
+        <ol class="thread" aria-label="How P‑7QX4KD was agreed so far">
+          <li style="animation-delay:.3s">They offered ₦800,000</li>
+          <li data-by="us" style="animation-delay:.4s">Tunde countered ₦840,000</li>
+          <li style="animation-delay:.5s">They countered ₦820,000</li>
+        </ol>
+        <div class="lapse">Lapses in 46 hours</div>
+        <div class="acts">
+          <span class="btn pine">Accept ₦820,000</span>
+          <span class="btn ghost">Counter</span>
+          <span class="btn ghost">Decline</span>
+        </div>
+      </article>
+      <div class="dline">✓ Agreed ₦820,000 with Rivers Foods on P‑7QX4KD</div>
+    </main>
+    <div class="toast">Under your lowest price: P‑7QX4KD waits for the owner's OK</div>
+    <footer>
+      <span class="round" style="background:#fff;box-shadow:0 1px 2px rgba(14,26,20,.12)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d3b2e" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg></span>
+      <span class="box">Message, @ to tag</span>
+      <span class="round" style="background:#0d3b2e"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c8f169" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+    </footer>
+  </div></div>
+  <i class="tap" data-at="1600" style="left:50%;top:534px"></i>
+  </div>
+
+  <aside class="float" aria-label="Ada's phone: Needs your OK">
+    <div class="from"><span class="avatar pine" style="width:34px;height:34px;font-size:12px">AO</span>Ada's Taskiem chat · Needs your OK</div>
+    <div style="display:flex;gap:14px;align-items:flex-start;margin-top:16px">
+      <span class="tile"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg></span>
+      <div>
+        <h3>Tunde would agree ₦820,000 with Rivers Foods</h3>
+        <p>P‑7QX4KD · was ₦860,000 · under your lowest price</p>
+      </div>
+    </div>
+    <div class="asking" style="display:flex;gap:10px;margin-top:18px;max-height:80px">
+      <span class="btn pine" style="flex:1">Agree ₦820,000</span>
+      <span class="btn soft">Later</span>
+    </div>
+    <div class="agreed" style="margin-top:14px;font-weight:700;font-size:18px;color:var(--pine)">✓ Agreed. Kept for Rivers Foods for 7 days.</div>
+    <i class="tap" data-at="4400" style="left:150px;top:190px"></i>
+  </aside>
+</div>
+</body>
+</html>

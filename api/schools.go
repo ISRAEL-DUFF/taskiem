@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/access"
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/schools"
@@ -288,6 +289,14 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if changed {
 			if err := auditTx(r, tx, "settings.schools", p.TenantID.String(), map[string]any{"enabled": req.Enabled}); err != nil {
+				return err
+			}
+			// Schools is an area: the tenant's kind follows (areas.go).
+			st, err := areas.Load(r.Context(), tx, p.TenantID)
+			if err != nil {
+				return err
+			}
+			if err := followKindTx(r, tx, p.TenantID, st); err != nil {
 				return err
 			}
 		}

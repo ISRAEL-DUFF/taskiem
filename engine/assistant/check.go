@@ -11,7 +11,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 )
 
-// The reply check (decision 0062 L6, A11, D6): before an assistant's reply
+// The reply check (decision 0074 L6, A11, D6): before an assistant's reply
 // is sent, it is checked for what a model must not say to a customer. A
 // customer's message is instructions to the model as much as the owner's
 // prompt, and outside material can carry instructions too, so a reply can

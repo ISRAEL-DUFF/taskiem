@@ -6,7 +6,16 @@ import { lagosTime, whenLabel } from "./bookings";
 import { feeInput, feeKobo } from "./orders";
 import { formatPrice } from "./storefront";
 
-export type DeliveryStatus = "offered" | "declined" | "passed" | "withdrawn" | "accepted" | "picked_up" | "arrived" | "delivered" | "released";
+export type DeliveryStatus =
+  | "offered"
+  | "declined"
+  | "passed"
+  | "withdrawn"
+  | "accepted"
+  | "picked_up"
+  | "arrived"
+  | "delivered"
+  | "released";
 
 /** One rider's part in an order's delivery, from the offer to the door. */
 export interface Delivery {
@@ -36,6 +45,9 @@ export interface Delivery {
   rating?: number | null;
   /** Running late: not picked up, or not arrived, in the business's time. */
   late?: "pickup" | "arrival";
+  /** The business confirmed it (the fee is payable), and how the fee stands. */
+  confirmed_at?: string;
+  fee_paid?: "pending" | "bank" | "cash";
   zone?: string;
 }
 
@@ -46,7 +58,10 @@ export interface OrderDeliveries {
 }
 
 /** A delivery's state in words, with its badge's tone. */
-export const DELIVERY_STATUS: Record<DeliveryStatus, { label: string; tone: "ok" | "warn" | "info" | "muted" | "danger" }> = {
+export const DELIVERY_STATUS: Record<
+  DeliveryStatus,
+  { label: string; tone: "ok" | "warn" | "info" | "muted" | "danger" }
+> = {
   offered: { label: "Offered", tone: "warn" },
   declined: { label: "Said they can't", tone: "muted" },
   passed: { label: "No answer", tone: "muted" },
@@ -58,14 +73,22 @@ export const DELIVERY_STATUS: Record<DeliveryStatus, { label: string; tone: "ok"
   released: { label: "Taken back", tone: "muted" },
 };
 
-export const deliveryStatus = (s: string) => DELIVERY_STATUS[s as DeliveryStatus] ?? { label: s.replaceAll("_", " "), tone: "muted" as const };
+export const deliveryStatus = (s: string) =>
+  DELIVERY_STATUS[s as DeliveryStatus] ?? {
+    label: s.replaceAll("_", " "),
+    tone: "muted" as const,
+  };
 
 /** Whether a rider holds the delivery now. */
-export const isHeld = (d: Delivery) => d.status === "accepted" || d.status === "picked_up" || d.status === "arrived";
+export const isHeld = (d: Delivery) =>
+  d.status === "accepted" || d.status === "picked_up" || d.status === "arrived";
 
 /** The delivery the order's rider holds or made, if any; else the live offer. */
 export function currentDelivery(list: Delivery[]): Delivery | undefined {
-  return list.find((d) => isHeld(d) || d.status === "delivered") ?? list.find((d) => d.status === "offered");
+  return (
+    list.find((d) => isHeld(d) || d.status === "delivered") ??
+    list.find((d) => d.status === "offered")
+  );
 }
 
 /** A held or done delivery's steps so far, oldest first, with their Lagos times. */
@@ -75,10 +98,29 @@ export function deliverySteps(d: Delivery): { label: string; at: string }[] {
     ["Accepted", d.accepted_at],
     ["Picked up", d.picked_up_at],
     ["At the door", d.arrived_at],
-    [d.paid_how === "cash" ? "Delivered, paid in cash" : d.paid_how === "transfer" ? "Delivered, paid by transfer at the door" : "Delivered", d.delivered_at],
+    [
+      d.paid_how === "cash"
+        ? "Delivered, paid in cash"
+        : d.paid_how === "transfer"
+          ? "Delivered, paid by transfer at the door"
+          : "Delivered",
+      d.delivered_at,
+    ],
+    [
+      d.fee_paid === "cash"
+        ? "Confirmed, fee paid in cash"
+        : d.fee_paid === "bank"
+          ? "Confirmed, fee paid to the rider's bank"
+          : d.fee_paid === "pending"
+            ? "Confirmed, fee on its way"
+            : "Confirmed, fee not paid yet",
+      d.confirmed_at,
+    ],
     ["Taken back", d.released_at],
   ];
-  return steps.filter((s): s is [string, string] => !!s[1]).map(([label, at]) => ({ label, at: lagosTime(at) }));
+  return steps
+    .filter((s): s is [string, string] => !!s[1])
+    .map(([label, at]) => ({ label, at: lagosTime(at) }));
 }
 
 /** A delivery's row underneath the reference: rider, area, fee and what is late. */
@@ -147,12 +189,16 @@ const whole = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN);
 /** Why the settings will be refused, or null. */
 export function settingsProblem(f: SettingsForm): string | null {
   const offer = whole(f.offer);
-  if (!(offer >= 1 && offer <= 60)) return "Riders have 1 to 60 minutes to accept an offer.";
+  if (!(offer >= 1 && offer <= 60))
+    return "Riders have 1 to 60 minutes to accept an offer.";
   const pickup = whole(f.pickup);
-  if (!(pickup >= 5 && pickup <= 240)) return "Picking up takes 5 to 240 minutes.";
+  if (!(pickup >= 5 && pickup <= 240))
+    return "Picking up takes 5 to 240 minutes.";
   const arrive = whole(f.arrive);
-  if (!(arrive >= 10 && arrive <= 600)) return "Getting to the customer takes 10 to 600 minutes.";
-  if (Number.isNaN(feeKobo(f.oweLimit)) || f.oweLimit.trim() === "") return "Enter the cash a rider may owe, like 20000.";
+  if (!(arrive >= 10 && arrive <= 600))
+    return "Getting to the customer takes 10 to 600 minutes.";
+  if (Number.isNaN(feeKobo(f.oweLimit)) || f.oweLimit.trim() === "")
+    return "Enter the cash a rider may owe, like 20000.";
   const mark = Number(f.ratingMark);
   if (!(mark >= 1 && mark <= 5)) return "The rating mark is 1 to 5.";
   return null;
@@ -212,8 +258,11 @@ export interface RidersPay {
 
 /** A pay line underneath the rider's name. */
 export function payLineSub(l: PayLine): string {
-  const parts = [`${l.deliveries} ${l.deliveries === 1 ? "delivery" : "deliveries"}, fees ${formatPrice(l.fees_kobo)}`];
-  if (l.owed_kobo > 0) parts.push(`less ${formatPrice(l.owed_kobo)} cash they owe`);
+  const parts = [
+    `${l.deliveries} ${l.deliveries === 1 ? "delivery" : "deliveries"}, fees ${formatPrice(l.fees_kobo)}`,
+  ];
+  if (l.owed_kobo > 0)
+    parts.push(`less ${formatPrice(l.owed_kobo)} cash they owe`);
   parts.push(l.bank || "No bank account yet");
   return parts.join(" · ");
 }
@@ -230,18 +279,30 @@ export function payoutSub(x: Payout): string {
 export const notPaidQuestion = (x: Payout) =>
   `Mark ${x.rider}'s payout of ${formatPrice(x.amount_kobo)} as not paid? Only once your bank shows it did not go: their deliveries are then paid in the next payout, so marking a payment that went through pays them twice.`;
 
-export const PAYOUT_STATUS: Record<Payout["status"], { label: string; tone: "ok" | "warn" | "muted" | "danger" }> = {
+export const PAYOUT_STATUS: Record<
+  Payout["status"],
+  { label: string; tone: "ok" | "warn" | "muted" | "danger" }
+> = {
   pending: { label: "Being paid", tone: "warn" },
   paid: { label: "Paid", tone: "ok" },
   failed: { label: "Not paid", tone: "danger" },
   cancelled: { label: "Not approved", tone: "muted" },
 };
 
-export const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+export const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
 
 /** Why a rider's bank account will be refused, or null. */
 export function bankProblem(code: string, number: string): string | null {
-  if (!/^[0-9A-Za-z]{3,6}$/.test(code.trim())) return "Choose the rider's bank.";
+  if (!/^[0-9A-Za-z]{3,6}$/.test(code.trim()))
+    return "Choose the rider's bank.";
   if (!/^\d{10}$/.test(number.trim())) return "An account number is 10 digits.";
   return null;
 }

@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/stock"
 )
 
@@ -34,14 +34,35 @@ func (s *Server) purchasesReady(w http.ResponseWriter) bool {
 func (s *Server) purchaseFail(w http.ResponseWriter, r *http.Request, err error) {
 	msg := err.Error()
 	for _, p := range []string{"stock: that does not fit the order: ", "stock: already a supplier: ", "stock: a second person approves this order: ",
-		"stock: the link was sent a moment ago: "} {
+		"stock: the link was sent a moment ago: ", "stock: the line's treatment is locked: "} {
 		msg = strings.ReplaceAll(msg, p, "")
 	}
+	// Tracking many asks first (409 track_ask: "Put 500 nylon bags on
+	// Things we have, one row each?", with Just record them); more than
+	// stock.MaxTracked cannot be tracked (422 track_too_many).
+	var track *stock.TrackError
+	if errors.As(err, &track) {
+		status, code := http.StatusConflict, "track_ask"
+		if errors.Is(err, stock.ErrTrackTooMany) {
+			status, code = http.StatusUnprocessableEntity, "track_too_many"
+		}
+		writeJSON(w, status, map[string]any{"error": track.Error(), "code": code, "line": track.Position, "item": track.Item, "quantity": track.Quantity,
+			"ask_over": stock.TrackAsk, "most": stock.MaxTracked})
+		return
+	}
 	switch {
+	case errors.Is(err, stock.ErrLineLocked):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": msg, "code": "line_locked"})
+		return
+	case errors.Is(err, stock.ErrNoThing), errors.Is(err, stock.ErrNoItem):
+		err = pgx.ErrNoRows
 	case errors.Is(err, stock.ErrNoSupplier), errors.Is(err, stock.ErrNoPurchase):
 		err = pgx.ErrNoRows
 	case errors.Is(err, stock.ErrPurchase):
 		err = fmt.Errorf("%w: %s", errBadRequest, msg)
+	case errors.Is(err, stock.ErrKeyUsed):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": strings.TrimPrefix(err.Error(), stock.ErrKeyUsed.Error()+": "), "code": "key_used"})
+		return
 	case errors.Is(err, stock.ErrSupplierExists), errors.Is(err, stock.ErrTooSoon), errors.Is(err, stock.ErrSecondApproval):
 		err = fmt.Errorf("%w: %s", errConflict, msg)
 	case errors.Is(err, stock.ErrLinked):
@@ -101,6 +122,9 @@ func (s *Server) addSupplier(w http.ResponseWriter, r *http.Request) {
 		Name  string   `json:"name"`
 		Phone string   `json:"phone"`
 		Items []string `json:"items"`
+		// LinkID: a linked business, added from the link with it; no phone
+		// is asked (its orders go through the link).
+		LinkID *uuid.UUID `json:"link_id"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -110,7 +134,12 @@ func (s *Server) addSupplier(w http.ResponseWriter, r *http.Request) {
 	var x stock.Supplier
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		if x, err = s.Purchases.AddSupplierTx(r.Context(), tx, p.TenantID, in.Name, in.Phone, p.Actor()); err != nil {
+		if in.LinkID != nil && strings.TrimSpace(in.Phone) == "" {
+			x, err = s.Purchases.AddLinkedSupplierTx(r.Context(), tx, p.TenantID, in.Name, *in.LinkID, p.Actor())
+		} else if x, err = s.Purchases.AddSupplierTx(r.Context(), tx, p.TenantID, in.Name, in.Phone, p.Actor()); err == nil && in.LinkID != nil {
+			x, err = s.Purchases.LinkSupplierTx(r.Context(), tx, p.TenantID, x.ID, in.LinkID, p.Actor())
+		}
+		if err != nil {
 			return err
 		}
 		return auditTx(r, tx, "supplier.add", x.Name, map[string]any{"supplier_id": x.ID})
@@ -118,30 +147,39 @@ func (s *Server) addSupplier(w http.ResponseWriter, r *http.Request) {
 		s.purchaseFail(w, r, err)
 		return
 	}
-	if err := s.supplyItems(r.Context(), p.TenantID, x.Name, in.Items, "sup-"+x.ID.String()); err != nil {
+	if err := s.supplyItems(r.Context(), p.TenantID, x.Name, in.Items, p.Actor()); err != nil {
 		s.Logger.Warn("stock: naming a supplier on items", "tenant", p.TenantID, "err", err)
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"supplier": x})
 }
 
-// supplyItems sets the catalogue's supplier on the items named (row ids).
-func (s *Server) supplyItems(ctx context.Context, tenant uuid.UUID, name string, ids []string, key string) error {
+// supplyItems makes the supplier named the usual one of the items named
+// (their ids): their stock items', a product not counted yet starting
+// to be.
+func (s *Server) supplyItems(ctx context.Context, tenant uuid.UUID, name string, ids []string, actor string) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	sh, err := s.stockShopOf(ctx, tenant)
+	_, items, err := s.stockItems(ctx, tenant)
 	if err != nil {
 		return err
 	}
-	if sh.cols().Supplier == "" {
-		return nil
+	byID := make(map[string]stock.Item, len(items))
+	for _, it := range items {
+		byID[it.ID] = it
 	}
-	for _, id := range ids {
-		if err := s.stockSetCells(ctx, tenant, sh, id, key+"-"+id, map[string]any{sh.cols().Supplier: name}); err != nil {
-			return err
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		for _, id := range ids {
+			it, ok := byID[id]
+			if !ok {
+				continue
+			}
+			if _, err := stockSetDetailsTx(ctx, tx, tenant, it, stockDetails{Supplier: &name}, actor); err != nil {
+				return err
+			}
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 // patchSupplier is PATCH /v1/stock/suppliers/{id}: a new name, carried to
@@ -163,30 +201,15 @@ func (s *Server) patchSupplier(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
-	var before, x stock.Supplier
+	// Their stock items name them by id: the new name is theirs at once.
+	var x stock.Supplier
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		if before, err = s.Purchases.SupplierTx(r.Context(), tx, p.TenantID, id); err != nil {
-			return err
-		}
 		x, err = s.Purchases.RenameSupplierTx(r.Context(), tx, p.TenantID, id, in.Name, p.Actor())
 		return err
 	}); err != nil {
 		s.purchaseFail(w, r, err)
 		return
-	}
-	if before.Name != x.Name {
-		if _, items, err := s.stockItems(r.Context(), p.TenantID); err == nil {
-			var ids []string
-			for _, it := range items {
-				if strings.EqualFold(strings.TrimSpace(it.Supplier), before.Name) {
-					ids = append(ids, it.ID)
-				}
-			}
-			if err := s.supplyItems(r.Context(), p.TenantID, x.Name, ids, "sup-rename-"+x.ID.String()+"-"+strconv.Itoa(len(x.Name))); err != nil {
-				s.Logger.Warn("stock: renaming a supplier on items", "tenant", p.TenantID, "err", err)
-			}
-		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"supplier": x})
 }
@@ -311,9 +334,55 @@ func (s *Server) listPurchases(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"purchases": list})
 }
 
+// draftLineIn is a line of a purchase order to draft (what a business
+// buys §5, §6): one of the business's own items whose stock it adds to
+// (item_id: a product or a material), or anything by its name (item, with
+// a unit); how many, the price of one (the item's last cost when
+// absent); and how it is treated when said (treatment record, stock with
+// stock_item_id and uses, or track; label_id; track_many to put more
+// than 50 on Things we have), else as remembered, else as suggested.
+type draftLineIn struct {
+	ItemID   string `json:"item_id"`
+	Item     string `json:"item"`
+	Unit     string `json:"unit"`
+	Quantity int64  `json:"quantity"`
+	CostKobo *int64 `json:"cost_kobo"`
+	stock.LineChoice
+}
+
+// draftLinesTx makes the lines to draft.
+func draftLinesTx(ctx context.Context, tx pgx.Tx, p *Principal, in []draftLineIn, byID map[string]stock.Item) ([]stock.PurchaseLine, error) {
+	lines := make([]stock.PurchaseLine, 0, len(in))
+	for _, l := range in {
+		var line stock.PurchaseLine
+		if l.ItemID != "" {
+			it, ok := byID[l.ItemID]
+			if !ok {
+				return nil, errNoItem
+			}
+			var err error
+			if line, err = stock.LineOf(ctx, tx, p.TenantID, it, l.Quantity, l.CostKobo, p.Actor()); err != nil {
+				return nil, err
+			}
+			if l.Treatment == "" {
+				l.Treatment, l.StockItemID, l.Uses = line.Treatment, line.StockItemID, line.Uses
+			}
+		} else {
+			line = stock.PurchaseLine{Item: l.Item, Unit: strings.TrimSpace(l.Unit), Quantity: l.Quantity}
+			if l.CostKobo != nil {
+				line.CostKobo = *l.CostKobo
+			}
+		}
+		line.Treatment, line.StockItemID, line.Uses, line.LabelID, line.TrackMany = l.Treatment, l.StockItemID, l.Uses, l.LabelID, l.TrackMany
+		lines = append(lines, line)
+	}
+	return lines, nil
+}
+
 // draftPurchase is POST /v1/stock/purchases, with an Idempotency-Key: an
-// order to a supplier, its lines (item ids, how many, the price of one,
-// the item's last cost when absent).
+// order to a supplier and its lines (draftLineIn). Each line answers its
+// treatment, and unconfirmed when it is Taskiem's suggestion, for the
+// business to confirm (PATCH …/lines/{position}).
 func (s *Server) draftPurchase(w http.ResponseWriter, r *http.Request) {
 	if !s.purchasesReady(w) {
 		return
@@ -324,50 +393,42 @@ func (s *Server) draftPurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		SupplierID uuid.UUID `json:"supplier_id"`
-		Lines      []struct {
-			ItemID   string `json:"item_id"`
-			Quantity int64  `json:"quantity"`
-			CostKobo *int64 `json:"cost_kobo"`
-		} `json:"lines"`
-		Note string `json:"note"`
+		SupplierID uuid.UUID     `json:"supplier_id"`
+		Lines      []draftLineIn `json:"lines"`
+		Note       string        `json:"note"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
-	_, items, err := s.stockItems(r.Context(), p.TenantID)
-	if err != nil {
-		s.stockFail(w, r, err)
-		return
-	}
 	byID := map[string]stock.Item{}
-	for _, it := range items {
-		byID[it.ID] = it
-	}
-	lines := make([]stock.PurchaseLine, 0, len(in.Lines))
 	for _, l := range in.Lines {
-		it, ok := byID[l.ItemID]
-		if !ok {
-			s.stockFail(w, r, errNoItem)
-			return
+		if l.ItemID != "" {
+			_, items, err := s.stockItems(r.Context(), p.TenantID)
+			if err != nil {
+				s.stockFail(w, r, err)
+				return
+			}
+			for _, it := range items {
+				byID[it.ID] = it
+			}
+			break
 		}
-		var cost int64
-		switch {
-		case l.CostKobo != nil:
-			cost = *l.CostKobo
-		case it.CostKobo != nil:
-			cost = *it.CostKobo
-		}
-		lines = append(lines, stock.PurchaseLine{ItemID: it.ID, Item: it.Name, Unit: it.Unit, Quantity: l.Quantity, CostKobo: cost})
 	}
 	var x stock.Purchase
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
+		lines, err := draftLinesTx(r.Context(), tx, p, in.Lines, byID)
+		if err != nil {
+			return err
+		}
 		x, err = stock.DraftTx(r.Context(), tx, p.TenantID, stock.DraftIn{Supplier: in.SupplierID, Lines: lines, Note: in.Note, Actor: p.Actor(), Key: "api-" + key})
 		return err
 	}); err != nil {
+		if errors.Is(err, errNoItem) {
+			s.stockFail(w, r, err)
+			return
+		}
 		s.purchaseFail(w, r, err)
 		return
 	}
@@ -434,14 +495,14 @@ func (s *Server) getPurchase(w http.ResponseWriter, r *http.Request) {
 }
 
 // purchaseStep runs a step on an order by its id.
-func (s *Server) purchaseStep(w http.ResponseWriter, r *http.Request, action string, do func(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, actor string) (stock.Purchase, error)) {
+func (s *Server) purchaseStep(w http.ResponseWriter, r *http.Request, action string, do func(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, actor string) (stock.Purchase, error)) (ok bool) {
 	if !s.purchasesReady(w) {
-		return
+		return false
 	}
 	id, err := idParam(r)
 	if err != nil {
 		s.fail(w, r, err)
-		return
+		return false
 	}
 	p := principalFrom(r.Context())
 	var x stock.Purchase
@@ -453,7 +514,7 @@ func (s *Server) purchaseStep(w http.ResponseWriter, r *http.Request, action str
 		return auditTx(r, tx, action, x.Reference, map[string]any{"purchase_id": x.ID, "status": x.Status})
 	}); err != nil {
 		s.purchaseFail(w, r, err)
-		return
+		return false
 	}
 	if action == "purchase.send" {
 		if err := s.waDrainOutbox(r.Context(), p.TenantID); err != nil {
@@ -461,11 +522,26 @@ func (s *Server) purchaseStep(w http.ResponseWriter, r *http.Request, action str
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"purchase": x})
+	return true
 }
 
 // sendPurchase is POST /v1/stock/purchases/{id}/send: approved and sent.
 func (s *Server) sendPurchase(w http.ResponseWriter, r *http.Request) {
-	s.purchaseStep(w, r, "purchase.send", s.Purchases.SendTx)
+	// Sent now, not before (a send again answers the same): a diary line.
+	var drafted bool
+	var x stock.Purchase
+	ok := s.purchaseStep(w, r, "purchase.send", func(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, actor string) (stock.Purchase, error) {
+		was, err := stock.PurchaseTx(ctx, tx, tenant, id, false)
+		if err != nil {
+			return was, err
+		}
+		drafted = was.Status == stock.Drafted
+		x, err = s.Purchases.SendTx(ctx, tx, tenant, id, actor)
+		return x, err
+	})
+	if ok && drafted && x.Status != stock.Drafted {
+		s.diaryChange(r.Context(), principalFrom(r.Context()), buyerStepWords("send", x.Reference, x.Supplier, x.TotalKobo))
+	}
 }
 
 // confirmPurchase is POST /v1/stock/purchases/{id}/confirm: the supplier
@@ -582,15 +658,4 @@ func (s *Server) payPurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"purchase": x})
-}
-
-// StockCost sets an item's cost price in the catalogue (after goods are
-// received on an order): stock.Purchases.Cost.
-func (s *Server) StockCost(ctx context.Context, tenant uuid.UUID, row string, kobo int64, key string) error {
-	sh, err := s.stockShopOf(ctx, tenant)
-	if err != nil || sh.cols().CostPrice == "" {
-		return err
-	}
-	set := stockCells(sh.cols(), "", &kobo, nil, nil, "")
-	return s.stockSetCells(ctx, tenant, sh, row, key, set)
 }

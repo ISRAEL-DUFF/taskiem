@@ -19,6 +19,19 @@ type Auth struct {
 	// Aligned: a verified DKIM signature, or a passing SPF check, belongs
 	// to the From address's domain, so the From is not forged.
 	Aligned bool `json:"aligned"`
+	// From is the address the checks were made for: the message's one
+	// From, as the signature covers it. Aligned says nothing of any other.
+	From string `json:"from,omitempty"`
+}
+
+// For is the checks as they hold for from, the sender a reader of the
+// message sees: when that is not the address they were made for, nothing
+// is proven of it.
+func (a Auth) For(from string) Auth {
+	if a.From != "" && !strings.EqualFold(a.From, from) {
+		a.Aligned = false
+	}
+	return a
 }
 
 // Meta is what the mail role knew of a message besides its content,

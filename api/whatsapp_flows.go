@@ -210,6 +210,9 @@ func (s *Server) waFlowRequest(ctx context.Context, wa *whatsapp.Platform, req w
 	if row.kind == "connect" {
 		return s.waFlowConnect(ctx, row, req), http.StatusOK
 	}
+	if row.kind == "pay_pin" {
+		return s.waFlowPayPin(ctx, row, req), http.StatusOK
+	}
 	resp, err := s.waFlowInputs(ctx, row, req)
 	if err != nil {
 		s.Logger.Error("whatsapp: a Flow request", "err", err)
@@ -396,7 +399,7 @@ func (s *Server) waFlowCompleted(ctx context.Context, c *chat) error {
 			return s.waSay(ctx, c.ch, c.addr, c.tenants[i].Name, out)
 		}
 		return nil
-	case "pin", "pin_set", "pin_wake":
+	case "pin", "pin_set", "pin_wake", "pay_pin":
 		say := func(text string) error { return s.waSay(ctx, c.ch, c.addr, c.tenants[i].Name, text) }
 		if out, _ := row.data["outcome"].(string); out != "" && (row.status == "done" || row.status == "refused") {
 			return say(out)
@@ -519,29 +522,20 @@ func (s *Server) waFlowPin(ctx context.Context, row flowRow, req whatsapp.FlowRe
 		const m = "You cannot decide approvals in this organisation any more."
 		return finish("refused", m, m)
 	}
-	var hash string
-	var locked *time.Time
-	err := s.Store.Pool.QueryRow(ctx, `SELECT pin_hash, locked_until FROM taskiem_wa_pin_state($1)`, user).Scan(&hash, &locked)
+	pin, _ := req.Data["pin"].(string)
+	t, err := s.tryPin(ctx, user, pin)
 	switch {
-	case errors.Is(err, pgx.ErrNoRows):
+	case err != nil:
+		s.Logger.Error("whatsapp: checking a PIN", "err", err)
+		return screen("Something went wrong; try again.")
+	case t.None:
 		const m = "You have no WhatsApp PIN set. Decide in Taskiem instead."
 		return finish("refused", m, m)
-	case err != nil:
-		s.Logger.Error("whatsapp: reading a PIN", "err", err)
-		return screen("Something went wrong; try again.")
-	case locked != nil:
-		m := "Your PIN is locked after too many wrong tries, until " + locked.UTC().Format("15:04") + " UTC. Decide in Taskiem instead."
+	case t.LockedUntil != nil:
+		m := "Your PIN is locked after too many wrong tries, until " + t.LockedUntil.UTC().Format("15:04") + " UTC. Decide in Taskiem instead."
 		return finish("refused", m, m)
 	}
-	pin, _ := req.Data["pin"].(string)
-	ok := validPin(pin) && checkPassword(hash, pin)
-	var failures int
-	var nowLocked bool
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT failures, locked FROM taskiem_wa_pin_result($1, $2, $3, $4::interval)`, user, ok, waPinMaxFailures, waPinWindow.String()).
-		Scan(&failures, &nowLocked); err != nil {
-		s.Logger.Error("whatsapp: recording a PIN check", "err", err)
-		return screen("Something went wrong; try again.")
-	}
+	ok, failures, nowLocked := t.Right, t.Failures, t.NowLocked
 	if !ok {
 		audit("whatsapp.pin.fail", map[string]any{"failures": failures})
 		if nowLocked {
@@ -565,7 +559,7 @@ func (s *Server) waFlowPin(ctx context.Context, row flowRow, req whatsapp.FlowRe
 		return finish("refused", m, m)
 	}
 	res, err := s.Store.VoteApproval(ctx, runtime.RunRef{ID: *row.run, TenantID: row.tenant}, *row.step,
-		runtime.Vote{UserID: user, Roles: p.Roles, Decision: *row.decision, Channel: "whatsapp", StepUp: runtime.StepUpWhatsAppPIN,
+		runtime.Vote{UserID: user, Roles: s.orderVoteRoles(ctx, p, *row.run, *row.step), Decision: *row.decision, Channel: "whatsapp", StepUp: runtime.StepUpWhatsAppPIN,
 			Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
 				return waAudit(ctx, tx, "whatsapp", p, "approval.decide", row.run.String()+"/"+*row.step, voteDetail(map[string]any{"decision": *row.decision,
 					"result": res.Status, "level": res.Level + 1, "levels": res.Levels, "step_up": runtime.StepUpWhatsAppPIN, "via": "flow_pin"}, res))

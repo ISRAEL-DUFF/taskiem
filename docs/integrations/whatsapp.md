@@ -38,7 +38,7 @@ A message's `to` is taken as people write it: spaces, dashes and brackets are dr
 
 Every send can carry `biz_opaque_callback_data`, which Meta returns in that message's status events. A send's output has `message_id` (the wamid), `wa_id` (the user's WhatsApp ID), `input` and, for paced templates, `message_status`.
 
-`send_text`, `send_media` and `send_interactive` are marked `resend_if_lost` ([action classes](../contracts/action-classes.md)): a workflow step may ask that a send whose answer was lost be sent once more instead of parked (decision 0062 D11), accepting a possible duplicate message.
+`send_text`, `send_media` and `send_interactive` are marked `resend_if_lost` ([action classes](../contracts/action-classes.md)): a workflow step may ask that a send whose answer was lost be sent once more instead of parked (decision 0074 D11), accepting a possible duplicate message.
 
 A 200 only means Meta **accepted** the message. Delivery comes as status events.
 
@@ -69,7 +69,7 @@ Every POST is verified with `X-Hub-Signature-256: sha256=<hex>`, an HMAC-SHA256 
 
 Meta may batch many messages and statuses in one POST. The trigger splits a delivery into one event per message, status or error (`split` in the manifest), and each event has its own type, dedup key and correlation. A run gets that one event as `trigger.item`: `{kind, message | status | error, metadata}`, with `metadata.phone_number_id` and `display_phone_number`; `trigger.body` is still the whole delivery. So a run that asks a question waits on `whatsapp@1:messages` with correlation `steps.ask.output.wa_id` and reads `trigger.item.message`; a workflow that starts on messages reads the same. A run that must know a message arrived waits with correlation `steps.notify.output.message_id`. A `read` can arrive without a `delivered`; Meta notes that read implies delivered.
 
-**What a customer sends** (decision 0062, P1): the sender's number and profile name, and what they wrote (text, captions, locations, contacts, button and list replies), are declared personal data, sealed in run history and readable by the run's steps.
+**What a customer sends** (decision 0074, P1): the sender's number and profile name, and what they wrote (text, captions, locations, contacts, button and list replies), are declared personal data, sealed in run history and readable by the run's steps.
 
 Meta sends every field the app subscribes to (template status, account updates, ...) to the same URL. The trigger acknowledges the other fields and ignores them. Meta retries failed deliveries for up to 7 days and expects quick 200s.
 

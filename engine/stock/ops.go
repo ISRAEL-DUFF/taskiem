@@ -14,57 +14,73 @@ import (
 )
 
 // Catalogue reads a business's catalogue table and its mapping
-// (storefront.XenibaseStock), for workflows (stock@1), which run outside
-// the API.
+// (storefront.XenibaseCatalogue), for workflows (stock@1), which run
+// outside the API. No catalogue reads no rows.
 type Catalogue interface {
 	Rows(ctx context.Context, tenant uuid.UUID) ([]map[string]any, storefront.Columns, error)
+	Row(ctx context.Context, tenant uuid.UUID, id string) ([]map[string]any, storefront.Columns, error)
 }
 
 // ErrNoItem: no item has that id.
 var ErrNoItem = errors.New("stock: no such item")
 
-// Items reads the business's items from the catalogue table itself;
-// ErrNotTracked when its catalogue keeps no stock.
+// Items reads the business's products, each with the stock item it is
+// counted by, and its materials; ErrNotTracked when it has neither a
+// catalogue nor a stock item.
 func (s *Stock) Items(ctx context.Context, tenant uuid.UUID) ([]Item, error) {
-	c, ok := s.Table.(Catalogue)
-	if !ok {
+	var rows []map[string]any
+	var m storefront.Columns
+	if s.Catalogue != nil {
+		var err error
+		if rows, m, err = s.Catalogue.Rows(ctx, tenant); err != nil {
+			return nil, err
+		}
+	}
+	var out []Item
+	err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		out, err = ItemsTx(ctx, tx, tenant, rows, m)
+		return err
+	})
+	if err == nil && len(out) == 0 && m.Name == "" {
 		return nil, ErrNotTracked
 	}
-	rows, m, err := c.Rows(ctx, tenant)
-	if err != nil {
-		return nil, err
-	}
-	if m.Stock == "" {
-		return nil, ErrNotTracked
-	}
-	return Items(rows, m), nil
+	return out, err
 }
 
-// RowReader reads one row of the catalogue by its id: what Item reads
-// when the catalogue can, rather than the whole table.
-type RowReader interface {
-	Row(ctx context.Context, tenant uuid.UUID, id string) ([]map[string]any, storefront.Columns, error)
-}
-
-// Item reads one item by its row id.
+// Item reads one item by its id: a product's row id, or a material's
+// stock item id.
 func (s *Stock) Item(ctx context.Context, tenant uuid.UUID, id string) (Item, error) {
-	if r, ok := s.Table.(RowReader); ok {
-		rows, m, err := r.Row(ctx, tenant, id)
-		if err != nil {
+	if sid, err := uuid.Parse(id); err == nil {
+		var x StockItem
+		var counts bool
+		if err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
+			var err error
+			if x, err = StockItemTx(ctx, tx, tenant, sid); err != nil {
+				return err
+			}
+			return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM product_stock WHERE tenant_id = $1 AND stock_item_id = $2)`, tenant, sid).Scan(&counts)
+		}); err != nil {
 			return Item{}, err
 		}
-		if m.Stock == "" {
-			return Item{}, ErrNotTracked
+		if !counts {
+			return FromStockItem(x), nil
 		}
-		for _, it := range Items(rows, m) {
-			if it.ID == id {
-				return it, nil
-			}
-		}
-		return Item{}, ErrNoItem
 	}
-	items, err := s.Items(ctx, tenant)
-	if err != nil {
+	var rows []map[string]any
+	var m storefront.Columns
+	if s.Catalogue != nil {
+		var err error
+		if rows, m, err = s.Catalogue.Row(ctx, tenant, id); err != nil {
+			return Item{}, err
+		}
+	}
+	var items []Item
+	if err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		items, err = ItemsTx(ctx, tx, tenant, rows, m)
+		return err
+	}); err != nil {
 		return Item{}, err
 	}
 	for _, it := range items {
@@ -76,11 +92,10 @@ func (s *Stock) Item(ctx context.Context, tenant uuid.UUID, id string) (Item, er
 }
 
 // Move records a movement with an audit entry by the system (a workflow,
-// named in its actor), then sends it; an error sending leaves it for the
-// sweep.
+// named in its actor).
 func (s *Stock) Move(ctx context.Context, tenant uuid.UUID, mv Move) (Movement, error) {
 	var m Movement
-	if err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
+	err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
 		var err error
 		if m, err = RecordTx(ctx, tx, tenant, mv); err != nil {
 			return err
@@ -89,14 +104,8 @@ func (s *Stock) Move(ctx context.Context, tenant uuid.UUID, mv Move) (Movement, 
 		raw, _ := json.Marshal(detail)
 		_, err = tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', 'stock', 'stock.move', $2, $3)`, tenant, mv.Item, raw)
 		return err
-	}); err != nil {
-		return m, err
-	}
-	// Recorded: a send that fails is sent again by the sweep.
-	if out, err := s.Apply(ctx, tenant, m.ID); err == nil && out.ID != uuid.Nil {
-		return out, nil
-	}
-	return m, nil
+	})
+	return m, err
 }
 
 // Movements lists a business's movements, the latest first.
@@ -135,7 +144,7 @@ func (s *Stock) Sell(ctx context.Context, tenant uuid.UUID, lines []SellLine, am
 	in := SaleIn{AmountKobo: amount, PaidHow: paidHow, Note: note, Actor: actor, Key: key}
 	for _, l := range lines {
 		it, ok := byID[l.ItemID]
-		if !ok {
+		if !ok || it.Material {
 			return CounterSale{}, ErrNoItem
 		}
 		price := int64(0)
@@ -147,7 +156,7 @@ func (s *Stock) Sell(ctx context.Context, tenant uuid.UUID, lines []SellLine, am
 		case amount == nil:
 			return CounterSale{}, fmt.Errorf("%w: %s has no price; give the amount", ErrSaleInvalid, it.Name)
 		}
-		in.Lines = append(in.Lines, SaleLine{ItemID: it.ID, Item: it.Name, Quantity: l.Quantity, Unit: it.Unit, PriceKobo: price, CostKobo: it.CostKobo})
+		in.Lines = append(in.Lines, SaleLine{ItemID: it.ID, Item: it.Name, Quantity: l.Quantity, Unit: it.SaleUnit(), PriceKobo: price, CostKobo: it.CostKobo})
 	}
 	return s.RecordSale(ctx, tenant, in, s.MoneyLog)
 }

@@ -1,11 +1,14 @@
+import { AreaPageTabs } from "./AreaPageTabs";
 import { useId, useMemo, useState } from "react";
 import { ReceiveMoneyCard } from "./ReceiveMoney";
+import { SavedFill } from "./SavedFill";
 import { Link, NavLink, Navigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, postOnce, put } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, Items, PageHeader, Row, Skeleton, useAction, useLiveRefresh, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { MoneyBars, MoneySources } from "./MoneyParts";
+import { SpendingCard } from "./MoneySpending";
 import { UNMATCHED_PATH, channelWords, dateLabel, naira, newRequestKey, plainMessage, type UnmatchedMoney } from "../lib/invoices";
 import {
   CLOSE_CHOICES,
@@ -81,6 +84,7 @@ import {
   type StatementColumns,
   type StatementRefusal,
   type WaitingLine,
+  otherCurrenciesLine,
 } from "../lib/money";
 
 /** Runs a request and words the server's refusal as a sentence. */
@@ -96,8 +100,10 @@ async function plainly<T>(p: Promise<T>): Promise<T> {
 /** The periods one press away; the rest are under "Other". */
 const QUICK_PERIODS = PERIOD_CHOICES.filter((c) => c.value === "today" || c.value === "week" || c.value === "month");
 
-/** Overview, Leaks, Upload statement, Cash and expenses, Fees. */
-function MoneyTabs() {
+/** Overview, Leaks, Upload statement, Cash and expenses, Fees; Things we
+ * have for those who may see stock; Labels for those who manage money. */
+export function MoneyTabs() {
+  const { can } = useAuth();
   return (
     <nav className="tabs" aria-label="Money">
       <NavLink to="/money" end>
@@ -107,6 +113,9 @@ function MoneyTabs() {
       <NavLink to="/money/statements">Upload statement</NavLink>
       <NavLink to="/money/entries">Cash and expenses</NavLink>
       <NavLink to="/money/fees">Fees</NavLink>
+      <AreaPageTabs areas={["money"]} />
+      {can("table.read") && <NavLink to="/money/things">Things we have</NavLink>}
+      {moneyAccess(can).manage && <NavLink to="/money/labels">Labels</NavLink>}
     </nav>
   );
 }
@@ -246,6 +255,7 @@ export function MoneyOverview() {
             {s.unit && s.buckets && s.buckets.length > 1 && <MoneyBars key={key} buckets={s.buckets} unit={s.unit} caption={`Money in and out, ${periodWords(p)}`} />}
           </section>
           <MoneySources channels={channels} total={s.in_settled_kobo} />
+          <SpendingCard period={p} />
           <section className="money-panel to-look" aria-labelledby="look-h" data-testid="overview-leaks">
             <h2 id="look-h">To look at</h2>
             {waiting.length > 0 && (
@@ -293,6 +303,11 @@ export function MoneyOverview() {
               </span>
               <Icon name="chevron" className="go" />
             </Link>
+            {otherCurrenciesLine(s.other_currencies) && (
+              <p className="hint" data-testid="other-currencies">
+                {otherCurrenciesLine(s.other_currencies)}
+              </p>
+            )}
             {!!s.collected_for_others_kobo && (
               <div className="list-row" data-testid="collected-for-others">
                 <span className="list-icon">
@@ -950,6 +965,9 @@ export function MoneyEntries() {
             </label>
           ))}
         </fieldset>
+        <div className="saved-fill-line">
+          <SavedFill kind="date" label="the date" onPick={(_, d) => set({ date: d })} />
+        </div>
         <div className="row">
           <Field label="Amount (₦)">
             <input inputMode="decimal" value={form.amount} onChange={(e) => set({ amount: e.target.value })} placeholder="12000" />

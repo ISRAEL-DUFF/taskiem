@@ -69,9 +69,21 @@ type Store struct {
 	// the base of callback steps' addresses. Empty, a workflow with
 	// callback steps cannot start.
 	HooksURL string
+	// Saved reads the business's saved things a run's workflow names, when
+	// it starts (saved.go); nil reads none.
+	Saved SavedResolver
+	// WakeInterval is the least time between two wake-ups this process
+	// sends for one queue (TASKIEM_WAKE_INTERVAL); zero is
+	// DefaultWakeInterval. WakeInTx leaves wake-ups to the task trigger,
+	// inside the transaction, as before decision 0067
+	// (TASKIEM_WAKE_IN_TX): for a comparison under load.
+	WakeInterval time.Duration
+	WakeInTx     bool
 
+	wake     waker
 	defs     lru.Cache[string, *wd.Definition] // "workflow_id/version"; versions are immutable; bounded (S34)
 	folds    decideCache
+	taints   taintCache
 	limits   sync.Map // tenant -> cachedLimits
 	hits     sync.Map // "tenant/limit" -> time recorded
 	hitCount atomic.Int64
@@ -103,7 +115,8 @@ const settleStatus = `, status = CASE WHEN runs.status NOT IN ('running', 'waiti
 const liveStatuses = `status IN ('running', 'waiting')`
 
 // maxInlineRounds bounds decide -> effects -> decide loops in one transaction
-// (a buffered signal consumed by a new wait triggers another round).
+// (a buffered signal consumed by a new wait triggers another round). A
+// decision that needs more leaves the rest to the sweep (decideInline).
 const maxInlineRounds = 16
 
 // maxForkRounds bounds the rounds of a forked run, whose replayed outcomes
@@ -141,7 +154,7 @@ type StartRequest struct {
 	// declared pii: a message's sender and text), sealed with the rest.
 	TriggerPII []pii.Path
 	// Customer is the person whose message started the run (a customer
-	// guard's sender, decision 0062 P2): the run's free text and names are
+	// guard's sender, decision 0074 P2): the run's free text and names are
 	// sealed under their subject, so erasing them erases the run's record
 	// of what they said. A child or fork run inherits its parent's.
 	Customer *Customer
@@ -152,11 +165,11 @@ type StartRequest struct {
 	// sealed under each person's current key and an erased person's value
 	// is refused (pii.Current).
 	Received bool
-	// Sandbox makes a test conversation's run (decision 0062 V7, Talk to it
+	// Sandbox makes a test conversation's run (decision 0074 V7, Talk to it
 	// here): what its steps would change is simulated, never sent
 	// (sandbox.go). A child or fork run of a sandbox run is one too.
 	Sandbox bool
-	// Conversation is the customer's message the run answers (decision 0062
+	// Conversation is the customer's message the run answers (decision 0074
 	// V7): it is tied to the run in the run's own transaction, so a run that
 	// answers at once finds its conversation.
 	Conversation *ConversationRef
@@ -263,6 +276,9 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 				req.Env = map[string]any{}
 			}
 		}
+		if fork == nil {
+			req.Trigger = withScanRead(def, req.Trigger)
+		}
 		// Capability steps run as the rails the environment's connections
 		// are, pinned now so the run never changes rail; a fork keeps the
 		// failed run's.
@@ -290,6 +306,9 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 					req.TenantID, req.TriggerID, req.DedupKey).Scan(&ref.ID)
 			}
 		}
+		if fork != nil && fork.resumedBy != nil {
+			return &NotResumableError{Reason: fmt.Sprintf("run %s was already resumed as run %s; resume that run if it failed", fork.parent, *fork.resumedBy)}
+		}
 		lim, err := s.limitsTx(ctx, tx, req.TenantID)
 		if err != nil {
 			return err
@@ -303,8 +322,15 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 		if err := checkQuota(ctx, tx, req.TenantID, lim); err != nil {
 			return err
 		}
-		if out.HeldBy, err = tenantHold(ctx, tx, req, lim); err != nil {
-			return err
+		// A child its parent's step waits for runs in the parent's slot:
+		// holding it would leave the parent waiting on a run that cannot
+		// start while the parent counts against the same limit (decision
+		// 0049). Chains are at most wd.MaxSubflowDepth deep, which bounds the
+		// overshoot.
+		if req.Parent == nil || !req.Parent.Waits {
+			if out.HeldBy, err = tenantHold(ctx, tx, req, lim); err != nil {
+				return err
+			}
 		}
 		if out.HeldBy != "" {
 			if err := checkBacklog(ctx, tx, req.TenantID, lim); err != nil {
@@ -362,6 +388,18 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			Trigger: req.Trigger, Env: req.Env, Connectors: pins, Policies: policies,
 		}
 		paths := triggerPaths(def)
+		var saved map[string]any
+		var savedPaths []pii.Path
+		if fork != nil && fork.saved != nil {
+			saved, savedPaths, err = s.forkSaved(ctx, tx, req.TenantID, def, fork.saved)
+		} else {
+			saved, savedPaths, err = s.savedInputs(ctx, tx, req.TenantID, def)
+		}
+		if err != nil {
+			return err
+		}
+		payload.Saved = saved
+		paths = append(paths, savedPaths...)
 		for _, p := range req.TriggerPII {
 			paths = append(paths, pii.Path{Segments: append([]string{"trigger"}, p.Segments...), Category: p.Category})
 		}
@@ -544,6 +582,16 @@ func lockRun(ctx context.Context, tx pgx.Tx, id uuid.UUID) (runRow, error) {
 	return r, err
 }
 
+// stepHistory loads what a task needs of its run's history, in order: the
+// run's start, its first scheduled step (for the run-start latency) and
+// the events of one step instance.
+func stepHistory(ctx context.Context, tx pgx.Tx, runID uuid.UUID, step string) ([]history.Event, error) {
+	return queryHistory(ctx, tx, `SELECT seq, type, COALESCE(step_id, ''), COALESCE(attempt, 0), payload, recorded_at, origin
+		FROM run_events WHERE run_id = $1 AND (step_id = $2 OR type = 'RunStarted'
+			OR seq = (SELECT f.seq FROM run_events f WHERE f.run_id = $1 AND f.type = 'StepScheduled' ORDER BY f.seq LIMIT 1))
+		ORDER BY seq`, runID, step)
+}
+
 // History loads a run's events in order.
 func History(ctx context.Context, tx pgx.Tx, runID uuid.UUID) ([]history.Event, error) {
 	return queryHistory(ctx, tx, `SELECT seq, type, COALESCE(step_id, ''), COALESCE(attempt, 0), payload, recorded_at, origin
@@ -695,25 +743,42 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			}
 		}
 		if len(deferred) == 0 {
-			if scheduled > 0 {
-				return s.countSteps(ctx, tx, run, def, scheduled)
-			}
-			_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL`+settleStatus+` WHERE id = $1`, ref.ID)
-			return err
+			return s.settle(ctx, tx, run, def, scheduled, true)
 		}
 	}
-	return fmt.Errorf("run %s: decision did not settle after %d rounds", ref.ID, rounds)
+	// Not settled within this transaction's rounds (a long chain of steps
+	// that each complete in the next round): keep what is decided, and
+	// leave what the last round appended undecided for the scheduler's
+	// sweep, which carries on in a transaction of its own. Each
+	// transaction stays bounded, and the run is not refused.
+	telemetry.DecisionsContinued.Inc()
+	return s.settle(ctx, tx, run, def, scheduled, false)
 }
+
+// settle ends a decision: it records the steps it scheduled (countSteps)
+// and releases the run. A decision that ran out of rounds (settled false)
+// leaves the run undecided (decided_seq < last_seq), so the sweep claims
+// it; deciding a run with nothing new is a no-op.
+func (s *Store) settle(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int, settled bool) error {
+	if scheduled > 0 {
+		return s.countSteps(ctx, tx, run, def, scheduled, settled)
+	}
+	_, err := tx.Exec(ctx, `UPDATE runs SET `+decidedThrough+`, orch_lease_owner = NULL, orch_lease_until = NULL`+settleStatus+` WHERE id = $1`, run.ref.ID, settled)
+	return err
+}
+
+// decidedThrough sets decided_seq for a decision ($2: whether it settled).
+const decidedThrough = `decided_seq = CASE WHEN $2::boolean THEN last_seq ELSE last_seq - 1 END`
 
 // countSteps records a decision's scheduled steps and fails the run when
 // they take it past its tenant's max_steps_per_run (a runaway foreach or
 // retry loop). The failure is appended after decide's batch, as a
 // cancellation is, and ends the run in the same transaction, so no step
 // beyond the cap ever reaches a worker.
-func (s *Store) countSteps(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int) error {
+func (s *Store) countSteps(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int, settled bool) error {
 	var total int
-	if err := tx.QueryRow(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $2`+settleStatus+`
-		WHERE id = $1 RETURNING steps_scheduled`, run.ref.ID, scheduled).Scan(&total); err != nil {
+	if err := tx.QueryRow(ctx, `UPDATE runs SET `+decidedThrough+`, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $3`+settleStatus+`
+		WHERE id = $1 RETURNING steps_scheduled`, run.ref.ID, settled, scheduled).Scan(&total); err != nil {
 		return err
 	}
 	lim, err := s.limitsTx(ctx, tx, run.ref.TenantID)
@@ -756,9 +821,14 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			if err != nil {
 				return nil, err
 			}
-			_, err = tx.Exec(ctx, `INSERT INTO tasks (id, tenant_id, run_id, step_id, attempt, queue, available_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			// The wake-up is sent after the commit, not by the task trigger
+			// in it (wake.go): the trigger reads app.task_wake, set here in
+			// the insert's own round trip.
+			b := &pgx.Batch{}
+			b.Queue(`SELECT set_config('app.task_wake', $1, true)`, s.wakeAfterCommit(tx, p.Queue, at))
+			b.Queue(`INSERT INTO tasks (id, tenant_id, run_id, step_id, attempt, queue, available_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 				uuid.Must(uuid.NewV7()), tenant, run.ref.ID, ev.StepID, ev.Attempt, p.Queue, at)
-			return nil, err
+			return nil, tx.SendBatch(ctx, b).Close()
 		case history.KindTimer:
 			at, err := history.ParseTime(p.FireAt)
 			if err != nil {
@@ -845,6 +915,9 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			return nil, insertTimer(ctx, tx, tenant, run.ref.ID, ev.StepID, "approval_timeout", at)
 		}
 	case history.StepCompleted:
+		if err := dropWait(ctx, tx, run.ref.ID, def, ev.StepID); err != nil {
+			return nil, err
+		}
 		// Closes an approval, if this step was one (decision or timeout).
 		if out, ok := ev.Payload.(history.CompletedPayload).Output.(map[string]any); ok {
 			if d, _ := out["decision"].(string); d != "" {
@@ -859,6 +932,11 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			}
 		}
 	case history.StepFailed:
+		// A step that timed out waits no longer: a signal that comes now
+		// is buffered for whoever waits next, not handed to this step.
+		if err := dropWait(ctx, tx, run.ref.ID, def, ev.StepID); err != nil {
+			return nil, err
+		}
 		p := ev.Payload.(history.FailedPayload)
 		if p.Error.Next == "park" || (p.Error.Next == "fail" && isCompensation(ev.StepID)) {
 			if _, err := tx.Exec(ctx, `UPDATE runs SET status = 'needs_reconciliation' WHERE id = $1`, run.ref.ID); err != nil {
@@ -871,27 +949,40 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		// cancellation before recording intent, and decide waits for a write
 		// already under way.
 		for _, q := range []string{
-			`DELETE FROM tasks WHERE run_id = $1 AND step_id = $2 AND lease_owner IS NULL`,
+			`DELETE FROM tasks WHERE run_id = $1 AND step_id = $2 AND ` + unstartedTask,
 			`DELETE FROM timers WHERE run_id = $1 AND step_id = $2 AND fired_at IS NULL`,
 			`UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
 			`UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND step_id = $2 AND status = 'pending'`,
+			// What a chat held towards it (a sealed location) goes with it.
+			`DELETE FROM form_chat_answers c USING form_requests r WHERE r.id = c.request_id AND r.run_id = $1 AND r.step_id = $2`,
 		} {
 			if _, err := tx.Exec(ctx, q, run.ref.ID, ev.StepID); err != nil {
 				return nil, err
 			}
 		}
-		// A run cancelled with reversing reverses the child runs its subflow
-		// steps wait for first (decision 0054): the step keeps its wait, so
-		// it hears when each child has ended, and decide waits for that.
-		children, err := s.childrenToReverse(ctx, tx, run, ev.StepID)
+		// A withdrawn subflow step's child run is cancelled with reversing
+		// (decision 0054), whatever withdrew the step. In a run cancelled
+		// with reversing the step keeps its wait, so it hears when each
+		// child has ended, and decide waits for that. A step withdrawn for
+		// another reason (a branch that lost, a scope that failed) is not
+		// waited for: its wait goes, and the child reverses on its own.
+		children, waited, err := s.childrenToReverse(ctx, tx, run, ev.StepID)
 		if err != nil {
 			return nil, err
 		}
-		if len(children) == 0 {
+		if len(children) == 0 || !waited {
 			if _, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`, run.ref.ID, ev.StepID); err != nil {
 				return nil, err
 			}
+		}
+		if len(children) == 0 {
 			break
+		}
+		if !waited {
+			// Now, before a later event of this batch ends the run and
+			// cancels the children it finds outright (cancelChildren).
+			// Nothing comes back to this run: the step's wait is gone.
+			return nil, s.reverseChildren(ctx, tx, run.ref.TenantID, children)
 		}
 		// After decide's batch: a child with nothing to reverse ends at
 		// once and tells this step so, and that event must follow the
@@ -905,6 +996,37 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		return nil, s.endRun(ctx, tx, run, def, "cancelled") // a reversed cancel, once its compensations ran
 	}
 	return nil, nil
+}
+
+// dropWait removes the signal wait of a step that has completed or failed.
+// Only steps that wait have one (a signal, form, callback or subflow step,
+// whatever a capability step expanded to); other steps cost no statement.
+func dropWait(ctx context.Context, tx pgx.Tx, run uuid.UUID, def *wd.Definition, inst string) error {
+	if _, id := history.SplitInstance(inst); def != nil {
+		if st := def.Step(id); st != nil {
+			switch st.Type {
+			case "signal", "form", "callback", "subflow":
+			default:
+				return nil
+			}
+		}
+	}
+	_, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`, run, inst)
+	return err
+}
+
+// waitSettled reports whether the step a wait row belongs to has already
+// completed or failed, so that the row is stale (an older engine left a
+// timed-out step's wait behind). A cancelled step is not settled here: a
+// subflow step withdrawn by a cancel keeps its wait to hear from its child.
+func waitSettled(ctx context.Context, tx pgx.Tx, run uuid.UUID, step string) (bool, error) {
+	var last string
+	err := tx.QueryRow(ctx, `SELECT type FROM run_events WHERE run_id = $1 AND step_id = $2 AND type IN ($3, $4, $5) ORDER BY seq DESC LIMIT 1`,
+		run, step, history.StepScheduled, history.StepCompleted, history.StepFailed).Scan(&last)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return last != history.StepScheduled, err
 }
 
 func isCompensation(inst string) bool {
@@ -961,47 +1083,68 @@ func policySnapshots(ctx context.Context, tx pgx.Tx, def *wd.Definition) (map[st
 // DefaultRetention applies when a workflow sets no settings.retention.
 const DefaultRetention = 90 * 24 * time.Hour
 
-// endRun marks a run terminal, starts its retention clock (spec 9.4), clears
-// what it no longer needs, and admits queued runs its slot was holding back.
-// Tasks a worker holds are left alone: its result is still recorded.
-func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definition, status string) error {
-	run := r.ref.ID
+// Retention is how long an ended run of def is kept in tenant (spec 9.4):
+// the workflow's settings.retention, else the tenant's governance default,
+// else DefaultRetention, capped by the plan (spec 16.2). def may be nil
+// (no workflow known): the tenant's default then applies. A form
+// submission that starts no run is kept as long (forms.Service.Retention).
+func (s *Store) Retention(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition) (time.Duration, error) {
 	retention := DefaultRetention
 	var tenantDefault string
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(default_retention, '') FROM governance_settings WHERE tenant_id = $1`, r.ref.TenantID).Scan(&tenantDefault); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return err
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(default_retention, '') FROM governance_settings WHERE tenant_id = $1`, tenant).Scan(&tenantDefault); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return 0, err
 	}
 	if d, err := wd.ParseDuration(tenantDefault); err == nil && d > 0 {
 		retention = d
 	}
-	conversations := def.Settings.Retention == wd.RetentionConversations
-	if conversations {
-		// As long as the business keeps its conversations (decision 0062
-		// V5): the run goes with the conversation's rows.
-		days := 30
-		if err := tx.QueryRow(ctx, `SELECT conversation_days FROM tenant_channel_settings WHERE tenant_id = $1`, r.ref.TenantID).Scan(&days); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return err
+	if def != nil {
+		if def.Settings.Retention == wd.RetentionConversations {
+			// As long as the business keeps its conversations (decision 0074
+			// V5): the run goes with the conversation's rows.
+			days := 30
+			if err := tx.QueryRow(ctx, `SELECT conversation_days FROM tenant_channel_settings WHERE tenant_id = $1`, tenant).Scan(&days); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return 0, err
+			}
+			retention = time.Duration(days) * 24 * time.Hour
+		} else if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
+			retention = d
 		}
-		retention = time.Duration(days) * 24 * time.Hour
-	} else if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
-		retention = d
 	}
-	// The plan caps retention (spec 16.2).
-	lim, err := s.limitsTx(ctx, tx, r.ref.TenantID)
+	lim, err := s.limitsTx(ctx, tx, tenant)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if c := time.Duration(lim.MaxRetentionDays) * 24 * time.Hour; c > 0 && retention > c {
 		retention = c
+	}
+	return retention, nil
+}
+
+// unstartedTask picks, in a DELETE FROM tasks, the tasks that can be
+// withdrawn: no worker holds them and their attempt recorded no intent. A
+// task between leases whose attempt did record one (its worker died, or it
+// is waiting to reconcile) is kept: a worker must still settle that write.
+const unstartedTask = `lease_owner IS NULL AND NOT EXISTS (SELECT 1 FROM run_events e
+	WHERE e.run_id = tasks.run_id AND e.step_id = tasks.step_id AND e.attempt = tasks.attempt AND e.type = 'EffectIntent')`
+
+// endRun marks a run terminal, starts its retention clock (spec 9.4), clears
+// what it no longer needs, and admits queued runs its slot was holding back.
+// Tasks a worker holds are left alone: its result is still recorded, but
+// one that has sent nothing yet sends nothing now (Worker.recordIntent).
+func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definition, status string) error {
+	run := r.ref.ID
+	retention, err := s.Retention(ctx, tx, r.ref.TenantID, def)
+	if err != nil {
+		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE runs SET status = $2, ended_at = now(), retain_until = now() + $3::interval WHERE id = $1`,
 		run, status, fmt.Sprintf("%d seconds", int64(retention.Seconds()))); err != nil {
 		return err
 	}
 	// The run's files go no later than the run itself; a conversation's
-	// files go with it exactly (decision 0062 V5).
+	// files go with it exactly (decision 0074 V5).
 	fileExpiry := `least(expires_at, now() + $2::interval)`
-	if conversations {
+	if def != nil && def.Settings.Retention == wd.RetentionConversations {
 		fileExpiry = `now() + $2::interval`
 	}
 	if _, err := tx.Exec(ctx, `UPDATE run_files SET expires_at = `+fileExpiry+` WHERE tenant_id = $3 AND run_id = $1`, run, fmt.Sprintf("%d seconds", int64(retention.Seconds())), r.ref.TenantID); err != nil {
@@ -1022,7 +1165,7 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 		return err
 	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM tasks WHERE run_id = $1 AND lease_owner IS NULL`, run); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM tasks WHERE run_id = $1 AND `+unstartedTask, run); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM timers WHERE run_id = $1 AND fired_at IS NULL`, run); err != nil {
@@ -1033,6 +1176,10 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 	}
 	// A form step's link is withdrawn with its run (forms 6.7).
 	if _, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND status = 'pending'`, run); err != nil {
+		return err
+	}
+	// And what a chat held towards one of them (device fields D1).
+	if _, err := tx.Exec(ctx, `DELETE FROM form_chat_answers c USING form_requests r WHERE r.id = c.request_id AND r.run_id = $1`, run); err != nil {
 		return err
 	}
 	// Subflows (subflows.go): the step that started this run hears how it
@@ -1172,6 +1319,55 @@ func (s *Store) DeliverSignalPII(ctx context.Context, tenant uuid.UUID, env, eve
 	return s.deliverSignal(ctx, tenant, env, event, correlation, dedupKey, payload, paths)
 }
 
+// DeliverSignalToRun hands a signal to one run, waiting for it at step (a
+// page's button, docs/spec/pages.md §7): never to another run waiting
+// under the same correlation, and never buffered for later. It reports
+// whether the run took it (false: it was not waiting there any more).
+func (s *Store) DeliverSignalToRun(ctx context.Context, tenant, run uuid.UUID, step, event string, payload any) (bool, error) {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return false, err
+	}
+	var took bool
+	err = db.InTenantTxRetry(ctx, s.Pool, []uuid.UUID{tenant}, false, func(tx pgx.Tx) error {
+		took = false
+		var env, correlation string
+		err := tx.QueryRow(ctx, `SELECT environment, correlation FROM signal_waits WHERE tenant_id = $1 AND run_id = $2 AND step_id = $3 AND event = $4`,
+			tenant, run, step, event).Scan(&env, &correlation)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := signalLock(ctx, tx, tenant, env, event, correlation); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE tenant_id = $1 AND run_id = $2 AND step_id = $3 AND event = $4`, tenant, run, step, event)
+		if err != nil || tag.RowsAffected() == 0 {
+			return err
+		}
+		if _, err := lockRun(ctx, tx, run); err != nil {
+			return err
+		}
+		stale, err := waitSettled(ctx, tx, run, step)
+		if err != nil || stale {
+			return err
+		}
+		if _, err := appendEvent(ctx, tx, run, history.SignalReceived, step, 0, signalPayload(event, raw), history.OriginSignal); err != nil {
+			return err
+		}
+		if !deciding(ctx, run) {
+			if err := s.decideInline(ctx, tx, RunRef{ID: run, TenantID: tenant}); err != nil {
+				return err
+			}
+		}
+		took = true
+		return nil
+	})
+	return took, err
+}
+
 func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any, paths []pii.Path) ([]uuid.UUID, bool, error) {
 	if env == "" {
 		return nil, false, errors.New("signal: no environment")
@@ -1182,7 +1378,9 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event,
 		return nil, false, err
 	}
 	var woke []uuid.UUID
-	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	// Run again when the database ended it to break a deadlock (the run
+	// it wakes is ending): it rolled back, and the signal is not lost.
+	err = db.InTenantTxRetry(ctx, s.Pool, []uuid.UUID{tenant}, false, func(tx pgx.Tx) error {
 		woke, fresh = woke[:0], true
 		if dedupKey != "" {
 			// The receipt marks the delivery as seen; no run is started (uuid.Nil).
@@ -1234,22 +1432,19 @@ func (s *Store) deliverSignalTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if len(waits) == 0 {
-		if !buffer {
-			return nil, nil
-		}
-		kept, err := s.sealSignal(ctx, tx, pii.Received(s.PII), tenant, raw, paths)
-		if err != nil {
-			return nil, err
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
-			uuid.Must(uuid.NewV7()), tenant, env, event, correlation, kept, SignalTTL.String())
-		return nil, err
-	}
 	var woke []uuid.UUID
 	for _, w := range waits {
 		if _, err := lockRun(ctx, tx, w.run); err != nil {
 			return nil, err
+		}
+		// Under the run's lock: a step that settled since its wait was
+		// written (or whose wait an older engine left) is passed over.
+		stale, err := waitSettled(ctx, tx, w.run, w.step)
+		if err != nil {
+			return nil, err
+		}
+		if stale {
+			continue
 		}
 		cipher, err := s.signalCipher(ctx, tx, w.run)
 		if err != nil {
@@ -1268,6 +1463,15 @@ func (s *Store) deliverSignalTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 			}
 		}
 		woke = append(woke, w.run)
+	}
+	if len(woke) == 0 && buffer {
+		kept, err := s.sealSignal(ctx, tx, pii.Received(s.PII), tenant, raw, paths)
+		if err != nil {
+			return nil, err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
+			uuid.Must(uuid.NewV7()), tenant, env, event, correlation, kept, SignalTTL.String())
+		return nil, err
 	}
 	return woke, nil
 }
@@ -1316,7 +1520,9 @@ func (s *Store) DecideApproval(ctx context.Context, ref RunRef, step, decision, 
 // Without, it ends now: steps a worker is executing still record their
 // results, and completed steps stay as they are.
 func (s *Store) CancelRun(ctx context.Context, ref RunRef, by string, reverse bool) error {
-	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{ref.TenantID}, func(tx pgx.Tx) error {
+	// Run again when the database ended it to break a deadlock (a child
+	// run reporting to this one as it is cancelled): it rolled back.
+	return db.InTenantTxRetry(ctx, s.Pool, []uuid.UUID{ref.TenantID}, false, func(tx pgx.Tx) error {
 		return s.cancelTx(ctx, tx, ref, by, reverse, history.OriginAPI)
 	})
 }
@@ -1333,9 +1539,17 @@ func (s *Store) cancelTx(ctx context.Context, tx pgx.Tx, ref RunRef, by string, 
 	if reverse && run.status != "queued" {
 		// Decide ends the run once its writes under way have settled and
 		// its compensations have run (decision 0054); asked twice, the
-		// first request stands.
-		if asked, err := cancelRequested(ctx, tx, ref.ID); err != nil || asked {
+		// first request stands. Asking again does look at the run again,
+		// which moves on one an older engine left waiting (requeueOpenIntents).
+		asked, err := cancelRequested(ctx, tx, ref.ID)
+		if err != nil {
 			return err
+		}
+		if asked {
+			if err := requeueOpenIntents(ctx, tx, run); err != nil {
+				return err
+			}
+			return s.decideInline(ctx, tx, ref)
 		}
 		if _, err := appendEvent(ctx, tx, ref.ID, history.CancelRequested, "", 0, history.CancelPayload{By: by}, origin); err != nil {
 			return err
@@ -1350,6 +1564,69 @@ func (s *Store) cancelTx(ctx context.Context, tx pgx.Tx, ref RunRef, by string, 
 		return err
 	}
 	return s.endRun(ctx, tx, run, def, "cancelled")
+}
+
+// requeueOpenIntents gives back its task to a write whose last attempt
+// recorded an intent and no outcome, and has no task. Every such attempt
+// should have one: a worker must settle it. Before a cancelled step with
+// an open intent was settled, its task was dropped instead, and the run
+// waited for ever for an outcome; this lets a second cancel request move
+// such a run on. The worker that claims the task only settles the write.
+func requeueOpenIntents(ctx context.Context, tx pgx.Tx, run runRow) error {
+	hist, err := History(ctx, tx, run.ref.ID)
+	if err != nil {
+		return err
+	}
+	type last struct {
+		attempt      int
+		queue        string
+		intent, done bool
+	}
+	steps := map[string]*last{}
+	var order []string
+	for _, e := range hist {
+		st := steps[e.StepID]
+		switch e.Type {
+		case history.StepScheduled:
+			var p struct {
+				Kind  string `json:"kind"`
+				Queue string `json:"queue"`
+			}
+			if err := json.Unmarshal(e.Payload, &p); err != nil {
+				return err
+			}
+			if p.Kind != history.KindTask {
+				continue
+			}
+			if st == nil {
+				order = append(order, e.StepID)
+			}
+			steps[e.StepID] = &last{attempt: e.Attempt, queue: p.Queue}
+		case history.EffectIntent:
+			if st != nil && e.Attempt == st.attempt {
+				st.intent = true
+			}
+		case history.StepCompleted:
+			if st != nil {
+				st.done = true
+			}
+		case history.StepFailed:
+			if st != nil && e.Attempt == st.attempt {
+				st.done = true
+			}
+		}
+	}
+	for _, step := range order {
+		st := steps[step]
+		if !st.intent || st.done {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO tasks (id, tenant_id, run_id, step_id, attempt, queue) VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (run_id, step_id, attempt) DO NOTHING`, uuid.Must(uuid.NewV7()), run.ref.TenantID, run.ref.ID, step, st.attempt, st.queue); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func cancelRequested(ctx context.Context, tx pgx.Tx, run uuid.UUID) (bool, error) {
@@ -1459,4 +1736,35 @@ func setSandbox(ctx context.Context, tx pgx.Tx, req StartRequest, run uuid.UUID)
 		_, err = tx.Exec(ctx, `UPDATE runs SET sandbox = (SELECT sandbox FROM runs WHERE id = $2) WHERE id = $1`, run, req.Fork.Parent)
 	}
 	return err
+}
+
+// withScanRead is a manual start's trigger with its scan input as the run
+// keeps it (device fields §7, D2): {state, source, text, format}, its
+// source set here from whether the phone gave a format, never from the
+// body. The caller's maps are left as they were.
+func withScanRead(def *wd.Definition, raw any) any {
+	trigger, ok := raw.(map[string]any)
+	if !ok {
+		return raw
+	}
+	if t, _ := trigger["type"].(string); t != "manual" {
+		return trigger
+	}
+	body, ok := trigger["body"].(map[string]any)
+	if !ok {
+		return trigger
+	}
+	b := make(map[string]any, len(body))
+	for k, v := range body {
+		b[k] = v
+	}
+	if !def.ReadScanInput(b) {
+		return trigger
+	}
+	out := make(map[string]any, len(trigger))
+	for k, v := range trigger {
+		out[k] = v
+	}
+	out["body"] = b
+	return out
 }

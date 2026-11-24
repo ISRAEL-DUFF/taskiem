@@ -90,9 +90,11 @@ func TestCryptoWithdrawal(t *testing.T) {
 	if err != nil || out(r)["status"] != "processing" {
 		t.Errorf("duplicate: %v %v", r.Output, err)
 	}
-	// Someone else's identical withdrawal within the minute: ours never happened.
+	// Refused as a duplicate and not shown under our reference: ours, or
+	// someone else's identical withdrawal. Not known to have failed, so a
+	// person decides.
 	_, err = call(t, "withdraw_crypto", cryptoIn, nil, "withdraw_crypto_duplicate", "withdrawal_by_ref_missing")
-	if effects.Classify(err) != effects.KindFatal {
+	if effects.Classify(err) != effects.KindIndeterminate {
 		t.Errorf("duplicate, not ours: %v", err)
 	}
 	_, err = call(t, "withdraw_crypto", cryptoIn, nil, "withdraw_crypto_duplicate", "withdrawal_by_ref_rejected")
@@ -146,5 +148,26 @@ func TestWebhookSecret(t *testing.T) {
 	}
 	if connector.VerifyWebhook(spec, "breet_whsec_2", h, []byte(`{}`)) == nil {
 		t.Error("wrong secret accepted")
+	}
+}
+
+// Reconcile must not answer "not found" from a lookup Breet has not
+// confirmed (an externalId in a path documented for an id): the engine
+// would send a second withdrawal, which cannot be taken back.
+func TestReconcileNeverAnswersNotFound(t *testing.T) {
+	srv := fixture.Serve(t, fixture.Load(t, "withdrawal_by_ref_missing"))
+	_, err := New(Options{BaseURL: srv.URL}).Actions["get_withdrawal"].Execute(context.Background(), connector.Request{
+		Input: map[string]any{"external_id": ref}, HTTP: srv.Client(), IdempotencyKey: ref, Reconciling: true, Attempt: 1,
+		Credentials: map[string]string{"app_id": "app-1", "app_secret": "sec-1", "pin": "1234", "environment": "sandbox"}})
+	if errors.Is(err, connector.ErrNotFound) || effects.Classify(err) != effects.KindIndeterminate {
+		t.Fatalf("reconcile with nothing shown must park, not read as not found: %v", err)
+	}
+	// Found is still found.
+	srv = fixture.Serve(t, fixture.Load(t, "withdrawal_by_ref"))
+	r, err := New(Options{BaseURL: srv.URL}).Actions["get_withdrawal"].Execute(context.Background(), connector.Request{
+		Input: map[string]any{"external_id": ref}, HTTP: srv.Client(), IdempotencyKey: ref, Reconciling: true, Attempt: 1,
+		Credentials: map[string]string{"app_id": "app-1", "app_secret": "sec-1", "pin": "1234", "environment": "sandbox"}})
+	if err != nil || out(r)["withdrawal_id"] != "697251ed397a53d0cb7b228b" {
+		t.Errorf("%v %v", r.Output, err)
 	}
 }

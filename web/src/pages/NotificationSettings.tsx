@@ -8,6 +8,7 @@ import {
 } from "../lib/notifications";
 import { ErrorBox, Items, PageHeader, Row, useAction, useLoad } from "../ui";
 import { onPrefs, readPrefs, writePrefs, playPing } from "../lib/chatNotify";
+import { ChatPush } from "./ChatPush";
 
 /**
  * How a person hears beyond the app (no-technical-steps N12). The bell
@@ -140,9 +141,10 @@ export function NotificationSettings() {
               {box(r.chat, "On WhatsApp or Telegram", r.setting.chat, (on) =>
                 save({ ...r.setting, chat: on }),
               )}
-              {box(r.email, "By email", r.setting.email, (on) =>
-                save({ ...r.setting, email: on }),
-              )}
+              {r.email &&
+                box(r.email, "By email", r.setting.email, (on) =>
+                  save({ ...r.setting, email: on }),
+                )}
             </Row>
           ))}
         </Items>
@@ -153,6 +155,7 @@ export function NotificationSettings() {
         </p>
       </section>
       <ChatOnThisComputer />
+      <ChatPush />
     </>
   );
 }

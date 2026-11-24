@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -79,13 +80,19 @@ func (g *chatStreamGate) lastCap() string {
 }
 
 func (g *chatStreamGate) acquire(t uuid.UUID) (release func(), ok bool) {
+	return g.acquireN(t, chatStreamsPerTenant, "business")
+}
+
+// acquireN takes one of the streams t may hold (per at once; who names
+// that cap when it refuses), and one of the server's.
+func (g *chatStreamGate) acquireN(t uuid.UUID, per int, who string) (release func(), ok bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.tenant == nil {
 		g.tenant = map[uuid.UUID]int{}
 	}
-	if g.tenant[t] >= chatStreamsPerTenant {
-		g.refused = "business"
+	if g.tenant[t] >= per {
+		g.refused = who
 		return nil, false
 	}
 	if g.total >= chatStreamsTotal {
@@ -182,93 +189,109 @@ func (s *Server) chatStream(w http.ResponseWriter, r *http.Request) {
 		more := false
 		polled := time.Now()
 		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-			refs, err := links.ChangedRefsTx(ctx, tx, p.TenantID, since, chatStreamBatch)
+			// Linked businesses turned off: their conversations are refused
+			// (areaGate), so they are not streamed either, not even replayed
+			// (the Taskiem conversation below still is). Turned back on, the
+			// stream goes on from a moment ago, as a new connection would.
+			linksOn, err := areas.Enabled(ctx, tx, p.TenantID, areas.Links)
 			if err != nil {
 				return err
 			}
-			var fresh []links.ChangeRef
-			var pairs []uuid.UUID
-			for _, c := range refs {
-				k := seenKey{c.Pair, c.At.UnixMicro()}
-				if _, done := seen[k]; done {
-					continue
+			if !linksOn {
+				since = time.Now().Add(-chatStreamLookBack)
+				if len(typing) > 0 {
+					typing = nil
+					sends = append(sends, func() error { return sent("typing", write("event: typing\ndata: {\"typing\":[]}\n\n")) })
 				}
-				seen[k] = struct{}{}
-				fresh = append(fresh, c)
-				if !c.Hidden {
-					pairs = append(pairs, c.Pair)
-				}
-			}
-			if n := len(refs); n > 0 {
-				if n == chatStreamBatch {
-					// A full batch: more may be waiting, so go on from the
-					// last of them (a bulk change, a conversation read at
-					// once) rather than from the look-back, which could
-					// not get past a batch that fills it.
-					more = true
-					if at := refs[n-1].At; at.After(since) {
-						since = at.Add(-time.Microsecond)
-					}
-				} else if edge := refs[n-1].At.Add(-chatStreamLookBack); edge.After(since) {
-					// The window slides to just before the newest change.
-					since = edge
-				}
-			}
-			if len(fresh) > 0 {
-				msgs, err := links.MessagesByPairTx(ctx, tx, p.TenantID, pairs)
+			} else {
+				refs, err := links.ChangedRefsTx(ctx, tx, p.TenantID, since, chatStreamBatch)
 				if err != nil {
 					return err
 				}
-				if err := links.DecorateTx(ctx, tx, p.TenantID, viewer, msgs); err != nil {
-					return err
-				}
-				byPair := map[uuid.UUID]links.Message{}
-				for _, m := range msgs {
-					byPair[m.PairID] = m
-				}
-				for _, c := range fresh {
-					id := c.At.UnixMicro()
-					switch m, ok := byPair[c.Pair]; {
-					case c.Hidden:
-						b, _ := json.Marshal(map[string]any{"id": c.Pair, "link": c.Link})
-						sends = append(sends, func() error { return sent("gone", write("id: %d\nevent: gone\ndata: %s\n\n", id, b)) })
-					case ok:
-						b, _ := json.Marshal(map[string]any{"message": m})
-						sends = append(sends, func() error { return sent("message", write("id: %d\nevent: message\ndata: %s\n\n", id, b)) })
+				var fresh []links.ChangeRef
+				var pairs []uuid.UUID
+				for _, c := range refs {
+					k := seenKey{c.Pair, c.At.UnixMicro()}
+					if _, done := seen[k]; done {
+						continue
+					}
+					seen[k] = struct{}{}
+					fresh = append(fresh, c)
+					if !c.Hidden {
+						pairs = append(pairs, c.Pair)
 					}
 				}
-			}
-			convs, err := links.ConversationChangesTx(ctx, tx, p.TenantID, since)
-			if err != nil {
-				return err
-			}
-			for _, c := range convs {
-				k := seenKey{c.Link, c.At.UnixMicro()}
-				if _, done := seenConv[k]; done {
-					continue
+				if n := len(refs); n > 0 {
+					if n == chatStreamBatch {
+						// A full batch: more may be waiting, so go on from the
+						// last of them (a bulk change, a conversation read at
+						// once) rather than from the look-back, which could
+						// not get past a batch that fills it.
+						more = true
+						if at := refs[n-1].At; at.After(since) {
+							since = at.Add(-time.Microsecond)
+						}
+					} else if edge := refs[n-1].At.Add(-chatStreamLookBack); edge.After(since) {
+						// The window slides to just before the newest change.
+						since = edge
+					}
 				}
-				seenConv[k] = struct{}{}
-				id, b := c.At.UnixMicro(), mustJSON(c)
-				sends = append(sends, func() error { return sent("conversation", write("id: %d\nevent: conversation\ndata: %s\n\n", id, b)) })
-			}
-			// Who is typing: the links come from the business's links, now
-			// and then; the typing, every couple of seconds.
-			if time.Since(linksAt) > 30*time.Second {
-				if activeLinks, err = links.ActiveLinksTx(ctx, tx); err != nil {
-					return err
+				if len(fresh) > 0 {
+					msgs, err := links.MessagesByPairTx(ctx, tx, p.TenantID, pairs)
+					if err != nil {
+						return err
+					}
+					if err := links.DecorateTx(ctx, tx, p.TenantID, viewer, msgs); err != nil {
+						return err
+					}
+					byPair := map[uuid.UUID]links.Message{}
+					for _, m := range msgs {
+						byPair[m.PairID] = m
+					}
+					for _, c := range fresh {
+						id := c.At.UnixMicro()
+						switch m, ok := byPair[c.Pair]; {
+						case c.Hidden:
+							b, _ := json.Marshal(map[string]any{"id": c.Pair, "link": c.Link})
+							sends = append(sends, func() error { return sent("gone", write("id: %d\nevent: gone\ndata: %s\n\n", id, b)) })
+						case ok:
+							b, _ := json.Marshal(map[string]any{"message": m})
+							sends = append(sends, func() error { return sent("message", write("id: %d\nevent: message\ndata: %s\n\n", id, b)) })
+						}
+					}
 				}
-				linksAt = time.Now()
-			}
-			if time.Since(typingAt) >= chatStreamTypingEv {
-				now, err := links.TypingNowTx(ctx, tx, activeLinks)
+				convs, err := links.ConversationChangesTx(ctx, tx, p.TenantID, since)
 				if err != nil {
 					return err
 				}
-				typingAt = time.Now()
-				if !slices.Equal(now, typing) {
-					typing = now
-					b, _ := json.Marshal(map[string]any{"typing": append([]uuid.UUID{}, now...)})
-					sends = append(sends, func() error { return sent("typing", write("event: typing\ndata: %s\n\n", b)) })
+				for _, c := range convs {
+					k := seenKey{c.Link, c.At.UnixMicro()}
+					if _, done := seenConv[k]; done {
+						continue
+					}
+					seenConv[k] = struct{}{}
+					id, b := c.At.UnixMicro(), mustJSON(c)
+					sends = append(sends, func() error { return sent("conversation", write("id: %d\nevent: conversation\ndata: %s\n\n", id, b)) })
+				}
+				// Who is typing: the links come from the business's links, now
+				// and then; the typing, every couple of seconds.
+				if time.Since(linksAt) > 30*time.Second {
+					if activeLinks, err = links.ActiveLinksTx(ctx, tx); err != nil {
+						return err
+					}
+					linksAt = time.Now()
+				}
+				if time.Since(typingAt) >= chatStreamTypingEv {
+					now, err := links.TypingNowTx(ctx, tx, activeLinks)
+					if err != nil {
+						return err
+					}
+					typingAt = time.Now()
+					if !slices.Equal(now, typing) {
+						typing = now
+						b, _ := json.Marshal(map[string]any{"typing": append([]uuid.UUID{}, now...)})
+						sends = append(sends, func() error { return sent("typing", write("event: typing\ndata: %s\n\n", b)) })
+					}
 				}
 			}
 			// The person's own conversation with Taskiem (every channel).

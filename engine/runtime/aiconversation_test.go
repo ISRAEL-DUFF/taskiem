@@ -16,7 +16,7 @@ import (
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 )
 
-// A reply in a conversation (decision 0062 V4): the turns so far, the
+// A reply in a conversation (decision 0074 V4): the turns so far, the
 // business's instruction under Taskiem's rules, a short answer, and a set
 // reply when the model cannot answer.
 const aiChat = `{"schema":"wd/v1","id":"wf_chat","version":1,"name":"chat","trigger":{"type":"manual"},
@@ -173,7 +173,7 @@ func TestAIStepFallback(t *testing.T) {
 	}
 }
 
-// AI steps spend their own allowance (decision 0062 D7): a building
+// AI steps spend their own allowance (decision 0074 D7): a building
 // budget used up does not stop them, their tokens do not count against
 // building, and an allowance of 0 turns them off (A8), with the set reply.
 func TestAIStepAllowanceIsSeparate(t *testing.T) {

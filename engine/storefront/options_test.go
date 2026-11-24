@@ -53,4 +53,17 @@ func TestFoodOptions(t *testing.T) {
 	if _, changed := reprice(sub, map[string]Item{"1": rice}, ActionOptions{}); changed {
 		t.Fatal("nothing changed")
 	}
+	// An order with a deposit keeps one at the new prices: the action's
+	// percentage, else the share it had (30% of 460000 is 138000).
+	dep := sub
+	dep.DepositKobo = 138000
+	if pc, _ := reprice(dep, map[string]Item{"1": dearer}, ActionOptions{DepositPercent: 30}); pc.DepositKobo != (500000*30+99)/100 {
+		t.Fatalf("deposit at the action's percentage: %+v", pc)
+	}
+	if pc, _ := reprice(dep, map[string]Item{"1": dearer}, ActionOptions{}); pc.DepositKobo != 150000 {
+		t.Fatalf("deposit at the order's share: %+v", pc)
+	}
+	if pc, _ := reprice(sub, map[string]Item{"1": dearer}, ActionOptions{}); pc.DepositKobo != 0 {
+		t.Fatalf("no deposit stays none: %+v", pc)
+	}
 }

@@ -122,22 +122,28 @@ test("a picture to send, a photo being sent and the camera, under the real conte
   await expect(waiting).toContainText("Photo: bags.png");
   const preview = waiting.getByRole("img", { name: "Preview of bags.png" });
   await expect(preview).toBeVisible();
-  expect(
-    await preview.evaluate(
-      (el: HTMLImageElement) => el.complete && el.naturalWidth,
-    ),
-  ).toBeGreaterThan(0);
+  // Loaded, not only there: asked again until it is.
+  await expect
+    .poll(() =>
+      preview.evaluate((el: HTMLImageElement) =>
+        el.complete ? el.naturalWidth : 0,
+      ),
+    )
+    .toBeGreaterThan(0);
 
   // Sent: its own preview shows at once, then the server's copy.
   await box.fill("The new bags");
   await box.press("Enter");
   const mine = pane.locator('[data-testid="chat-message"][data-mine="true"]');
   await expect(mine.getByRole("img", { name: "Your photo" })).toBeVisible();
-  expect(
-    await mine
-      .getByRole("img", { name: "Your photo" })
-      .evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth),
-  ).toBeGreaterThan(0);
+  // The server's copy takes the preview's place: whichever is shown loads.
+  await expect
+    .poll(() =>
+      mine
+        .getByRole("img", { name: "Your photo" })
+        .evaluate((el: HTMLImageElement) => (el.complete ? el.naturalWidth : 0)),
+    )
+    .toBeGreaterThan(0);
 
   // The camera, and the photo it takes.
   await pane.getByTestId("attach").click();
@@ -152,11 +158,13 @@ test("a picture to send, a photo being sent and the camera, under the real conte
     .getByTestId("chat-attaching")
     .getByRole("img", { name: /Preview of photo-\d+\.jpg/ });
   await expect(taken).toBeVisible();
-  expect(
-    await taken.evaluate(
-      (el: HTMLImageElement) => el.complete && el.naturalWidth,
-    ),
-  ).toBeGreaterThan(0);
+  await expect
+    .poll(() =>
+      taken.evaluate((el: HTMLImageElement) =>
+        el.complete ? el.naturalWidth : 0,
+      ),
+    )
+    .toBeGreaterThan(0);
 
   expect(refused).toEqual([]);
 });

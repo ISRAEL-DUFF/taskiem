@@ -37,7 +37,11 @@ import (
 const deliveryButtonPrefix = "dl1."
 
 var deliveryActions = map[byte]string{'a': dispatch.Accept, 'c': dispatch.Cant, 'p': dispatch.PickedUp, 'r': dispatch.Arrived, 'd': dispatch.Delivered,
-	'm': dispatch.Cash, 'n': dispatch.NewNumber}
+	'm': dispatch.Cash, 'n': dispatch.NewNumber, proofButton: "proof"}
+
+// proofButton is "the photo I sent is for this order": not a step of the
+// delivery, so riderPress takes it itself.
+const proofButton = 'f'
 
 type deliveryButton struct {
 	Action   byte
@@ -338,6 +342,16 @@ func (s *Server) riderPress(ctx context.Context, ch chatChannel, channel, addr, 
 	if !mine {
 		return invalid()
 	}
+	if b.Action == proofButton {
+		x, err := s.Dispatch.MoveProof(ctx, b.Tenant, b.Delivery)
+		if errors.Is(err, dispatch.ErrNoDelivery) {
+			return invalid()
+		}
+		if err != nil {
+			return true, err
+		}
+		return true, s.waSay(ctx, ch, addr, "", tr(l, "rider.photo_moved", "reference", x.Reference))
+	}
 	return true, s.riderAct(ctx, ch, addr, b.Tenant, b.Delivery, deliveryActions[b.Action])
 }
 
@@ -384,6 +398,61 @@ var actionFits = map[string][]string{
 	dispatch.Delivered: {"arrived", "picked_up"}, dispatch.Cash: {"arrived", "picked_up"}, dispatch.NewNumber: {"arrived"},
 }
 
+// riderJobWords ask a rider's open deliveries.
+var riderJobWords = map[string]bool{"my deliveries": true, "deliveries": true, "jobs": true, "my jobs": true, "today": true, "what do i have": true}
+
+// riderJobsWord answers a rider's "my deliveries" (chat tools phase 5: a
+// rider works a shift from chat alone): each open delivery, where it goes,
+// its map pin, and the word to send next. false when the words are not
+// those or the sender has no delivery.
+func (s *Server) riderJobsWord(ctx context.Context, ch chatChannel, channel, addr, text string) (bool, error) {
+	if !s.Dispatch.Ready() {
+		return false, nil
+	}
+	w := strings.Join(strings.Fields(strings.ToLower(strings.Trim(strings.TrimSpace(text), "/ .!?"))), " ")
+	if !riderJobWords[w] {
+		return false, nil
+	}
+	phone := ""
+	if channel == reach.WhatsApp {
+		phone = addr
+	}
+	list, err := s.Dispatch.RiderDeliveries(ctx, phone, channel, addr)
+	if err != nil || len(list) == 0 {
+		return false, err
+	}
+	l := s.chooseLang(ctx, ch.OwnTenant(), addr, "").Tag
+	lines := []string{tr(l, "rider.jobs")}
+	for _, o := range list {
+		// Done ones (kept two hours for their photo) are not open.
+		if (ch.OwnTenant() != uuid.Nil && ch.OwnTenant() != o.Tenant) || o.Status == "delivered" {
+			continue
+		}
+		var v dispatch.View
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{o.Tenant}, func(tx pgx.Tx) error {
+			var err error
+			v, err = s.Dispatch.ViewTx(ctx, tx, o.Tenant, o.Delivery)
+			return err
+		}); err != nil {
+			continue
+		}
+		drop := v.Area
+		if v.Held() && v.Address != "" {
+			drop = strings.TrimSpace(v.Address + ", " + v.Area)
+		}
+		line := tr(l, "rider.job", "reference", v.Reference, "business", whatsapp.SafeText(v.Business), "drop", whatsapp.SafeText(drop),
+			"step", tr(l, "rider.job_"+o.Status))
+		if v.Held() && v.Pin != "" {
+			line += "\n" + tr(l, "rider.pin", "pin", v.Pin)
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 1 {
+		return false, nil
+	}
+	return true, s.waSay(ctx, ch, addr, "", strings.Join(lines, "\n\n"))
+}
+
 // riderDeliveryWord takes a rider's word for a tap ("picked up") on the
 // delivery it fits, from an address linked to no member; false when the
 // words are none of those, or the sender has no delivery they fit.
@@ -416,8 +485,12 @@ func (s *Server) riderDeliveryWord(ctx context.Context, ch chatChannel, channel,
 }
 
 // riderMedia keeps a rider's photo (proof of delivery) or location (at
-// the door) on their delivery: the one at the door, or delivered in the
-// last two hours. false when the sender has none.
+// the door) on their delivery: the one they last marked arrived or
+// delivered (in the last two hours), else one they have picked up. A
+// photo is kept beside the delivery's earlier ones. When other orders of
+// the business fit too, the answer names the order and offers each of
+// the others on a button, which moves the photo there. false when the
+// sender has none.
 func (s *Server) riderMedia(ctx context.Context, c *chat, channel string) (bool, error) {
 	in := c.in
 	if !s.Dispatch.Ready() || (in.Image == nil && in.Location == "") {
@@ -431,11 +504,24 @@ func (s *Server) riderMedia(ctx context.Context, c *chat, channel string) (bool,
 	if err != nil {
 		return false, err
 	}
+	// The list is the latest step first: the first at the door or
+	// delivered is the one the rider marked last. One only picked up is
+	// taken when nothing is at the door.
 	var target *dispatch.Open
+	var others []dispatch.Open
 	for i, o := range list {
-		if o.Status == "arrived" || o.Status == "delivered" || o.Status == "picked_up" {
+		if o.Status != "arrived" && o.Status != "delivered" {
+			continue
+		}
+		if target == nil {
 			target = &list[i]
-			break
+		} else if o.Tenant == target.Tenant && len(others) < 2 {
+			others = append(others, o)
+		}
+	}
+	for i, o := range list {
+		if target == nil && o.Status == "picked_up" {
+			target = &list[i]
 		}
 	}
 	if target == nil {
@@ -464,7 +550,38 @@ func (s *Server) riderMedia(ctx context.Context, c *chat, channel string) (bool,
 	if err := s.Dispatch.SetProof(ctx, target.Tenant, target.Delivery, path, ""); err != nil {
 		return true, err
 	}
-	return true, s.waSay(ctx, c.ch, c.addr, "", tr(l, "rider.photo_kept"))
+	// Which order it was kept for, and the rider's other orders at the
+	// door or just delivered, each on a button that moves it there.
+	var ref string
+	var buttons []whatsapp.Button
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{target.Tenant}, func(tx pgx.Tx) error {
+		x, err := s.Dispatch.GetTx(ctx, tx, target.Tenant, target.Delivery)
+		if err != nil {
+			return err
+		}
+		ref, buttons = x.Reference, nil
+		contact, found, err := s.Reach.ContactOfTx(ctx, tx, target.Tenant, channel, c.addr)
+		if err != nil || !found {
+			return err
+		}
+		for _, o := range others {
+			y, err := s.Dispatch.GetTx(ctx, tx, o.Tenant, o.Delivery)
+			if err != nil {
+				return err
+			}
+			id := signDeliveryButton(s.chatSigner().Key, deliveryButton{Action: proofButton, Tenant: o.Tenant, Delivery: o.Delivery, Contact: contact})
+			buttons = append(buttons, whatsapp.Button{ID: id, Title: y.Reference})
+		}
+		return nil
+	})
+	if err != nil {
+		s.Logger.Warn("dispatch: naming the order a photo was kept for", "err", err)
+		return true, s.waSay(ctx, c.ch, c.addr, "", tr(l, "rider.photo_kept"))
+	}
+	if len(buttons) == 0 {
+		return true, s.waSay(ctx, c.ch, c.addr, "", tr(l, "rider.photo_kept_for", "reference", ref))
+	}
+	return true, s.waSay(ctx, c.ch, c.addr, "", tr(l, "rider.photo_kept_which", "reference", ref), buttons...)
 }
 
 // storeProof keeps a proof photo in the business's own storage, cleaned
@@ -491,6 +608,9 @@ func (s *Server) storeProof(ctx context.Context, tenant uuid.UUID, data []byte) 
 type deliveryView struct {
 	dispatch.Delivery
 	ProofURL string `json:"proof_url,omitempty"`
+	// Proofs is how many photos the rider sent for it; proof_url is the
+	// latest.
+	Proofs int `json:"proofs,omitempty"`
 }
 
 func (s *Server) dispatchReady(w http.ResponseWriter, r *http.Request) bool {
@@ -503,11 +623,7 @@ func (s *Server) dispatchReady(w http.ResponseWriter, r *http.Request) bool {
 
 // dispatchFail maps dispatch's refusals to plain answers.
 func (s *Server) dispatchFail(w http.ResponseWriter, r *http.Request, err error) {
-	msg := err.Error()
-	for _, p := range []string{"dispatch: the order is not ready to dispatch: ", "dispatch: that does not fit the delivery now: ", "dispatch: invalid: ",
-		"riders: invalid: ", "storefront: "} {
-		msg = strings.ReplaceAll(msg, p, "")
-	}
+	msg := dispatchWords(err)
 	switch {
 	case errors.Is(err, dispatch.ErrNoDelivery), errors.Is(err, storefront.ErrNoOrder), errors.Is(err, dispatch.ErrNoDelivery):
 		err = pgx.ErrNoRows
@@ -521,8 +637,18 @@ func (s *Server) dispatchFail(w http.ResponseWriter, r *http.Request, err error)
 
 func (s *Server) proofURLs(ctx context.Context, tenant uuid.UUID, list []dispatch.Delivery) []deliveryView {
 	out := make([]deliveryView, len(list))
+	var with []uuid.UUID
+	for _, x := range list {
+		if x.ProofPath() != "" {
+			with = append(with, x.ID)
+		}
+	}
+	counts, err := s.Dispatch.ProofCounts(ctx, tenant, with)
+	if err != nil {
+		s.Logger.Warn("dispatch: counting proof photos", "err", err)
+	}
 	for i, x := range list {
-		out[i] = deliveryView{Delivery: x}
+		out[i] = deliveryView{Delivery: x, Proofs: counts[x.ID]}
 		if x.ProofPath() == "" || s.Media == nil {
 			continue
 		}
@@ -559,7 +685,7 @@ func (s *Server) listDeliveries(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, list)})
+	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, cashierView(p, list))})
 }
 
 // orderDeliveries is GET /v1/storefront/orders/{reference}/deliveries: who
@@ -585,7 +711,17 @@ func (s *Server) orderDeliveries(w http.ResponseWriter, r *http.Request) {
 		s.dispatchFail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, list), "not_ready": why})
+	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, cashierView(p, list)), "not_ready": why})
+}
+
+// dispatchWords is a dispatch error in the owner's words.
+func dispatchWords(err error) string {
+	msg := err.Error()
+	for _, p := range []string{"dispatch: the order is not ready to dispatch: ", "dispatch: that does not fit the delivery now: ", "dispatch: invalid: ",
+		"riders: invalid: ", "storefront: "} {
+		msg = strings.ReplaceAll(msg, p, "")
+	}
+	return msg
 }
 
 // offerOrder is POST /v1/storefront/orders/{reference}/offer: to a named
@@ -603,14 +739,23 @@ func (s *Server) offerOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	// A rider's pay is the storefront's to set, not a cashier's.
+	if req.FeeKobo != nil && !p.Can(PermStorefrontManage) {
+		s.fail(w, r, fmt.Errorf("%w: setting a rider's fee needs %s", errForbidden, PermStorefrontManage))
+		return
+	}
 	by := p.Actor()
 	if req.RiderID == nil {
 		by = "rotation"
 	}
-	out, err := s.Dispatch.Offer(r.Context(), p.TenantID, chi.URLParam(r, "reference"), dispatch.OfferIn{Rider: req.RiderID, FeeKobo: req.FeeKobo, By: by})
+	ref := chi.URLParam(r, "reference")
+	out, err := s.Dispatch.Offer(r.Context(), p.TenantID, ref, dispatch.OfferIn{Rider: req.RiderID, FeeKobo: req.FeeKobo, By: by})
 	if err != nil {
 		s.dispatchFail(w, r, err)
 		return
+	}
+	if out.Status == "offered" && out.Rider != "" {
+		s.diaryChange(r.Context(), p, fmt.Sprintf("Offered order %s to %s", ref, out.Rider))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -721,4 +866,18 @@ func (s *Server) riderRemit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"owed_kobo": left})
+}
+
+// cashierView is deliveries as someone who works the orders without the
+// storefront's say sees them (a cashier): the rider by name, not their
+// phone or pay.
+func cashierView(p *Principal, list []dispatch.Delivery) []dispatch.Delivery {
+	if p.Can(PermStorefrontManage) {
+		return list
+	}
+	for i := range list {
+		list[i].RiderPhone = maskPhone(list[i].RiderPhone)
+		list[i].FeeKobo = 0
+	}
+	return list
 }

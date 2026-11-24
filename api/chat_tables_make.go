@@ -43,7 +43,7 @@ type chatTableMake struct {
 	Name    string              `json:"name,omitempty"`
 	Title   string              `json:"title,omitempty"`
 	Columns []datatables.Column `json:"columns,omitempty"`
-	// How long a known table keeps its rows (decision 0062 V5).
+	// How long a known table keeps its rows (decision 0074 V5).
 	KeepDays              *int `json:"keep_days,omitempty"`
 	KeepWithConversations bool `json:"keep_with_conversations,omitempty"`
 	// Known are the known tables offered, in the order listed.

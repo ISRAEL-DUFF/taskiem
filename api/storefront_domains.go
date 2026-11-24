@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -49,6 +50,24 @@ func (s *Server) domainTarget() storefront.DomainTarget {
 		t.CNAME = "pages." + s.previewDomain()
 	}
 	return t
+}
+
+// notPlatformHost refuses a slug whose preview host, <slug>.<preview
+// domain>, is one of the platform's own names: the target owners point
+// their domains at, or the form host. The reserved words cover the
+// defaults (pages, forms); an operator's own names are checked here (F67).
+func (s *Server) notPlatformHost(slug string) error {
+	host := strings.ToLower(slug + "." + s.previewDomain())
+	own := []string{s.domainTarget().CNAME}
+	if s.Forms != nil {
+		own = append(own, s.Forms.FormHost)
+	}
+	for _, h := range own {
+		if h = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(h)), "."); h != "" && h == host {
+			return fmt.Errorf("%w: %q is one of Taskiem's own addresses: choose another name for the page", storefront.ErrInvalid, slug)
+		}
+	}
+	return nil
 }
 
 // platformHosts are names no business may bring: the web app's and the

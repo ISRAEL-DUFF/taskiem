@@ -14,7 +14,7 @@ import (
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 )
 
-// An assistant answers from what the business told it (decision 0062
+// An assistant answers from what the business told it (decision 0074
 // D12): knowledge@1 finds the passages that answer the customer, and the
 // ai step gets them as material, quoted, under Taskiem's rule that
 // material is never instructions (K11), even when a page carries some.

@@ -689,3 +689,56 @@ func TestCopiedActionStartsItsOwnWorkflow(t *testing.T) {
 		t.Fatalf("a booking copied: %v", err)
 	}
 }
+
+// Submissions are kept for the business's retention (default 12 months)
+// and then their customer's details erased (docs/spec/storefronts.md,
+// Privacy): an ended order past it reads with no customer; a recent one,
+// or one still open, keeps them.
+func TestOrdersPastRetentionAreForgotten(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	old, recent, open := w.submit("enquiry", "none", 0), w.submit("enquiry", "none", 0), w.submit("enquiry", "none", 0)
+	if err := w.orders.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	w.env.Drain(t)
+	w.decide(old, "answered", "approved")
+	w.decide(recent, "answered", "approved")
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE storefront_orders SET updated_at = now() - interval '366 days' WHERE reference = ANY ($1)`, []string{old, open}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.orders.ForgetExpired(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if o := w.order(old); o.Customer.Phone != "" || o.Customer.Name != "" || o.Status != "completed" {
+		t.Fatalf("an order past retention: %+v", o)
+	}
+	for _, ref := range []string{recent, open} {
+		if o := w.order(ref); o.Customer.Phone != "+2348031234567" {
+			t.Fatalf("%s lost its customer: %+v", ref, o)
+		}
+	}
+	// The status link no longer opens it.
+	var hash []byte
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT status_hash FROM storefront_orders WHERE reference = $1`, old).Scan(&hash)
+	if len(hash) != 0 {
+		t.Errorf("status hash kept: %x", hash)
+	}
+	// A shorter retention takes the recent one too.
+	w.in(func(tx pgx.Tx) error { return storefront.SetRetention(ctx, tx, w.env.Tenant, 30) })
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE storefront_orders SET updated_at = now() - interval '31 days' WHERE reference = $1`, recent); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.orders.ForgetExpired(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if o := w.order(recent); o.Customer.Phone != "" {
+		t.Fatalf("past a 30-day retention: %+v", o)
+	}
+	w.in(func(tx pgx.Tx) error {
+		if err := storefront.SetRetention(ctx, tx, w.env.Tenant, 7); !errors.Is(err, storefront.ErrInvalid) {
+			t.Errorf("a retention of a week: %v", err)
+		}
+		return nil
+	})
+}

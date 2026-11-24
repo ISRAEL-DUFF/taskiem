@@ -100,9 +100,10 @@ func TestRepeatReportsTheOriginalTransfer(t *testing.T) {
 	if effects.Classify(err) != effects.KindFatal || !strings.Contains(err.Error(), "Insufficient funds") {
 		t.Errorf("failed original: %v", err)
 	}
-	// Refused, yet nothing under the reference: a bad reference, not a payment.
+	// Refused as sent before, yet nothing under the reference: not a
+	// failed payment (the engine would pay it again), an unknown outcome.
 	_, err = call(t, "transfer", transferIn, "transfer_duplicate", "by_reference_not_found")
-	if effects.Classify(err) != effects.KindFatal {
+	if effects.Classify(err) != effects.KindUnknownOutcome {
 		t.Errorf("refused and absent: %v", err)
 	}
 	// "declined" is undocumented: a person decides.

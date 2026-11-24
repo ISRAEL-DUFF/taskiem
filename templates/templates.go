@@ -112,7 +112,7 @@ type Table struct {
 	// chat does not offer it as a new table.
 	Front bool `json:"front,omitempty"`
 	// Assistant marks a known table the customer assistant's templates
-	// make (conversations, assistant_allowed: decision 0062 V8), so chat
+	// make (conversations, assistant_allowed: decision 0074 V8), so chat
 	// does not offer it as a new table either.
 	Assistant   bool     `json:"assistant,omitempty"`
 	Name        string   `json:"name"`
@@ -120,7 +120,7 @@ type Table struct {
 	Description string   `json:"description,omitempty"`
 	Columns     []Column `json:"columns"`
 	// KeepDays and KeepWithConversations say how long the table keeps its
-	// rows (data tables' row expiry, decision 0062 V5); neither keeps them
+	// rows (data tables' row expiry, decision 0074 V5); neither keeps them
 	// until deleted.
 	KeepDays              *int `json:"keep_days,omitempty"`
 	KeepWithConversations bool `json:"keep_with_conversations,omitempty"`
@@ -1172,7 +1172,7 @@ func (r Replacements) By(holds map[string]bool) string {
 
 // The conditions a Replacement holds on.
 const (
-	WhenKeepsStock   = "keeps_stock"   // the catalogue keeps stock in a table
+	WhenKeepsStock   = "keeps_stock"   // the business keeps stock items
 	WhenRecordsSales = "records_sales" // sales are recorded by chat or the web
 	WhenNoSheets     = "no_sheets"     // no Google Sheets connection (decision 0060)
 	// WhenNoSheetsStock is no_sheets where Taskiem's stock is on, for the
@@ -1181,7 +1181,7 @@ const (
 	WhenNoSheetsStock = "no_sheets_stock"
 	// WhenAssistantsOff: Taskiem lets no assistant answer the business's
 	// customers (off, a beta it is not in, or stopped): the assistant's
-	// templates (category assistant) are not offered (decision 0062 V8).
+	// templates (category assistant) are not offered (decision 0074 V8).
 	WhenAssistantsOff = "assistants_off"
 )
 

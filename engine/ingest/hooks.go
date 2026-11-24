@@ -92,7 +92,7 @@ type Handler struct {
 	// for deliveries to /hooks/platform/{connector}.
 	Platform map[string]Platform
 	// Guard is the customer guard of chat triggers that have one
-	// (decision 0062 V6); Vault keys their customers; RunFiles keeps a
+	// (decision 0074 V6); Vault keys their customers; RunFiles keeps a
 	// customer's voice note fetched before the run. A guard with no Vault
 	// refuses the delivery (503), so nothing starts unguarded.
 	Guard    *assistant.Guard
@@ -149,8 +149,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, span := telemetry.Tracer().Start(r.Context(), "ingest "+kind)
 	defer span.End()
-	// Answers come from the hooks origin; some carry text a manifest chose.
-	httpsec.Set(w.Header())
+	// Answers come from the hooks origin, which may be the console's own;
+	// some carry text a workflow or a manifest chose. None is a page, so
+	// every one is sandboxed.
+	httpsec.SetAnswer(w.Header())
 	ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 	h.router.ServeHTTP(ww, r.WithContext(ctx))
 	span.SetAttributes(attribute.Int("http.status_code", ww.Status()))
@@ -270,6 +272,9 @@ type tenantGate struct {
 	mu      sync.Mutex
 	entries map[uuid.UUID]*gateEntry
 	lookups *rate.Limiter // database checks for tenants not cached
+	// refresh re-checks tenants already known to exist, apart from
+	// lookups, which made-up ids can spend (F29).
+	refresh *rate.Limiter
 }
 
 type gateEntry struct {
@@ -314,6 +319,7 @@ const (
 	gateTTL    = time.Minute      // how long whether a tenant exists is trusted
 	gateIdle   = 10 * time.Minute // a tenant not seen for this long may be forgotten
 	gateLookup = 100              // tenant checks per second, across all tenants
+	gateStale  = gateIdle         // a known tenant's last answer, kept while re-checks are spent
 )
 
 // errBusy: too many unknown tenants are being looked up; retry shortly.
@@ -328,6 +334,7 @@ func (h *Handler) gate(ctx context.Context, tenant uuid.UUID) (gateEntry, error)
 	if g.entries == nil {
 		g.entries = map[uuid.UUID]*gateEntry{}
 		g.lookups = rate.NewLimiter(gateLookup, gateLookup)
+		g.refresh = rate.NewLimiter(gateLookup, gateLookup)
 	}
 	e := g.entries[tenant]
 	if e != nil && now.Sub(e.checked) < gateTTL {
@@ -335,7 +342,23 @@ func (h *Handler) gate(ctx context.Context, tenant uuid.UUID) (gateEntry, error)
 		g.mu.Unlock()
 		return *e, nil
 	}
-	allowed := g.lookups.Allow()
+	// Ids that are not known tenants share lookups, which anyone can
+	// spend by making ids up; a known tenant's re-check comes from its
+	// own budget, and while that is spent too it keeps its last answer
+	// for a while rather than being turned away.
+	known := e != nil && e.hard != nil
+	var allowed bool
+	if known {
+		allowed = g.refresh.Allow()
+		if !allowed && now.Sub(e.checked) < gateStale {
+			e.seen = now
+			out := *e
+			g.mu.Unlock()
+			return out, nil
+		}
+	} else {
+		allowed = g.lookups.Allow()
+	}
 	g.mu.Unlock()
 	if !allowed {
 		return gateEntry{}, errBusy
@@ -607,10 +630,6 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 // for the run's respond step (spec 8.2).
 const respondBudget = 30 * time.Second
 
-// respondHeaders are the response headers a respond step may set, besides
-// X- headers; the rest are the server's.
-var respondHeaders = map[string]bool{"content-type": true, "location": true, "cache-control": true}
-
 // respond answers a synchronous webhook: it watches the run's history for
 // its first completed respond step and sends what it says, or the run's
 // end, or, when neither comes within respondBudget, the usual 202 with
@@ -671,39 +690,79 @@ func isRespondStep(def *wd.Definition, inst string) bool {
 
 // writeResponse sends a respond step's output: its status, the headers it
 // may set, and its body as JSON, or as text when it is a string.
+//
+// The answer goes out from Taskiem's own address, where a person may be
+// signed in, so a browser must never treat it as a page or a script: the
+// step cannot touch the security headers, the content type is one of a
+// safe set or plain text, and the policy sandboxes whatever is opened
+// (wd.RespondHeader, wd.RespondContentType, httpsec.AnswerCSP).
 func writeResponse(w http.ResponseWriter, output any, ref runtime.RunRef) {
 	out, _ := output.(map[string]any)
 	status := http.StatusOK
 	if n, ok := out["status"].(float64); ok && n >= 200 && n < 600 {
 		status = int(n)
 	}
-	if hs, ok := out["headers"].(map[string]any); ok {
-		for k, v := range hs {
-			if lk := strings.ToLower(k); respondHeaders[lk] || strings.HasPrefix(lk, "x-") {
-				if sv, ok := v.(string); ok {
-					w.Header().Set(k, sv)
-				}
+	asked := ""
+	hs, _ := out["headers"].(map[string]any)
+	names := make([]string, 0, len(hs))
+	for k := range hs {
+		names = append(names, k)
+	}
+	slices.Sort(names)
+	for _, k := range names {
+		sv, isText := hs[k].(string)
+		if ok, _ := wd.RespondHeader(k); !ok || !isText {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(k)) {
+		case "content-type":
+			asked = sv
+		case "location":
+			if wd.RespondLocation(status, sv) {
+				w.Header().Set("Location", sv)
 			}
+		default:
+			w.Header().Set(strings.TrimSpace(k), sv)
 		}
 	}
+	// After the step's headers, so nothing it set stands in their place.
+	httpsec.SetAnswer(w.Header())
 	w.Header().Set("X-Taskiem-Run", ref.ID.String())
 	body := out["body"]
-	if text, ok := body.(string); ok {
-		if w.Header().Get("Content-Type") == "" {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	text, isText := body.(string)
+	if asked == "" {
+		asked = "application/json"
+		if isText {
+			asked = wd.RespondPlainText
 		}
-		w.WriteHeader(status)
+	}
+	ct, _, inline := wd.RespondContentType(asked)
+	w.Header().Set("Content-Type", ct)
+	if !inline {
+		// A file, an image or XML: a browser that is sent to the address
+		// saves it rather than showing it under Taskiem's name. Callers
+		// that are programs do not read this header.
+		w.Header().Set("Content-Disposition", "attachment")
+	}
+	w.WriteHeader(status)
+	if isText {
 		_, _ = w.Write([]byte(text))
 		return
 	}
-	if w.Header().Get("Content-Type") == "" {
-		w.Header().Set("Content-Type", "application/json")
-	}
-	w.WriteHeader(status)
 	if body == nil {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+// ackContentType is a manifest's ack content type as it is sent: plain
+// text or JSON as the manifest rules allow, and plain text for anything
+// else, so an ack is never a page.
+func ackContentType(ct string) string {
+	if mt, _, err := mime.ParseMediaType(ct); err == nil && (mt == "text/plain" || mt == "application/json") {
+		return ct
+	}
+	return wd.RespondPlainText
 }
 
 // callback takes a call back to a run's callback step (wd-v1 callback
@@ -964,7 +1023,7 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		if ct == "" {
 			ct = "text/plain; charset=utf-8"
 		}
-		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Content-Type", ackContentType(ct))
 		w.WriteHeader(status)
 		_, _ = w.Write([]byte(a.Body))
 		return
@@ -1128,7 +1187,21 @@ const enrichTimeout = 3 * time.Second
 func (h *Handler) enrich(ctx context.Context, f connector.Enricher, tenant uuid.UUID, env string, conn *connector.Connector, connection string, opts map[string]any, body any) (any, error) {
 	ctx, cancel := context.WithTimeout(ctx, enrichTimeout)
 	defer cancel()
-	call := connector.EventCall{Options: opts, Connect: func() (map[string]string, *http.Client, error) {
+	return f(ctx, h.eventCall(ctx, tenant, env, conn, connection, opts), body)
+}
+
+// key asks a connector's keyer for a verified event's dedup key, as enrich
+// asks its enricher, with no trigger options.
+func (h *Handler) key(ctx context.Context, f connector.Keyer, tenant uuid.UUID, env string, conn *connector.Connector, connection string, body any) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, enrichTimeout)
+	defer cancel()
+	return f(ctx, h.eventCall(ctx, tenant, env, conn, connection, nil), body)
+}
+
+// eventCall is what an enricher or a keyer gets: the options, and the
+// connection on demand.
+func (h *Handler) eventCall(ctx context.Context, tenant uuid.UUID, env string, conn *connector.Connector, connection string, opts map[string]any) connector.EventCall {
+	return connector.EventCall{Options: opts, Connect: func() (map[string]string, *http.Client, error) {
 		if h.Egress == nil {
 			return nil, nil, errors.New("no egress guard: this edge cannot call providers")
 		}
@@ -1140,7 +1213,6 @@ func (h *Handler) enrich(ctx context.Context, f connector.Enricher, tenant uuid.
 		pol := egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":ingest"}
 		return creds, h.Egress.Client(pol, enrichTimeout), nil
 	}}
-	return f(ctx, call, body)
 }
 
 func nullUUID(id uuid.UUID) *uuid.UUID {

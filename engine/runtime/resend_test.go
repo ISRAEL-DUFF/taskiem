@@ -31,7 +31,7 @@ actions:
 `
 
 // A chat reply whose answer was lost is sent once more when the step asks
-// for it and the action allows it (decision 0062 D11); a second loss
+// for it and the action allows it (decision 0074 D11); a second loss
 // parks; without the step's request the first loss parks, as before.
 func TestLostChatReplyIsSentOnceMore(t *testing.T) {
 	e := rt.New(t)

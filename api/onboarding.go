@@ -18,7 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/areas"
-	"github.com/israel-duff/taskiem/engine/schools"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
@@ -148,6 +148,9 @@ type signupReq struct {
 	// Bearer asks for the session token in the answer instead of a cookie
 	// (API and CLI clients; S35).
 	Bearer bool `json:"bearer,omitempty"`
+	// Device names the phone the app is on: a session that stays signed in
+	// (devices.go).
+	Device *deviceReq `json:"device,omitempty"`
 	// AcceptTerms is the person agreeing to the terms and privacy notice,
 	// needed when the deployment has them (TASKIEM_TERMS_VERSION).
 	AcceptTerms bool `json:"accept_terms,omitempty"`
@@ -187,13 +190,17 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, status, msg)
 	}
 	ip := clientIP(r)
-	if !s.loginLimiter("login:" + ip).Allow() {
+	if !s.loginLimiter("login:" + limitIP(r)).Allow() {
 		refuse("rate_limited", http.StatusTooManyRequests, "too many attempts")
 		return
 	}
 	var req signupReq
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	r, ok := askDevice(w, r, req.Device, req.Bearer)
+	if !ok {
 		return
 	}
 	if req.Website != "" {
@@ -233,7 +240,7 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 	if req.Kinds != nil {
 		var err error
 		if start, err = areas.FromKinds(*req.Kinds); err != nil {
-			refuse("invalid", http.StatusBadRequest, "kinds are shop, service or school (any number, or none for just workflows)")
+			refuse("invalid", http.StatusBadRequest, "kinds are shop, service, delivery or school (any number, or none for just workflows)")
 			return
 		}
 	}
@@ -252,9 +259,15 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// "Just workflows" (no kinds) starts a workflows workspace; any kind,
+	// or none said, a business (taskiem-for-everyone §18).
+	kind := areas.TenantBusiness
+	if start != nil {
+		kind = areas.TenantKind(start)
+	}
 	var token string
 	mailOn := s.mailOn()
-	tenant, user, err := createTenant(r.Context(), s.Store.Pool, tenantName, email, userName, req.Password, func(tx pgx.Tx, tenant, user uuid.UUID) error {
+	tenant, user, err := createTenant(r.Context(), s.Store.Pool, tenantName, kind, email, userName, req.Password, func(tx pgx.Tx, tenant, user uuid.UUID) error {
 		if _, err := tx.Exec(r.Context(), `INSERT INTO tenant_onboarding (tenant_id, source, signed_up_by) VALUES ($1, 'signup', $2)`, tenant, user); err != nil {
 			return err
 		}
@@ -263,13 +276,8 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		}
 		// What the business said it does decides which parts it starts with.
 		if start != nil {
-			if err := areas.SaveAll(r.Context(), tx, tenant, start, "signup"); err != nil {
+			if err := startAreasTx(r.Context(), tx, tenant, start, *req.Kinds, "signup"); err != nil {
 				return err
-			}
-			if start.On(areas.Schools) {
-				if _, err := schools.SetEnabled(r.Context(), tx, tenant, true, "signup"); err != nil {
-					return err
-				}
 			}
 		}
 		if !mailOn {
@@ -473,7 +481,9 @@ func (s *Server) needVerified(r *http.Request, sendsEmail bool) error {
 	}
 	sources := []string{"signup"}
 	if sendsEmail {
-		sources = append(sources, "whatsapp", "telegram", "slack")
+		// The app's (a phone account's Start something, the app's sign-up
+		// conversation) as chat sign-ups: no email of their own yet.
+		sources = append(sources, "whatsapp", "telegram", "slack", "app")
 	}
 	var source string
 	err := s.tx(r, func(tx pgx.Tx) error {
@@ -489,6 +499,17 @@ func (s *Server) needVerified(r *http.Request, sendsEmail bool) error {
 		return fmt.Errorf("%w: %s", errForbidden, chatUnverifiedMsg)
 	}
 	return fmt.Errorf("%w: %s", errForbidden, unverifiedMsg)
+}
+
+// startDeliveryBusinessTx sets up a business that delivers for others
+// (docs/spec/chat-riders.md, phase 2): its chat tools on from the start
+// (its work is in the conversations), and its profile saying it delivers,
+// so Explore's Delivery section lists it once it chooses to be found.
+func startDeliveryBusinessTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, by string) error {
+	if _, err := tx.Exec(ctx, `UPDATE tenants SET chat_tools = true WHERE id = $1`, tenant); err != nil {
+		return err
+	}
+	return links.SetDeliversTx(ctx, tx, tenant, by)
 }
 
 // checklistItem is one step of getting started; the web app words it.

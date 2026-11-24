@@ -57,6 +57,9 @@ var Reserved = []string{
 	"email", "webhook", "webhooks", "hooks", "embed", "health", "metrics",
 	"status", "docs", "dev", "staging", "test", "preview", "internal",
 	"root", "system",
+	// pages.<preview domain> is the default name owners point their
+	// domains at (TASKIEM_PUBLIC_CNAME).
+	"pages", "page",
 	// Accounts and sign-in, the pages phishing copies.
 	"admin", "login", "logout", "signin", "signup", "register", "secure",
 	"security", "password", "account", "accounts", "auth", "oauth", "sso",

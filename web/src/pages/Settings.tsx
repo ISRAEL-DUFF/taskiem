@@ -1,5 +1,6 @@
 import { plainValue, showValue } from "../lib/values";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { del, get, post, put, type GitConnection, type GitSync } from "../api";
 import { useAdvanced, useAuth } from "../auth";
 import { EnvSelect, useEnvironments } from "../environments";
@@ -8,7 +9,10 @@ import { WhatsAppNumber } from "./WhatsAppNumber";
 import { PeopleYouMessage } from "./PeopleYouMessage";
 import { USSDChannels } from "./USSDChannels";
 import { Help } from "../onboarding";
+import { proof } from "../passkeys";
 import { SchoolsSwitch } from "./Schools";
+import { setChatTools } from "../lib/useChatTools";
+import { AIPhotoReadingSwitch } from "./AIPhotoReading";
 
 interface Secret {
   environment: string;
@@ -58,7 +62,7 @@ interface LanguagesView {
   max_conversation_days: number;
 }
 
-/** Voice in workflows: the owner's switch for workflows that hear customers' voice notes and answer by voice (speech, decision 0062 T7). */
+/** Voice in workflows: the owner's switch for workflows that hear customers' voice notes and answer by voice (speech, decision 0074 T7). */
 function VoiceSwitch() {
   const { data, error, reload } = useLoad(() => get<LanguagesView>("/v1/languages"), []);
   const act = useAction();
@@ -131,7 +135,7 @@ interface AssistantView {
   handovers: { channel: string; customer: string; where: string; hint: string; at: string; until: string }[];
 }
 
-/** Your assistant (decision 0062 V6): the owner's pause for every customer, and the customers waiting for a person. */
+/** Your assistant (decision 0074 V6): the owner's pause for every customer, and the customers waiting for a person. */
 function AssistantCard() {
   const { data, error, reload } = useLoad(() => get<AssistantView>("/v1/assistant"), []);
   const act = useAction();
@@ -196,6 +200,115 @@ function AssistantCard() {
   );
 }
 
+/** Chat tools (docs/spec/chat-tools.md): a message goes to the businesses
+ * it names, and @Taskiem calls Taskiem. Owners and admins turn it on for
+ * everyone. */
+function ChatToolsSwitch() {
+  const view = useLoad(() => get<{ chat_tools: boolean }>("/v1/settings/chat-tools"), []);
+  const act = useAction();
+  // What was just chosen shows at once; the saved value once it is back.
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const on = chosen ?? !!view.data?.chat_tools;
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Chat tools</h2>
+      <label>
+        <input
+          type="checkbox"
+          checked={on}
+          disabled={act.busy || !view.data}
+          onChange={(e) => {
+            const next = e.target.checked;
+            setChosen(next);
+            void act.run(async () => {
+              try {
+                await put("/v1/settings/chat-tools", { chat_tools: next });
+                setChatTools(next);
+              } catch (err) {
+                setChosen(null);
+                throw err;
+              }
+            }, "Saved");
+          }}
+        />{" "}
+        Name a business to message it
+      </label>
+      <p className="hint">
+        On WhatsApp, Telegram, Slack and in your Taskiem chat, a message naming linked businesses goes straight to them. Write @Taskiem to ask Taskiem instead. Everyone in the business gets the same.
+      </p>
+      <ErrorBox error={act.error ?? view.error} />
+    </div>
+  );
+}
+
+interface SecurityView {
+  require_admin_passkeys: boolean;
+  admins_without_passkey: number;
+  you_have_passkey: boolean;
+  deployment_requires: boolean;
+  can_change: boolean;
+}
+
+/** Security: whether the business requires passkeys for its
+ * administrators (docs/spec/optional-passkeys.md §5). Owners change it,
+ * confirming as for a factor change; turning it on needs a passkey of
+ * their own. */
+function Security() {
+  const { me } = useAuth();
+  const view = useLoad(() => get<SecurityView>("/v1/settings/security"), []);
+  const [typed, setTyped] = useState("");
+  const act = useAction();
+  const v = view.data;
+  if (!v) return <ErrorBox error={view.error} />;
+  const f = me?.factors;
+  const needsTyped = !f?.passkey && (f?.totp || f?.password);
+  const on = v.require_admin_passkeys;
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Security</h2>
+      <p>
+        <strong>Require passkeys for administrators:</strong> {on ? "on" : "off"}
+      </p>
+      <p className="hint">
+        {on
+          ? "Owners and administrators of this business sign in with a passkey: your device's fingerprint, face or PIN."
+          : "Owners and administrators may sign in with a password or their chat. Turn this on so they must use a passkey."}{" "}
+        {v.admins_without_passkey > 0 &&
+          `${v.admins_without_passkey} ${v.admins_without_passkey === 1 ? "administrator has" : "administrators have"} no passkey yet${on ? "; they are asked to add one when they next sign in." : "."}`}
+      </p>
+      {v.deployment_requires && <p className="hint">This Taskiem requires passkeys for every administrator, whatever this setting.</p>}
+      <ErrorBox error={act.error} />
+      {v.can_change && !on && !v.you_have_passkey ? (
+        <p className="hint">Add a passkey of your own first, on your Account page.</p>
+      ) : (
+        v.can_change && (
+          <form
+            className="row"
+            style={{ alignItems: "flex-end", flexWrap: "wrap" }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void act.run(async () => {
+                await put("/v1/settings/security", { require_admin_passkeys: !on, ...(await proof(f, typed, "business.require_passkeys")) });
+                setTyped("");
+                view.reload();
+              }, "Saved");
+            }}
+          >
+            {needsTyped && (
+              <Field label={f?.totp ? "Authenticator code" : "Your password"}>
+                <input type={f?.totp ? "text" : "password"} inputMode={f?.totp ? "numeric" : undefined} value={typed} onChange={(e) => setTyped(e.target.value)} required />
+              </Field>
+            )}
+            <button className={on ? "" : "primary"} type="submit" disabled={act.busy}>
+              {on ? "Turn off" : "Turn on"}
+            </button>
+          </form>
+        )
+      )}
+    </div>
+  );
+}
+
 export function Settings() {
   const { can, me } = useAuth();
   const advanced = useAdvanced();
@@ -207,7 +320,35 @@ export function Settings() {
         description="Your environments and the secrets and variables workflows read in each of them."
         actions={<EnvSelect value={env} onChange={setEnv} />}
       />
+      <div className="card" data-testid="settings-saved">
+        <h2 style={{ marginTop: 0 }}>Saved</h2>
+        <p className="hint">Accounts your business pays or shares, saved once and called up by name, like @bayo.</p>
+        <Link className="button" to="/settings/saved">
+          Open saved accounts
+        </Link>
+      </div>
       {can("member.manage") && <AdvancedSwitch />}
+      {can("member.manage") && <ChatToolsSwitch />}
+      <AIPhotoReadingSwitch />
+      {(can("order.handle") || can("storefront.manage")) && (
+        <div className="card" data-testid="settings-customer-chats">
+          <h2 style={{ marginTop: 0 }}>Customer chats</h2>
+          <p className="hint">Your chat link and its QR code, whether you take chats, and what happens when nobody answers.</p>
+          <Link className="button" to="/settings/customers">
+            Open customer chats
+          </Link>
+        </div>
+      )}
+      {can("storefront.manage") && (
+        <div className="card" data-testid="settings-discover">
+          <h2 style={{ marginTop: 0 }}>Discover</h2>
+          <p className="hint">Whether customers find you in the Taskiem app, and what your listing shows them.</p>
+          <Link className="button" to="/settings/discover">
+            Open Discover
+          </Link>
+        </div>
+      )}
+      {can("member.manage") && <Security />}
       {me?.roles.includes("owner") && <SchoolsSwitch />}
       {can("secret.manage") && <VoiceSwitch />}
       {can("secret.manage") && <AssistantCard />}
@@ -269,7 +410,7 @@ function PlanLimits() {
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Plan limits</h2>
       <p className="hint">Set by your operator; 0 means no limit, except where a row says 0 turns something off. Above the ingest rate deliveries are still accepted and their runs queued.</p>
-      <table>
+      <table className="cards">
         <thead>
           <tr>
             <th>Limit</th>
@@ -281,13 +422,13 @@ function PlanLimits() {
         <tbody>
           {Object.keys(data.help).sort().map((k) => (
             <tr key={k}>
-              <td className="mono">{k}</td>
-              <td>
+              <td className="mono primary">{k}</td>
+              <td data-label="Value">
                 {data.limits[k]}
                 {k in data.overrides ? "" : " (default)"}
               </td>
-              <td>{used[k] ?? ""}</td>
-              <td className="hint">{data.help[k]}</td>
+              <td data-label="In use">{used[k] ?? ""}</td>
+              <td className="hint wide">{data.help[k]}</td>
             </tr>
           ))}
         </tbody>

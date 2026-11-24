@@ -30,11 +30,42 @@ export const GLOSSARY: RegExp[] = [
   /\bundefined\b/,
   /\/steps\/[0-9a-z_]/,
   /\b(status|HTTP) [1-5]\d\d\b/,
+  // Sizes and colours (chat categories Part B): never "variant" to an owner.
+  /\bvariants?\b/i,
 ];
 
 /** The owner's path: the pages of the gate's five tasks. */
 const OWNER_FILES = [
   "pages/Start.tsx",
+  // Pages (decision 0072): the list, a page, the editor and their words.
+  "pages/Pages.tsx",
+  "pages/PageEditor.tsx",
+  "lib/pages.ts",
+  // Your tools (made tools M1): the sheet, its answer, the tool's page,
+  // and Use it from chat in the builder.
+  "pages/MadeToolSheet.tsx",
+  "lib/toolanswer.ts",
+  "pages/UseFromChat.tsx",
+  "lib/toolbuild.ts",
+  "pages/SearchEverywhere.tsx",
+  "pages/Saved.tsx",
+  "lib/saved.ts",
+  "pages/Payments.tsx",
+  "pages/PaySheet.tsx",
+  "pages/PhotoRead.tsx",
+  "lib/photoAI.ts",
+  "pages/AIPhotoReading.tsx",
+  "pages/PayChip.tsx",
+  "pages/SaveAsSheet.tsx",
+  "lib/payments.ts",
+  "lib/paymessage.ts",
+  "pages/PayBatch.tsx",
+  "lib/batches.ts",
+  "pages/PayCollect.tsx",
+  "lib/paycollect.ts",
+  "pages/SavedImport.tsx",
+  "lib/savedImport.ts",
+  "lib/savedSources.ts",
   "pages/Storefront.tsx",
   "pages/StorefrontForms.tsx",
   "pages/StorefrontFronts.tsx",
@@ -47,12 +78,64 @@ const OWNER_FILES = [
   "pages/StockPurchases.tsx",
   "pages/StockCounts.tsx",
   "pages/StorefrontSuppliers.tsx",
+  "pages/TreatLine.tsx",
+  "pages/MoneyLabels.tsx",
+  "pages/Things.tsx",
+  "pages/MoneySpending.tsx",
+  "lib/things.ts",
+  "lib/treat.ts",
   "pages/Areas.tsx",
+  "pages/WayIn.tsx",
+  "pages/You.tsx",
+  "pages/PersonChats.tsx",
+  "pages/PersonTools.tsx",
+  "pages/AppCards.tsx",
+  "pages/ChatLinkPage.tsx",
+  "pages/Discover.tsx",
+  "pages/DiscoverSettings.tsx",
+  "pages/YouOrders.tsx",
+  "pages/YouAccount.tsx",
+  "pages/YouStanding.tsx",
+  "pages/PeopleSearch.tsx",
+  "pages/PeopleLive.tsx",
+  "pages/PeopleChat.tsx",
+  "pages/People.tsx",
+  "pages/GroupChat.tsx",
+  "pages/Basket.tsx",
+  "pages/Groups.tsx",
+  "pages/Transparency.tsx",
+  "pages/Legal.tsx",
+  "pages/CustomerChatSettings.tsx",
+  "pages/CustomerCards.tsx",
+  "pages/Switch.tsx",
+  "pages/ChangeNumber.tsx",
+  "pages/StartSomething.tsx",
   "pages/Links.tsx",
+  "pages/BusinessProfile.tsx",
+  "pages/ChatPush.tsx",
+  "pages/PushNotices.tsx",
   "pages/Bills.tsx",
+  "pages/PayByTransfer.tsx",
+  "lib/paybytransfer.ts",
   "pages/TradeOrders.tsx",
   "pages/Conversation.tsx",
   "pages/TaskiemChat.tsx",
+  "pages/CustomerChat.tsx",
+  "pages/CustomerOrders.tsx",
+  "pages/ChatMoney.tsx",
+  "pages/ChatRefCard.tsx",
+  "pages/Staff.tsx",
+  "pages/StaffPerson.tsx",
+  "pages/Payroll.tsx",
+  "lib/payroll.ts",
+  "pages/Tasks.tsx",
+  "pages/ChatToolForms.tsx",
+  "pages/ChatTools.tsx",
+  "pages/ChatBuyer.tsx",
+  "pages/ProductPhotos.tsx",
+  "pages/PhotoAdd.tsx",
+  "pages/SizesForms.tsx",
+  "pages/ChatStaff.tsx",
   "pages/PriceLists.tsx",
   "pages/Mentions.tsx",
   "pages/Statement.tsx",
@@ -70,6 +153,7 @@ const OWNER_FILES = [
   "pages/Account.tsx",
   "pages/Connect.tsx",
   "pages/ChatDoors.tsx",
+  "pages/ChatAvailability.tsx",
   "forms/ConnectionPicker.tsx",
   "forms/RolePicker.tsx",
   "forms/SheetChooser.tsx",
@@ -142,6 +226,34 @@ describe("an owner never sees technical words", () => {
     it(f, () => {
       const src = readFileSync(resolve(__dirname, "..", f), "utf8");
       const bad = shownText(f, src).filter((t) => GLOSSARY.some((g) => g.test(t)));
+      expect(bad).toEqual([]);
+    });
+  }
+});
+
+/** Every string in a file's code (not its comments): a lib file's words
+ * are shown as they are returned. */
+function allStrings(file: string, src: string): string[] {
+  const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const out: string[] = [];
+  const visit = (n: ts.Node) => {
+    if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) out.push(n.text);
+    if (ts.isJsxText(n) && n.getText().trim()) out.push(n.getText().trim());
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return out;
+}
+
+// Paying people (docs/spec/chat-pay-people.md, Tests and checks): "Pay",
+// "Send money", "Beneficiary", the words bank apps use; never "payout" or
+// "NUBAN" in the Pay sheet, the chip under a message, or their words.
+describe("paying people says Pay, never payout", () => {
+  const PAY_FILES = ["pages/PaySheet.tsx", "pages/PayChip.tsx", "pages/SaveAsSheet.tsx","pages/Payments.tsx", "lib/payments.ts", "lib/paymessage.ts", "pages/PayBatch.tsx", "lib/batches.ts", "pages/PayCollect.tsx", "lib/paycollect.ts", "pages/StaffPerson.tsx", "lib/team.ts", "pages/Payroll.tsx", "lib/payroll.ts"];
+  for (const f of PAY_FILES) {
+    it(f, () => {
+      const src = readFileSync(resolve(__dirname, "..", f), "utf8");
+      const bad = allStrings(f, src).filter((t) => /\bpayouts?\b|\bNUBAN\b/i.test(t));
       expect(bad).toEqual([]);
     });
   }

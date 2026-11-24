@@ -1,5 +1,5 @@
 // Package assistant is the assistant@1 platform connector
-// (docs/assistant-guard.md, decision 0062 V6): checking a reply before it
+// (docs/assistant-guard.md, decision 0074 V6): checking a reply before it
 // reaches a customer, handing a customer to a person, and WhatsApp's
 // window, for the tenant of the run calling it (connector.CallerFrom).
 package assistant

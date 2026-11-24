@@ -40,7 +40,9 @@ const (
 )
 
 var (
-	inviteRe       = regexp.MustCompile(`(?i)^invite\s+(.+?)\s+as\s+(?:an?\s+)?([a-z][a-z0-9_]*)$`)
+	inviteRe = regexp.MustCompile(`(?i)^(?:invite|add)\s+(.+?)\s+as\s+(?:an?\s+)?([a-z][a-z0-9_]*(?:\s+[a-z][a-z0-9_]*)?)$`)
+	// phoneInRe is the number in "add Tunde 0803 123 4567 as cashier".
+	phoneInRe      = regexp.MustCompile(`\+?\d[\d\s().-]{5,}\d`)
 	slackMentionRe = regexp.MustCompile(`^<@([A-Z0-9]{1,24})(?:\|[^>]*)?>$`)
 )
 
@@ -50,6 +52,13 @@ type chatInvite struct {
 	Address string   `json:"address"`
 	Shown   string   `json:"shown"`
 	Roles   []string `json:"roles"`
+	// Name is the person's, when given ("add Tunde 0803… as cashier").
+	Name string `json:"name,omitempty"`
+}
+
+// staffRole is a role as typed: "shift manager" is shift_manager.
+func staffRole(typed string) string {
+	return strings.Join(strings.Fields(strings.ToLower(typed)), "_")
 }
 
 // inviteRow is an invitation as the person invited, or an owner deciding
@@ -86,8 +95,13 @@ func (s *Server) waInvite(ctx context.Context, c *chat, text string) error {
 	if m == nil {
 		return c.say(ctx, s, c.t("invite.how"))
 	}
-	who, role := strings.TrimSpace(m[1]), strings.ToLower(m[2])
+	who, role := strings.TrimSpace(m[1]), staffRole(m[2])
 	inv := &chatInvite{Channel: c.ch.Name(), Roles: []string{role}}
+	if inv.Channel != "slack" && inv.Channel != "telegram" {
+		// A number typed on WhatsApp or in the Taskiem chat on the web is
+		// invited on WhatsApp, as the Staff page invites.
+		inv.Channel = "whatsapp"
+	}
 	if inv.Channel == "slack" {
 		mm := slackMentionRe.FindStringSubmatch(who)
 		team, _, ok := parseSlackAddr(c.addr)
@@ -101,11 +115,22 @@ func (s *Server) waInvite(ctx context.Context, c *chat, text string) error {
 			}
 		}
 	} else {
-		number, err := whatsapp.Normalise(who, s.defaultCountry())
+		// "Tunde 0803 123 4567": the name is the words around the number.
+		phone := who
+		if loc := phoneInRe.FindStringIndex(who); loc != nil {
+			phone = who[loc[0]:loc[1]]
+			if n, ok := plainName(strings.TrimSpace(who[:loc[0]]+" "+who[loc[1]:]), 1, 80); ok {
+				inv.Name = n
+			}
+		}
+		number, err := whatsapp.Normalise(phone, s.defaultCountry())
 		if err != nil {
 			return c.say(ctx, s, c.t("invite.how"))
 		}
 		inv.Address, inv.Shown = number, number
+		if inv.Name != "" {
+			inv.Shown = inv.Name + " (" + number + ")"
+		}
 	}
 	if role == "owner" && !slices.Contains(c.p.Roles, "owner") {
 		return c.say(ctx, s, c.t("invite.owner_only"))
@@ -124,7 +149,7 @@ func (s *Server) waInvite(ctx context.Context, c *chat, text string) error {
 	})
 	switch {
 	case errors.Is(err, errInviteRole):
-		return c.say(ctx, s, c.t("invite.role_unknown", "role", role, "roles", "viewer, operator, approver, builder, auditor, admin"))
+		return c.say(ctx, s, c.t("invite.role_unknown", "role", role, "roles", "cashier, shift_manager, viewer, operator, approver, builder, auditor, admin"))
 	case errors.Is(err, errForbidden):
 		return c.say(ctx, s, c.t("invite.cannot_grant", "role", role))
 	case err != nil:
@@ -135,7 +160,7 @@ func (s *Server) waInvite(ctx context.Context, c *chat, text string) error {
 	if err := s.saveSession(ctx, c, stateConfirming, data, waPendingTTL); err != nil {
 		return err
 	}
-	return c.say(ctx, s, c.t("invite.confirm", "who", inv.Shown, "org", c.tenant.Name, "role", role),
+	return c.say(ctx, s, c.t("invite.confirm", "who", inv.Shown, "org", c.tenant.Name, "role", strings.ReplaceAll(role, "_", " ")),
 		whatsapp.Button{ID: "yes", Title: c.t("button.yes")}, whatsapp.Button{ID: "no", Title: c.t("button.no")})
 }
 
@@ -158,6 +183,24 @@ func (s *Server) waInviteReply(ctx context.Context, c *chat, cmd string) error {
 	}
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return err
+	}
+	if inv.Channel == "whatsapp" {
+		if s.WhatsApp == nil {
+			return c.say(ctx, s, c.t("invite.send_failed"))
+		}
+		var id uuid.UUID
+		var inviter string
+		if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+			var err error
+			id, inviter, err = s.staffInviteTx(ctx, tx, c.tenant.ID, c.tenant.Name, c.p, inv.Address, inv.Name, inv.Roles, c.ch.Name())
+			return err
+		}); err != nil {
+			return err
+		}
+		if !s.deliverStaffInvite(ctx, c.tenant.ID, c.tenant.Name, inviter, inv.Address, inv.Roles, id) {
+			return c.say(ctx, s, c.t("invite.send_failed"))
+		}
+		return c.say(ctx, s, c.t("invite.sent", "who", inv.Shown))
 	}
 	id := uuid.Must(uuid.NewV7())
 	var token string
@@ -425,8 +468,20 @@ func (s *Server) inviteJoin(ctx context.Context, ic *inviteChat, inv *inviteRow,
 		}
 	}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{inv.Tenant}, func(tx pgx.Tx) error {
+		// The name the business gave them, when it gave one.
+		var given string
+		if err := tx.QueryRow(ctx, `SELECT name FROM chat_invites WHERE id = $1`, inv.ID).Scan(&given); err != nil {
+			return err
+		}
+		if name == "" {
+			name = given
+		}
 		if isNew {
 			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name) VALUES ($1, $2, $3)`, user, email, name); err != nil {
+				return err
+			}
+		} else if name != "" {
+			if _, err := tx.Exec(ctx, `UPDATE users SET name = $2 WHERE id = $1 AND name = ''`, user, name); err != nil {
 				return err
 			}
 		}
@@ -490,6 +545,16 @@ func (s *Server) inviteJoin(ctx context.Context, ic *inviteChat, inv *inviteRow,
 	if err := toucher.Touch(ctx, ic.addr, false, true, &inv.Tenant); err != nil {
 		return err
 	}
+	// Those who bring people in are told (Staff, phase 3).
+	who := name
+	if who == "" {
+		who = "Someone you invited"
+	}
+	roles := strings.ReplaceAll(strings.Join(inv.Roles, ", "), "_", " ")
+	s.background(ctx, "staff joined", func(ctx context.Context) {
+		s.tellHolders(ctx, inv.Tenant, []string{PermMemberManage}, "joined:"+inv.ID.String(), "/staff",
+			func(lang.Tag) (string, string) { return who + " joined " + inv.Business, "As " + roles + "." })
+	})
 	return ic.say(ctx, s, ic.t("invite.joined", "org", inv.Business))
 }
 

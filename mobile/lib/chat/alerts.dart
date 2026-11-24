@@ -1,0 +1,905 @@
+// What needs the person, at the end of Taskiem's conversation
+// (docs/spec/chat-tools.md §6; web/src/pages/ChatAlerts.tsx, ChatStaff.tsx
+// BriefingCard; kit.css .tk-brief, .tk-alert, .tk-approve): the day's
+// briefing on pine, then a card for each thing to act on, with its next
+// step and Later, and approvals with Decline and Approve.
+
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
+
+import '../api/api.g.dart';
+import '../api/transport.dart';
+import '../app/auth.dart';
+import '../kit/motion.dart';
+import '../kit/icon.dart';
+import '../kit/kit.dart';
+import '../kit/sheet.dart';
+import 'approve.dart';
+import '../kit/tap_area.dart';
+import '../theme/look.dart' show TkLook;
+import '../theme/theme.dart';
+import 'cards.dart' show CardPill;
+import 'give_task.dart';
+import 'pages_page.dart' show openPage;
+import 'words.dart';
+import '../school/school_money.dart' show SchoolApproveSheet;
+
+// --- words (web/src/lib/alerts.ts, lib/approvals.ts, lib/staff.ts) ---
+
+/// alerts.ts ALERT_LOOK: each kind's icon and tile.
+const alertLook = <String, ({String icon, CardTone tone})>{
+  'low_stock': (icon: 'warn', tone: CardTone.warn),
+  'overdue': (icon: 'invoices', tone: CardTone.warn),
+  'new_order': (icon: 'orders', tone: CardTone.lime),
+  'rider': (icon: 'store', tone: CardTone.plain),
+  'confirm': (icon: 'money', tone: CardTone.lime),
+  'unmatched': (icon: 'money', tone: CardTone.plain),
+  'approval': (icon: 'approvals', tone: CardTone.plain),
+  'school_approval': (icon: 'approvals', tone: CardTone.plain),
+  'deal': (icon: 'money', tone: CardTone.warn),
+  'order_draft': (icon: 'chat', tone: CardTone.lime),
+  'page': (icon: 'tables', tone: CardTone.warn),
+};
+
+/// alerts.ts ago: "Just now", "3 min ago", "2 h ago", "Yesterday", "9 Nov".
+String ago(DateTime at, DateTime now) {
+  final s = now.difference(at).inSeconds.clamp(0, 1 << 31);
+  if (s < 60) return 'Just now';
+  if (s < 3600) return '${s ~/ 60} min ago';
+  if (s < 86400) return '${s ~/ 3600} h ago';
+  if (s < 2 * 86400) return 'Yesterday';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  final l = at.toLocal();
+  return '${l.day} ${months[l.month - 1]}';
+}
+
+/// approvals.ts subjectWords: the amount, who it goes to and the account,
+/// when the approval's subject names them.
+({String? amount, String? to, String? account, List<(String, String)> rest}) subjectWords(Object? subject) {
+  if (subject is! Map) return (amount: null, to: null, account: null, rest: const []);
+  final s = subject.cast<String, Object?>();
+  String? first(List<String> keys, bool Function(Object?) ok) {
+    for (final k in keys) {
+      if (s.containsKey(k) && ok(s[k])) return k;
+    }
+    return null;
+  }
+
+  final amountKey =
+      first(['amount_kobo', 'total_kobo', 'amount', 'total'], (v) => v is num) ?? s.keys.where((k) => k.endsWith('_kobo') && s[k] is num).firstOrNull;
+  String? amount;
+  if (amountKey != null) {
+    final v = s[amountKey]! as num;
+    amount = amountKey.endsWith('_kobo') ? naira(v.toInt()) : _grouped(v);
+  }
+  final toKey = first(['to', 'payee', 'recipient', 'beneficiary', 'account_name', 'supplier', 'customer', 'name'], (v) => v is String && v.trim().isNotEmpty);
+  final bankKey = first(['bank', 'bank_name'], (v) => v is String && v.trim().isNotEmpty);
+  final accKey = first(['account_number', 'account', 'nuban'], (v) => (v is String || v is num) && '$v'.replaceAll(RegExp(r'\D'), '').length >= 4);
+  String? account;
+  if (accKey != null) {
+    final digits = '${s[accKey]}'.replaceAll(RegExp(r'\D'), '');
+    account = '${bankKey != null ? '${s[bankKey]} ' : ''}••${digits.substring(digits.length - 4)}';
+  }
+  // Every other plain field, as label and value.
+  final used = {?amountKey, ?toKey, ?accKey, if (accKey != null && bankKey != null) bankKey};
+  final rest = <(String, String)>[
+    for (final e in s.entries)
+      if (!used.contains(e.key) && (e.value is String || e.value is num || e.value is bool)) (fieldLabel(e.key), fieldValue(e.key, e.value!)),
+  ];
+  return (amount: amount, to: toKey == null ? null : s[toKey] as String, account: account, rest: rest);
+}
+
+/// approvals.ts fieldLabel: "amount_kobo" is "Amount", "due_date" "Due date".
+String fieldLabel(String key) {
+  final words = key.replaceAll(RegExp(r'_kobo$'), '').replaceAll(RegExp(r'[_-]+'), ' ').trim();
+  return words.isEmpty ? key : words[0].toUpperCase() + words.substring(1);
+}
+
+/// approvals.ts fieldValue: kobo as naira, numbers grouped, yes and no.
+String fieldValue(String key, Object v) {
+  if (v is num && key.endsWith('_kobo')) return naira(v.toInt());
+  if (v is num) return _grouped(v);
+  if (v is bool) return v ? 'Yes' : 'No';
+  return '$v';
+}
+
+String _grouped(num v) => v.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+
+/// staff.ts firstName: the greeting's name, the first name, else the email's start.
+String firstName(String? name, String? email) {
+  final n = (name ?? '').trim().split(RegExp(r'\s+')).first;
+  return n.isNotEmpty ? n : (email ?? '').split('@').first;
+}
+
+// --- the briefing ---
+
+/// ChatStaff.tsx BriefingCard: on pine, from 8am: yesterday's sales and the
+/// week's bars, what is owed, low and due today; Got it puts it away.
+class BriefingCard extends StatefulWidget {
+  const BriefingCard({super.key, required this.briefing, required this.auth, this.onAsk, this.onGone, this.onTile});
+  final GetChatBriefingResponse briefing;
+  final Auth auth;
+
+  /// A tile pressed: owed, stock, deliveries, staff, tasks or bookings
+  /// (ChatStaff.tsx's tiles lead to their screens).
+  final ValueChanged<String>? onTile;
+
+  /// "How did we do yesterday", asked from the sales.
+  final ValueChanged<String>? onAsk;
+
+  /// Put away for the day.
+  final VoidCallback? onGone;
+
+  @override
+  State<BriefingCard> createState() => _BriefingCardState();
+}
+
+class _BriefingCardState extends State<BriefingCard> {
+  /// A school's headline: the fees that came in yesterday (from its close;
+  /// this week's before one was taken), and how much of the term's is in.
+  Widget _schoolHead(GetChatBriefingResponseSchool s, Color on, Color Function(double) mix, Color accent) {
+    final y = s.yesterday;
+    final cut = s.term.lastIndexOf(' ');
+    final term = cut > 0 ? s.term.substring(0, cut) : s.term;
+    final close = y == null ? '' : (y.reconciles ? ' · the close reconciles' : ' · the close does not reconcile');
+    final label = y == null ? 'Fees in this week' : 'Fees collected yesterday';
+    final figure = naira(y?.collectedKobo ?? s.thisWeekKobo);
+    return Semantics(
+      label: '$label $figure. ${s.collectedPercent}% of $term’s fees in$close',
+      excludeSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(label, style: tkText(size: 13.5, color: mix(0.8))),
+          const SizedBox(height: 2),
+          Text(figure, style: tkText(size: 32, weight: 800, letterSpacing: -0.64, color: on)),
+          const SizedBox(height: 2),
+          Text('${s.collectedPercent}% of $term’s fees in$close', style: tkText(size: 13.5, weight: 600, color: accent)),
+        ],
+      ),
+    );
+  }
+
+  bool _gone = false;
+  bool _failed = false;
+
+  Future<void> _gotIt() async {
+    setState(() {
+      _gone = true;
+      _failed = false;
+    });
+    try {
+      await widget.auth.transport.send('POST', '/v1/chat-alerts/later', body: {'key': widget.briefing.key, 'hours': 24});
+      widget.onGone?.call();
+    } on Object {
+      // Not put away: the card comes back, saying so.
+      if (mounted) {
+        setState(() {
+          _gone = false;
+          _failed = true;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final b = widget.briefing;
+    if (!b.ready || b.putOff || _gone) return const SizedBox.shrink();
+    final t = TkTheme.tokens(context);
+    final on = t.tkOnPine;
+    Color mix(double p) => cssMix(on, const Color(0x00000000), p);
+    final day = DateTime.parse('${b.day}T12:00:00');
+    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final hello = switch (b.part) {
+      'afternoon' => 'Good afternoon',
+      'evening' => 'Good evening',
+      _ => 'Good morning',
+    };
+    final me = widget.auth.me;
+    final sales = b.sales;
+    final change = sales == null ? null : changeWords(sales.changePct as num?, 'last ${sales.weekday ?? ''}');
+    final week = sales?.week ?? const <DaySales>[];
+    final heights = barHeights([for (final d in week) d.kobo]);
+    Widget tile(String label, String value, [String? key]) {
+      final go = key == null || widget.onTile == null ? null : () => widget.onTile!(key);
+      final box = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(color: mix(0.09), borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: tkText(size: 12, color: mix(0.72))),
+            const SizedBox(height: 2),
+            Text(value, style: tkText(size: 15, weight: 700, color: on)),
+          ],
+        ),
+      );
+      if (go == null) return box;
+      return TapArea(
+        child: Semantics(
+          button: true,
+          label: '$label, $value',
+          onTap: go,
+          excludeSemantics: true,
+          child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: go, child: box),
+        ),
+      );
+    }
+    // A school's (as drawn): what is still owed, who is cleared, what waits
+    // for this person as the second person, what is not matched.
+    final school = b.school;
+    final tiles = <Widget>[
+      if (school != null) ...[
+        tile('Still owed', naira(school.debtorsKobo), 'school:debtors'),
+        tile('Cleared', '${_grouped(school.cleared)} of ${_grouped(school.students)}', 'school:clearance'),
+        if (school.waiting != null) tile('Waiting for you', '${school.waiting}', 'school:waiting'),
+        if (school.yesterday case final y?) tile('Not matched', '${y.unmatched}', 'school:match'),
+      ],
+      if (b.owedKobo != null && school == null) tile('Owed to you', naira(b.owedKobo!), 'owed'),
+      if (b.low != null) tile('Low stock', b.low == 1 ? '1 item' : '${b.low} items', 'stock'),
+      if (b.deliveries != null) tile('Deliveries', '${b.deliveries} today', 'deliveries'),
+      if (b.staff case final n?) tile('Staff', staffTile(n.in_.length, n.late.length), 'staff'),
+      if (b.tasks case final n?) tile('Tasks', tasksTile(n.today, n.late), 'tasks'),
+      if (b.bookings != null && b.bookings! > 0) tile('Bookings', '${b.bookings} today', 'bookings'),
+    ];
+    final parts = <Widget>[
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // As drawn: the greeting, then the day and time on its line.
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '$hello, ${firstName(me?.user?.name, me?.user?.email)}'.toUpperCase(),
+                    style: tkText(size: 11, weight: 700, letterSpacing: 0.88, color: t.brandDark),
+                  ),
+                  const TextSpan(text: '   '),
+                  TextSpan(text: '${weekdays[day.weekday - 1]}${b.now.isNotEmpty ? ' · ${b.now}' : ''}', style: tkText(size: 12.5, color: mix(0.72))),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Live: today's numbers; chat.css `.tk-brief-live { animation:
+          // tkd-pulse-lime 2s 1.2s infinite }`.
+          Container(
+            margin: const EdgeInsets.only(top: 6, right: 4),
+            child: TkPulse(
+              color: const Color(0x8CC8F169),
+              spread: 8,
+              period: const Duration(seconds: 2),
+              delay: const Duration(milliseconds: 1200),
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: t.brandDark, shape: BoxShape.circle),
+              ),
+            ),
+          ),
+        ],
+      ),
+      if (school != null && sales == null) _schoolHead(school, on, mix, t.brandDark),
+      if (sales != null)
+        Semantics(
+          button: true,
+          label: 'Sales yesterday ${naira(sales.yesterdayKobo ?? 0)}: ask how we did yesterday',
+          onTap: () => widget.onAsk?.call('how did we do yesterday'),
+          excludeSemantics: true,
+          child: TkPress(
+            onTap: () => widget.onAsk?.call('how did we do yesterday'),
+            // As drawn: the figure, then the week's bars across the card.
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Sales yesterday', style: tkText(size: 13.5, color: mix(0.8))),
+                const SizedBox(height: 2),
+                Text(naira(sales.yesterdayKobo ?? 0), style: tkText(size: 32, weight: 800, letterSpacing: -0.64, color: on)),
+                if (change != null) ...[const SizedBox(height: 2), Text(change, style: tkText(size: 13.5, weight: 600, color: t.brandDark))],
+                if (week.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    height: 30,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        for (var i = 0; i < week.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 6),
+                          // `.tk-brief-bars > span`: each grows 50 ms after the last.
+                          Expanded(
+                            child: TkGrow.bar(
+                              index: i,
+                              child: Container(
+                                height: 8 + (heights[i] * 100).round() / 100 * 22,
+                                decoration: BoxDecoration(
+                                  color: i == week.length - 1 ? t.brandDark : cssMix(t.brandDark, const Color(0x00000000), 0.45),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      if (tiles.isNotEmpty) _AutoFitGrid(min: 96, gap: 8, children: tiles),
+      // As drawn: a lime pill at the left, 12 px below the tiles.
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: TapArea(child: Semantics(
+            button: true,
+            label: 'Got it: put the briefing away for today',
+            onTap: _gotIt,
+            excludeSemantics: true,
+            child: TkPress(
+              onTap: _gotIt,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 36),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                decoration: BoxDecoration(color: const Color(0xFFC8F169), borderRadius: BorderRadius.circular(999)),
+                child: Text('Got it', style: tkText(size: 13.5, weight: 700, lineHeight: 1.2, color: const Color(0xFF0D3B2E))),
+              ),
+            ),
+          )),
+        ),
+      ),
+      if (_failed)
+        Semantics(
+          liveRegion: true,
+          child: Text('That didn’t go through. Try Got it again.', style: tkText(size: 13, weight: 600, color: on)),
+        ),
+    ];
+    // chat.css `.tk-brief { animation: tkd-card-rise 0.5s 0.05s }`.
+    return TkIn.cardRise(
+      child: Align(
+      alignment: Alignment.centerLeft,
+      child: Semantics(
+        container: true,
+        label: 'Today’s briefing',
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 480),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: t.brand,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [BoxShadow(color: cssMix(t.brand, const Color(0x00000000), 0.6), offset: const Offset(0, 20), blurRadius: 40, spreadRadius: -18)],
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _gaps(parts, 14)),
+        ),
+      ),
+      ),
+    );
+  }
+}
+
+List<Widget> _gaps(List<Widget> list, double gap) => [
+  for (var i = 0; i < list.length; i++) ...[if (i > 0) SizedBox(height: gap), list[i]],
+];
+
+/// `grid-template-columns: repeat(auto-fit, minmax(min, 1fr))`: as many
+/// equal columns as fit at [min] wide each, filled in rows.
+class _AutoFitGrid extends StatelessWidget {
+  const _AutoFitGrid({required this.min, required this.gap, required this.children});
+  final double min;
+  final double gap;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        var cols = ((box.maxWidth + gap) / (min + gap)).floor().clamp(1, 1 << 10);
+        // auto-fit: empty tracks collapse, so the cards share the row.
+        if (cols > children.length) cols = children.length;
+        final w = (box.maxWidth - gap * (cols - 1)) / cols;
+        final rows = <Widget>[];
+        for (var i = 0; i < children.length; i += cols) {
+          final row = children.sublist(i, (i + cols).clamp(0, children.length));
+          rows.add(
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var j = 0; j < row.length; j++) ...[if (j > 0) SizedBox(width: gap), SizedBox(width: w, child: row[j])],
+                ],
+              ),
+            ),
+          );
+        }
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: _gaps(rows, gap));
+      },
+    );
+  }
+}
+
+// --- the cards ---
+
+/// What a card's step does when it opens something not yet in the app (a
+/// tool's sheet, the approval's sheet): told to the screen.
+typedef AlertOpen = void Function(String what, ChatAlert a);
+
+/// ChatAlerts.tsx AlertCards: the cards in their order, each going once
+/// dealt with.
+class AlertCards extends StatefulWidget {
+  const AlertCards({super.key, required this.alerts, required this.auth, required this.now, this.onChanged, this.onOpen});
+  final List<ChatAlert> alerts;
+  final Auth auth;
+  final DateTime now;
+
+  /// Something was dealt with: the list, and the conversation, again.
+  final VoidCallback? onChanged;
+  final AlertOpen? onOpen;
+
+  @override
+  State<AlertCards> createState() => _AlertCardsState();
+}
+
+class _AlertCardsState extends State<AlertCards> {
+  final _gone = <String>{};
+
+  void _done(ChatAlert a) {
+    setState(() => _gone.add(a.key));
+    widget.onChanged?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = widget.alerts.where((a) => !_gone.contains(a.key)).toList();
+    if (shown.isEmpty) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Semantics(
+        container: true,
+        label: 'Needs you',
+        child: Container(
+          // `.tk-alerts { margin: 4px 0 8px; gap: 12px; max-width: 480px }`
+          constraints: const BoxConstraints(maxWidth: 480),
+          margin: const EdgeInsets.only(top: 4, bottom: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _gaps([
+              // As drawn: NEEDS YOU over the cards.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
+                child: ExcludeSemantics(child: Text('NEEDS YOU', style: tkText(size: 11.5, weight: 700, letterSpacing: 0.6, color: TkTheme.tokens(context).muted))),
+              ),
+              // chat.css `.tk-alerts > li`: each rises 300 ms after the last.
+              for (final (i, a) in shown.indexed)
+                TkIn.cardRise(
+                  key: ValueKey(a.key),
+                  index: i + 1,
+                  child: a.kind == 'school_approval' && a.school != null
+                    ? _ApprovalCard(
+                        a: a,
+                        now: widget.now,
+                        onDecide: (d) async {
+                          final decided = await showTkSheet<bool>(
+                            context,
+                            (_) => SchoolApproveSheet(auth: widget.auth, request: schoolRequestMap(a.school!), declining: d == 'rejected'),
+                          );
+                          if (decided == true) _done(a);
+                        },
+                      )
+                    : a.kind == 'approval'
+                    ? _ApprovalCard(
+                        a: a,
+                        now: widget.now,
+                        onDecide: (d) async {
+                          final decided = await showTkSheet<bool>(context, (_) => ApproveSheet(a: a, decision: d, auth: widget.auth));
+                          if (decided == true) _done(a);
+                        },
+                      )
+                    : _AlertCard(a: a, auth: widget.auth, onDone: () => _done(a), onOpen: widget.onOpen),
+                ),
+            ], 12),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+BoxDecoration _cardLook(TkTokens t, bool dark) => BoxDecoration(
+  color: t.panel,
+  borderRadius: BorderRadius.circular(22),
+  border: dark ? Border.all(color: t.border) : null,
+  boxShadow: dark ? null : [BoxShadow(color: cssMix(t.brand, const Color(0x00000000), 0.45), offset: const Offset(0, 10), blurRadius: 30, spreadRadius: -18)],
+);
+
+/// `.tk-alert-go`, `.tk-alert-soft`, `.tk-approve-go`: the cards' 52 px pills.
+class _Pill extends StatelessWidget {
+  const _Pill({required this.label, required this.named, required this.onTap, this.kind = 'go', this.icon, this.height = 52, this.said});
+  final String label;
+  final double height;
+
+  /// The words in full for a screen reader, when [label] is short.
+  final String? said;
+
+  /// The card it is for, said after the label ("Later: Rice is running low").
+  final String named;
+  final VoidCallback? onTap;
+  final String kind;
+  final String? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final (bg, ink) = switch (kind) {
+      'soft' => (dark ? const Color(0xFF000000) : t.tkSoft, t.text),
+      'approve' => (t.brandDark, t.brand),
+      _ => dark ? (t.brandDark, t.brandDarkText) : (t.brand, t.tkOnPine),
+    };
+    return Semantics(
+      container: true,
+      button: true,
+      enabled: onTap != null,
+      label: '${said ?? label}: $named',
+      onTap: onTap,
+      excludeSemantics: true,
+      child: TkPress(
+        scale: 0.97,
+        onTap: onTap,
+        child: Container(
+          constraints: BoxConstraints(minHeight: height),
+          padding: EdgeInsets.symmetric(horizontal: kind == 'go' ? 16 : (kind == 'soft' ? 22 : 18)),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[TkIcon(icon!, size: 20, color: ink), const SizedBox(width: 8)],
+              Flexible(child: Text(label, textAlign: TextAlign.center, style: tkText(size: 15, weight: 700, lineHeight: 1.2, color: ink))),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// staff.ts asksBriefing: typed words that ask for the briefing rather
+/// than tell Taskiem.
+bool asksBriefing(String words) =>
+    RegExp(r"^(show (me )?)?(the |my |today'?s )?(morning )?briefing[.!?]?$", caseSensitive: false).hasMatch(words.trim());
+
+/// team.ts staffTile: who is in, and who is late.
+String staffTile(int inNow, int late) => ['$inNow in', if (late > 0) '$late late'].join(' · ');
+
+/// tasks.ts tasksTile: tasks due today, and late.
+String tasksTile(int today, int late) {
+  final w = [if (today > 0) '$today due today', if (late > 0) '$late late'].join(' · ');
+  return w.isEmpty ? 'None due' : w;
+}
+
+/// ChatAlerts.tsx AlertCard: what it is, and its next step with Later.
+class _AlertCard extends StatefulWidget {
+  const _AlertCard({required this.a, required this.auth, required this.onDone, this.onOpen});
+  final ChatAlert a;
+  final Auth auth;
+  final VoidCallback onDone;
+  final AlertOpen? onOpen;
+
+  @override
+  State<_AlertCard> createState() => _AlertCardState();
+}
+
+class _AlertCardState extends State<_AlertCard> {
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _run(Future<void> Function() f) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await f();
+      widget.onDone();
+    } on ApiError catch (e) {
+      _error = e.message;
+    } on Offline {
+      _error = 'You’re offline. Try again when you’re back online.';
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _post(String path, [Object? body]) => widget.auth.transport.send('POST', path, body: body ?? const {});
+
+  /// The card's next step, by its kind and what the person may do.
+  ({String words, String? short, VoidCallback go})? _step() {
+    final a = widget.a;
+    final can = widget.auth.can;
+    final id = Uri.encodeComponent(a.id ?? '');
+    final open = widget.onOpen;
+    switch (a.kind) {
+      case 'low_stock':
+        final r = a.reorder;
+        // As drawn: "Reorder 10" on the button; who from, in its line and
+        // said to a screen reader.
+        if (r != null) return (words: 'Reorder ${r.quantity} from ${r.supplier}', short: 'Reorder ${r.quantity}', go: () => open?.call('reorder', a));
+        return (words: can('table.edit') ? 'Record stock in' : 'Open stock', short: null, go: () => open?.call('stock', a));
+      case 'overdue':
+        if (!can('invoice.manage')) return null;
+        // Sent: the card is put off for a day, not shown again at once.
+        return (
+          words: 'Send reminder',
+          short: null,
+          go: () => _run(() async {
+            await _post('/v1/invoices/$id/send');
+            await _post('/v1/chat-alerts/later', {'key': a.key, 'hours': 24});
+          }),
+        );
+      case 'new_order':
+        return (words: 'Review order', short: null, go: () => open?.call('orders', a));
+      case 'deal':
+        if (!can('storefront.manage')) return null;
+        return (words: 'Agree${a.amountKobo != null ? ' ${naira(a.amountKobo!)}' : ''}', short: null, go: () => _run(() => _post('/v1/trade-orders/$id/accept')));
+      case 'rider':
+        return (words: 'Assign rider', short: null, go: () => open?.call('rider', a));
+      case 'confirm':
+        if (!can('storefront.manage')) return null;
+        return (words: 'Confirm, pay the fee', short: null, go: () => _run(() => _post('/v1/storefront/orders/${Uri.encodeComponent(a.reference ?? '')}/confirm')));
+      case 'order_draft':
+        return (words: 'Open the order', short: null, go: () => open?.call('customer', a));
+      case 'unmatched':
+        return can('invoice.manage') ? (words: 'Match it', short: null, go: () => open?.call('match', a)) : null;
+      case 'page':
+        // A page's figure above zero (pages §9): the page itself.
+        return (words: 'Open the page', short: null, go: () => unawaited(openPage(context, widget.auth, a.reference ?? '', backLabel: 'Back')));
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final a = widget.a;
+    final look = alertLook[a.kind] ?? (icon: 'info', tone: CardTone.plain);
+    final colours = TkLook.of(context);
+    final (tileBg, tileInk) = switch (look.tone) {
+      CardTone.warn => (colours.orange, const Color(0xFFFFFFFF)),
+      CardTone.danger => (colours.red, const Color(0xFFFFFFFF)),
+      CardTone.lime => (const Color(0xFFC8F169), const Color(0xFF0D3B2E)),
+      _ => (colours.teal, const Color(0xFFFFFFFF)),
+    };
+    final step = _step();
+    // ChatAlerts.tsx: "Give this to…" a low stock item, for those who give tasks.
+    final can = widget.auth.can;
+    final give = a.kind == 'low_stock' && (a.id ?? '').isNotEmpty && can('member.manage|invoice.manage')
+        ? () => giveThis(context, widget.auth, (kind: 'stock', id: a.id!, name: a.title.replaceFirst(RegExp(r' is running low$'), '')))
+        : null;
+    final later = _busy ? null : () => _run(() => _post('/v1/chat-alerts/later', {'key': a.key}));
+    // As drawn: compact; the next step short, Give this to… as a person's
+    // icon, Later as the ✕ in the corner.
+    return Semantics(
+      container: true,
+      label: a.title,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 14),
+        decoration: _cardLook(t, dark),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // As drawn: a solid square in the card's colour.
+                Container(
+                  width: 34,
+                  height: 34,
+                  margin: const EdgeInsets.only(top: 2),
+                  decoration: BoxDecoration(color: tileBg, borderRadius: BorderRadius.circular(10)),
+                  alignment: Alignment.center,
+                  child: TkIcon(look.icon, size: 18, stroke: 2, color: tileInk),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(a.title, style: tkText(size: 15.5, weight: 700, lineHeight: 1.3, color: t.text)),
+                      const SizedBox(height: 2),
+                      Text(a.line, style: tkText(size: 13, lineHeight: 1.35, color: t.muted)),
+                    ],
+                  ),
+                ),
+                TapArea(
+                  child: Semantics(
+                    button: true,
+                    enabled: later != null,
+                    label: 'Later: ${a.title}',
+                    onTap: later,
+                    excludeSemantics: true,
+                    child: TkPress(
+                      onTap: later,
+                      child: SizedBox(width: 30, height: 30, child: Center(child: TkIcon('close', size: 16, color: t.muted))),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (step != null || give != null) ...[
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.only(left: 48, right: 4),
+                child: Row(
+                  children: [
+                    if (step != null)
+                      Expanded(
+                        child: TapArea(child: _Pill(label: step.short ?? step.words, said: step.words, named: a.title, height: 34, onTap: _busy ? null : step.go)),
+                      ),
+                    if (give != null) ...[
+                      const SizedBox(width: 8),
+                      TapArea(
+                        child: Semantics(
+                          button: true,
+                          label: 'Give this to…: ${a.title}',
+                          onTap: _busy ? null : give,
+                          excludeSemantics: true,
+                          child: TkPress(
+                            onTap: _busy ? null : give,
+                            child: Container(
+                              width: 34,
+                              height: 34,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(color: t.tkSoft, shape: BoxShape.circle),
+                              child: TkIcon('b-people', size: 17, color: t.text),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            if (_error != null) TkErrorBox(_error!),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// ChatAlerts.tsx ApprovalCard: who asks for what, the amount and to whom,
+/// what else to know, Decline and Approve.
+class _ApprovalCard extends StatelessWidget {
+  const _ApprovalCard({required this.a, required this.now, required this.onDecide});
+  final ChatAlert a;
+  final DateTime now;
+  final ValueChanged<String> onDecide;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final ap = a.approval;
+    final sp = a.school;
+    if (ap == null && sp == null) return const SizedBox.shrink();
+    // A school's request (cash at the desk, a discount), as drawn: what it
+    // is for, the amount, and the student's class, how and invoice.
+    final w = ap != null
+        ? subjectWords(ap.subject)
+        : (
+            amount: naira(sp!.amountKobo) as String?,
+            to: null as String?,
+            rest: const <(String, String)>[],
+            account: [
+              [?sp.class_, if (sp.details['how'] is String) '${sp.details['how']}'].join(' · '),
+              ?sp.invoiceNumber,
+            ].where((x) => x.isNotEmpty).join('\n') as String?,
+          );
+    final title = sp == null ? a.title : '${schoolKindWords(sp.kind)} for ${sp.admissionNumber ?? 'a student'}';
+    final notes = <Widget>[
+      if (ap?.firstPayment == true) const CardPill('First payment to this account', CardTone.warn),
+      if (ap != null && ap.levels > 1) CardPill('Level ${ap.level} of ${ap.levels}', CardTone.plain),
+      if (ap != null && ap.required > 1) CardPill('${ap.approvals} of ${ap.required} approvals', CardTone.plain),
+    ];
+    final parts = <Widget>[
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // As drawn: the kicker in the warning's colour.
+          Expanded(child: Text('NEEDS YOUR OK', style: tkText(size: 11, weight: 700, letterSpacing: 0.88, color: t.tkWarnInk))),
+          Text(ago(a.at, now), style: tkText(size: 13, color: t.muted)),
+        ],
+      ),
+      Text(a.who != null ? '${a.who} asks: $title' : title, style: tkText(size: 15, weight: 600, lineHeight: 1.3, color: t.text)),
+      if (w.amount != null || w.to != null || w.account != null)
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: 12,
+          runSpacing: 4,
+          children: [
+            if (w.amount != null) Text(w.amount!, style: tkText(size: 28, weight: 800, letterSpacing: -0.6, color: t.text)),
+            if (w.to != null || w.account != null)
+              Text(
+                [if (w.to != null) 'to ${w.to}', ?w.account].join('\n'),
+                textAlign: TextAlign.right,
+                style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
+              ),
+          ],
+        ),
+      if (notes.isNotEmpty) Wrap(spacing: 6, runSpacing: 6, children: notes),
+      // `.tk-approve-acts`: Decline `flex: 1`, Approve `flex: 1.4`, each
+      // first as wide as its words, the room left shared 1 to 1.4.
+      LayoutBuilder(
+        builder: (context, box) {
+          double words(String s) => (TextPainter(
+            text: TextSpan(text: s, style: tkText(size: 15, weight: 700, lineHeight: 1.2)),
+            textDirection: TextDirection.ltr,
+          )..layout()).width;
+          final no = words('Decline') + 36, yes = 20 + 8 + words('Approve') + 36;
+          final room = (box.maxWidth - 10 - no - yes).clamp(0.0, double.infinity);
+          return Row(
+            children: [
+              // As drawn: 40 px; Approve in pine (lime in the dark).
+              SizedBox(width: no + room / 2.4, child: TapArea(child: _Pill(label: 'Decline', named: a.title, kind: 'soft', height: 40, onTap: () => onDecide('rejected')))),
+              const SizedBox(width: 10),
+              SizedBox(width: yes + room * 1.4 / 2.4, child: TapArea(child: _Pill(label: 'Approve', named: a.title, icon: sp == null ? 'fingerprint' : null, height: 40, onTap: () => onDecide('approved')))),
+            ],
+          );
+        },
+      ),
+    ];
+    return Semantics(
+      container: true,
+      label: 'Needs your OK: ${a.title}',
+      // As drawn: an orange edge down its left side.
+      child: Container(
+        decoration: _cardLook(t, dark),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _gaps(parts, 10)),
+            ),
+            Positioned(left: 0, top: 0, bottom: 0, child: Container(width: 4, color: const Color(0xFFF2994A))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A school request's kind in a card's words ("cash", "a discount").
+String schoolKindWords(String kind) => switch (kind) {
+  'cash_posting' => 'cash',
+  'cash_match' => 'money matched by hand',
+  'discount' => 'a discount',
+  'discount_amendment' => 'a discount on an invoice',
+  'term_invoice' => 'a term invoice',
+  _ => 'a request',
+};
+
+/// A school request as its approve sheet reads it (the server's JSON).
+Map<String, dynamic> schoolRequestMap(SchoolPosting p) => {
+  'id': p.id,
+  'kind': p.kind,
+  'status': p.status,
+  'amount_kobo': p.amountKobo,
+  'name': ?p.name,
+  'class': ?p.class_,
+  'admission_number': ?p.admissionNumber,
+  'invoice_number': ?p.invoiceNumber,
+  'student_id': ?p.studentId,
+  'details': p.details,
+  'requested_by': p.requestedBy,
+  'requested_email': ?p.requestedEmail,
+  'requested_at': p.requestedAt.toIso8601String(),
+};

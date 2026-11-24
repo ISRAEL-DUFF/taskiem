@@ -8,7 +8,7 @@ describe("notification settings", () => {
       { group: "finished", chat: false, email: false },
     ]);
     expect(rows.map((r) => r.title)).toEqual(["Failed runs", "Your runs that finish"]);
-    expect(rows[1]?.email.label).toBe("Your runs that finish by email");
+    expect(rows[1]?.email?.label).toBe("Your runs that finish by email");
     expect(rows[0]?.chat.label).toBe("Failed runs on WhatsApp or Telegram");
   });
 
@@ -16,7 +16,7 @@ describe("notification settings", () => {
     const [money] = groupRows([{ group: "money", chat: true, email: false }]);
     expect(money?.title).toBe("Money summaries");
     expect(money?.chat).toEqual({ label: "Daily money summary (chat)", caption: "Daily money summary" });
-    expect(money?.email.label).toBe("Monthly money email");
+    expect(money?.email?.label).toBe("Monthly money email");
     expect(money?.hint).toMatch(/Owners get them unless they turn them off/);
     expect(money?.setting).toEqual({ group: "money", chat: true, email: false });
   });
@@ -34,5 +34,11 @@ describe("notification settings", () => {
     expect(groupRows(undefined)).toEqual([]);
     expect(groupRows([null as never, { group: 3 } as never])).toEqual([]);
     expect(groupTitle("__")).toBe("Other");
+  });
+
+  it("tells the changes a person makes on their chat only", () => {
+    const [changes] = groupRows([{ group: "changes", chat: true, email: false }]);
+    expect(changes?.title).toBe("Changes you make");
+    expect(changes?.email).toBeNull();
   });
 });

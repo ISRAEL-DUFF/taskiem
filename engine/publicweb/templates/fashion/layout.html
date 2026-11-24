@@ -1,0 +1,49 @@
+{{/* Editorial: black and white with the business's colour used
+sparingly, serif headings, hairline rules, square corners, small
+capitals. Pages open with a thin bar: back, and the business's name set
+like a masthead. */}}
+{{define "fhead"}}<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}<meta name="robots" content="noindex">
+<title>{{.Title}} · {{.Business}}</title>
+{{end}}
+
+{{define "fbody"}}</head>
+<body class="fx fx-page">
+<header class="fx-top">
+  {{with .Home}}<a class="fx-link" href="{{.}}">Shop</a>{{else}}<span></span>{{end}}
+  <a class="fx-name" href="{{with .Home}}{{.}}{{else}}#{{end}}">{{.Business}}</a>
+  <span class="sf-top-r">{{with .BagHref}}<a class="sf-pill" href="{{.}}?step=bag" data-bag-link data-bag-show hidden>{{template "i-bag"}}<span class="sr">{{$.Brand.Words.Your}}, </span><b data-bag-n></b><span class="sr"> items</span></a>{{end}}</span>
+</header>
+<main class="page fx-narrow">
+{{end}}
+
+{{define "kicker"}}<p class="kicker">{{.}}</p>{{end}}
+
+{{define "ffoot"}}</main>
+<footer class="foot sf-foot">
+<p class="sf-foot-name">{{.Business}}</p>
+<p class="sf-foot-meta">Powered by Taskiem</p>
+<p class="safety">{{template "safety"}}</p>
+</footer>
+</body>
+</html>
+{{end}}
+
+{{define "head"}}<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}<title>{{.Title}}</title>
+</head>
+<body>
+<main class="page page-plain">
+{{end}}
+
+{{define "foot"}}</main>
+<footer class="foot">
+<p class="safety">{{template "safety"}}</p>
+</footer>
+</body>
+</html>
+{{end}}

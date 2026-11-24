@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/time/rate"
 
 	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/forms"
@@ -175,6 +176,20 @@ type Server struct {
 	// FormSubmissions limits form submissions and code requests per
 	// client address; nil uses FormSubmissionsPerIP (50 an hour).
 	FormSubmissions *formguard.Limiter
+	// FormPerForm limits one form's submissions from every address
+	// together; nil uses FormSubmissionsPerForm (500 an hour).
+	FormPerForm *formguard.Limiter
+	// FormCodes limits verification codes asked for per client address;
+	// nil uses FormCodesPerIP.
+	FormCodes *formguard.Limiter
+	// FormUploads limits bodies with files to forms that take files, per
+	// client address, before they are read; nil uses FormUploadsPerIP.
+	// UploadsAtOncePerIP and UploadsAtOncePerForm cap those arriving at
+	// once (0: FormUploadsAtOncePerIP, FormUploadsAtOncePerForm).
+	FormUploads          *formguard.Limiter
+	UploadsAtOncePerIP   int
+	UploadsAtOncePerForm int
+	uploads              uploadGauge
 	// Invoices reads the invoices businesses send their customers, for
 	// their pages on the form host, /i/{token} (invoice.go); nil: none.
 	Invoices Invoices
@@ -201,6 +216,7 @@ type Server struct {
 
 	hosts         *lru.Cache[string, hostEntry]
 	formCache     *lru.Cache[string, formEntry]
+	tripNotes     *formguard.Limiter // a tripped form recorded once a minute
 	fguard, fstep *formguard.Guard
 	origins       *lru.Cache[uuid.UUID, []string]
 	pages         *lru.Cache[uuid.UUID, pageEntry]
@@ -248,6 +264,21 @@ func (s *Server) Handler() http.Handler {
 	if s.FormSubmissions == nil {
 		b := FormSubmissionsPerIP
 		s.FormSubmissions = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormCodes == nil {
+		b := FormCodesPerIP
+		s.FormCodes = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormUploads == nil {
+		b := FormUploadsPerIP
+		s.FormUploads = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormPerForm == nil {
+		b := FormSubmissionsPerForm
+		s.FormPerForm = formguard.NewLimiter(b.Rate, b.Burst, formLimiterSize, 2*time.Hour)
+	}
+	if s.tripNotes == nil {
+		s.tripNotes = formguard.NewLimiter(rate.Every(time.Minute), 1, formLimiterSize, 2*time.Minute)
 	}
 	s.FormHost = strings.ToLower(strings.TrimSuffix(s.FormHost, "."))
 	if s.fguard == nil && s.FormKeys != nil {
@@ -323,16 +354,19 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Static files are immutable and cheap, so only pages are counted.
-	if !s.Views.Allow(s.ClientIP(r)) {
+	if !s.Views.Allow(s.clientKey(r)) {
 		w.Header().Set("Retry-After", "60")
 		s.page(w, r, http.StatusTooManyRequests, "unavailable", pageData{Title: "Too many requests"})
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, previewPrefix) {
+	host := hostOf(r)
+	// A brand preview is a page of the form host only: on a business's
+	// own address it would show another member's name and look as if it
+	// were that business's (the sealed preview is not bound to a host).
+	if strings.HasPrefix(r.URL.Path, previewPrefix) && s.FormHost != "" && host == s.FormHost {
 		s.servePreview(w, r)
 		return
 	}
-	host := hostOf(r)
 	if s.FormHost != "" && host == s.FormHost {
 		s.routeForms(w, r)
 		return
@@ -405,6 +439,13 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 	case embed:
 		// The other embedded views arrive with S6.
 		s.page(w, r, http.StatusOK, "embedsetup", pageData{Title: "Coming soon"})
+	case site.Kind == "storefront" && !embed && itemPath.MatchString(path):
+		// An item's page on the home page, /i/<id>.
+		s.serveItem(w, r, site, "", itemPath.FindStringSubmatch(path)[1])
+	case site.Kind == "storefront" && !embed && frontItemPath.MatchString(path):
+		// An item's page on a front, /<front>/i/<id> (fronts F3).
+		m := frontItemPath.FindStringSubmatch(path)
+		s.serveItem(w, r, site, m[1], m[2])
 	case site.Kind == "storefront" && !embed && frontPath.MatchString(path):
 		// A front's page, /<front> (fronts F3).
 		s.serveFront(w, r, site, path[1:])
@@ -507,6 +548,12 @@ func hostOf(r *http.Request) string {
 		host = h
 	}
 	return strings.TrimSuffix(host, ".")
+}
+
+// clientKey is the client's address for limits and identities: an IPv6
+// address cut to its /64, which one subscriber holds whole (F69).
+func (s *Server) clientKey(r *http.Request) string {
+	return formguard.ClientKey(s.ClientIP(r))
 }
 
 // ClientIP is the request's client address: the last X-Forwarded-For

@@ -59,9 +59,10 @@ func TestInvitationsListCancelDecline(t *testing.T) {
 	}
 }
 
-// Someone with an account but no membership anywhere signs in to an
-// invitee session: it reaches their invitations and nothing else. Accepting
-// one makes it a session in that tenant.
+// Someone with an account but no membership anywhere signs in to their own
+// side, a personal session (docs/spec/taskiem-for-everyone.md §5.2): it
+// reaches their invitations and their own routes, nothing of a business.
+// Accepting an invitation makes it a session in that tenant.
 func TestInviteeSession(t *testing.T) {
 	w := newWorld(t)
 	acme := w.tenant(t, "Acme", "owner@acme.test")
@@ -74,8 +75,8 @@ func TestInviteeSession(t *testing.T) {
 	anon := &client{t: t, base: w.base}
 	login := map[string]any{"email": "bob@acme.test", "password": testPassword, "bearer": true}
 
-	// With no membership and no invitation, sign-in is refused as before.
-	if st, out := anon.do("POST", "/v1/auth/login", login); st != 401 || out["invitations_only"] != nil {
+	// With no membership and no invitation: their own side.
+	if st, out := anon.do("POST", "/v1/auth/login", login); st != 200 || out["invitations_only"] != nil || out["personal"] != true || out["tenant_id"] != nil {
 		t.Fatalf("no invitation: %d %v", st, out)
 	}
 	beta.must(201, "POST", "/v1/members", map[string]any{"email": "bob@acme.test", "roles": []string{"builder"}})
@@ -90,13 +91,13 @@ func TestInviteeSession(t *testing.T) {
 	}
 	inv := &client{t: t, base: w.base, token: out["token"].(string)}
 	me := inv.must(200, "GET", "/v1/me", nil)
-	if me["invitations_only"] != true || me["tenant_id"] != nil || len(me["permissions"].([]any)) != 0 || me["user"].(map[string]any)["email"] != "bob@acme.test" {
+	if me["invitations_only"] != true || me["personal"] != true || me["tenant_id"] != nil || len(me["permissions"].([]any)) != 0 || me["user"].(map[string]any)["email"] != "bob@acme.test" {
 		t.Fatalf("me: %v", me)
 	}
 	// No tenant data, no settings, nothing else of the API.
 	for _, path := range []string{"/v1/workflows", "/v1/runs", "/v1/members", "/v1/secrets", "/v1/audit", "/v1/limits", "/v1/governance",
 		"/v1/approvals", "/v1/me/passkeys", "/v1/me/whatsapp", "/v1/templates", "/v1/connectors", "/v1/permissions", "/v1/invitations"} {
-		if st, body := inv.do("GET", path, nil); st != 403 || body["invitations_only"] != true {
+		if st, body := inv.do("GET", path, nil); st != 403 || body["personal_only"] != true {
 			t.Errorf("GET %s: %d %v", path, st, body)
 		}
 	}
@@ -130,8 +131,8 @@ func TestInviteeSession(t *testing.T) {
 	}
 }
 
-// Signing out ends an invitee session; a suspended inviter's invitation
-// does not open one.
+// Signing out ends a personal session; a suspended inviter's invitation
+// is not one of the person's.
 func TestInviteeSessionEnds(t *testing.T) {
 	w := newWorld(t)
 	acme := w.tenant(t, "Acme", "owner@acme.test")
@@ -149,7 +150,7 @@ func TestInviteeSessionEnds(t *testing.T) {
 	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE tenants SET status = 'suspended' WHERE id = $1`, tenantOf(t, beta)); err != nil {
 		t.Fatal(err)
 	}
-	if st, out := anon.do("POST", "/v1/auth/login", login); st != 401 || strings.Contains(toJSON(out), "invitations_only") {
+	if st, out := anon.do("POST", "/v1/auth/login", login); st != 200 || out["personal"] != true || strings.Contains(toJSON(out), "invitations_only") {
 		t.Errorf("invited only by a suspended tenant: %d %v", st, out)
 	}
 }

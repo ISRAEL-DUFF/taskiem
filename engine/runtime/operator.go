@@ -28,30 +28,22 @@ func (s *Store) ResolveStep(ctx context.Context, ref RunRef, step, resolution st
 		if err != nil {
 			return err
 		}
-		if run.status != "needs_reconciliation" {
+		// A live run is accepted too, not only one marked as waiting for
+		// reconciliation: what matters is that the step is parked. A run
+		// resolved before the status was kept for its other parked steps
+		// was left running with a step nobody could resolve.
+		switch run.status {
+		case "needs_reconciliation", "running", "waiting":
+		default:
 			return fmt.Errorf("run %s is %s, not waiting for reconciliation: %w", ref.ID, run.status, ErrNotFound)
 		}
 		hist, err := History(ctx, tx, ref.ID)
 		if err != nil {
 			return err
 		}
-		attempt, parked := 0, false
-		for _, e := range hist {
-			if e.StepID != step {
-				continue
-			}
-			switch e.Type {
-			case history.StepScheduled:
-				attempt = e.Attempt
-			case history.StepFailed:
-				var p history.FailedPayload
-				_ = json.Unmarshal(e.Payload, &p)
-				parked = p.Error.Next == "park" || (p.Error.Next == "fail" && isCompensation(step))
-			case history.StepCompleted:
-				parked = false
-			}
-		}
-		if !parked {
+		attempts, parked := waitingForOperator(hist)
+		attempt := attempts[step]
+		if !parked[step] {
 			return fmt.Errorf("step %q is not parked: %w", step, ErrNotFound)
 		}
 		var typ string
@@ -60,7 +52,7 @@ func (s *Store) ResolveStep(ctx context.Context, ref RunRef, step, resolution st
 		case ResolveCompleted:
 			typ, payload = history.StepCompleted, map[string]any{"output": output, "resolved_by": by, "note": note}
 		case ResolveFailed:
-			typ, payload = history.StepFailed, history.FailedPayload{Error: history.Error{Kind: "resolved", Message: "operator confirmed it did not happen: " + note, Next: "fail"}}
+			typ, payload = history.StepFailed, history.FailedPayload{Error: history.Error{Kind: history.KindResolved, Message: "operator confirmed it did not happen: " + note, Next: "fail"}}
 		case ResolveRetry:
 			// "not_sent": the operator confirmed nothing reached the provider, so
 			// the worker may send again even for an unsafe write. A person's
@@ -72,7 +64,17 @@ func (s *Store) ResolveStep(ctx context.Context, ref RunRef, step, resolution st
 		if _, err := appendEvent(ctx, tx, ref.ID, typ, step, attempt, payload, history.OriginAPI); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE runs SET status = 'running' WHERE id = $1`, ref.ID); err != nil {
+		// The run waits for reconciliation for as long as any step is parked:
+		// resolving one of two must leave the other resolvable.
+		delete(parked, step)
+		if resolution == ResolveFailed && isCompensation(step) {
+			parked[step] = true // a compensation that did not happen still blocks the run
+		}
+		status := "running"
+		if len(parked) > 0 {
+			status = "needs_reconciliation"
+		}
+		if _, err := tx.Exec(ctx, `UPDATE runs SET status = $2 WHERE id = $1`, ref.ID, status); err != nil {
 			return err
 		}
 		detail, _ := json.Marshal(map[string]any{"run_id": ref.ID, "step": step, "resolution": resolution, "note": note})
@@ -81,4 +83,28 @@ func (s *Store) ResolveStep(ctx context.Context, ref RunRef, step, resolution st
 		}
 		return s.decideInline(ctx, tx, ref)
 	})
+}
+
+// waitingForOperator returns each step's last scheduled attempt, and the
+// steps whose latest outcome leaves them parked for an operator: a park,
+// or a compensation that failed for good.
+func waitingForOperator(hist []history.Event) (attempts map[string]int, parked map[string]bool) {
+	attempts, parked = map[string]int{}, map[string]bool{}
+	for _, e := range hist {
+		switch e.Type {
+		case history.StepScheduled:
+			attempts[e.StepID] = e.Attempt
+		case history.StepFailed:
+			var p history.FailedPayload
+			_ = json.Unmarshal(e.Payload, &p)
+			if p.Error.Next == "park" || (p.Error.Next == "fail" && isCompensation(e.StepID)) {
+				parked[e.StepID] = true
+			} else {
+				delete(parked, e.StepID)
+			}
+		case history.StepCompleted:
+			delete(parked, e.StepID)
+		}
+	}
+	return attempts, parked
 }

@@ -6,6 +6,8 @@ Taskiem (working name) reaches public launch in five gated phases over roughly 1
 
 Phase 5, added on 2026-10-19, is the first phase after launch: a public front door for businesses without a website ([storefronts](storefronts.md)) and hosted forms for every workflow ([forms](forms.md)).
 
+The work after Phase 5, added on 2026-11-19, is planned in stages without dates: [saved objects, payments, made tools, pages and the app as a node](#after-phase-5--saved-objects-payments-made-tools-pages-and-the-app-as-a-node).
+
 ## Roadmap
 
 ```mermaid
@@ -265,6 +267,31 @@ The Phase 4 team carries on, with these additions:
 - [ ] No phishing or scam page live for more than 24 hours after a report, and none that reached a customer's money
 - [ ] A security review of the public host, uploads, embedding and agent sessions, with no open high findings
 - [ ] At least 60% of businesses signed up by agents still active after 30 days
+
+## After Phase 5 — saved objects, payments, made tools, pages and the app as a node
+
+Added on 2026-11-19. This work is planned in stages, not yet in weeks: it has no sizes, no dates and no exit gate here until each stage is sized as it starts. Its order, its shared parts, what each phase needs and when each is done are in [the build plan for saved objects, payments, made tools and pages](build-plan-saved-tools-payments.md), which is the place to read and to tick off.
+
+The founder's order: **saved objects in full, then payments in full, then the rest.**
+
+| Stage | What is built | Spec |
+| --- | --- | --- |
+| 1 | Saved objects: the store for saved accounts, with the step to open a Taskiem wallet or connect a provider (S0); all kinds, the picker, cards and sharing (S1) | [Saved objects](saved-objects.md) |
+| 2 | Saved objects in actions and words (S2), and in workflows (S3) | Saved objects |
+| 3 | Being paid by transfer in the chat (F1); paying one person (P1) | [The payments flow](chat-payments-flow.md), [paying people](chat-pay-people.md) |
+| 4 | Paying from a message (P2), several people (P3), payroll and the chat apps (P4) | Paying people |
+| 5 | Made tools declared (M0) and in use (M1); device fields declared (D0) | [Made tools](made-tools.md), [the app as a node](device-fields.md) |
+| 6 | Cards and buttons (M2), the reader (M3), asking back (M4); pages from tables (G0, G1); location and photo (D1) | Made tools, [pages](pages.md), the app as a node |
+| 7 | Customers' tools (M5); pages with buttons and in the chat (G2, G3); scan and signature (D2) | Made tools, pages, the app as a node |
+| 8 | Recipes and the builder (M6); boards, charts and starters (G4, G5) | Made tools, pages |
+
+Outside these stages:
+
+- **Made tools for linked businesses** ([its plan](made-tools-linked.md)): fully written, and held back by the founder's choice until customers' tools (M5) are in use.
+- **The payments flow** ([its plan](chat-payments-flow.md)): part 1, paying a bill by transfer in the chat, is written, settled and is F1 above. Only its later parts (a statement, one number for several bills) are not yet written.
+- **Schools:** the Schools area and the school in the chat are **built** (the briefing card, second-person approvals as cards, the school's tiles in the tools panel, approvals and the daily line on WhatsApp and Telegram). [Schools in the chat](schools-in-the-chat.md) is notes on what could come next for schools and parents, not a plan yet.
+
+Before any of it ships to a business: a security review of saved accounts and paying one person (that plan's D7).
 
 ## Pillar coverage by phase
 

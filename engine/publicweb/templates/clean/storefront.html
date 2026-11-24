@@ -16,7 +16,8 @@
     {{range .Forms}}<a class="btn{{if or (eq .Ref "order") (and (eq .Kind "booking") (not $.Ordering))}} btn-primary{{end}}" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>
     {{end}}
   </nav>{{end}}
-  {{if or .M.WhatsLink .Phone .M.MapLink}}<nav class="contact" aria-label="Contact">
+  {{if or .M.ChatLink .M.WhatsLink .Phone .M.MapLink}}<nav class="contact" aria-label="Contact">
+    {{with .M.ChatLink}}<a class="btn{{if not $.Forms}} btn-primary{{end}}" href="{{.}}" rel="noopener">{{template "i-chat"}}Chat with us</a>{{end}}
     {{with .M.WhatsLink}}<a class="btn{{if not $.Forms}} btn-primary{{end}}" href="{{.}}" rel="noopener">{{template "i-whatsapp"}}WhatsApp</a>{{end}}
     {{with .Phone}}<a class="btn" href="tel:{{.}}">{{template "i-call"}}Call</a>{{end}}
     {{with .M.MapLink}}<a class="btn" href="{{.}}" rel="noopener">{{template "i-map"}}Directions</a>{{end}}
@@ -56,12 +57,11 @@
       <li class="item{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
         {{if .Small}}<img class="thumb" src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="88px" alt="{{.Name}}" loading="lazy" decoding="async">{{else}}<span class="thumb thumb-icon">{{template "i-photo"}}</span>{{end}}
         <div class="item-text">
-          <h3><a class="item-open" href="#i-{{.ID}}">{{.Name}}</a></h3>
+          <h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3>
           {{with .Description}}<p class="item-sub">{{.}}</p>{{end}}{{if .ReadyIn}}<p class="item-sub">Ready in {{.ReadyIn}} min</p>{{end}}
           <p class="item-row"><span class="price">{{.Price}}</span>
-          {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}</p>
+          {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}{{if or .Options .Sizes}}<a class="add" href="{{$.Base}}/i/{{.ID}}" aria-label="Choose {{.Name}}">{{template "i-plus"}}</a>{{else}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}{{end}}</p>
         </div>
-        {{template "itemsheet" (sheet . $)}}
       </li>
       {{end}}
     </ul>

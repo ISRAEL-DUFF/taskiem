@@ -10,6 +10,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -37,8 +39,15 @@ type mentionOrder struct {
 }
 
 type mentionPart struct {
-	Business string // as linked
-	Text     string // what was said before the mention: "400 bags of cement"
+	Business string // as linked (the first of Links)
+	// Links are the linked businesses the mention names: more than one is
+	// asked about, never picked in silence (links.Mentioned).
+	Links []links.Link
+	Text  string // what was said before the mention: "400 bags of cement"
+	// Typed is the mention's words as typed, without the "@"; At and End
+	// are where it starts (the "@") and ends, in runes.
+	Typed   string
+	At, End int
 }
 
 var (
@@ -51,17 +60,11 @@ var (
 	phraseSplitRe = regexp.MustCompile(`(?i)\s*(?:,|\band\b)\s*(?:\d)`)
 )
 
-// parseMentions finds the "@" mentions in text against the linked
-// businesses' names (the longest name that fits; case is ignored, folded
-// character by character, so a name whose lower case is longer or shorter
-// in bytes, as with İ or the Kelvin sign, is read as any other), and what
-// each is asked for: the words between it and the mention before.
-func parseMentions(text string, names []string) mentionOrder {
-	sorted := make([][]rune, len(names))
-	for i, n := range names {
-		sorted[i] = []rune(n)
-	}
-	slices.SortFunc(sorted, func(a, b []rune) int { return len(b) - len(a) })
+// parseMentions finds the "@" mentions in text against the active linked
+// businesses, each by the start of its name (links.Mentioned: "@Dangote"
+// names Dangote Nigeria Ltd), and what each is asked for: the words
+// between it and the mention before.
+func parseMentions(text string, active []links.Link) mentionOrder {
 	r := []rune(text)
 	var out mentionOrder
 	prev := 0
@@ -69,23 +72,20 @@ func parseMentions(text string, names []string) mentionOrder {
 		if r[i] != '@' || (i > 0 && !strings.ContainsRune(" \t\n,(", r[i-1])) {
 			continue
 		}
-		rest := r[i+1:]
-		matched, end := "", 0
-		for _, n := range sorted {
-			if len(rest) >= len(n) && strings.EqualFold(string(rest[:len(n)]), string(n)) && (len(rest) == len(n) || !isWordRune(rest[len(n)])) {
-				matched, end = string(n), i+1+len(n)
-				break
-			}
-		}
-		if matched == "" {
-			w := mentionWordRe.FindString(string(rest))
-			if w == "" {
+		rest := string(r[i+1:])
+		var end int
+		if hit, n := links.Mentioned(active, rest); n > 0 {
+			end = i + 1 + n
+			out.Parts = append(out.Parts, mentionPart{Business: hit[0].Name, Links: hit, Text: cleanAsk(string(r[prev:i])),
+				Typed: string(r[i+1 : end]), At: i, End: end})
+		} else {
+			w := mentionWordRe.FindString(rest)
+			// "@4500" is an amount ("cement @4500"), not a business.
+			if w == "" || unicode.IsDigit([]rune(w)[0]) {
 				continue
 			}
 			out.Unknown = append(out.Unknown, w)
 			end = i + 1 + len([]rune(w))
-		} else {
-			out.Parts = append(out.Parts, mentionPart{Business: matched, Text: cleanAsk(string(r[prev:i]))})
 		}
 		prev = end
 		i = end - 1
@@ -93,8 +93,14 @@ func parseMentions(text string, names []string) mentionOrder {
 	return out
 }
 
-func isWordRune(c rune) bool {
-	return unicode.IsLetter(c) || unicode.IsDigit(c) || c == '_'
+// mentionChoices lists the businesses a mention could be, each with its
+// role: "Dangote Cement (supplier), Dangote Sugar (customer)".
+func mentionChoices(c *chat, ls []links.Link) string {
+	list := make([]string, len(ls))
+	for i, l := range ls {
+		list[i] = whatsapp.SafeText(l.Name) + " (" + c.t("link.role."+l.Role) + ")"
+	}
+	return strings.Join(list, ", ")
 }
 
 // cleanAsk is the words of an ask without "buy", "and" or "from".
@@ -219,6 +225,20 @@ func matchPriceItems(items []links.PriceItem, words string) []links.PriceItem {
 // conversation; false when the message names none (it is something
 // else).
 func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool, error) {
+	// "…, deliver to @warehouse": a saved place, where what it buys is
+	// delivered (saved objects S2); read off the order's words.
+	body := text
+	if m := deliverTail.FindStringSubmatch(text); m != nil && c.p != nil {
+		if n, err := saved.Name(m[1]); err == nil {
+			got, err := s.savedFind(ctx, c, n)
+			if err != nil {
+				return true, err
+			}
+			if len(got) > 0 {
+				body = deliverTail.ReplaceAllString(text, "")
+			}
+		}
+	}
 	var linked []links.Link
 	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		var err error
@@ -227,35 +247,50 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	}); err != nil {
 		return true, err
 	}
-	names := []string{}
-	byName := map[string][]links.Link{}
-	for _, l := range linked {
-		if l.State == links.Active {
-			if len(byName[l.Name]) == 0 {
-				names = append(names, l.Name)
-			}
-			byName[l.Name] = append(byName[l.Name], l)
-		}
-	}
-	mo := parseMentions(text, names)
+	mo := parseMentions(body, linked)
 	if len(mo.Parts) == 0 && len(mo.Unknown) == 0 {
 		return false, nil
 	}
 	if len(mo.Unknown) > 0 {
-		return true, c.say(ctx, s, c.t("wa.mention.unlinked", "name", whatsapp.SafeText(mo.Unknown[0])))
+		// A saved thing's name is not a business that is not linked: said
+		// for the names that are neither; when all are saved things, the
+		// words go on to what reads saved things (saved objects S2).
+		for _, u := range mo.Unknown {
+			if n, err := saved.Name(u); err == nil && c.p != nil {
+				got, err := s.savedFind(ctx, c, n)
+				if err != nil {
+					return true, err
+				}
+				if len(got) > 0 {
+					continue
+				}
+			}
+			return true, c.say(ctx, s, c.t("wa.mention.unlinked", "name", whatsapp.SafeText(u)))
+		}
+		if len(mo.Parts) == 0 {
+			return false, nil
+		}
+		// An order naming a saved place anywhere but at its end: said how.
+		return true, c.say(ctx, s, c.t("wa.mention.deliver_how", "name", whatsapp.SafeText(mo.Unknown[0])))
 	}
 	for _, part := range mo.Parts {
-		// Two links of the same name: never one picked in silence.
-		if same := byName[part.Business]; len(same) > 1 {
-			list := make([]string, len(same))
-			for i, l := range same {
-				list[i] = whatsapp.SafeText(l.Name) + " (" + c.t("link.role."+l.Role) + ")"
-			}
-			return true, c.say(ctx, s, c.t("wa.mention.which", "name", whatsapp.SafeText(part.Business), "list", strings.Join(list, ", ")))
+		// Two businesses the mention names: never one picked in silence.
+		if len(part.Links) > 1 {
+			return true, c.say(ctx, s, c.t("wa.mention.which", "name", whatsapp.SafeText(part.Typed), "list", mentionChoices(c, part.Links)))
 		}
 	}
 	if !c.p.Can(PermStorefrontManage) {
 		return true, c.say(ctx, s, c.t("wa.supplier.denied", "org", c.tenant.Name))
+	}
+	// Where it is delivered, when the words end with a saved place.
+	var to *links.DeliverTo
+	var place, address string
+	if body != text {
+		var ok bool
+		var err error
+		if _, to, place, address, ok, err = s.orderPlace(ctx, c, text); !ok || err != nil {
+			return true, err
+		}
 	}
 	// Each business's price list, and what is asked of it.
 	var prices []links.SupplierPrices
@@ -272,10 +307,15 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	}
 	var drafts []draft
 	for _, part := range mo.Parts {
-		l := byName[part.Business][0]
+		l := part.Links[0]
 		i := slices.IndexFunc(prices, func(p links.SupplierPrices) bool { return p.LinkID == l.ID })
 		if i < 0 {
-			return true, c.say(ctx, s, c.t("wa.prices.none", "name", whatsapp.SafeText(l.Name)))
+			text := c.t("wa.prices.none", "name", whatsapp.SafeText(l.Name))
+			if !strings.ContainsAny(part.Text, "0123456789") {
+				// Not an order at all: how to send it as a message.
+				text += "\n" + c.t("chat.direct.hint", "name", whatsapp.SafeText(l.Name))
+			}
+			return true, c.say(ctx, s, text)
 		}
 		if !strings.ContainsAny(part.Text, "0123456789") {
 			return true, c.say(ctx, s, c.t("wa.mention.how", "name", whatsapp.SafeText(l.Name)))
@@ -312,27 +352,17 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	var unlinked errUnlinkedItem
 	var unlinkedFrom string
 	err = chatTx(ctx, s, c, func(tx pgx.Tx) error {
-		for _, d := range drafts {
-			known, err := links.ItemLinksTx(ctx, tx, c.tenant.ID, d.link.ID)
-			if err != nil {
+		if to != nil {
+			if err := s.riderPhoneTx(ctx, tx, c, to); err != nil {
 				return err
 			}
+		}
+		for _, d := range drafts {
 			in := make([]orderLineIn, 0, len(d.lines))
 			for _, l := range d.lines {
-				line := orderLineIn{SellerItemID: l.Item.ItemID, Quantity: l.Quantity}
-				if !slices.ContainsFunc(known, func(k links.ItemLink) bool { return k.SellerItemID == l.Item.ItemID }) {
-					// The first time, an own item of the same name is the one.
-					var same []stock.Item
-					for _, o := range items {
-						if strings.EqualFold(strings.TrimSpace(o.Name), strings.TrimSpace(l.Item.Name)) {
-							same = append(same, o)
-						}
-					}
-					if len(same) == 1 {
-						line.ItemID = same[0].ID
-					}
-				}
-				in = append(in, line)
+				// Unremembered, an own item of the same name (a product, or
+				// a material) is suggested: added to its stock item.
+				in = append(in, orderLineIn{SellerItemID: l.Item.ItemID, Quantity: l.Quantity, suggest: sameNamed(items, l.Item.Name)})
 			}
 			x, err := s.draftFromPricesTx(ctx, tx, c.p, d.link.ID, in, own, "", "wa-"+uuid.NewString())
 			if errAs(err, &unlinked) {
@@ -341,11 +371,22 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 			if err != nil {
 				return err
 			}
+			if to != nil {
+				if err := links.SetPurchaseDeliverToTx(ctx, tx, s.Vault, c.tenant.ID, x.ID, *to); err != nil {
+					return err
+				}
+			}
 			made = append(made, x)
 		}
 		return nil
 	})
+	deliver := ""
+	if to != nil {
+		deliver = "\n" + c.t("wa.deliver.to", "name", place, "address", whatsapp.SafeText(address))
+	}
 	switch {
+	case errors.Is(err, errNoRiderPhone):
+		return true, c.say(ctx, s, c.t("wa.deliver.no_phone", "name", place))
 	case unlinkedFrom != "":
 		return true, c.say(ctx, s, c.t("wa.prices.unlinked", "item", whatsapp.SafeText(unlinked.Item.Name), "name", whatsapp.SafeText(unlinkedFrom)))
 	case errIsAny(err, links.ErrInvalid, links.ErrState):
@@ -355,21 +396,13 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	case err != nil:
 		return true, err
 	}
-	if len(made) == 1 {
-		x := made[0]
-		return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_order", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID}}},
-			c.t("wa.order.confirm", "reference", x.Reference, "items", whatsapp.SafeText(x.Words()), "supplier", whatsapp.SafeText(x.Supplier),
-				"total", storefront.FormatNaira(x.TotalKobo)))
-	}
+	// Each line not remembered is asked how to treat it; then the orders
+	// are shown for one Yes.
 	ids := make([]uuid.UUID, len(made))
-	lines := make([]string, len(made))
 	for i, x := range made {
 		ids[i] = x.ID
-		lines[i] = c.t("wa.mention.draft", "reference", x.Reference, "supplier", whatsapp.SafeText(x.Supplier), "items", whatsapp.SafeText(x.Words()),
-			"total", storefront.FormatNaira(x.TotalKobo))
 	}
-	return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_orders", StockChat: &stockChat{Purchase: &purchaseChat{Drafted: ids}}},
-		c.t("wa.mention.confirm", "count", strconv.Itoa(len(made)), "orders", strings.Join(lines, "\n")))
+	return true, s.orderAsk(ctx, c, ids, deliver)
 }
 
 // sendDrafted sends each of the orders one yes answered: those above the
@@ -425,9 +458,15 @@ func errIsAny(err error, targets ...error) bool {
 // mentionRef is a mention as the composer sends it: a business by its
 // link, or an item of the conversation's price list by its id.
 type mentionRef struct {
-	Kind   string    `json:"kind"`
-	Link   uuid.UUID `json:"link"`
-	ItemID string    `json:"item_id"`
+	Kind      string    `json:"kind"`
+	Link      uuid.UUID `json:"link"`
+	ItemID    string    `json:"item_id"`
+	ServiceID string    `json:"service_id"`
+	// Ref is an invoice's or an order's id (from /link-chats/{link}/refs).
+	Ref string `json:"ref"`
+	// Saved is a saved thing shared as a card (kind saved; saved objects
+	// S1, part 3), checked by linkSavedMentions, not checkMentions.
+	Saved *savedShare `json:"saved"`
 }
 
 // conversationItems is what "#" names in a conversation with a link: the
@@ -451,11 +490,14 @@ func conversationItems(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) (
 // business one of ours, linked; each item on the conversation's price
 // list, with its unit and price; each named in the text. A mention whose
 // name the text does not hold is left out.
-func checkMentions(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, text string, refs []mentionRef) ([]links.Mention, error) {
+func checkMentions(ctx context.Context, tx pgx.Tx, p *Principal, link uuid.UUID, text string, refs []mentionRef) ([]links.Mention, error) {
+	tenant := p.TenantID
 	if len(refs) > 10 {
 		return nil, fmt.Errorf("%w: up to 10 mentions in a message", links.ErrInvalid)
 	}
 	var items []links.PriceItem
+	var services []storefront.Item
+	var shared []chatRef
 	lower := strings.ToLower(text)
 	out := []links.Mention{}
 	for _, r := range refs {
@@ -480,14 +522,50 @@ func checkMentions(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, text 
 			}
 			it := items[i]
 			m = links.Mention{Kind: "item", Name: it.Name, ItemID: it.ItemID, Unit: it.Unit, PriceKobo: it.PriceKobo}
+		case "service":
+			// One of our own services (chat tools), as our storefront offers it.
+			if services == nil {
+				var err error
+				if services, err = storefront.Services(ctx, tx, tenant); err != nil {
+					return nil, err
+				}
+				if services == nil {
+					services = []storefront.Item{}
+				}
+			}
+			i := slices.IndexFunc(services, func(it storefront.Item) bool { return it.ID == r.ServiceID })
+			if i < 0 {
+				return nil, fmt.Errorf("%w: that is not one of your services", links.ErrInvalid)
+			}
+			sv := services[i]
+			m = links.Mention{Kind: "service", Name: sv.Name, ServiceID: sv.ID, Minutes: sv.DurationMinutes}
+			if sv.PriceKobo != nil {
+				m.PriceKobo = *sv.PriceKobo
+			}
+		case "invoice", "bill", "order", "purchase":
+			// Between the two businesses only (linkRefsTx).
+			if shared == nil {
+				l, err := links.GetTx(ctx, tx, link)
+				if err != nil {
+					return nil, err
+				}
+				if shared, err = linkRefsTx(ctx, tx, p, l); err != nil {
+					return nil, err
+				}
+			}
+			i := slices.IndexFunc(shared, func(x chatRef) bool { return x.Kind == r.Kind && x.ID == r.Ref })
+			if i < 0 {
+				return nil, fmt.Errorf("%w: you can name only invoices and orders between you and this business", links.ErrInvalid)
+			}
+			x := shared[i]
+			m = links.Mention{Kind: x.Kind, Name: x.Name, Ref: x.ID, PriceKobo: *x.TotalKobo, Status: x.Status}
 		default:
-			return nil, fmt.Errorf("%w: a mention is a business or an item", links.ErrInvalid)
+			return nil, fmt.Errorf("%w: a mention is a business, an item, a service, an invoice, a bill or an order", links.ErrInvalid)
 		}
-		mark := "@"
-		if m.Kind == "item" {
-			mark = "#"
-		}
-		if strings.Contains(lower, strings.ToLower(mark+m.Name)) {
+		// A business is "@Name"; an item "#Name", or "@Name" as the chat
+		// tools picker writes it (docs/spec/chat-tools.md §3).
+		name := strings.ToLower(m.Name)
+		if strings.Contains(lower, "@"+name) || (m.Kind != "business" && strings.Contains(lower, "#"+name)) {
 			out = append(out, m)
 		}
 	}
@@ -523,4 +601,67 @@ func (s *Server) linkChatItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// linkChatPhoto is GET /v1/link-chats/{link}/photo?item=&w=: the photo of
+// one of the other business's items, as our copy of its storefront names
+// it (business-chat-tools.md §2). The picture is in their storage, which
+// the app's pages may not load: it comes through here, fetched with their
+// connection from the address their own storefront wrote, never one the
+// caller gives.
+func (s *Server) linkChatPhoto(w http.ResponseWriter, r *http.Request) {
+	link, err := linkParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if s.Media == nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	item := r.URL.Query().Get("item")
+	width := r.URL.Query().Get("w")
+	p := principalFrom(r.Context())
+	var seller uuid.UUID
+	var urls map[string]string
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		l, err := links.GetTx(r.Context(), tx, link)
+		if err != nil {
+			return err
+		}
+		seller = l.Business
+		var raw []byte
+		if err := tx.QueryRow(r.Context(), `SELECT photo FROM supplier_prices WHERE tenant_id = $1 AND link_id = $2 AND item_id = $3`,
+			p.TenantID, link, item).Scan(&raw); err != nil {
+			return err
+		}
+		if len(raw) == 0 {
+			return pgx.ErrNoRows
+		}
+		return json.Unmarshal(raw, &urls)
+	}); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	}
+	src := urls[width]
+	for _, k := range []string{"320", "800", "2000"} {
+		if src == "" {
+			src = urls[k]
+		}
+	}
+	if src == "" {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	data, ctype, err := s.Media.FetchPublic(r.Context(), seller, src)
+	if err != nil {
+		// Their storage gone or not answering: no picture, the tile shows
+		// its icon; not our fault to report.
+		s.Logger.Debug("links: a linked business's photo", "link", link, "err", err)
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	_, _ = w.Write(data) //nolint:gosec // a JPEG or PNG by its bytes (FetchPublic), sent as that type with nosniff
 }

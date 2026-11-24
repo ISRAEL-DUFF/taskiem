@@ -65,7 +65,7 @@ actions:
     # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
     turn: { to: chat_id, text: text, kind: text }
     # A duplicate is a duplicate chat message: a step may ask for a lost
-    # send to be sent once more (decision 0062 D11).
+    # send to be sent once more (decision 0074 D11).
     resend_if_lost: true
     compensate: null
     input:
@@ -93,7 +93,7 @@ actions:
     # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
     turn: { to: chat_id, text: caption, file: photo, kind: image }
     # A duplicate is a duplicate chat message: a step may ask for a lost
-    # send to be sent once more (decision 0062 D11).
+    # send to be sent once more (decision 0074 D11).
     resend_if_lost: true
     compensate: null
     input:
@@ -128,7 +128,7 @@ actions:
     # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
     turn: { to: chat_id, text: caption, file: document, kind: document }
     # A duplicate is a duplicate chat message: a step may ask for a lost
-    # send to be sent once more (decision 0062 D11).
+    # send to be sent once more (decision 0074 D11).
     resend_if_lost: true
     compensate: null
     input:
@@ -181,7 +181,7 @@ actions:
     # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
     turn: { to: chat_id, text: caption, file: file, kind: voice }
     # A duplicate is a duplicate chat message: a step may ask for a lost
-    # send to be sent once more (decision 0062 D11).
+    # send to be sent once more (decision 0074 D11).
     resend_if_lost: true
     compensate: null
     input:
@@ -210,7 +210,7 @@ actions:
     # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
     turn: { to: chat_id, text: caption, file: file, kind: audio }
     # A duplicate is a duplicate chat message: a step may ask for a lost
-    # send to be sent once more (decision 0062 D11).
+    # send to be sent once more (decision 0074 D11).
     resend_if_lost: true
     compensate: null
     input:
@@ -365,7 +365,7 @@ triggers:
     # The bot's one webhook is set while a published workflow starts on
     # this trigger with the connection, and removed when the last one is
     # unpublished (decision 0021 registration: connection_when_used;
-    # decision 0062 C7), with a secret token Taskiem keeps. A bot used only
+    # decision 0074 C7), with a secret token Taskiem keeps. A bot used only
     # to send is never touched. A webhook set by hand instead is verified
     # with the connection's webhook_secret.
     registration: connection_when_used
@@ -397,7 +397,7 @@ triggers:
       : has(body.message_reaction) ? string(body.message_reaction.chat.id)
       : ""
     # A customer's new message, for a workflow's customer guard (decision
-    # 0062 V6, connector/v1 rule 23): a new message only (not an edit, a
+    # 0074 V6, connector/v1 rule 23): a new message only (not an edit, a
     # channel post or a button press), and private only in a one-to-one
     # chat, so a bot added to a group answers no one there. A voice note or
     # audio is fetched before the run can wait in a queue.
@@ -422,7 +422,7 @@ triggers:
       fetch: get_file
       fetch_input: file_id
       reply: { action: send_message, to: chat_id, text: text }
-    # Who wrote and what they wrote is personal data (decision 0062, P1):
+    # Who wrote and what they wrote is personal data (decision 0074, P1):
     # sealed in run history, readable by the run's steps.
     pii:
       - { field: body.message.from.id, category: other }

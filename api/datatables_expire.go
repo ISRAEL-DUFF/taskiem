@@ -13,7 +13,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 )
 
-// Row expiry (decision 0062 V5, M3 and M6): a table that keeps its rows
+// Row expiry (decision 0074 V5, M3 and M6): a table that keeps its rows
 // for so many days, or as long as the business keeps its conversations,
 // has its older rows deleted by this sweep, a batch at a time, through
 // the table's own connection as the rows API does. Only ids are read.
@@ -146,7 +146,7 @@ func (s *Server) expireTable(ctx context.Context, tenant uuid.UUID, name string,
 // eraseConversationRows deletes what a customer said and was answered in
 // every table kept with the business's conversations that has a sender
 // column, and their rows in any table whose sender column is personal (an
-// assistant's allowed customers, V8) (decision 0062 V5, P2): the rows whose sender is the person
+// assistant's allowed customers, V8) (decision 0074 V5, P2): the rows whose sender is the person
 // erased, by their number in the forms it may be written in, or by their
 // chat id. It answers how many rows went.
 func (s *Server) eraseConversationRows(ctx context.Context, tenant uuid.UUID, category string, value any) (int, error) {

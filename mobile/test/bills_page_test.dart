@@ -1,0 +1,297 @@
+// Bills (M8 part B; web Bills.tsx, lib/bills.ts): the list and its hero,
+// one bill (Pay from Taskiem sent for approval, set up first; how to pay;
+// paid outside Taskiem; a query) and what each sends.
+
+import 'dart:convert';
+
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:taskiem/api/api.g.dart' show Me;
+import 'package:taskiem/chat/bills_page.dart';
+import 'package:taskiem/chat/chats.dart';
+import 'package:taskiem/main.dart';
+import 'package:taskiem/theme/theme.dart';
+
+import 'looks.dart';
+import 'guidelines.dart';
+import 'support.dart';
+
+// The day the pictures were made: the bill falls due the next day.
+DateTime _picturedOn() => DateTime(2026, 11, 19, 9);
+
+Map<String, dynamic> _bill({String status = 'open', bool disputed = false}) => {
+  'id': 'B1',
+  'reference': 'INV-0042',
+  'supplier_name': 'Bayo Rice Mills',
+  'status': status,
+  'disputed': disputed,
+  'amount_kobo': 15600000,
+  'paid_kobo': 5600000,
+  'due_kobo': 10000000,
+  'sent_kobo': 0,
+  'paying_kobo': 0,
+  'declared_paid_kobo': 0,
+  'due_on': '2026-11-20',
+  'pay_account_number': '9900000001',
+  'pay_bank_name': 'Wema Bank',
+  'pay_link': 'https://pay.taskiem.test/i/b1',
+  'mirrored_at': '2026-11-12T08:00:00Z',
+  'lines': [
+    {'description': 'Rice 50kg', 'quantity': 2, 'unit_kobo': 7800000},
+  ],
+};
+
+void main() {
+  setUpAll(loadFonts);
+
+  test('when bills fall due: in days, in words, the week ahead', () {
+    // Saturday 14 November 2026, 10:00 in Lagos.
+    final now = DateTime.utc(2026, 11, 14, 9);
+    expect(daysUntil('2026-11-14', now), 0);
+    expect(daysUntil('2026-11-15', now), 1);
+    expect(daysUntil('2026-11-10', now), -4);
+    expect(daysUntil('', now), isNull);
+    expect(dueWords('2026-11-14', now), 'today');
+    expect(dueWords('2026-11-15', now), 'tomorrow');
+    expect(dueWords('2026-11-17', now), 'Tue');
+    expect(dueWords('2026-11-10', now), startsWith('late since '));
+    final week = weekDue([
+      {'due_on': '2026-11-10', 'due_kobo': 5000},
+      {'due_on': '2026-11-15', 'due_kobo': 7000},
+      {'due_on': '2026-11-20', 'due_kobo': 9000},
+      {'due_on': '2026-11-30', 'due_kobo': 1000},
+    ], now);
+    expect(week.map((d) => d.label), ['Today', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+    expect(week.map((d) => d.kobo), [5000, 7000, 0, 0, 0, 0, 9000], reason: 'what is late counted today; past the week left out');
+  });
+
+  test('what is left to pay on the bills', () {
+    expect(billsDue([_bill(), _bill(status: 'void'), _bill()]), 20000000);
+    expect(billPath('B 1', '/pay'), '/v1/bills/B%201/pay');
+  });
+
+  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home, {Map<String, dynamic>? bill, bool ready = true, bool fail = false}) async {
+    await t.pumpWidget(const SizedBox());
+    t.view.physicalSize = const Size(390, 2600);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chats');
+    final sent = <String>[];
+    var set = ready;
+    http.Response ok(Object b) => http.Response(jsonEncode(b), 200, headers: {'content-type': 'application/json'});
+    final chats = ChatsData(
+      f.auth(
+        also: (req) async {
+          final p = req.url.path;
+          if (req.method == 'GET') {
+            if (p == '/v1/bills') {
+              sent.add('LIST ${req.url.query}');
+              return ok({
+                'bills': req.url.queryParameters['status'] == 'paid' ? [_bill(status: 'paid')..['id'] = 'B2'] : [bill ?? _bill()],
+              });
+            }
+            if (p == '/v1/bills/pay') return ok({'workflow_id': set ? 'W1' : '', 'approver_role': 'owner'});
+            if (p == '/v1/money/labels') return ok({'labels': <Object>[], 'suggestions': <Object>[]});
+            if (p.startsWith('/v1/stock/purchases/')) {
+              sent.add('GET $p');
+              return ok({
+                'purchase': {
+                  'id': 'po-1',
+                  'reference': 'PO-0012',
+                  'lines': [
+                    {'seller_item_id': 'si-1', 'treatment': 'track', 'received': 1},
+                  ],
+                },
+              });
+            }
+            if (p.startsWith('/v1/bills/')) return ok(bill ?? _bill());
+            return null;
+          }
+          sent.add('${req.method} $p ${req.body}');
+          if (fail) await Future<void>.delayed(const Duration(milliseconds: 100));
+          if (fail) return http.Response(jsonEncode({'error': 'The supplier could not be told.'}), 500, headers: {'content-type': 'application/json'});
+          if (p == '/v1/bills/pay/setup') set = true;
+          return ok({'ok': true});
+        },
+      ),
+      now: () => f.at,
+    );
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: home(chats)));
+    await settle(t);
+    return sent;
+  }
+
+  testWidgets('the list: left to pay, then paid', (t) async {
+    final sent = await open(t, (c) => BillsPage(auth: c.auth, now: _picturedOn));
+    await looks(t, 'bills');
+    expect(sent, containsAll(['LIST ', 'LIST status=paid']));
+    expect(find.text('₦100,000'), findsWidgets);
+    expect(find.text('1 bill'), findsOneWidget);
+    expect(find.text('Paid'), findsWidgets);
+    await t.tap(find.text('Bayo Rice Mills').first);
+    await settle(t);
+    expect(find.text('INV-0042 from Bayo Rice Mills'), findsOneWidget);
+  });
+
+  testWidgets('a bill paid from Taskiem: sent for approval', (t) async {
+    final sent = await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false));
+    expect(find.textContaining('once the owner approves it'), findsOneWidget);
+    expect(find.text('9900 000 001'), findsOneWidget, reason: 'read out in groups');
+    expect(find.text('Rice 50kg × 2'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Pay ₦100,000'));
+    await settle(t);
+    expect(sent.last, 'POST /v1/bills/B1/pay {}');
+    expect(find.text('Sent for approval'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('paying bills set up first', (t) async {
+    final sent = await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false), ready: false);
+    await t.tap(find.bySemanticsLabel('Set up paying bills'));
+    await settle(t);
+    expect(sent.last, 'PUT /v1/bills/pay/setup {}');
+    expect(find.bySemanticsLabel('Pay ₦100,000'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('paid outside Taskiem; a query', (t) async {
+    final sent = await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false));
+    await t.tap(find.bySemanticsLabel('Paid outside Taskiem'));
+    await t.pumpAndSettle();
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Amount')), matching: find.byType(EditableText)), '25,000');
+    await t.tap(find.text('In cash'));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Record it'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(sent.last, 'POST /v1/bills/B1/declare {"amount_kobo":2500000,"how":"cash"}');
+    await t.pump(const Duration(seconds: 5));
+    await t.tap(find.bySemanticsLabel('Query this bill'));
+    await t.pumpAndSettle();
+    final send = find.bySemanticsLabel('Send the query');
+    expect(t.getSemantics(send).flagsCollection.isEnabled.toString(), 'Tristate.isFalse');
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^What is wrong')), matching: find.byType(EditableText)), 'Short by one bag');
+    await t.pump();
+    await t.tap(send);
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(sent.last, 'POST /v1/bills/B1/query {"reason":"Short by one bag"}');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('M8 fixes 1: Record it pressed once while it sends; its failure said in the modal', (t) async {
+    final sent = await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false), fail: true);
+    await t.tap(find.bySemanticsLabel('Paid outside Taskiem'));
+    await t.pumpAndSettle();
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Amount')), matching: find.byType(EditableText)), '25,000');
+    await t.tap(find.bySemanticsLabel('Record it'));
+    await t.tap(find.bySemanticsLabel('Record it'));
+    await settle(t);
+    expect(sent.where((s) => s.contains('/declare')), hasLength(1), reason: 'not sent twice');
+    expect(find.text('The supplier could not be told.'), findsOneWidget, reason: 'in the modal, still open');
+    expect(find.bySemanticsLabel('Record it'), findsOneWidget);
+  });
+
+  testWidgets('a queried bill says so, and is not paid from Taskiem', (t) async {
+    await open(
+      t,
+      (c) => BillPage(auth: c.auth, id: 'B1', follow: false),
+      bill: _bill(disputed: true),
+    );
+    expect(find.text('You queried this bill. It is not paid from Taskiem until Bayo Rice Mills settles the query.'), findsOneWidget);
+    expect(find.bySemanticsLabel('Query this bill'), findsNothing);
+  });
+
+  testWidgets('a bill line not matched to its order line has no mark', (t) async {
+    final b = _bill()
+      ..['lines'] = [
+        {'description': 'Sewing machine', 'quantity': 1, 'unit_kobo': 15600000, 'purchase_id': 'po-1', 'seller_item_id': 'si-1'},
+        {'description': 'Delivery', 'quantity': 1, 'unit_kobo': 500000, 'purchase_id': 'po-1'},
+      ];
+    await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false), bill: b);
+    expect(find.text('Delivery'), findsOneWidget);
+    expect(find.text('Things we have'), findsOneWidget, reason: 'the matched line, kept track of');
+    expect(find.text('Not labelled'), findsOneWidget, reason: 'only the matched line, which has no label');
+  });
+
+  testWidgets('On Things we have shows only to someone who may see Things we have', (t) async {
+    final tracked = _bill()
+      ..['lines'] = [
+        {'description': 'Sewing machine', 'quantity': 1, 'unit_kobo': 15600000, 'purchase_id': 'po-1', 'seller_item_id': 'si-1'},
+      ];
+    final sent = await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false), bill: tracked);
+    expect(sent, contains('GET /v1/stock/purchases/po-1'));
+    expect(find.text('On Things we have'), findsOneWidget);
+    expect(find.text('From PO-0012'), findsOneWidget);
+
+    // table.read taken away while the page is open (the order is loaded):
+    // the row goes, as on an order to a supplier.
+    final auth = (t.widget(find.byType(BillPage)) as BillPage).auth;
+    auth.me = Me.fromJson({...Fixture('chats').json('/v1/me'), 'permissions': auth.me!.permissions.where((x) => x != 'table.read').toList()});
+    (t.element(find.byType(BillPage)) as StatefulElement).markNeedsBuild();
+    await t.pump();
+    expect(auth.can('table.read'), isFalse);
+    expect(find.text('On Things we have'), findsNothing);
+
+    final f = Fixture('chats');
+    final sent2 = <String>[];
+    final c = f.auth(
+      also: (req) async {
+        if (req.method == 'GET') sent2.add(req.url.path);
+        return switch (req.url.path) {
+          '/v1/bills/B1' => http.Response(jsonEncode(tracked), 200, headers: {'content-type': 'application/json'}),
+          _ => null,
+        };
+      },
+    );
+    c.me = Me.fromJson({...f.json('/v1/me'), 'permissions': ['invoice.read', 'invoice.manage']});
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: BillPage(auth: c, id: 'B1', follow: false)));
+    await settle(t);
+    expect(find.text('Sewing machine'), findsOneWidget);
+    expect(find.text('On Things we have'), findsNothing);
+    expect(sent2.where((x) => x.startsWith('/v1/stock/purchases/')), isEmpty);
+  });
+
+  testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {
+    final f = Fixture('chats');
+    http.Response ok(Object b) => http.Response(jsonEncode(b), 200, headers: {'content-type': 'application/json'});
+    final chats = ChatsData(
+      f.auth(
+        also: (req) async => switch (req.url.path) {
+          '/v1/bills' => ok({
+            'bills': [_bill()],
+          }),
+          '/v1/bills/pay' => ok({'workflow_id': 'W1', 'approver_role': 'owner'}),
+          '/v1/bills/B1' => ok(_bill()),
+          _ => null,
+        },
+      ),
+      now: () => f.at,
+    );
+    await expectLargeText(
+      t,
+      TaskiemApp(
+        mode: TkMode.light,
+        home: BillsPage(auth: chats.auth, now: _picturedOn),
+      ),
+      drive: settle,
+    );
+    await expectLargeText(
+      t,
+      TaskiemApp(
+        mode: TkMode.dark,
+        home: BillPage(auth: chats.auth, id: 'B1', follow: false),
+      ),
+      drive: settle,
+    );
+  });
+}
+
+Future<void> settle(WidgetTester t) async {
+  for (var i = 0; i < 6; i++) {
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
+    await t.pump();
+  }
+  await t.pump(const Duration(milliseconds: 400));
+}

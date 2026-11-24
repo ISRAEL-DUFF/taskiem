@@ -16,11 +16,25 @@ spec:
       app.kubernetes.io/component: {{ $role }}
   policyTypes: [Ingress]
   ingress:
+    {{- /* With networkPolicy.ingressNamespace, only the ingress controller
+           reaches the API and edge ports; without it, anything may. */}}
     {{- if or (eq $role "api") (eq $role "all") }}
     - ports: [{ port: 8080 }]
+      {{- with $root.Values.networkPolicy.ingressNamespace }}
+      from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+      {{- end }}
     {{- end }}
     {{- if eq $role "edge" }}
     - ports: [{ port: 8081 }]
+      {{- with $root.Values.networkPolicy.ingressNamespace }}
+      from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+      {{- end }}
     {{- end }}
     - from:
         - namespaceSelector:

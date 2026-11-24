@@ -1,0 +1,5 @@
+{{template "fhead" .}}{{template "fbody" .}}
+<h1>{{.Title}}</h1>
+<p class="notice" role="status">{{.Message}}</p>
+{{with .App}}<p><a class="btn btn-primary btn-block" href="{{.}}">Open in the Taskiem app</a></p>{{end}}
+{{template "ffoot" .}}

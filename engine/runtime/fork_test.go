@@ -137,3 +137,49 @@ func TestForkRefusesUncertainRuns(t *testing.T) {
 		t.Fatalf("error: %v", err)
 	}
 }
+
+// A failed run is resumed once: a second resume (another repair proposal
+// for the same run) is refused, naming the run that resumed it, since both
+// would send the steps after the failure. The same request again is the
+// same resume, and a resume that failed in its turn is resumed itself.
+func TestForkOnlyOnce(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(forkPay+","+forkCheck+","+forkNotify, ""))
+	parent := e.Start(t, wf, map[string]any{"amount": 100, "id": "ord-1"})
+	e.Drain(t)
+	resume := func(from runtime.RunRef, v int, proposal string) (runtime.Started, error) {
+		return e.Store.Start(ctx, runtime.StartRequest{TenantID: e.Tenant, WorkflowID: wf, Version: v, Environment: "prod", StartedBy: "tester",
+			TriggerID: "repair/" + proposal, DedupKey: "resume", Fork: &runtime.Fork{Parent: from.ID}})
+	}
+	first, err := resume(parent, 1, "a")
+	if err != nil || !first.Created {
+		t.Fatalf("first resume: %+v %v", first, err)
+	}
+	e.Drain(t)
+	if st := e.Status(t, first.Ref); st != "failed" {
+		t.Fatalf("first resume on the same version: %s", st)
+	}
+	if again, err := resume(parent, 1, "a"); err != nil || again.Created || again.Ref.ID != first.Ref.ID {
+		t.Errorf("the same resume again: %+v %v", again, err)
+	}
+	if _, err := resume(parent, 1, "b"); err == nil {
+		t.Fatal("a run already resumed was resumed again")
+	} else if nr, ok := runtime.IsNotResumable(err); !ok || !strings.Contains(nr.Reason, first.Ref.ID.String()) {
+		t.Errorf("second resume: %v", err)
+	}
+	addVersion(t, e, wf, 2, wfDoc(forkPay+","+forkCheck+","+forkFixed, ""))
+	second, err := resume(first.Ref, 2, "c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Drain(t)
+	if st := e.Status(t, second.Ref); st != "completed" {
+		t.Errorf("resume of the failed resume: %s", st)
+	}
+	if n := e.Provider.Executions("ord-1"); n != 1 {
+		t.Errorf("the transfer ran %d times", n)
+	}
+	if n := e.Provider.Executions("ord-1-unknown"); n != 1 {
+		t.Errorf("the notify after the failure ran %d times", n)
+	}
+}

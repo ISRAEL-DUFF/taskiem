@@ -60,14 +60,15 @@ func (r *recorder) Record(_ context.Context, it builder.Interaction) error {
 	return nil
 }
 
-type meter struct{ allow int }
+type meter struct{ allow, held int }
 
-func (m *meter) Allow(context.Context) error {
+func (m *meter) Reserve(context.Context, int64) (func(), error) {
 	if m.allow <= 0 {
-		return ai.ErrBudgetExhausted
+		return nil, ai.ErrBudgetExhausted
 	}
 	m.allow--
-	return nil
+	m.held++
+	return func() { m.held-- }, nil
 }
 
 func newBuilder(t *testing.T, f *ai.Fake) (*builder.Builder, *recorder) {
@@ -277,13 +278,18 @@ func TestBudgetExhausted(t *testing.T) {
 		t.Fatalf("no call once the budget is spent")
 	}
 	// Spent mid-way: the last draft comes back with a warning.
-	b.Meter = &meter{allow: 2}
+	m := &meter{allow: 2}
+	b.Meter = m
 	p, err := b.Build(context.Background(), builder.Request{Goal: "pay"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.Rounds != 2 || p.Warnings[0].Kind != "budget" {
 		t.Fatalf("rounds %d warnings %+v", p.Rounds, p.Warnings)
+	}
+	// Every round's reservation is released once the build ends.
+	if m.held != 0 {
+		t.Fatalf("%d reservations still held", m.held)
 	}
 }
 

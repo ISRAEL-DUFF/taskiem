@@ -8,8 +8,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/israel-duff/taskiem/engine/media"
 )
 
 func TestOpenAISpeechAsksForOpus(t *testing.T) {
@@ -32,8 +30,8 @@ func TestOpenAISpeechAsksForOpus(t *testing.T) {
 	if got["response_format"] != "opus" || got["model"] != DefaultSpeechModel || got["voice"] != "coral" || got["input"] != "We have rice." || got["instructions"] != "warm" {
 		t.Fatalf("asked %v", got)
 	}
-	if sp.MimeType != "audio/ogg" || !media.IsOpus(sp.Data) {
-		t.Fatalf("answered %s, Opus %v", sp.MimeType, media.IsOpus(sp.Data))
+	if sp.MimeType != "audio/ogg" || !isOpus(sp.Data) {
+		t.Fatalf("answered %s, Opus %v", sp.MimeType, isOpus(sp.Data))
 	}
 	if _, err := o.Speak(context.Background(), SpeechRequest{Text: "x", Voice: "coral", Format: FormatMP3}); err != nil || got["response_format"] != "mp3" {
 		t.Fatalf("mp3: %v %v", err, got)
@@ -104,10 +102,32 @@ func TestSpeechConfigFromEnv(t *testing.T) {
 func TestFakeSpeakerAnswersOpus(t *testing.T) {
 	f := &FakeSpeaker{}
 	sp, err := f.Speak(context.Background(), SpeechRequest{Text: strings.Repeat("a", 45), Voice: "coral", Format: FormatOgg})
-	if err != nil || !media.IsOpus(sp.Data) {
-		t.Fatalf("%v, Opus %v", err, media.IsOpus(sp.Data))
+	if err != nil || !isOpus(sp.Data) {
+		t.Fatalf("%v, Opus %v", err, isOpus(sp.Data))
 	}
 	if d, ok := OggDuration(sp.Data); !ok || d.Seconds() < 2.9 || d.Seconds() > 3.1 {
 		t.Fatalf("duration %v", d)
 	}
+}
+
+// isOpus reports whether data is Ogg whose first packet is an Opus head
+// (the test's own check: engine/media, which has one, imports this
+// package).
+func isOpus(data []byte) bool {
+	if len(data) < 27 || string(data[:4]) != "OggS" {
+		return false
+	}
+	n := int(data[26])
+	if len(data) < 27+n {
+		return false
+	}
+	size := 0
+	for _, s := range data[27 : 27+n] {
+		size += int(s)
+		if s < 255 {
+			break
+		}
+	}
+	start := 27 + n
+	return size >= 8 && len(data) >= start+8 && string(data[start:start+8]) == "OpusHead"
 }

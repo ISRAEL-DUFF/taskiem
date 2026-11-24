@@ -243,3 +243,37 @@ func TestRetentionPurgeReportsBacklog(t *testing.T) {
 		t.Errorf("after purging: backlog %v, oldest overdue %v", b, o)
 	}
 }
+
+// The scheduler deletes sign-in sessions that expired more than 30 days
+// ago, with their client IPs, and keeps the rest (F77).
+func TestSchedulerPurgesOldSessions(t *testing.T) {
+	e := rt.New(t)
+	user := uuid.Must(uuid.NewV7())
+	if _, err := e.DB.Admin.Exec(ctx, `INSERT INTO users (id, email) VALUES ($1, 'old@sessions.test')`, user); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Admin.Exec(ctx, `INSERT INTO sessions (token_hash, user_id, tenant_id, expires_at, ip) VALUES
+		(sha256('old'::bytea), $1, $2, now() - interval '31 days', '203.0.113.7'),
+		(sha256('new'::bytea), $1, $2, now() + interval '12 hours', '203.0.113.8')`, user, e.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Scheduler().Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var ips []string
+	rows, err := e.DB.Admin.Query(ctx, `SELECT ip FROM sessions WHERE user_id = $1`, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var ip string
+		if err := rows.Scan(&ip); err != nil {
+			t.Fatal(err)
+		}
+		ips = append(ips, ip)
+	}
+	rows.Close()
+	if len(ips) != 1 || ips[0] != "203.0.113.8" {
+		t.Errorf("sessions left after a tick: %v, want only the live one", ips)
+	}
+}

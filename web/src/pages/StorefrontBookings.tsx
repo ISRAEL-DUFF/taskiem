@@ -39,6 +39,7 @@ import {
   type Services,
 } from "../lib/bookings";
 import { StorefrontTabs } from "./Storefront";
+import { SavedFill } from "./SavedFill";
 
 const header = (
   <PageHeader
@@ -263,6 +264,9 @@ function MoveDialog({ booking, onClose, onDone }: { booking: Order; onClose: () 
           {booking.service_name}
           {booking.starts_at && `, now ${whenLabel(booking.starts_at)}`}. Choose a free time in Lagos time; the customer is texted the new one.
         </p>
+        <div className="saved-fill-line">
+          <SavedFill kind="date" label="the new date" onPick={(_, d) => setDay(d)} />
+        </div>
         <div className="row">
           <Field label="New date">
             <input type="date" value={day} min={lagosDay(Date.now())} onChange={(e) => setDay(e.target.value)} required />

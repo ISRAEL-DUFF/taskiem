@@ -19,7 +19,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
-// A document sent in chat for the assistant to know (decision 0062 V10,
+// A document sent in chat for the assistant to know (decision 0074 V10,
 // K7): a PDF or Word document an owner sends on WhatsApp or Telegram
 // becomes a source of what the business's assistant knows, as one
 // uploaded on the What your assistant knows page, waiting there for Use

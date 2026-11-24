@@ -40,7 +40,7 @@ func opened(t *testing.T, e *rt.Env, ref runtime.RunRef) string {
 // A child run of a customer's run keeps what it was given sealed under
 // the customer, the parent's personal values where they were passed on
 // and every text besides, so erasing the customer erases the child's copy
-// too (decision 0062 P2).
+// too (decision 0074 P2).
 func TestCustomerSubflowSealed(t *testing.T) {
 	e := rt.New(t)
 	child := e.Publish(t, echoChild)

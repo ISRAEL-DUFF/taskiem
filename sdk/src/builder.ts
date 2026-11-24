@@ -10,7 +10,7 @@
 // functions over the expression context, compiled to CEL by build().
 
 import { compileFunction, ExpressionError } from "./expr.js";
-import type { ActionClass, ContainerLimits, Duration, FormTriggerConfig, Output, Retry, Step, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
+import type { ActionClass, ContainerLimits, Duration, FormTriggerConfig, Output, Retry, Step, Tool, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
 
 /** What an expression can read (wd/v1 rule 10). Values are untyped. */
 export interface Context {
@@ -92,7 +92,7 @@ export function webhook(
 export function schedule(config: { cron: string; timezone?: string } & Values): Trigger {
   return { type: "schedule", config };
 }
-/** A chat trigger's customer guard (decision 0062 V6): true for the defaults, or its settings. */
+/** A chat trigger's customer guard (decision 0074 V6): true for the defaults, or its settings. */
 export type CustomerGuard =
   | true
   | {
@@ -257,7 +257,7 @@ export function wait(config: { duration: Duration } | { until: Expr<string> }): 
   return { type: "wait", config };
 }
 
-export function signal(config: { event: string; correlation: Expr; timeout?: Duration }): StepSpec {
+export function signal(config: { event: string; correlation: Expr; timeout?: Duration; pages?: boolean }): StepSpec {
   return { type: "signal", config };
 }
 
@@ -394,6 +394,10 @@ export interface WorkflowOptions {
   settings?: { timeout?: Duration; concurrency_key?: Expr; max_concurrency?: number; retention?: Duration };
   /** What this workflow gives back when another of the business's workflows uses it as a step (callWorkflow); it needs inputs too. */
   outputs?: (Omit<Output, "value"> & { value: Expr })[];
+  /** Who may start it by hand: members holding one of these roles (owners always may). Left out: everyone who may start runs. */
+  roles?: string[];
+  /** The workflow as a tool in the chat: its name, command, who it is for and what it answers with (decision 0073). */
+  tool?: Tool;
 }
 
 export class Workflow extends Steps {
@@ -415,6 +419,8 @@ export class Workflow extends Steps {
     if (o.types !== undefined) def.types = o.types;
     if (o.settings !== undefined) def.settings = lowerAt(o.settings, "settings");
     if (o.outputs !== undefined) def.outputs = lowerAt(o.outputs, "outputs");
+    if (o.roles !== undefined) def.roles = o.roles;
+    if (o.tool !== undefined) def.tool = o.tool;
     return def as unknown as WorkflowDefinition;
   }
 

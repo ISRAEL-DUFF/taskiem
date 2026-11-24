@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/capability"
@@ -27,6 +29,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/speech"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -143,6 +146,7 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		service         string
 	}
 	vars, secs := map[string][]*wd.Step{}, map[string][]*wd.Step{}
+	savedUse := map[string][]*wd.Step{} // saved things by expression (saved objects S3)
 	var tables, roles []use
 	var caps []*wd.Step // capability steps: their connection is any rail that can
 	var speechSteps, aiSteps []*wd.Step
@@ -160,11 +164,20 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 			for n := range refs.Secrets {
 				secs[n] = append(secs[n], st)
 			}
+			for n := range refs.Saved {
+				savedUse[n] = append(savedUse[n], st)
+			}
 		})
 	}
 	var trig any
 	_ = json.Unmarshal(d.Trigger.RawCfg, &trig)
 	readExprs(nil, trig)
+	if len(d.Outputs) > 0 {
+		var outs any
+		b, _ := json.Marshal(d.Outputs)
+		_ = json.Unmarshal(b, &outs)
+		readExprs(nil, outs)
+	}
 	d.Walk(func(st *wd.Step) {
 		var raw map[string]any
 		b, _ := json.Marshal(st)
@@ -217,7 +230,7 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 			}
 		}
 	})
-	// The trigger's own connection (decision 0062 C9): a workflow that
+	// The trigger's own connection (decision 0074 C9): a workflow that
 	// starts on a provider's events needs that provider connected, as a
 	// step that calls it does.
 	if d.Trigger.Type == "connector_event" {
@@ -300,7 +313,7 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 			}
 		}
 		// Files customers send are scanned before a run keeps them; with no
-		// scanner on this Taskiem every one is refused (decision 0062 gap 7).
+		// scanner on this Taskiem every one is refused (decision 0074 gap 7).
 		if s.Media == nil || s.Media.Scanner == nil {
 			for _, c := range conns {
 				if c.step != nil && personFileAction[c.connector+"/"+c.step.Action] {
@@ -323,7 +336,7 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		}
 		if d.Trigger.Type == "connector_event" {
 			// Meta sends WhatsApp messages only to a callback URL set by
-			// hand in its App Dashboard (decision 0062 C8): say exactly
+			// hand in its App Dashboard (decision 0074 C8): say exactly
 			// what to set. Not blocking: Taskiem cannot see Meta's side.
 			if ref, _ := d.Trigger.Config["connector"].(string); ref == "whatsapp@1" {
 				name, _ := d.Trigger.Config["connection"].(string)
@@ -374,6 +387,27 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 					n.Table = &spec
 				}
 				add(key{"table", u.name, "", env}, n, u.step)
+			}
+		}
+		// The business's saved things it reads, by name ("price_list" is
+		// @price-list); a person's own are never a run's.
+		for _, n := range slices.Sorted(maps.Keys(savedUse)) {
+			name, err := saved.Name(n)
+			if err != nil {
+				// No saved thing can be called that: the workflow is to change.
+				for _, st := range savedUse[n] {
+					add(key{"saved", n, "", env}, readyNeed{Problem: "invalid", Blocking: true, Message: needMessage(l, "saved", "invalid", "", n)}, st)
+				}
+				continue
+			}
+			ok := false
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM saved_objects WHERE tenant_id = $1 AND person_id IS NULL AND archived_at IS NULL AND name = $2)`, tenant, name).Scan(&ok); err != nil {
+				return nil, err
+			}
+			if !ok {
+				for _, st := range savedUse[n] {
+					add(key{"saved", name, "", env}, readyNeed{Problem: "missing", Blocking: true, Message: needMessage(l, "saved", "missing", "", name)}, st)
+				}
 			}
 		}
 	}
@@ -516,6 +550,11 @@ func needMessage(l lang.Tag, kind, problem, service, name string) string {
 		return tr(l, "ready.secret", "name", humanName(name))
 	case "table":
 		return tr(l, "ready.table", "name", humanName(name))
+	case "saved":
+		if problem == "invalid" {
+			return tr(l, "ready.saved_invalid", "name", name)
+		}
+		return tr(l, "ready.saved", "name", name)
 	case "role":
 		return tr(l, "ready.role", "role", humanName(name))
 	}
@@ -662,6 +701,8 @@ type approverRole struct {
 
 // listApproverRoles answers GET /v1/approver-roles: the roles a step can
 // name, so nobody types one, and how many active members the business has.
+// With ?for=start, the roles that can start runs, for who can start a
+// workflow (decision 0073).
 func (s *Server) listApproverRoles(w http.ResponseWriter, r *http.Request) {
 	var out []approverRole
 	var members int
@@ -691,6 +732,30 @@ func (s *Server) listApproverRoles(w http.ResponseWriter, r *http.Request) {
 		counts := map[string]int{}
 		for _, h := range all {
 			counts[h.name] += h.n
+		}
+		if r.URL.Query().Get("for") == "start" {
+			// Who can start it (decision 0073): the roles that can start
+			// runs at all, built-in and the business's own; owners always
+			// may, so they are not listed.
+			for _, n := range access.Holding(PermRunStart) {
+				if n != "owner" {
+					out = append(out, approverRole{Name: n, Builtin: true, Holders: counts[n]})
+				}
+			}
+			rows, err := tx.Query(ctx, `SELECT name FROM roles WHERE $1 = ANY (permissions) ORDER BY name`, PermRunStart)
+			if err != nil {
+				return err
+			}
+			own, err := pgx.CollectRows(rows, pgx.RowTo[string])
+			if err != nil {
+				return err
+			}
+			for _, n := range own {
+				if _, builtin := rolePermissions[n]; !builtin {
+					out = append(out, approverRole{Name: n, Holders: counts[n]})
+				}
+			}
+			return nil
 		}
 		out = append(out, approverRole{Name: "owner", Builtin: true, Holders: counts["owner"]}, approverRole{Name: "approver", Builtin: true, Holders: counts["approver"]})
 		var names []string
@@ -892,7 +957,7 @@ func (s *Server) speechNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e
 }
 
 // allowanceNeeds: this month's allowance for AI answers or for voice used
-// up (decision 0062 D7, L10). Not blocking: an ai step answers with its
+// up (decision 0074 D7, L10). Not blocking: an ai step answers with its
 // fallback and a voice note with the fixed answers until the month turns
 // (AI answers beyond it are billed on a plan with overage, and no need is
 // shown then).
@@ -1002,7 +1067,7 @@ func deliveryNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string,
 }
 
 // areaNeeds: a step (or the trigger) of a part of Taskiem the business
-// has turned off (invoices are Money, stock@1 Stock: decision 0062 I4).
+// has turned off (invoices are Money, stock@1 Stock: decision 0074 I4).
 // Such a step fails at once, so publishing waits for it to be turned on.
 func areaNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, l lang.Tag, d *wd.Definition, steps map[areas.Area][]*wd.Step,
 	add func(readyKey, readyNeed, *wd.Step)) error {

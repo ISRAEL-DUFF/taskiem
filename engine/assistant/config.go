@@ -1,5 +1,5 @@
 // Package assistant keeps a business's assistant safe for its customers
-// and for the business (decision 0062 V6, docs/assistant-guard.md): the
+// and for the business (decision 0074 V6, docs/assistant-guard.md): the
 // customer guard a chat trigger runs before a run can start, the words a
 // customer controls it with, and the check of a reply before it is sent.
 package assistant

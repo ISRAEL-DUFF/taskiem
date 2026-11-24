@@ -10,7 +10,7 @@ import (
 )
 
 // A workflow that starts on WhatsApp messages needs its connection like a
-// step does (decision 0062 C9), is told exactly what to set in Meta (C8),
+// step does (decision 0074 C9), is told exactly what to set in Meta (C8),
 // and the connection's check says when messages cannot be received for
 // want of the app secret (C17).
 func TestWhatsAppTriggerReadiness(t *testing.T) {

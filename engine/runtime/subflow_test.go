@@ -3,6 +3,7 @@ package runtime_test
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -228,4 +229,63 @@ func waitingDef(t *testing.T, e *rt.Env, wf uuid.UUID) *wd.Definition {
 		t.Fatal(err)
 	}
 	return def
+}
+
+// chain is a workflow of n subflow steps one after another, none waiting
+// for its child, after an optional wait.
+func chain(child uuid.UUID, n int, wait string) string {
+	var steps []string
+	prev := ""
+	if wait != "" {
+		steps = append(steps, `{"id":"w","type":"wait","config":{"duration":"`+wait+`"}}`)
+		prev = "w"
+	}
+	for i := 1; i <= n; i++ {
+		id := fmt.Sprintf("s%d", i)
+		needs := ""
+		if prev != "" {
+			needs = `"needs":["` + prev + `"],`
+		}
+		steps = append(steps, `{"id":"`+id+`","type":"subflow",`+needs+`"config":{"workflow":"`+child.String()+`","wait":false}}`)
+		prev = id
+	}
+	return wfDoc(strings.Join(steps, ","), "")
+}
+
+// A decision whose steps complete inline one after another (each subflow
+// that does not wait completes in the next round) is not refused when it
+// runs past one transaction's rounds: what is decided is kept and the
+// sweep carries on, so a long chain starts, and one after a wait does not
+// fail its timer every time.
+func TestLongInlineChainSettlesAcrossTransactions(t *testing.T) {
+	e := rt.New(t)
+	child := e.Publish(t, `{"schema":"wd/v1","id":"wf_c","version":1,"name":"Child","trigger":{"type":"subflow"},
+	  "steps":[{"id":"t","type":"transform","config":{"output":1}}]}`)
+	children := func(ref runtime.RunRef) int {
+		var n int
+		if err := e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM runs WHERE parent_run_id = $1`, ref.ID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	wf := e.Publish(t, chain(child, 40, ""))
+	ref, _, err := e.Store.StartRun(ctx, runtime.StartRequest{TenantID: e.Tenant, WorkflowID: wf, Version: 1, Environment: "prod", Trigger: map[string]any{}})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	e.Drain(t)
+	if st, n := e.Status(t, ref), children(ref); st != "completed" || n != 40 {
+		t.Errorf("chain of 40: %s with %d children", st, n)
+	}
+
+	wf = e.Publish(t, chain(child, 20, "200ms"))
+	ref = e.Start(t, wf, map[string]any{})
+	time.Sleep(300 * time.Millisecond)
+	if _, err := e.Scheduler().Tick(ctx); err != nil {
+		t.Errorf("tick: %v", err)
+	}
+	e.Drain(t)
+	if st, n := e.Status(t, ref), children(ref); st != "completed" || n != 20 {
+		t.Errorf("chain of 20 after a wait: %s with %d children", st, n)
+	}
 }

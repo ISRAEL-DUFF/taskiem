@@ -13,7 +13,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/whatsapp"
 )
 
-// The quality watch on an assistant's WhatsApp number (decision 0062 V10,
+// The quality watch on an assistant's WhatsApp number (decision 0074 V10,
 // C23): read every few hours, kept, and the owners told once when it gets
 // worse; a number that stays the same, or gets better, tells no one.
 func TestWhatsAppQualityWatch(t *testing.T) {

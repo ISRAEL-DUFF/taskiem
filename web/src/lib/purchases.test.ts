@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  linesWords,
+  sizeParents,
   limitInput,
   limitRequest,
   payProblem,
@@ -11,9 +13,26 @@ import {
   receiveRequest,
   supplierProblem,
   supplierSub,
+  deliverToOpen,
+  deliverToSub,
   type Purchase,
   type Supplier,
 } from "./purchases";
+
+describe("where a purchase is delivered", () => {
+  it("can be changed until the supplier has it", () => {
+    expect(deliverToOpen({ status: "drafted" })).toBe(true);
+    expect(deliverToOpen({ status: "sent", seller_status: null })).toBe(true);
+    expect(deliverToOpen({ status: "sent", seller_status: "received" })).toBe(false);
+    expect(deliverToOpen({ status: "confirmed", seller_status: "accepted" })).toBe(false);
+    expect(deliverToOpen({ status: "cancelled" })).toBe(false);
+  });
+  it("says whose place it is", () => {
+    expect(deliverToSub({ address: "", phone: "", own: false })).toBe("Nowhere set: you pick it up.");
+    expect(deliverToSub({ address: "12 Allen Avenue", phone: "+2348031234567", own: false })).toBe("Where your orders usually go");
+    expect(deliverToSub({ address: "The farm", phone: "+2348031234567", own: true })).toBe("This order's own place");
+  });
+});
 
 const po: Purchase = {
   id: "p1",
@@ -147,5 +166,39 @@ describe("purchase orders", () => {
     expect(payProblem("")).toContain("amount");
     expect(payProblem("0")).toContain("amount");
     expect(payProblem("425,000")).toBeNull();
+  });
+});
+
+describe("lines in words", () => {
+  it("tells a product's sizes and colours together", () => {
+    const parents = sizeParents([
+      { id: "a42", variant_of: "am90" },
+      { id: "a43", variant_of: "am90" },
+      { id: "am90" },
+      { id: "rice" },
+    ]);
+    expect(
+      linesWords(
+        [
+          { item_id: "a42", item: "Air Max 90 – 42, Black", quantity: 20, unit: "pair" },
+          { item_id: "rice", item: "Rice", quantity: 2, unit: "bag" },
+          { item_id: "a43", item: "Air Max 90 – 43, Black", quantity: 16, unit: "pair" },
+        ],
+        parents,
+      ),
+    ).toBe("36 pairs Air Max 90 in 2 sizes and colours, 2 bags Rice");
+    expect(linesWords([{ item_id: "a42", item: "Air Max 90 – 42, Black", quantity: 1, unit: "pair" }], parents)).toBe(
+      "1 pair Air Max 90 – 42, Black",
+    );
+  });
+
+  it("never groups items that only share the start of their names", () => {
+    // Two plain products named with a dash are not one product's sizes.
+    expect(
+      linesWords([
+        { item_id: "i1", item: "Indomie – Chicken", quantity: 5, unit: "carton" },
+        { item_id: "i2", item: "Indomie – Onion", quantity: 3, unit: "carton" },
+      ]),
+    ).toBe("5 cartons Indomie – Chicken, 3 cartons Indomie – Onion");
   });
 });

@@ -396,8 +396,15 @@ func actionArea(action string) (areas.Area, bool) {
 		return areas.Stock, true
 	case strings.HasPrefix(action, "link.order"):
 		return areas.Orders, true
+	case strings.HasPrefix(action, "link.delivery"):
+		// A delivery reaches a rider's business through its links alone:
+		// its orders are theirs whatever else it has on.
+		return areas.Links, true
 	case strings.HasPrefix(action, "link.bill"):
 		return areas.Money, true
+	case action == "link.booking":
+		// A booking from a conversation is taken by their storefront.
+		return areas.Storefront, true
 	case action == "link.message":
 		// (A read receipt, link.read, is not gated: if the other side
 		// cannot see receipts, nothing is lost by writing one.)

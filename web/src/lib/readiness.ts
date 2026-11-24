@@ -4,20 +4,13 @@
 // this decides how the web app offers each one.
 
 export interface ReadyNeed {
-  kind:
-    | "connection"
-    | "variable"
-    | "secret"
-    | "table"
-    | "role"
-    | "field"
-    | "setup"
-    | "setting";
+  kind: "connection" | "variable" | "secret" | "table" | "role" | "field" | "setup" | "setting" | "saved";
   /** "" for a connection a step does not name. */
   name: string;
   connector?: string;
   service?: string;
-  /** support: the connection's service must turn a feature on for the business (Paystack's Pay with Transfer); setup: something to set in the service's own dashboard (Meta's callback URL). Never blocking. */
+  /** support: the connection's service must turn a feature on for the business (Paystack's Pay with Transfer); setup: something to set in the service's own dashboard (Meta's callback URL). Never blocking.
+   * invalid: a saved thing's name no saved thing can have; the message says so. */
   problem:
     | "missing"
     | "expired"
@@ -30,7 +23,8 @@ export interface ReadyNeed {
     | "setup"
     | "off"
     | "limit"
-    | "reconnect";
+    | "reconnect"
+    | "invalid";
   environment: string;
   steps: { id: string; name: string }[];
   /** Publishing waits for it: a run would fail at once. */
@@ -70,6 +64,7 @@ export type Fix =
   | { kind: "make_table"; name: string; table?: TableSpec }
   | { kind: "give_role"; role: string }
   | { kind: "ask_phone"; field: string }
+  | { kind: "save_thing"; name: string }
   | { kind: "ask_support"; service: string }
   /** Something to do outside Taskiem (a provider's dashboard): the message says what. */
   | { kind: "outside"; service: string }
@@ -78,7 +73,9 @@ export type Fix =
   /** This month's allowance used up: a bigger plan, or wait for the month to turn. */
   | { kind: "plan" }
   /** A provider stopped sending messages (a bot's webhook refused): check or connect it again. */
-  | { kind: "reconnect"; service: string };
+  | { kind: "reconnect"; service: string }
+  /** Nothing to do here but what the message says. */
+  | { kind: "none" };
 
 /** The connection name a new connection takes for a need. */
 export const DEFAULT_CONNECTION = "main";
@@ -133,6 +130,11 @@ export function fixFor(n: ReadyNeed): Fix {
       return { kind: "outside", service: n.service ?? n.connector ?? "" };
     case "setting":
       return { kind: "turn_on", setting: n.name };
+    case "saved":
+      // A business's saved thing the workflow reads (saved.price_list is
+      // @price-list); a name no saved thing can have is the workflow's to fix.
+      if (n.problem === "invalid") return { kind: "none" };
+      return { kind: "save_thing", name: n.name };
   }
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -90,6 +91,15 @@ func (w *Watch) Tick(ctx context.Context) error {
 // Tenant keeps one business's low items and raises its alerts; how many
 // alerts it raised.
 func (w *Watch) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
+	// A business that turned Stock off is not watched, and is told nothing
+	// (docs/spec/business-areas.md §5: background jobs).
+	on := true
+	if err := db.InTenantTx(ctx, w.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) (err error) {
+		on, err = areas.Enabled(ctx, tx, tenant, areas.Stock)
+		return err
+	}); err != nil || !on {
+		return 0, err
+	}
 	items, err := w.Stock.Items(ctx, tenant)
 	if err != nil {
 		return 0, err
@@ -99,6 +109,17 @@ func (w *Watch) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
 	err = db.InTenantTx(ctx, w.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		low := Low(items)
 		ids := make([]string, 0, len(low))
+		// On an open order already: its stock item is on one.
+		onOrder, err := OnOrderTx(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		ordered := []string{}
+		for _, it := range low {
+			if it.OnOrder(onOrder) {
+				ordered = append(ordered, it.ID)
+			}
+		}
 		for _, it := range low {
 			ids = append(ids, it.ID)
 			if _, err := tx.Exec(ctx, `INSERT INTO stock_low (tenant_id, item_id, item, since) VALUES ($1, $2, $3, $4)
@@ -113,9 +134,8 @@ func (w *Watch) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
 		// Low a week, nothing ordered, not yet told.
 		rows, err := tx.Query(ctx, `SELECT l.item_id, l.item, l.since FROM stock_low l
 			WHERE l.tenant_id = $1 AND l.alerted_at IS NULL AND l.since <= $2
-			  AND NOT EXISTS (SELECT 1 FROM purchase_orders o, jsonb_array_elements(o.lines) x
-			                  WHERE o.tenant_id = l.tenant_id AND o.status IN ('drafted', 'sent', 'confirmed', 'part_received') AND x->>'item_id' = l.item_id)`,
-			tenant, now.Add(-LowWeekAfter))
+			  AND NOT (l.item_id = ANY ($3))`,
+			tenant, now.Add(-LowWeekAfter), ordered)
 		if err != nil {
 			return err
 		}

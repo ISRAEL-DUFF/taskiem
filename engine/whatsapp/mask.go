@@ -90,6 +90,9 @@ func MaskValue(category string, v any) string {
 		return string([]rune(s)[0]) + "•••" + s[at:]
 	case "bvn", "nin":
 		return "[" + category + "]"
+	case pii.CategoryLocation:
+		// About 100 m (docs/spec/device-fields.md §5).
+		return pii.MaskLocation(v)
 	case "name":
 		r := []rune(s)
 		if len(r) == 0 {

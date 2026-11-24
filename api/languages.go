@@ -59,7 +59,7 @@ type tenantChannel struct {
 	// (speech@1, docs/speech.md), separate from Voice.
 	WorkflowVoice bool
 	// ConversationDays is how long conversations with customers are kept
-	// (decision 0062 V5, Q4): the conversations table's rows, and runs
+	// (decision 0074 V5, Q4): the conversations table's rows, and runs
 	// kept "conversations" long with their files.
 	ConversationDays int
 	at               time.Time
@@ -135,6 +135,9 @@ func (s *Server) numberLang(ctx context.Context, number string) (lang.Tag, strin
 }
 
 func (s *Server) setNumberLang(ctx context.Context, number string, t lang.Tag, source string) error {
+	if strings.HasPrefix(number, "app:") {
+		return nil // the app's sign-up: the phone's own language is the app's
+	}
 	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_lang_set($1, $2, $3)`, number, string(t), source)
 	return err
 }
@@ -258,11 +261,13 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 	if s.Billing.Require(ctx, c.tenant.ID, billing.FeatureAI) != nil {
 		return lang.Match{}
 	}
-	limit, used, err := s.aiBudget(ctx, c.tenant.ID)
-	if err != nil || limit > 0 && used >= limit {
+	info, _ := lang.Lookup(c.lang.Tag)
+	// The call's tokens are reserved until it is recorded (finding F49).
+	release, err := s.reserveAI(ctx, c.tenant.ID, "intent", intent.Request(text, info, 0).Estimate(), chatAIReservation)
+	if err != nil {
 		return lang.Match{}
 	}
-	info, _ := lang.Lookup(c.lang.Tag)
+	defer release()
 	cl := &intent.Classifier{Provider: s.Languages.Model}
 	res, resp, err := cl.Classify(ctx, text, info)
 	outcome, errText := "valid", ""
@@ -274,7 +279,7 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 	case res.Intent == lang.IntentNone:
 		outcome = "unknown"
 	}
-	s.recordIntent(ctx, c, text, resp, outcome, errText)
+	s.recordIntent(ctx, c, resp, outcome, errText)
 	if err != nil {
 		if !errors.Is(err, intent.ErrUnusable) {
 			s.Logger.Warn("whatsapp: routing a message through the model", "err", err)
@@ -284,8 +289,8 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 	return lang.Match{Intent: res.Intent, Arg: res.Arg, Language: c.lang.Tag}
 }
 
-func (s *Server) recordIntent(ctx context.Context, c *chat, text string, resp *ai.Response, outcome, errText string) {
-	s.recordModelCall(ctx, c, "intent", "intent", s.Languages.Model, text, resp, outcome, errText)
+func (s *Server) recordIntent(ctx context.Context, c *chat, resp *ai.Response, outcome, errText string) {
+	s.recordModelCall(ctx, c, "intent", "intent", s.Languages.Model, resp, outcome, errText)
 }
 
 // --- settings API ---
@@ -317,7 +322,7 @@ type languagesView struct {
 // reKeepConversations moves the end of the runs already ended that are
 // kept as long as conversations (settings.retention "conversations"),
 // and of their files, to the business's new number of days, so a
-// conversation's runs and files still go with its rows (decision 0062
+// conversation's runs and files still go with its rows (decision 0074
 // V5). Runs still going take it up when they end.
 func reKeepConversations(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, days int) error {
 	keep := fmt.Sprintf("%d days", days)

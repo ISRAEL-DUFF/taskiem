@@ -57,13 +57,42 @@ type Bill struct {
 	// bank confirmed the business sent from Taskiem (its own record).
 	PayingKobo int64 `json:"paying_kobo"`
 	SentKobo   int64 `json:"sent_kobo"`
+	// UncountedKobo is what the bank confirmed the business sent from
+	// Taskiem that the supplier's figure does not show yet (its match has
+	// not paired it, or the mirror has not brought the count back): it is
+	// not due again, so the bill is not paid twice (uncountedSQL).
+	UncountedKobo int64 `json:"uncounted_kobo"`
 	// The way to pay, the seller's: the account number it issued us, and
 	// the invoice's page.
-	PayAccountNumber string    `json:"pay_account_number,omitempty"`
-	PayBankName      string    `json:"pay_bank_name,omitempty"`
-	PayLink          string    `json:"pay_link,omitempty"`
-	MirroredAt       time.Time `json:"mirrored_at"`
-	CreatedAt        time.Time `json:"created_at"`
+	PayAccountNumber string `json:"pay_account_number,omitempty"`
+	PayBankName      string `json:"pay_bank_name,omitempty"`
+	PayLink          string `json:"pay_link,omitempty"`
+	// Paying by transfer (the payments flow, part 1): whether the seller's
+	// provider gives an account number for one payment, the newest one
+	// given for this bill, when the buyer last asked, and why one could
+	// not be had.
+	PayByTransfer   bool          `json:"-"`
+	TransferLonger  bool          `json:"-"`
+	Transfer        *BillTransfer `json:"-"`
+	TransferAskedAt *time.Time    `json:"-"`
+	TransferProblem string        `json:"-"`
+	MirroredAt      time.Time     `json:"mirrored_at"`
+	CreatedAt       time.Time     `json:"created_at"`
+}
+
+// BillTransfer is an account number the seller's provider gave for one
+// payment of a bill, as the bill keeps it.
+type BillTransfer struct {
+	Seq           int        `json:"seq"`
+	BankName      string     `json:"bank_name"`
+	AccountNumber string     `json:"account_number"`
+	AccountName   string     `json:"account_name,omitempty"`
+	AmountKobo    int64      `json:"amount_kobo"`
+	Status        string     `json:"status"` // requested, open, failed, paid, returned, unavailable
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	// PaidAt: when the invoice was paid in full.
+	PaidAt    *time.Time `json:"paid_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // Mirror is what a bill takes from its invoice.
@@ -82,6 +111,14 @@ type Mirror struct {
 	// The way to pay: the account the seller issued the buyer, and the
 	// invoice's page.
 	PayAccountNumber, PayBankName, PayLink string
+	// PayByTransfer: the seller's provider gives one-time account numbers
+	// (nil: not known just now);
+	// Transfer the newest the invoice has (nil: none yet).
+	PayByTransfer *bool // nil: not known just now (kept as it was)
+	// TransferLonger: the provider gives longer than the default (nil:
+	// not known just now).
+	TransferLonger *bool
+	Transfer       *BillTransfer
 }
 
 // MirrorBillTx writes a bill from its invoice into the business in scope
@@ -106,15 +143,16 @@ func MirrorBillTx(ctx context.Context, tx pgx.Tx, buyer uuid.UUID, m Mirror) (bo
 	}
 	var inserted bool
 	err := tx.QueryRow(ctx, `INSERT INTO bills (id, tenant_id, link_id, supplier_tenant, supplier_name, source_id, reference, lines, amount_kobo, paid_kobo,
-			due_on, voided, allow_part_payments, pay_account_number, pay_bank_name, pay_link)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12, $13, $14, $15, $16)
+			due_on, voided, allow_part_payments, pay_account_number, pay_bank_name, pay_link, pay_by_transfer, transfer, transfer_longer)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12, $13, $14, $15, $16, COALESCE($17, false), $18, COALESCE($19, false))
 		ON CONFLICT (tenant_id, link_id, source_id) DO UPDATE SET supplier_name = EXCLUDED.supplier_name, reference = EXCLUDED.reference,
 			lines = EXCLUDED.lines, amount_kobo = EXCLUDED.amount_kobo, paid_kobo = EXCLUDED.paid_kobo, due_on = EXCLUDED.due_on,
 			voided = EXCLUDED.voided, allow_part_payments = EXCLUDED.allow_part_payments, pay_account_number = EXCLUDED.pay_account_number,
-			pay_bank_name = EXCLUDED.pay_bank_name, pay_link = EXCLUDED.pay_link, mirrored_at = now()
+			pay_bank_name = EXCLUDED.pay_bank_name, pay_link = EXCLUDED.pay_link, pay_by_transfer = COALESCE($17, bills.pay_by_transfer), transfer_longer = COALESCE($19, bills.transfer_longer),
+			transfer = COALESCE(EXCLUDED.transfer, bills.transfer), mirrored_at = now()
 		RETURNING xmax = 0`,
 		uuid.Must(uuid.NewV7()), buyer, m.Link, m.Supplier, m.SupplierName, m.Source, m.Reference, m.Lines, m.AmountKobo, m.PaidKobo,
-		due, m.Voided, m.AllowParts, null(m.PayAccountNumber), null(m.PayBankName), null(m.PayLink)).Scan(&inserted)
+		due, m.Voided, m.AllowParts, null(m.PayAccountNumber), null(m.PayBankName), null(m.PayLink), m.PayByTransfer, m.Transfer, m.TransferLonger).Scan(&inserted)
 	if err != nil || m.Voided {
 		return inserted, err
 	}
@@ -134,16 +172,25 @@ func MirrorBillTx(ctx context.Context, tx pgx.Tx, buyer uuid.UUID, m Mirror) (bo
 	return inserted, nil
 }
 
+// uncountedSQL is a bill's UncountedKobo: the payments the bank
+// confirmed that the supplier's match has not paired, and, of those it
+// paired, what the supplier's figure (paid_kobo) does not show yet, as
+// the mirror brings it later. Read FROM bills, unaliased.
+const uncountedSQL = `(SELECT u + GREATEST(bills.sent_kobo - u - bills.paid_kobo, 0) FROM (SELECT COALESCE(sum(p.amount_kobo), 0)::bigint AS u
+	FROM bill_payments p WHERE p.bill_id = bills.id AND p.status = 'paid' AND p.paired_at IS NULL) x)`
+
 const billCols = `id, link_id, supplier_tenant, supplier_name, reference, lines, amount_kobo, paid_kobo, COALESCE(to_char(due_on, 'YYYY-MM-DD'), ''),
-	status, allow_part_payments, disputed, declared_paid_kobo, paying_kobo, sent_kobo, COALESCE(pay_account_number, ''), COALESCE(pay_bank_name, ''), COALESCE(pay_link, ''),
-	mirrored_at, created_at`
+	status, allow_part_payments, disputed, declared_paid_kobo, paying_kobo, sent_kobo, ` + uncountedSQL + `, COALESCE(pay_account_number, ''), COALESCE(pay_bank_name, ''), COALESCE(pay_link, ''),
+	pay_by_transfer, transfer_longer, transfer, transfer_asked_at, COALESCE(transfer_problem, ''), mirrored_at, created_at`
 
 func scanBill(r pgx.Row) (Bill, error) {
 	var b Bill
 	err := r.Scan(&b.ID, &b.LinkID, &b.Supplier, &b.SupplierName, &b.Reference, &b.Lines, &b.AmountKobo, &b.PaidKobo, &b.DueOn,
-		&b.Status, &b.AllowParts, &b.Disputed, &b.DeclaredPaidKobo, &b.PayingKobo, &b.SentKobo, &b.PayAccountNumber, &b.PayBankName, &b.PayLink, &b.MirroredAt, &b.CreatedAt)
-	if b.Status != "void" && b.AmountKobo > b.PaidKobo {
-		b.DueKobo = b.AmountKobo - b.PaidKobo
+		&b.Status, &b.AllowParts, &b.Disputed, &b.DeclaredPaidKobo, &b.PayingKobo, &b.SentKobo, &b.UncountedKobo, &b.PayAccountNumber, &b.PayBankName, &b.PayLink,
+		&b.PayByTransfer, &b.TransferLonger, &b.Transfer, &b.TransferAskedAt, &b.TransferProblem, &b.MirroredAt, &b.CreatedAt)
+	// What was sent and is not counted yet is not due again.
+	if b.Status != "void" && b.AmountKobo > b.PaidKobo+b.UncountedKobo {
+		b.DueKobo = b.AmountKobo - b.PaidKobo - b.UncountedKobo
 	}
 	return b, err
 }
@@ -297,33 +344,39 @@ type PayIn struct {
 
 // StartBillPaymentTx records a payment of a bill under way and marks the
 // bill paying, so a second Pay is refused until it is settled, refused or
-// rejected. The token, the bill's reference and a short code, is what the
+// rejected; what the bank confirmed sent and the supplier has not counted
+// yet is not due again, so the bill is not paid twice before its count
+// comes back. The token, the bill's reference and a short code, is what the
 // payout's narration carries.
 func StartBillPaymentTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in PayIn) (BillPayment, error) {
 	var b struct {
 		ref                   string
-		due, paying           int64
+		due, paying, sent     int64
 		status                string
 		parts, disputed, void bool
 	}
-	err := tx.QueryRow(ctx, `SELECT reference, amount_kobo - paid_kobo, paying_kobo, status, allow_part_payments, disputed, voided FROM bills WHERE id = $1 FOR UPDATE`, in.Bill).
-		Scan(&b.ref, &b.due, &b.paying, &b.status, &b.parts, &b.disputed, &b.void)
+	err := tx.QueryRow(ctx, `SELECT reference, amount_kobo - paid_kobo, paying_kobo, `+uncountedSQL+`, status, allow_part_payments, disputed, voided
+		FROM bills WHERE id = $1 FOR UPDATE`, in.Bill).
+		Scan(&b.ref, &b.due, &b.paying, &b.sent, &b.status, &b.parts, &b.disputed, &b.void)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return BillPayment{}, ErrNotFound
 	}
 	if err != nil {
 		return BillPayment{}, err
 	}
+	left := b.due - b.sent
 	switch {
 	case b.void || b.status == "paid":
 		return BillPayment{}, fmt.Errorf("%w: the bill is %s", ErrState, map[bool]string{true: "cancelled", false: "paid"}[b.void])
 	case b.paying > 0:
 		return BillPayment{}, fmt.Errorf("%w: a payment of this bill is already under way", ErrState)
+	case b.sent > 0 && left <= 0:
+		return BillPayment{}, fmt.Errorf("%w: you sent %d kobo for this bill that the supplier has not counted yet; confirm the payment was for this bill instead of paying again", ErrState, b.sent)
 	case b.disputed:
 		return BillPayment{}, fmt.Errorf("%w: the bill is queried; settle the query with the supplier first", ErrState)
-	case in.AmountKobo <= 0 || in.AmountKobo > b.due:
-		return BillPayment{}, fmt.Errorf("%w: pay up to what is left, %d kobo", ErrInvalid, b.due)
-	case in.AmountKobo < b.due && !b.parts:
+	case in.AmountKobo <= 0 || in.AmountKobo > left:
+		return BillPayment{}, fmt.Errorf("%w: pay up to what is left, %d kobo", ErrInvalid, left)
+	case in.AmountKobo < left && !b.parts:
 		return BillPayment{}, fmt.Errorf("%w: the supplier takes this bill paid in full", ErrInvalid)
 	}
 	p := BillPayment{ID: uuid.Must(uuid.NewV7()), BillID: in.Bill, Reference: b.ref, AmountKobo: in.AmountKobo, Connection: in.Connection,
@@ -723,4 +776,13 @@ func tellOther(ctx context.Context, tx pgx.Tx, me, link uuid.UUID, n Notice, act
 		}
 	}
 	return n, other, putNoticeTx(ctx, tx, other, &n)
+}
+
+// TellTransferTx records that both chats are told event of the bill's
+// number (its seq and paid or part), in the buyer's scope; false when they
+// were told it already.
+func TellTransferTx(ctx context.Context, tx pgx.Tx, buyer, link, source uuid.UUID, event string) (bool, error) {
+	tag, err := tx.Exec(ctx, `UPDATE bills SET transfer_told = $4 WHERE tenant_id = $1 AND link_id = $2 AND source_id = $3
+		AND transfer_told IS DISTINCT FROM $4`, buyer, link, source, event)
+	return tag.RowsAffected() == 1, err
 }

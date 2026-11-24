@@ -9,6 +9,12 @@ describe("the conversation with a linked business", () => {
     expect(cardLine({ doc: "bill", event: "bill", reference: "INV-0042" }, false, "Dangote Stores")).toBe("Dangote Stores sent invoice INV-0042");
     expect(cardLine({ doc: "purchase", event: "accept", reference: "P-7QX4KD" }, true, "Dangote Stores")).toBe("You accepted order P-7QX4KD");
     expect(cardLine({ doc: "order", event: "new_thing", reference: "P-7QX4KD" }, true, "X")).toBe("You new thing order P-7QX4KD");
+    // An order's steps read as sentences, the reference last.
+    const step = (event: string) => cardLine({ doc: "purchase", event, reference: "P-7QX4KD" }, false, "Grace");
+    expect(step("ready")).toBe("Grace prepared order P-7QX4KD");
+    expect(step("dispatched")).toBe("Grace sent out order P-7QX4KD");
+    expect(step("cancel_agreed")).toBe("Grace agreed to cancel order P-7QX4KD");
+    expect(step("short")).toBe("Grace said some is missing from order P-7QX4KD");
     expect(cardSub({ doc: "bill", event: "queried", reference: "INV-1", amount_kobo: 2_500_000, note: "Two bags torn" })).toBe("₦25,000 · “Two bags torn”");
   });
   it("opens a card's document", () => {

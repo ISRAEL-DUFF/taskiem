@@ -11,7 +11,7 @@ With areas set, the order form asks a customer who chooses delivery for their ar
 The form also asks where exactly to come:
 
 - a **landmark** ("opposite the Shoprite gate");
-- a **map pin**: a link pasted from a maps app, or **Use my location** in the browser (offered, never required).
+- a **map pin**: a link pasted from a maps app, or **Use my location** in the browser (offered, never required). Only a maps link is taken, since staff and riders open it: Google Maps' share links (`maps.app.goo.gl`, `goo.gl/maps`), `www.google.com/maps` and `maps.google.com`, Apple Maps (`maps.apple.com`), OpenStreetMap and Waze. Any other page, and any other address on those companies' hosts (a Google Sites page, a `google.com/url` redirect), is refused.
 
 Both are sealed with the customer's details. The rider sees them only while they hold the order. Taskiem never looks an address up on a map: the pin is passed on as the customer gave it.
 
@@ -93,7 +93,9 @@ The rider's taps, each a button in their chat (or the words `picked up`, `arrive
 | **Arrived** | The order is **At the door**; the customer is told. An order paid at the door and not yet paid gets its account number (below) |
 | **Delivered** | The order is **completed**. The customer is told and asked to rate the delivery. With proof on, the rider is asked for a photo |
 
-A **photo** the rider sends after Delivered is kept as proof, in the business's own storage. A **location** they share at the door is kept with the delivery. Both show on the order's Delivery card. Taskiem never tracks where a rider is.
+The order is completed in the same step that saves the tap, so a delivery is never delivered with its order still open. Telling the order's workflow and the customer comes straight after; if that fails (the service restarts at that moment), a second tap on **Delivered** does it, and so does the dispatch sweep within a couple of minutes, each once (`deliveries.finished_at` says it is done). The same holds for the paid flow after **Cash received**.
+
+A **photo** the rider sends is kept as proof, in the business's own storage, for the order they last marked **Arrived** or **Delivered** (in the last two hours), and the answer names that order. A rider with other orders of the business at the door or just delivered gets each of them on a button: a tap moves the photo to that order (for half an hour, once). A later photo is kept beside the earlier ones (`delivery_proofs`), never in their place; the order's Delivery card shows the latest, and `proofs` in the API says how many there are. A **location** they share at the door is kept with the delivery. Both show on the order's Delivery card. Taskiem never tracks where a rider is.
 
 **Quiet riders.** A rider who has not picked up an order in time (20 minutes by default), or not reached the door in time (90 minutes), is raised to the owner with the rider's phone. The owner can call them or take the order back.
 
@@ -107,7 +109,7 @@ When it lands, the rider gets **Paid. Hand it over and tap Delivered.** **New nu
 
 **Cash received**, shown while the order is unpaid at the door, completes the order as paid in cash. The money log records a cash receipt for the order. The rider then **owes** that amount until they hand it in:
 
-- A transfer from the rider whose narration names the order's reference counts by itself, oldest debt first.
+- A transfer from the rider whose narration names the order's reference counts by itself, oldest debt first. It is then used up in the money log, as a payment counted towards an invoice or order is: it cannot also count towards an invoice, an order or a sale, and a transfer one of those already took is not counted for the rider.
 - Cash handed in is recorded under **Pay riders > Record cash handed in**, and is added to the money log as cash.
 - What a rider still owes when they are paid is taken off their pay.
 
@@ -124,7 +126,7 @@ A delivery's fee is the rider's fee per delivery unless it was set on the offer.
 
 **A rider's bank account** is where their money goes, so whoever adds or changes one confirms it is them with their passkey or authenticator code, for that rider only. Someone with neither is asked to add one under Account first, and an API key cannot change it. The audit log records how it was confirmed.
 
-**Set up weekly pay** chooses a day and a time (Lagos). It makes the **Pay riders** workflow from the [`pay-riders-weekly`](templates.md) template and publishes it, paying from the business's Taskiem wallet. A business with another payments account chooses it through the API. **Pay riders now** starts the same payout at once. Each payout runs the same way:
+**Set up weekly pay** chooses a day and a time (Lagos). It makes the **Pay riders** workflow from the [`pay-riders-weekly`](templates.md) template and publishes it, paying from the business's Taskiem wallet. A business with another payments account chooses it through the API. **Pay riders now** starts the same payout at once. One payout is open at a time: while one waits to be approved or is being paid, another is refused (409) until it is approved or declined, and a request sent again with the same `Idempotency-Key` (a weak connection, the button pressed twice) answers the payout it started. Each payout runs the same way:
 
 1. Each rider's fees since their last payout are added up, less the cash they owe. A rider whose cash owed covers their fees is settled at once with nothing to pay. A rider with no bank account set is named and paid next time.
 2. Each rider's bank confirms the name on their account.
@@ -178,6 +180,7 @@ The riders platform connector acts on the run's own business:
 | `release` | Takes an order back from its rider |
 | `prepare_payouts` | A payout batch (`batch_id`): each rider's payout with their bank account, and those not paid for want of one |
 | `finish_payouts` | Records how each payout went (`results`), or `cancel` for a list not approved |
+| `record_proof` | Records on an order's delivery (`reference`) the proof a form step asked its rider for ([device fields](spec/device-fields.md) §6): `where`, the step's location answer, kept only at its masked point (about 100 m), and `photo`, its photo answer, kept beside the delivery's other photos with its source (`camera` or `sent`). Its `mark` is `confirmed_at_door` (read by the phone within 150 m of the customer's own pin), `far_from_address`, `said_by_rider` (a pin sent in a chat), `read_by_phone` (no customer pin to compare) or `no_location`. The Confirm card shows the pin, the photo and which was read by the phone and which was sent |
 
 The rider's taps are not steps. A workflow that goes on after Delivered waits for the signal `storefront.delivered` with the order's reference as its correlation. The AI builder knows `riders@1` ("hand my orders to my riders", "pay my riders weekly").
 

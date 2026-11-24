@@ -31,6 +31,9 @@ async function narrow(page: Page) {
 }
 
 test("two businesses find each other and link", async ({ browser }) => {
+  // Two businesses signed up and linked: as slow on a busy CI runner as
+  // the other two-business tests, which have the long timeout too.
+  test.setTimeout(180_000);
   // Letters, not digits: a search with six digits in a row is never run.
   const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
   const dangoteName = `Dangote Depot ${stamp}`;
@@ -52,14 +55,14 @@ test("two businesses find each other and link", async ({ browser }) => {
 
   // Ada finds it and asks, as a supplier.
   await ada.goto("/chat");
-  await expect(ada.getByText("No linked businesses yet")).toBeVisible();
+  await expect(ada.getByTestId("chats-start")).toContainText("Link with the businesses you trade with");
   // Asked once whether others find her; Not now keeps the default.
   await expect(ada.getByTestId("link-findable-ask")).toBeVisible();
   await axeBoth(ada, "/chat, empty");
   await ada.getByRole("button", { name: "Not now" }).click();
   await expect(ada.getByTestId("link-findable-ask")).toBeHidden();
   await ada.reload();
-  await expect(ada.getByText("No linked businesses yet")).toBeVisible();
+  await expect(ada.getByTestId("chats-start")).toContainText("Link with the businesses you trade with");
   await expect(ada.getByTestId("link-findable-ask")).toBeHidden();
   await ada.getByTestId("link-search").fill(`dangote depot ${stamp}`);
   const found = ada.getByTestId("link-found").filter({ hasText: dangoteName });
@@ -76,6 +79,11 @@ test("two businesses find each other and link", async ({ browser }) => {
   // A phone number is never searched: one row that sends a request.
   await ada.getByTestId("link-search").fill("0803 123 4567");
   await expect(ada.getByTestId("link-blind")).toContainText("Send a link request to 0803…4567");
+  // A word that names no business found, though it could be an address, is
+  // not offered as a request: it says nothing was found.
+  await ada.getByTestId("link-search").fill("zzqx");
+  await expect(ada.getByTestId("link-results")).toContainText("No business found for “zzqx”");
+  await expect(ada.getByTestId("link-blind")).toHaveCount(0);
   await ada.getByTestId("link-search").fill("");
 
   // Dangote accepts.
@@ -93,8 +101,8 @@ test("two businesses find each other and link", async ({ browser }) => {
   await ada.goto("/settings/links");
   const row = ada.getByTestId("link-row").filter({ hasText: dangoteName });
   await expect(row).toHaveAttribute("data-state", "active");
-  ada.once("dialog", (d) => void d.accept());
   await row.getByRole("button", { name: `End link ${dangoteName}` }).click();
+  await ada.getByTestId("confirm-ok").click(); // the app's own confirmation
   await expect(row).toHaveAttribute("data-state", "ended");
   await axeBoth(ada, "/settings/links, a link ended");
 });
@@ -114,7 +122,7 @@ test("a link code opens a request to a business that is not found by search", as
   const stranger = await (await browser.newContext()).newPage();
   await stranger.goto(path);
   await expect(stranger.getByRole("heading", { name: "Link with a business on Taskiem" })).toBeVisible();
-  await expect(stranger.getByRole("link", { name: "Sign up your business" })).toBeVisible();
+  await expect(stranger.getByRole("link", { name: "Start your business on Taskiem" })).toBeVisible();
   await axeBoth(stranger, "a link code, signed out");
 
   // Signed in, it names the business and asks.

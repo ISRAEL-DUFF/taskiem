@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
+	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/plain"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -64,7 +65,7 @@ func (s *Server) RunWhatsApp(ctx context.Context) error {
 // bound number who have not had them, and how runs started from WhatsApp
 // ended.
 func (s *Server) WhatsAppTick(ctx context.Context) error {
-	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_wa_tenants() UNION SELECT tenant_id FROM taskiem_tg_tenants() UNION SELECT tenant_id FROM taskiem_slack_tenants()`)
+	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_wa_tenants() UNION SELECT tenant_id FROM taskiem_tg_tenants() UNION SELECT tenant_id FROM taskiem_slack_tenants() UNION SELECT tenant_id FROM taskiem_web_watch_tenants() UNION SELECT tenant_id FROM taskiem_customer_tool_tenants()`)
 	if err != nil {
 		return err
 	}
@@ -86,6 +87,10 @@ func (s *Server) WhatsAppTick(ctx context.Context) error {
 	if err := s.dormantSweep(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("dormant bindings: %w", err))
 	}
+	// Saved uploads never claimed, a day on (saved_files.go).
+	if err := s.purgeSavedUploads(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("saved uploads: %w", err))
+	}
 	// Slack installs no business took (slack_install.go).
 	if err := s.slackInstallSweep(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("slack installs: %w", err))
@@ -99,6 +104,10 @@ func (s *Server) WhatsAppTick(ctx context.Context) error {
 		}
 		if err := s.waNotifyRuns(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: runs: %w", t, err))
+		}
+		// Customers' answers on the business's own number (made tools T5).
+		if err := s.customerToolsNotify(ctx, t); err != nil {
+			errs = append(errs, fmt.Errorf("tenant %s: customers' answers: %w", t, err))
 		}
 		if err := s.waDrainOutbox(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: outbox: %w", t, err))
@@ -153,19 +162,30 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 			  SELECT o.run_id, o.step_id, o.level, o.role, o.forbid_self, o.distinct_ap, o.forbid_sole, m.user_id FROM open o
 			    JOIN memberships m ON o.role IS NULL OR m.role IN (o.role, 'owner')
 			  UNION
+			  -- The shop's own order steps go to those who work the orders
+			  -- too (order.handle: a cashier), by a built-in or own role.
+			  SELECT o.run_id, o.step_id, o.level, o.role, o.forbid_self, o.distinct_ap, o.forbid_sole, m.user_id FROM open o
+			    JOIN runs ro ON ro.id = o.run_id
+			    JOIN memberships m ON true LEFT JOIN roles rr ON rr.tenant_id = m.tenant_id AND rr.name = m.role
+			   WHERE `+fmt.Sprintf(shopOrderStep, "ro", "o")+`
+			     AND ((rr.name IS NULL AND m.role = ANY ($2)) OR rr.permissions && ARRAY['order.handle', 'storefront.manage'])
+			  UNION
 			  SELECT o.run_id, o.step_id, o.level, o.role, o.forbid_self, o.distinct_ap, o.forbid_sole, g.to_user FROM open o JOIN delegations g ON o.role = ANY (g.roles)
 			     AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
 			     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (o.role, 'owner')))
 			SELECT DISTINCT c.run_id, c.step_id, c.level, c.user_id, c.role FROM cand c
 			  JOIN runs r ON r.id = c.run_id JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
 			 WHERE NOT EXISTS (SELECT 1 FROM whatsapp_notices n WHERE n.run_id = c.run_id AND n.step_id = c.step_id AND n.level = c.level AND n.user_id = c.user_id
-			                     AND n.channel = $1)
+			                     AND n.channel = $1
+			                     -- Set aside as not able to decide it: looked at again
+			                     -- after an hour (a role given since).
+			                     AND (n.error IS DISTINCT FROM 'may_not_decide' OR n.sent_at > now() - interval '1 hour'))
 			   AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = c.run_id AND d.step_id = c.step_id
 			                     AND (d.level = c.level OR c.distinct_ap) AND (d.user_id = c.user_id OR d.on_behalf_of = c.user_id))
 			   AND NOT (c.forbid_self AND c.user_id::text IN (COALESCE(taskiem_actor_human(r.started_by), ''),
 			                COALESCE(taskiem_actor_human(wv.created_by), ''), COALESCE(taskiem_actor_human(wv.published_by::text), ''))
 			            AND (c.forbid_sole OR NOT taskiem_sole_approver(c.role, c.user_id)))
-			 LIMIT 200`, channel)
+			 LIMIT 200`, channel, holdingAll(PermOrders))
 		if err != nil {
 			return err
 		}
@@ -179,6 +199,13 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 		users := make([]uuid.UUID, 0, len(targets))
 		for _, t := range targets {
 			users = append(users, t.user)
+		}
+		// The bell: every approver has one.
+		if channel == "bell" {
+			for i := range targets {
+				targets[i].channel = channel
+			}
+			return nil
 		}
 		addrs, err := chatAddrsTx(ctx, tx, channel, users)
 		if err != nil {
@@ -206,6 +233,19 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 			allowed[t.user] = p
 		}
 		if p == nil || !p.mayDecide(t.role) {
+			// In the bell, one who may not decide it is set aside once, so
+			// the same candidates do not fill every look (and crowd out
+			// those after them).
+			if t.channel == "bell" {
+				if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+					_, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel, error) VALUES ($1, $2, $3, $4, $5, 'bell', 'may_not_decide')
+						ON CONFLICT (run_id, step_id, level, user_id, channel) DO UPDATE SET sent_at = now() WHERE whatsapp_notices.error = 'may_not_decide'`,
+						tenant, t.run, t.step, t.level, t.user)
+					return err
+				}); err != nil {
+					errs = append(errs, err)
+				}
+			}
 			continue
 		}
 		if err := s.waQueueApproval(ctx, tenant, t); err != nil {
@@ -215,14 +255,68 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 	return errors.Join(errs...)
 }
 
+// approvalBellEvery is how often the bell looks for approvals waiting.
+const approvalBellEvery = 15 * time.Second
+
+// RunApprovalBell tells approvers in the bell of an approval waiting for them
+// (once each, per level), whether or not a chat app is set up: the bell item
+// is what pushes it to their phone and browser (docs/spec/mobile-app-m4.md N2).
+func (s *Server) RunApprovalBell(ctx context.Context) {
+	tick := time.NewTicker(approvalBellEvery)
+	defer tick.Stop()
+	for {
+		if err := s.ApprovalBellTick(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Warn("approvals: the bell", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
+}
+
+// ApprovalBellTick tells, in the bell, each approver who has not been told of
+// an approval waiting for them.
+func (s *Server) ApprovalBellTick(ctx context.Context) error {
+	rows, err := s.Store.Pool.Query(ctx, `SELECT taskiem_approval_tenants()`)
+	if err != nil {
+		return err
+	}
+	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, t := range tenants {
+		if err := s.notifyApprovalsOn(ctx, t, "bell"); err != nil {
+			errs = append(errs, fmt.Errorf("tenant %s: %w", t, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // waQueueApproval queues an approval request for an approver once: the
 // outbox sends it, and retries it if sending fails.
 func (s *Server) waQueueApproval(ctx context.Context, tenant uuid.UUID, t approvalTarget) error {
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+		// A row that only set this person aside (they may decide it now) is
+		// taken over; any other means another notifier has it.
+		tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel) VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (run_id, step_id, level, user_id, channel) DO UPDATE SET error = NULL, sent_at = now() WHERE whatsapp_notices.error = 'may_not_decide'`,
 			tenant, t.run, t.step, t.level, t.user, t.channel)
 		if err != nil || tag.RowsAffected() == 0 {
 			return err // another notifier has it
+		}
+		if t.channel == "bell" {
+			// In the bell, which also pushes it (migration 00446).
+			var name string
+			if err := tx.QueryRow(ctx, `SELECT w.name FROM runs r JOIN workflows w ON w.id = r.workflow_id WHERE r.id = $1`, t.run).Scan(&name); err != nil {
+				return err
+			}
+			return notices.AddTx(ctx, tx, tenant, []uuid.UUID{t.user}, notices.Notice{Kind: notices.Setup, Level: notices.Warning,
+				Title: "Approval waiting: " + name, Body: "Open it to approve or decline.", Link: "/approvals",
+				Group: fmt.Sprintf("approval:%s:%s:%d", t.run, t.step, t.level)})
 		}
 		run, step, level := t.run, t.step, t.level
 		_, err = whatsapp.Enqueue(ctx, tx, whatsapp.OutboxItem{Tenant: tenant, Channel: t.channel, Kind: whatsapp.OutboxApproval, User: t.user, Run: &run, Step: &step, Level: &level},
@@ -236,12 +330,37 @@ func (s *Server) waQueueApproval(ctx context.Context, tenant uuid.UUID, t approv
 // message and retried with backoff (whatsapp.FinishOutbox), never
 // returned: only database errors are.
 func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
-	items, err := whatsapp.ClaimOutbox(ctx, s.Store.Pool, tenant, 50, nil)
-	if err != nil {
-		return err
+	// Small batches, so one is done well inside its lease, and a few of
+	// them a tick.
+	var errs []error
+	for range 5 {
+		items, err := whatsapp.ClaimOutbox(ctx, s.Store.Pool, tenant, whatsapp.OutboxBatch, nil)
+		if err != nil {
+			return errors.Join(append(errs, err)...)
+		}
+		errs = append(errs, s.waSendOutbox(ctx, tenant, items)...)
+		if len(items) < whatsapp.OutboxBatch {
+			break
+		}
 	}
+	return errors.Join(errs...)
+}
+
+// waSendOutbox sends claimed items one after another, each only while it
+// is still this sender's: the lease is checked and taken afresh before
+// every send, so an item another notifier claimed meanwhile (a slow batch
+// outlasting its lease) is left to it and never sent twice.
+func (s *Server) waSendOutbox(ctx context.Context, tenant uuid.UUID, items []whatsapp.OutboxItem) []error {
 	var errs []error
 	for _, it := range items {
+		held, err := whatsapp.HoldOutbox(ctx, s.Store.Pool, it)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if !held {
+			continue
+		}
 		var sendErr error
 		switch it.Kind {
 		case whatsapp.OutboxApproval:
@@ -272,6 +391,8 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 			sendErr = s.sendSalesEveningItem(ctx, it)
 		case stock.OutboxSupplier:
 			sendErr = s.sendSupplierItem(ctx, it)
+		case outboxPayment, outboxPaymentBatch:
+			sendErr = s.sendPayResultItem(ctx, it)
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}
@@ -282,7 +403,7 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 			errs = append(errs, err)
 		}
 	}
-	return errors.Join(errs...)
+	return errs
 }
 
 // waSendApprovalItem sends a queued approval request, with fresh decision
@@ -313,7 +434,7 @@ func (s *Server) waSendApprovalItem(ctx context.Context, it whatsapp.OutboxItem)
 		return err
 	}
 	t := approvalTarget{run: *it.Run, step: *it.Step, level: *it.Level, user: it.User, channel: it.Channel, addr: addr}
-	return s.waSendApproval(ctx, tenantRef{it.Tenant, name}, t, false)
+	return s.waSendApproval(ctx, tenantRef{ID: it.Tenant, Name: name}, t, false)
 }
 
 // waSendRunOutcome tells the person who started a run from WhatsApp how it
@@ -357,6 +478,32 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	}
 	title := tr(l, outcome, "workflow", wf, "env", env)
 	body := tr(l, "wa.outcome.body")
+	// A tool's run answers with its answer (tools_answer.go): the person
+	// who started it is the one it goes to.
+	var buttons []whatsapp.Button
+	var list *whatsapp.List
+	if status == "completed" {
+		if a, err := s.answerOf(ctx, it.Tenant, *it.Run, func(string, string) bool { return true }, chatRows); err == nil && a.Type != "outcome" {
+			if words := toolAnswerWords(l, a); words != "" {
+				title, body = words, ""
+			}
+			// A card's buttons as the chat's reply buttons (tools_buttons.go).
+			buttons = chatButtons(a.Buttons)
+			// A list's rows with their buttons (tools_rows.go): on WhatsApp a
+			// list message, a row chosen offers its buttons; elsewhere a
+			// button for each row's action.
+			if rowsPressable(a) {
+				if ch.Name() == "whatsapp" {
+					title, list = answerListHead(l, a), answerList(l, *it.Run, a)
+					if title == "" {
+						title = wf // a list message has words over it
+					}
+				} else {
+					buttons = rowButtons(a)
+				}
+			}
+		}
+	}
 	// Why, in plain words: the step that failed (N5).
 	if status == "failed" {
 		if why := s.runFailureText(ctx, it.Tenant, *it.Run); why != "" {
@@ -365,6 +512,7 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	}
 	m := whatsapp.AlertMessage(name, kind, title, body, link, map[string]any{"workflow": wf, "environment": env})
 	m.Tenant = it.Tenant
+	m.Buttons, m.List = buttons, list
 	if ch.OwnTenant() != uuid.Nil {
 		m.Text = strings.TrimPrefix(m.Text, "["+name+"] ")
 	}
@@ -695,7 +843,7 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Principal, cl whatsapp.Claims, stepUp, via string) error {
 	say := func(text string) error { return s.waSay(ctx, c.ch, c.addr, tenant.Name, text) }
 	ref := runtime.RunRef{ID: cl.Run, TenantID: tenant.ID}
-	res, err := s.Store.VoteApproval(ctx, ref, cl.Step, runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: c.ch.Name(), StepUp: stepUp,
+	res, err := s.Store.VoteApproval(ctx, ref, cl.Step, runtime.Vote{UserID: p.UserID, Roles: s.orderVoteRoles(ctx, p, ref.ID, cl.Step), Decision: cl.Decision, Channel: c.ch.Name(), StepUp: stepUp,
 		Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
 			return waAudit(ctx, tx, c.ch.Name(), p, "approval.decide", cl.Run.String()+"/"+cl.Step, voteDetail(map[string]any{"decision": cl.Decision, "result": res.Status,
 				"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "via": via}, res))
@@ -881,6 +1029,14 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	cl := row.claims
+	// Eligibility first: a refused vote does not use up the code or challenge.
+	if req.TOTP != "" || req.Passkey != nil {
+		if err := s.Store.CheckVote(r.Context(), runtime.RunRef{ID: cl.Run, TenantID: p.TenantID}, cl.Step,
+			runtime.Vote{UserID: p.UserID, Roles: s.orderVoteRoles(r.Context(), p, cl.Run, cl.Step), Decision: cl.Decision, Channel: row.channel}); err != nil {
+			s.voteRefused(w, r, err)
+			return
+		}
+	}
 	// A passkey must have been asked for this decision on this approval.
 	stepUp, ok := s.checkStepUp(w, r, stepUpProof{TOTP: req.TOTP, Passkey: req.Passkey}, approvalScope(cl.Run, cl.Step, cl.Decision))
 	if !ok {
@@ -891,7 +1047,7 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := s.Store.VoteApproval(r.Context(), runtime.RunRef{ID: cl.Run, TenantID: p.TenantID}, cl.Step,
-		runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: row.channel, IP: clientIP(r), StepUp: stepUp,
+		runtime.Vote{UserID: p.UserID, Roles: s.orderVoteRoles(r.Context(), p, cl.Run, cl.Step), Decision: cl.Decision, Channel: row.channel, IP: clientIP(r), StepUp: stepUp,
 			Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
 				return auditTx(r, tx, "approval.decide", cl.Run.String()+"/"+cl.Step, voteDetail(map[string]any{"decision": cl.Decision, "result": res.Status,
 					"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "channel": row.channel, "via": "handoff"}, res))

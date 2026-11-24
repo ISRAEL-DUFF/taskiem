@@ -597,3 +597,79 @@ func metricValue(m prometheus.Metric) float64 {
 	}
 	return out.Counter.GetValue()
 }
+
+// Linked businesses turned off: the stream carries none of their
+// conversations (no replay, no reaction, no typing), as the area's routes
+// refuse them, while the person's conversation with Taskiem still comes;
+// turned back on, they come again (finding F79).
+func TestChatStreamRespectsLinksArea(t *testing.T) {
+	w := newWAWorld(t)
+	seller, buyer, _, _ := linkedPair(t, w)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	before := strconv.FormatInt(time.Now().UnixMicro(), 10)
+	mb := buyer.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Do you have rice?"})["message"].(map[string]any)
+	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Yes, 40 bags"})
+	buyer.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]any{"links": false}, "confirm": true})
+
+	// A reconnect from before: nothing of the conversation is replayed,
+	// but the Taskiem conversation still comes.
+	replay, closeReplay := chatStream(t, buyer, before)
+	defer closeReplay()
+	if next(replay, "ready", 3*time.Second, nil) == nil {
+		t.Fatal("no ready event")
+	}
+	buyer.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "status"})
+	taskiem := false
+	deadline := time.After(4 * time.Second)
+replayed:
+	for {
+		select {
+		case e, open := <-replay:
+			if !open {
+				break replayed
+			}
+			taskiem = taskiem || e.Event == "taskiem"
+			if e.Event == "message" {
+				t.Errorf("a linked business's message replayed with Links off: %v", e.Data)
+			}
+		case <-deadline:
+			break replayed
+		}
+	}
+	if !taskiem {
+		t.Error("the Taskiem conversation stopped coming")
+	}
+	closeReplay()
+
+	// Live: the other side's reaction and typing do not come either.
+	live, closeLive := chatStream(t, buyer, "")
+	defer closeLive()
+	next(live, "ready", 3*time.Second, nil)
+	seller.do("PUT", "/v1/link-chats/"+link+"/messages/"+mb["id"].(string)+"/reaction", map[string]any{"emoji": "👍"})
+	seller.do("POST", "/v1/link-chats/"+link+"/typing", nil)
+	deadline = time.After(4 * time.Second)
+watch:
+	for {
+		select {
+		case e, open := <-live:
+			if !open {
+				break watch
+			}
+			switch {
+			case e.Event == "message", e.Event == "conversation", e.Event == "gone":
+				t.Errorf("a linked business's %s with Links off: %v", e.Event, e.Data)
+			case e.Event == "typing" && len(e.Data["typing"].([]any)) > 0:
+				t.Errorf("typing with Links off: %v", e.Data)
+			}
+		case <-deadline:
+			break watch
+		}
+	}
+
+	// Back on: the conversation comes again.
+	buyer.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]any{"links": true}})
+	m := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Back"})["message"].(map[string]any)
+	if next(live, "message", 5*time.Second, func(e streamEvent) bool { return e.Data["message"].(map[string]any)["id"] == m["id"] }) == nil {
+		t.Error("with Links back on, a new message did not come")
+	}
+}

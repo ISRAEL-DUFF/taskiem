@@ -15,7 +15,7 @@ import (
 )
 
 // What a customer writes to a business's WhatsApp number or Telegram bot,
-// and who they are, is sealed in the run's history (decision 0062, P1),
+// and who they are, is sealed in the run's history (decision 0074, P1),
 // while the run's steps still read it.
 func TestCustomerMessagesAreSealed(t *testing.T) {
 	w := newWorld(t)

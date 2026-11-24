@@ -169,3 +169,106 @@ func cloneTaint(t pii.Taint) pii.Taint {
 	}
 	return c
 }
+
+// taintCache keeps, per run, the personal values its history holds (the
+// taint a task's output is sealed and its errors masked against), up to
+// the last event read. A task reads only the events after it, rather than
+// opening the whole history again each time (a foreach of n items would
+// open n squared values). Unlike decideCache, entries are shared by the
+// tasks of a run running at once: a task copies the taint and puts back
+// what it read past it.
+type taintCache struct {
+	mu   sync.Mutex
+	runs map[uuid.UUID]*runTaint
+	tick uint64
+}
+
+type runTaint struct {
+	erasedAt *time.Time
+	last     history.Event // the last event read, as stored (sealed)
+	taint    pii.Taint
+	used     uint64
+}
+
+func (c *taintCache) get(run uuid.UUID) (runTaint, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	t, ok := c.runs[run]
+	if !ok {
+		return runTaint{}, false
+	}
+	c.tick++
+	t.used = c.tick
+	out := *t
+	out.taint = cloneTaint(t.taint)
+	return out, true
+}
+
+// put keeps t unless the cache already holds the run read further.
+func (c *taintCache) put(run uuid.UUID, t runTaint) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.runs == nil {
+		c.runs = map[uuid.UUID]*runTaint{}
+	}
+	if old, ok := c.runs[run]; ok && old.last.Seq > t.last.Seq && sameTime(old.erasedAt, t.erasedAt) {
+		return
+	}
+	if _, ok := c.runs[run]; !ok && len(c.runs) >= decideCacheSize {
+		var oldest uuid.UUID
+		var min uint64
+		for id, e := range c.runs {
+			if min == 0 || e.used < min {
+				oldest, min = id, e.used
+			}
+		}
+		delete(c.runs, oldest)
+	}
+	c.tick++
+	t.used = c.tick
+	t.taint = cloneTaint(t.taint)
+	c.runs[run] = &t
+}
+
+// runTaint returns the personal values a run's history holds: from the
+// cache and the events after it when the cached last event is still there
+// (and no one was erased since), from the whole history otherwise. The
+// caller owns the returned taint.
+func (s *Store) runTaint(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID) (pii.Taint, error) {
+	if s.PII == nil {
+		return pii.Taint{}, nil
+	}
+	erased, err := latestErasure(ctx, tx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	var raw []history.Event
+	t, ok := s.taints.get(run)
+	if ok && sameTime(t.erasedAt, erased) {
+		if raw, err = HistoryAfter(ctx, tx, run, t.last.Seq-1); err != nil {
+			return nil, err
+		}
+		if len(raw) == 0 || !sameEvent(raw[0], t.last) {
+			ok = false // read from a history purged and restarted: read it all
+		} else {
+			raw = raw[1:]
+		}
+	} else {
+		ok = false
+	}
+	if !ok {
+		if raw, err = History(ctx, tx, run); err != nil {
+			return nil, err
+		}
+		t = runTaint{taint: pii.Taint{}}
+	}
+	if _, t.taint, err = s.openHistoryInto(ctx, tx, tenant, raw, t.taint); err != nil {
+		return nil, err
+	}
+	if len(raw) > 0 {
+		t.last = raw[len(raw)-1]
+	}
+	t.erasedAt = erased
+	s.taints.put(run, t)
+	return t.taint, nil
+}

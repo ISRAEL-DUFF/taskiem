@@ -22,20 +22,28 @@ export interface GroupRow {
   title: string;
   hint: string;
   chat: Choice;
-  email: Choice;
+  /** null: the group is never sent by email. */
+  email: Choice | null;
 }
 
 interface Known {
   title: string;
   hint: string;
   chat?: Choice;
-  email?: Choice;
+  email?: Choice | null;
 }
 
 const KNOWN: Record<string, Known> = {
   failures: { title: "Failed runs", hint: "A run failed, or needs a person to check something. Owners, whoever started it and whoever published it." },
   setup: { title: "Setup problems", hint: "Something Taskiem needs you to fix: a domain, a connection, your data tables. Owners." },
   finished: { title: "Your runs that finish", hint: "A run you started yourself finished." },
+  // Chat tools' diary lines (docs/spec/chat-tools.md §4); never by email.
+  changes: {
+    title: "Changes you make",
+    hint: "A price, stock, a service or an order you change, told on your WhatsApp or Telegram with chat tools on. Changes made together come as one message.",
+    chat: { label: "Changes you make (chat)", caption: "On your chat" },
+    email: null,
+  },
   // Listed only for people who can see invoices (docs/money-reports.md).
   money: {
     title: "Money summaries",
@@ -63,7 +71,7 @@ export function groupRows(settings: readonly NotificationSetting[] | undefined):
         title,
         hint: k?.hint ?? "",
         chat: k?.chat ?? { label: `${title} on WhatsApp or Telegram` },
-        email: k?.email ?? { label: `${title} by email` },
+        email: k?.email === null ? null : (k?.email ?? { label: `${title} by email` }),
       };
     });
 }

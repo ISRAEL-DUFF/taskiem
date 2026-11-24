@@ -1,6 +1,6 @@
 # Keeping a customer assistant safe
 
-A business's assistant answers its customers on the business's own WhatsApp number or Telegram bot ([decision 0062](decisions/0062-customer-assistant.md), [plan V6](spec/voice-assistant.md#v6-guard-rails-for-customers)). Customers are not members: they can write anything, as often as they like, in any language, and some will try to talk the model into things. This page is what keeps that safe for them and for the business:
+A business's assistant answers its customers on the business's own WhatsApp number or Telegram bot ([decision 0074](decisions/0074-customer-assistant.md), [plan V6](spec/voice-assistant.md#v6-guard-rails-for-customers)). Customers are not members: they can write anything, as often as they like, in any language, and some will try to talk the model into things. This page is what keeps that safe for them and for the business:
 - **the customer guard**, which runs when a message arrives, before a run can start;
 - **`assistant@1`**, the actions a workflow uses: checking a reply before it is sent, handing a customer to a person, and WhatsApp's 24-hour window;
 - **the switches**: the owner's pause, and Taskiem's own.
@@ -134,7 +134,7 @@ The owners are told when this month's allowance for AI steps or for voice (secon
 
 ## For operators
 
-- **Storage.** The guard keeps `assistant_decisions` (each message's decision for three days, no personal data), `assistant_contacts` (one row per customer per channel, keyed by their subject: never the number in the clear; the sender itself sealed), `assistant_controls` (Taskiem's beta flag and stop, written only with the platform chain in scope), `tenant_channel_settings.assistant_paused_at`, `triggers.guard`, and `runs.customer_subject` (migration 00320).
+- **Storage.** The guard keeps `assistant_decisions` (each message's decision for three days, no personal data), `assistant_contacts` (one row per customer per channel, keyed by their subject: never the number in the clear; the sender itself sealed), `assistant_controls` (Taskiem's beta flag and stop, written only with the platform chain in scope), `tenant_channel_settings.assistant_paused_at`, `triggers.guard`, and `runs.customer_subject` (migration 00598).
 - **Not read yet.** Telegram Business messages (a bot connected to a business account: `business_message`), presses of inline buttons (`callback_query`), and a customer blocking the bot (`my_chat_member` kicked, which is not taken as STOP). A Meta delivery without the sender's number (usernames) is not read as a customer's message.
 - **The queue cap** is a soft one: deliveries for different customers at the same moment can each pass it.
 
@@ -146,7 +146,7 @@ Each run claims the messages it answers, under a lock, so two runs never answer 
 
 ## The WhatsApp number's quality
 
-Meta rates how a business number's customers receive its messages (green, yellow, red) and lowers its daily limit, or restricts it, when they block or report it (C23). Every six hours Taskiem reads each WhatsApp number an assistant answers on (`whatsapp@1 get_phone_number`: `quality_rating`, `messaging_limit_tier`, `status`), keeps what it read (`whatsapp_number_health`, migration 00323), and tells the owners (`whatsapp_quality`) when it gets worse, with what helps it recover: a lower rating, a lower limit, or a worse status (flagged, rate limited, restricted, disconnected, banned, deleted, in that order). A number read before that can no longer be read (banned, or the token revoked) is told too. Each state is told once a day, in prod only; a number read in the last five hours is not read again.
+Meta rates how a business number's customers receive its messages (green, yellow, red) and lowers its daily limit, or restricts it, when they block or report it (C23). Every six hours Taskiem reads each WhatsApp number an assistant answers on (`whatsapp@1 get_phone_number`: `quality_rating`, `messaging_limit_tier`, `status`), keeps what it read (`whatsapp_number_health`, migration 00601), and tells the owners (`whatsapp_quality`) when it gets worse, with what helps it recover: a lower rating, a lower limit, or a worse status (flagged, rate limited, restricted, disconnected, banned, deleted, in that order). A number read before that can no longer be read (banned, or the token revoked) is told too. Each state is told once a day, in prod only; a number read in the last five hours is not read again.
 
 ## Not yet
 

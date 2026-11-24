@@ -158,7 +158,7 @@ No Xenibase auth and no new account system: members use Taskiem's own sign-in, o
 - **Images:** metadata (including location) is removed. Large photos are scaled down to 2,000 pixels.
 - **In the run:** a file field's value is a reference: `{id, name, type, size, sha256}`. Steps read the content through a platform action that issues a short-lived signed URL. Contents never go into run history, logs or AI prompts.
 - **People** see and download files from the run or the submission in the app, with `pii.read`, and each download is audited.
-- **Retention:** files are deleted with the run's data, by the workflow's retention.
+- **Retention:** files are deleted with the run's data, by the workflow's retention: purging the run deletes its submissions and their files, and the api then removes the files from storage. A submission that starts no run (refused, or held back at a plan limit) is kept as long as its run would have been, counted from when it was refused or held, then deleted with its files; files stored for a submission that is then refused are removed at once.
 
 ### 6.6 After submitting
 
@@ -166,7 +166,7 @@ No Xenibase auth and no new account system: members use Taskiem's own sign-in, o
 | --- | --- |
 | `message` (default) | A thank-you message (Markdown, no links outside the organisation's verified domains) and the reference |
 | `redirect` | A redirect to a URL on one of the organisation's verified domains. Never anywhere else, so a form cannot become an open redirect |
-| `result` | The run's answer: the page waits up to 30 seconds for a `respond` step (the synchronous mode of spec 8.2) and shows its message, then falls back to the thank-you message and a status link |
+| `result` | The run's answer: the page waits up to 30 seconds for a `respond` step (the synchronous mode of spec 8.2) and shows its message, then falls back to the thank-you message and a status link. A form's result page shows only a submission sent to that form; another form's reference answers as not found |
 
 - **The status link** (optional, `after.status: true`): an unguessable link to a page that shows the latest message the workflow has set with `respond` ("Your application is with our credit team"). It never shows the run's steps or data.
 - **A copy for the respondent** (optional): an email of their answers to a verified email address, without files and with sensitive fields masked.
@@ -223,8 +223,8 @@ The same form can be filled in from WhatsApp (as a Flow) or Telegram (one questi
 
 ### 7.3 Abuse
 
-- **Rate limits:** per form and per IP hash (default 50 submissions an hour per IP for a public form, generous because mobile networks share IPs; see [storefronts 7.5](storefronts.md#75-abuse-of-forms)), and the organisation's ingest limits.
-- **Bots:** a hidden honeypot field, a minimum time to fill in, and a light proof-of-work in the page's script. A form under attack falls back to requiring the code (`verify`) for a while. No third-party captcha, which would be a new data processor.
+- **Rate limits:** per form and per IP hash (default 50 submissions an hour per IP for a public form, generous because mobile networks share IPs; see [storefronts 7.5](storefronts.md#75-abuse-of-forms)), and the organisation's ingest limits. Per form, every address together: 500 submissions an hour after a burst of 100, per public host process; a form over it answers "This form is busy", the public host logs a warning naming the tenant and form and counts it (`taskiem_form_limit_trips_total`, which raises the operators' `TaskiemFormUnderAttack`), and the form is guarded: recorded once a minute at most (`form_endpoints.guarded_until`, an hour after the last trip), and its business's owners are alerted once per guard (`form.guarded`, in the app, on their alert channels and on their linked chat).
+- **Bots:** a hidden honeypot field, a minimum time to fill in, and a light proof-of-work in the page's script. A form under attack (guarded, above) falls back to requiring a phone code (`verify`) for the hour; a form that already asks for one, or is for members or by link, is unchanged. No third-party captcha, which would be a new data processor.
 - **Size:** a submission is at most 256 KB without files.
 - **Plan limits:** submissions count as runs. Beyond the plan, the form shows its closed message and the organisation is alerted.
 
@@ -292,8 +292,8 @@ What is new: the `form` trigger and step, the form host, uploads with scanning, 
 - **Every form shows** who receives the answers (the organisation by name), the purpose (the form's description), and a link to the organisation's privacy notice, or one Taskiem generates from its details.
 - **The organisation is the controller**; Taskiem is its processor, as for any run.
 - **Fields marked `x-pii`** are sealed when received, and masked in the app, logs and AI. The detector also catches unmarked personal data in text fields.
-- **Erasure** of a respondent's data uses the existing erase-by-subject function, which now covers submissions and files.
-- **Retention** is the workflow's. Unfinished multi-page sessions are deleted after 24 hours.
+- **Erasure** of a respondent's data uses the existing erase-by-subject function, which now covers submissions and files: erasing a subject deletes every submission whose answers or respondent hold it, with its files (their bytes are removed from storage shortly after, as files are not sealed).
+- **Retention** is the workflow's, for submissions with or without a run. Unfinished multi-page sessions are deleted after 24 hours.
 - **The IP address** is kept only as a keyed hash, for abuse limits.
 
 ## 10. What the builder sees

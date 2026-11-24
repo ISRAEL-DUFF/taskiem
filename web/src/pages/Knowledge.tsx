@@ -14,7 +14,7 @@ import {
   useLoad,
 } from "../ui";
 
-// What your assistant knows (decision 0062 D12, docs/knowledge.md): the
+// What your assistant knows (decision 0074 D12, docs/knowledge.md): the
 // business's knowledge sources, what each gave, and the owner's approval
 // before any is used.
 

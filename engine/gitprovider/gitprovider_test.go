@@ -279,3 +279,50 @@ func keys(m map[string][]byte) []string {
 	}
 	return out
 }
+
+// TestEmptySecretVerifiesNothing: an empty stored secret refuses every
+// delivery, with or without a signature made with an empty key. An HMAC
+// with an empty key, or an empty token compared with an absent header,
+// is something anyone can produce (F56).
+func TestEmptySecretVerifiesNothing(t *testing.T) {
+	for _, h := range hosts(t) {
+		t.Run(h.name, func(t *testing.T) {
+			p, err := gitprovider.New(h.cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hdr, body := h.push("main", "abc123", "")
+			if push, err := p.VerifyPush(hdr, body, ""); !errors.Is(err, gitprovider.ErrSignature) {
+				t.Errorf("signed with an empty key: %+v %v", push, err)
+			}
+			for _, k := range []string{"X-Hub-Signature-256", "X-Hub-Signature", "X-Gitlab-Token"} {
+				hdr.Del(k)
+			}
+			if push, err := p.VerifyPush(hdr, body, ""); !errors.Is(err, gitprovider.ErrSignature) {
+				t.Errorf("unsigned: %+v %v", push, err)
+			}
+		})
+	}
+}
+
+// A push names the people behind it: the host's signed-in pusher and each
+// commit's author and committer; GitHub's own merge committer is left out.
+func TestPushNamesThePeopleBehindIt(t *testing.T) {
+	p, err := gitprovider.New(gitprovider.Config{Provider: "github", Repo: "acme/flows", Branch: "main", Auth: gitprovider.Auth{Type: "token", Token: "x"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, body := gitfake.GitHubPushBy("main", "aaa", "bbb", "s3cret", "carol@acme.test", "Bob@Acme.test")
+	push, err := p.VerifyPush(h, body, "s3cret")
+	if err != nil || push.Before != "aaa" || !push.Complete || len(push.People) != 2 {
+		t.Fatalf("push: %+v %v", push, err)
+	}
+	if push.People[0].Role != "pusher" || push.People[0].Email != "carol@acme.test" || push.People[1].Role != "author" || push.People[1].Email != "bob@acme.test" {
+		t.Errorf("people: %+v", push.People)
+	}
+	// The plain delivery names no commits: nobody is accounted for.
+	h, body = gitfake.GitHubPush("main", "bbb", "s3cret")
+	if push, err := p.VerifyPush(h, body, "s3cret"); err != nil || push.Complete || len(push.People) != 0 {
+		t.Errorf("a push without commits: %+v %v", push, err)
+	}
+}

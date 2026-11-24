@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,6 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -41,6 +43,7 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	paced := s.linkWriteLimit
 	r.Get("/chat/stream", s.chatStream)
 	r.Get("/link-chats", s.listLinkChats)
+	r.Get("/link-chats/changes", s.linkChatChanges)
 	r.Get("/link-chats/search", s.searchLinkChats)
 	r.Get("/link-chats/thread", s.linkThread)
 	r.Get("/link-chats/starred", s.starredLinkMessages)
@@ -51,6 +54,9 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/files", s.sendLinkFile)
 	r.Get("/link-chats/{link}/files/{id}", s.linkFile)
 	r.Get("/link-chats/{link}/items", s.linkChatItems)
+	r.Get("/link-chats/{link}/photo", s.linkChatPhoto)
+	r.Get("/link-chats/{link}/refs", s.linkChatRefs)
+	r.Get("/link-chats/{link}/card", s.linkChatCard)
 	r.Post("/link-chats/{link}/read", s.readLinkChat)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/typing", s.linkTyping)
 	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/forward", s.forwardLinkMessage)
@@ -109,6 +115,86 @@ func (s *Server) listLinkChats(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.fail(w, r, linkErr(err))
 		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// linkChangesBatch is the most messages one answer of changes carries.
+const linkChangesBatch = 500
+
+// linkChangesLookBack is how far behind now an answer's cursor stays: a
+// change stamped a moment before another may commit after it (the stream's
+// look-back, chat_stream.go), so it is read again next time rather than
+// missed. Read twice, a change is the same.
+const linkChangesLookBack = 10 * time.Second
+
+type linkChangesOut struct {
+	// Messages changed since (written, read, reacted to), as their pages
+	// carry them.
+	Messages []links.Message `json:"messages"`
+	// Gone are the messages deleted for this side since.
+	Gone []linkGone `json:"gone"`
+	// Until is where the next ask goes on from (?since=).
+	Until time.Time `json:"until"`
+	// More: a full batch; ask again from Until at once.
+	More bool `json:"more"`
+}
+
+type linkGone struct {
+	ID   uuid.UUID `json:"id"`
+	Link uuid.UUID `json:"link"`
+}
+
+// linkChatChanges is GET /v1/link-chats/changes?since=: what changed in the
+// conversations since a time, for a phone that kept them while it was
+// closed or offline (docs/spec/mobile-app-explore-and-offline.md K3). With
+// no since, nothing changed is listed: the answer's until is where to begin.
+func (s *Server) linkChatChanges(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	now := time.Now()
+	out := linkChangesOut{Messages: []links.Message{}, Gone: []linkGone{}, Until: now.Add(-linkChangesLookBack)}
+	v := r.URL.Query().Get("since")
+	if v == "" {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	since, err := time.Parse(time.RFC3339Nano, v)
+	if err != nil {
+		s.fail(w, r, fmt.Errorf("%w: since is a time (RFC 3339)", errBadRequest))
+		return
+	}
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		refs, err := links.ChangedRefsTx(r.Context(), tx, p.TenantID, since, linkChangesBatch)
+		if err != nil {
+			return err
+		}
+		var pairs []uuid.UUID
+		for _, c := range refs {
+			if c.Hidden {
+				out.Gone = append(out.Gone, linkGone{ID: c.Pair, Link: c.Link})
+			} else {
+				pairs = append(pairs, c.Pair)
+			}
+		}
+		if out.Messages, err = links.MessagesByPairTx(r.Context(), tx, p.TenantID, pairs); err != nil {
+			return err
+		}
+		if err := links.DecorateTx(r.Context(), tx, p.TenantID, viewerOf(p), out.Messages); err != nil {
+			return err
+		}
+		if len(refs) == linkChangesBatch {
+			// More waiting: on from the last of these.
+			out.More = true
+			out.Until = refs[len(refs)-1].At
+		}
+		return nil
+	}); err != nil {
+		s.fail(w, r, linkErr(err))
+		return
+	}
+	// Never back before where this ask began.
+	if out.Until.Before(since) {
+		out.Until = since
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -218,6 +304,70 @@ func (s *Server) linkThread(w http.ResponseWriter, r *http.Request) {
 
 type linkMessageOut struct {
 	Message links.Message `json:"message"`
+	// Also are the other businesses the message named, with chat tools on:
+	// each got it as its own message in our conversation with it.
+	Also []alsoSent `json:"also,omitempty"`
+	// Messages are what Taskiem said, for a "@Taskiem" (the message is then
+	// the note it left in this conversation).
+	Messages []TaskiemMessage `json:"messages,omitempty"`
+}
+
+// taskiemNote keeps what Taskiem answered a "@Taskiem" in a conversation
+// with a linked business, as a note on this side only.
+func (s *Server) taskiemNote(ctx context.Context, p *Principal, link uuid.UUID, asked string, said []TaskiemMessage, client *uuid.UUID) (links.Message, error) {
+	var note links.Message
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		if _, err := links.GetTx(ctx, tx, link); err != nil {
+			return err
+		}
+		var name string
+		if err := tx.QueryRow(ctx, `SELECT name FROM users WHERE id = $1`, p.UserID).Scan(&name); err != nil {
+			return err
+		}
+		var err error
+		note, err = links.TaskiemNoteTx(ctx, tx, p.TenantID, link, asked, taskiemAnswerWords(said), links.Sender{ID: p.Actor(), FirstName: firstWord(name)}, client)
+		return err
+	})
+	return note, err
+}
+
+// taskiemAnswerWords is what Taskiem said, as plain words for a note: its
+// lines, *bold* marks off; a menu as its line and where to pick from it.
+func taskiemAnswerWords(said []TaskiemMessage) string {
+	var out []string
+	menu := false
+	for _, m := range said {
+		if m.Inbound {
+			continue
+		}
+		switch m.Kind {
+		case "text", "diary":
+			if w := strings.TrimSpace(strings.ReplaceAll(m.Text, "*", "")); w != "" {
+				out = append(out, w)
+			}
+		case "menu":
+			var mm chatMenuMsg
+			if json.Unmarshal([]byte(m.Text), &mm) == nil && strings.TrimSpace(mm.Line) != "" {
+				out = append(out, strings.TrimSpace(strings.ReplaceAll(mm.Line, "*", "")))
+			}
+			menu = true
+		}
+	}
+	if menu {
+		out = append(out, "Pick what to do in your Taskiem chat.")
+	}
+	if len(out) == 0 {
+		return "Taskiem answered in your Taskiem chat."
+	}
+	return strings.Join(out, "\n")
+}
+
+// alsoSent is how a copy to another business named in a message went.
+type alsoSent struct {
+	Link   uuid.UUID `json:"link"`
+	Name   string    `json:"name"`
+	Sent   bool      `json:"sent"`
+	Reason string    `json:"reason,omitempty"`
 }
 
 // sendLinkMessage is POST /v1/link-chats/{link}/messages: a message to a
@@ -246,6 +396,12 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	} else if m != nil {
+		// A "@Taskiem" sent again (the first answer was lost on the way):
+		// the note it left, without asking Taskiem a second time.
+		if m.Kind == links.KindTaskiem {
+			writeJSON(w, http.StatusOK, linkMessageOut{Message: *m})
+			return
+		}
 		if !sameSend(m, in.Text) {
 			s.fail(w, r, fmt.Errorf("%w: that client_id was used for a different message", errConflict))
 			return
@@ -256,16 +412,79 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 	if !s.allowLinkWrite(w, r) {
 		return
 	}
+	// Chat tools: "@Taskiem" is for the person's own Taskiem conversation,
+	// never the business (chat_tools.go).
+	var tools bool
+	if err := s.tx(r, func(tx pgx.Tx) (err error) {
+		tools, err = chatToolsOn(r.Context(), tx, p.TenantID)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if tools {
+		if text, tagged := cutTaskiem(in.Text); tagged {
+			if p.UserID == uuid.Nil {
+				s.fail(w, r, errForbidden)
+				return
+			}
+			if !s.limiter("web-chat:"+p.UserID.String(), 3*time.Second, 20).Allow() {
+				writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
+				return
+			}
+			msgs, err := s.taskiemRun(r.Context(), p, whatsapp.Inbound{Type: "text", Text: text}, nil)
+			if err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			// Nothing went to the business: Taskiem answered in the
+			// person's own conversation with it, and the answer is kept
+			// here as a note only this side sees.
+			note, err := s.taskiemNote(r.Context(), p, link, strings.TrimSpace(in.Text), msgs, in.ClientID)
+			if errors.Is(err, links.ErrDuplicate) {
+				if first, ferr := s.sentWith(r.Context(), p, link, in.ClientID); ferr == nil && first != nil {
+					note, err = *first, nil
+				}
+			}
+			if err != nil {
+				s.fail(w, r, linkMessageErr(err))
+				return
+			}
+			writeJSON(w, http.StatusCreated, linkMessageOut{Message: note, Messages: msgs})
+			return
+		}
+	}
 	var ments []links.Mention
-	if len(in.Mentions) > 0 {
+	// The shares saved things make, recorded once the message is sent.
+	var shares []*savedShareRecord
+	// Saved things shared (S1 part 3) apart: asked first before what is
+	// sensitive, each share recorded.
+	others := slices.DeleteFunc(slices.Clone(in.Mentions), func(m mentionRef) bool { return m.Kind == "saved" })
+	if len(others) > 0 {
 		if err := s.tx(r, func(tx pgx.Tx) error {
 			var err error
-			ments, err = checkMentions(r.Context(), tx, p.TenantID, link, in.Text, in.Mentions)
+			ments, err = checkMentions(r.Context(), tx, p, link, in.Text, others)
 			return err
 		}); err != nil {
 			s.fail(w, r, linkMessageErr(err))
 			return
 		}
+	}
+	if len(others) < len(in.Mentions) {
+		var shared []links.Mention
+		shared, shares, err = s.linkSavedMentions(r, link, in.Text, in.Mentions)
+		if err != nil {
+			if !shareConfirmFail(w, err) {
+				var se customerSendErr
+				if errors.As(err, &se) {
+					writeErr(w, se.code, se.msg)
+				} else {
+					s.fail(w, r, linkMessageErr(err))
+				}
+			}
+			return
+		}
+		ments = append(ments, shared...)
 	}
 	m, err := s.sendLink(r.Context(), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo, Mentions: ments, ClientID: in.ClientID})
 	if errors.Is(err, links.ErrDuplicate) {
@@ -279,7 +498,84 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
-	writeJSON(w, http.StatusCreated, linkMessageOut{Message: m})
+	for _, rec := range shares {
+		s.recordShare(r, rec)
+	}
+	out := linkMessageOut{Message: m}
+	if tools {
+		out.Also = s.sendAlso(r.Context(), p, link, in.Text, ments)
+	}
+	writeJSON(w, http.StatusCreated, out)
+}
+
+// linkSavedMentions makes the cards of the saved things a message to a
+// linked business shares (saved objects S1, part 3): the business's own or
+// the sender's, each named in the words by its @name; the question, before
+// what is sensitive, names the other business.
+func (s *Server) linkSavedMentions(r *http.Request, link uuid.UUID, text string, refs []mentionRef) ([]links.Mention, []*savedShareRecord, error) {
+	p := principalFrom(r.Context())
+	person, err := personOf(r)
+	if err != nil {
+		return nil, nil, customerSendErr{http.StatusForbidden, "Saved things are shared by a person, not a key."}
+	}
+	var name string
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		l, err := links.GetTx(r.Context(), tx, link)
+		name = l.Name
+		return err
+	}); err != nil {
+		return nil, nil, err
+	}
+	var out []links.Mention
+	var recs []*savedShareRecord
+	seen := map[uuid.UUID]bool{}
+	for _, ref := range refs {
+		if ref.Kind != "saved" {
+			continue
+		}
+		if ref.Saved == nil {
+			return nil, nil, customerSendErr{http.StatusBadRequest, "Choose the saved thing to share."}
+		}
+		if seen[ref.Saved.ID] {
+			continue
+		}
+		seen[ref.Saved.ID] = true
+		sh := *ref.Saved
+		sh.namedIn = text // named in the words before anything is asked
+		c, rec, err := s.savedCardFor(r, person, p.TenantID, sh, name)
+		if err != nil {
+			return nil, nil, err
+		}
+		out = append(out, links.Mention{Kind: "saved", Name: c.Name, Saved: &c})
+		recs = append(recs, rec)
+	}
+	return out, recs, nil
+}
+
+// sendAlso sends a message to the other linked businesses it names, with
+// chat tools on: each its own message, in our conversation with it, the
+// same words. One failing does not stop the rest; each is answered.
+func (s *Server) sendAlso(ctx context.Context, p *Principal, link uuid.UUID, text string, ments []links.Mention) []alsoSent {
+	var out []alsoSent
+	seen := map[uuid.UUID]bool{link: true}
+	for _, m := range ments {
+		if m.Kind != "business" || seen[m.Link] {
+			continue
+		}
+		seen[m.Link] = true
+		a := alsoSent{Link: m.Link, Name: m.Name, Sent: true}
+		if _, err := s.sendLink(ctx, p, m.Link, text, links.SendOpts{}); err != nil {
+			a.Sent = false
+			if errIsAny(err, directRefusals...) {
+				a.Reason = directReason(err)
+			} else {
+				s.Logger.Error("link chat: a copy to a named business not sent", "tenant", p.TenantID, "link", m.Link, "err", err)
+				a.Reason = "it could not be sent; send it again"
+			}
+		}
+		out = append(out, a)
+	}
+	return out
 }
 
 // sameSend reports whether a repeated send says what the first did: the same
@@ -370,7 +666,7 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 	o.MaxPerDay = lim.LinkMessagesDaily
 	var m links.Message
 	var other uuid.UUID
-	var from string
+	var tenantName string
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		var name string
 		if p.UserID != uuid.Nil {
@@ -378,7 +674,7 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 				return err
 			}
 		}
-		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&from); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&tenantName); err != nil {
 			return err
 		}
 		from := links.Sender{ID: p.Actor(), FirstName: firstWord(name)}
@@ -386,13 +682,27 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 			from = *as
 		}
 		var err error
-		m, other, err = links.SendWithTx(ctx, tx, p.TenantID, link, text, from, actorOf(p), o)
-		return err
+		if m, other, err = links.SendWithTx(ctx, tx, p.TenantID, link, text, from, actorOf(p), o); err != nil {
+			return err
+		}
+		// Its push, queued in the message's own transaction (now in the
+		// receiver's scope: SendWithTx crossed to it): it is sent once this
+		// commits, and a restart loses nothing.
+		// In a savepoint: a push that cannot be queued never loses the message.
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		if err := s.pushMessageTx(ctx, sp, other, link, p.TenantID, tenantName, m); err != nil {
+			s.Logger.Warn("push: queueing a message", "tenant", other, "err", err)
+			return sp.Rollback(ctx)
+		}
+		return sp.Commit(ctx)
 	})
 	if err != nil {
 		return m, err
 	}
-	s.tellLinkMessage(ctx, other, link, from, m)
+	s.tellLinkMessage(ctx, other, link, tenantName, m)
 	return m, nil
 }
 
@@ -403,9 +713,31 @@ func firstWord(s string) string {
 	return ""
 }
 
+// linkMessageLine is a message as one line for a phone or a notification:
+// the member's name, what a file is, and the words; a reply to a document
+// begins "about INV-0001" when withRef (a push carries no references).
+func linkMessageLine(l lang.Tag, m links.Message, withRef bool) string {
+	body := m.Body
+	if a := m.Attachment; a != nil {
+		what := tr(l, "chat.link."+a.Kind)
+		if a.Kind == "file" && a.Name != "" {
+			what = a.Name
+		}
+		body = strings.TrimSpace("(" + what + ") " + body)
+	}
+	if m.SenderName != "" {
+		body = m.SenderName + ": " + body
+	}
+	if withRef && m.Reply != nil && m.Reply.Card != nil {
+		body = tr(l, "chat.link.about", "reference", m.Reply.Card.Reference) + " " + body
+	}
+	return body
+}
+
 // tellLinkMessage tells the people of the business a message went to who
 // write in its conversations, on their phones, unless it muted the
 // conversation: "[Dangote Stores] Musa: …".
+// Its push was queued with the message (pushMessageTx).
 func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from string, m links.Message) {
 	s.background(ctx, "link message", func(ctx context.Context) {
 		var muted bool
@@ -416,23 +748,10 @@ func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from s
 		}); err != nil || muted {
 			return
 		}
-		s.tellHoldersSent(ctx, to, []string{PermChatTrade}, "msg:"+m.PairID.String(), "/chat?with="+link.String(), func(l lang.Tag) (string, string) {
-			body := m.Body
-			if a := m.Attachment; a != nil {
-				what := tr(l, "chat.link."+a.Kind)
-				if a.Kind == "file" && a.Name != "" {
-					what = a.Name
-				}
-				body = strings.TrimSpace("(" + what + ") " + body)
-			}
-			if m.SenderName != "" {
-				body = m.SenderName + ": " + body
-			}
-			if m.Reply != nil && m.Reply.Card != nil {
-				body = tr(l, "chat.link.about", "reference", m.Reply.Card.Reference) + " " + body
-			}
-			return "[" + whatsapp.SafeText(from) + "]", whatsapp.SafeText(body)
-		}, nil, s.keepSent(ctx, to, link, m.PairID))
+		words := func(l lang.Tag) (string, string) {
+			return "[" + whatsapp.SafeText(from) + "]", whatsapp.SafeText(linkMessageLine(l, m, true))
+		}
+		s.tellHoldersSent(ctx, to, []string{PermChatTrade}, "msg:"+m.PairID.String(), "/chat?with="+link.String(), words, nil, s.keepSent(ctx, to, link, m.PairID))
 	})
 }
 
@@ -618,9 +937,51 @@ func (s *Server) orderCards(ctx context.Context, t links.Told) uuid.UUID {
 	if !sellerTold(t.Event) {
 		seller, buyer = t.FromTenant, t.Tenant
 	}
+	// What the order comes to now (the buyer's record of it), on both cards.
+	var amount *int64
+	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{buyer}, func(tx pgx.Tx) error {
+		x, err := stock.PurchaseTx(ctx, tx, buyer, t.Purchase, false)
+		if err != nil {
+			return err // no total: the cards go without it
+		}
+		total := x.TotalKobo
+		// A change waiting on the buyer: what it would come to.
+		if len(x.Change) > 0 {
+			total = 0
+			for _, l := range x.Change {
+				total += l.Quantity * l.CostKobo
+			}
+		}
+		if total > 0 {
+			amount = &total
+		}
+		return nil
+	})
+	// A deal (phase 7): what it is against, at the seller's own prices,
+	// and its history as it stands.
+	var was *int64
+	var sellerDeal, buyerDeal *links.DealCard
+	if amount != nil && (t.Event == "offered" || t.Event == "countered" || t.Event == "change") {
+		_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
+			o, err := links.GetOrderTx(ctx, tx, t.Order.String(), false)
+			if err != nil || !links.IsDeal(o.DealHistory) {
+				return err // a change to an order at the seller's prices is no deal
+			}
+			lines := o.Lines
+			if t.Event == "change" && len(o.Change) > 0 {
+				lines = o.Change
+			}
+			if w := dealWas(lines); w > *amount {
+				was = &w
+			}
+			sellerDeal = links.DealCardFor(o.DealHistory, o.DealUntil, "seller")
+			buyerDeal = links.DealCardFor(o.DealHistory, o.DealUntil, "buyer")
+			return nil
+		})
+	}
 	return s.postCards(ctx, t.Link,
-		cardSide{tenant: seller, mine: seller == t.FromTenant, card: links.DocCard{Doc: links.DocOrder, Event: t.Event, Reference: t.Reference, ID: t.Order.String()}},
-		cardSide{tenant: buyer, mine: buyer == t.FromTenant, card: links.DocCard{Doc: links.DocPurchase, Event: t.Event, Reference: t.Reference, ID: t.Purchase.String()}})
+		cardSide{tenant: seller, mine: seller == t.FromTenant, card: links.DocCard{Doc: links.DocOrder, Event: t.Event, Reference: t.Reference, ID: t.Order.String(), AmountKobo: amount, WasKobo: was, Deal: sellerDeal}},
+		cardSide{tenant: buyer, mine: buyer == t.FromTenant, card: links.DocCard{Doc: links.DocPurchase, Event: t.Event, Reference: t.Reference, ID: t.Purchase.String(), AmountKobo: amount, WasKobo: was, Deal: buyerDeal}})
 }
 
 // billCards writes a bill's event into both sides' conversations: the
@@ -645,25 +1006,19 @@ func (s *Server) waAskLinked(ctx context.Context, c *chat, rest string) (bool, e
 	}); err != nil {
 		return true, err
 	}
-	words := strings.Fields(rest)
-	// The longest run of words that names one linked business.
-	var to links.Link
-	n := 0
-	for i := len(words); i > 0 && n == 0; i-- {
-		name := strings.Join(words[:i], " ")
-		var hit []links.Link
-		for _, l := range list {
-			if l.State == links.Active && strings.HasPrefix(strings.ToLower(l.Name), strings.ToLower(name)) {
-				hit = append(hit, l)
-			}
-		}
-		if len(hit) == 1 {
-			to, n = hit[0], i
-		}
-	}
-	if n == 0 {
+	// The longest run of words that names a linked business, by the start
+	// of its name (links.Mentioned): "ask Dangote …" for Dangote Nigeria Ltd.
+	rest = strings.TrimSpace(rest)
+	hit, used := links.Mentioned(list, rest)
+	if used == 0 {
 		return false, nil
 	}
+	if len(hit) > 1 {
+		return true, c.say(ctx, s, c.t("wa.mention.which", "name", whatsapp.SafeText(string([]rune(rest)[:used])), "list", mentionChoices(c, hit)))
+	}
+	to := hit[0]
+	words := strings.Fields(string([]rune(rest)[used:]))
+	n := 0
 	if !c.p.Can(PermChatTrade) {
 		return true, c.say(ctx, s, c.t("chat.link.denied", "org", c.tenant.Name))
 	}
@@ -879,7 +1234,10 @@ func (s *Server) linkFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "private, max-age=3600")
+	// An attachment's bytes never change, but its message can be deleted:
+	// kept a day, so a deleted one does not linger in a browser's cache
+	// (the phone keeps its own copy, and wipes it with the message).
+	w.Header().Set("Cache-Control", "private, max-age=86400")
 	disp := "inline"
 	if a.Kind == "file" {
 		disp = "attachment"

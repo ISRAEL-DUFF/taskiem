@@ -2,6 +2,8 @@ package secrets
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -49,4 +51,24 @@ func (v *Vault) LegacySubjectID(ctx context.Context, tenant uuid.UUID, category 
 		return nil
 	})
 	return s, err
+}
+
+// SealRawTx seals a value as code before canonical subject ids did: under
+// the subject of the value exactly as given.
+func (v *Vault) SealRawTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (map[string]any, error) {
+	key, err := v.pseudonymKey(ctx, tx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	subject := rawSubjectIDWith(key, category, value)
+	dek, err := v.subjectKey(ctx, tx, tenant, subject, category, true)
+	if err != nil {
+		return nil, err
+	}
+	raw, _ := json.Marshal(value)
+	ct, err := seal(dek, raw, []byte(subject))
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"$pii": category, "subject": subject, "ct": base64.StdEncoding.EncodeToString(ct)}, nil
 }

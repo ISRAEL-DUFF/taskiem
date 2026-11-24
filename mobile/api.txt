@@ -1,0 +1,446 @@
+# The operations the app uses, by operationId (api/openapi/openapi.yaml).
+# tools/mobilegen writes lib/api/api.g.dart from them.
+
+# The app's config (S1)
+appConfig
+
+# Signing in and out, staying signed in (M2)
+login
+chatSigninStart
+chatSigninVerify
+passkeyLoginOptions
+passkeyLogin
+signupOptions
+signup
+me
+logout
+listDevices
+removeDevice
+listBusinesses
+switchBusiness
+# Start a business or workflows (taskiem-for-everyone §18)
+startSomething
+
+# Personal accounts: the phone way in, second proofs, changing a phone
+# (docs/spec/taskiem-for-everyone.md §5, stage 1)
+phoneStart
+phoneVerify
+phoneCreate
+secondProofEmailStart
+secondProofEmailVerify
+secondProofPin
+secondProofPassword
+secondProofPasskeyOptions
+secondProofPasskey
+phoneChangeStart
+phoneChangeVerify
+# Invitations waiting on You (taskiem-for-everyone §7)
+myInvitations
+acceptInvitation
+declineInvitation
+
+# The chats list (M3)
+listLinkChats
+listCustomerChats
+customerChatsUnread
+listLinks
+getChatAlerts
+getChatTools
+getLinkSettings
+
+# A conversation (M3)
+linkMessages
+sendLinkMessage
+readLinkChat
+linkTyping
+
+# Taskiem's conversation (M3)
+taskiemHistory
+taskiemSay
+getChatBriefing
+chatRefs
+chatActions
+chatActionChoices
+closeChatMenu
+runChatAction
+
+# Customers' conversations (M3)
+getCustomerChat
+listCustomerMessages
+readCustomerChat
+putCustomerChat
+replyCustomer
+
+# Customers in the app, the business's side (taskiem-for-everyone §8, stage 2)
+openAppCustomerChat
+blockCustomer
+unblockCustomer
+customerChatTyping
+broadcastOffer
+getCustomerChatSettings
+putCustomerChatSettings
+
+# You: a person's chats with businesses, through the customer door
+# (taskiem-for-everyone §7, §8, stage 2). Files go as multipart forms and
+# come as bytes, outside the generated client, as linked businesses' do.
+listMyChats
+startMyChat
+getMyChat
+putMyChat
+listMyChatMessages
+sendMyChatMessage
+readMyChat
+typingInMyChat
+blockBusiness
+unblockBusiness
+reportBusiness
+myChatShop
+myChatServices
+myChatServiceTimes
+myChatOrders
+placeMyChatOrder
+bookInMyChat
+payMyChatOrder
+# The business's tools for its customers (made tools T5).
+myChatTools
+startMyChatTool
+confirmMyChatTool
+myChatToolAnswer
+pressMyChatToolButton
+
+# Discover: the public finding businesses, and a business's listing
+# (taskiem-for-everyone §10, stage 3). Chat from a profile is startMyChat
+# with from: "discover".
+discoverSearch
+discoverCategories
+discoverProfile
+discoverReport
+getDiscoverSettings
+putDiscoverSettings
+
+# The message menu (M3)
+reactLinkMessage
+unreactLinkMessage
+starLinkMessage
+unstarLinkMessage
+hideLinkMessage
+
+# The chats list: starred messages and its search (M3)
+starredLinkMessages
+searchLinkChats
+searchLinks
+searchCustomerChats
+
+# Tags: the price list, our services and stock (M3)
+linkChatItems
+getStorefrontServices
+getStock
+# The Stock page's stock items, and what a product is counted by (S2)
+listStockItems
+putCountedBy
+deleteCountedBy
+
+# Find a business (M3)
+explore
+
+# "Give this to…" on a card: the people, and the task (M3)
+listStaffTasks
+giveStaffTask
+
+# Connecting a service from Taskiem's conversation (M3, docs/spec/mobile-app.md 3.5)
+getConnectLink
+connectWithKey
+
+# Reference cards, and what Taskiem's conversation may name (M3)
+chatCard
+linkChatCard
+linkChatRefs
+listSupplierPrices
+
+# Settings: your email, your linked chats and the approval PIN, chat tools (M3, S2-S5)
+addEmail
+getWhatsApp
+startWhatsAppBinding
+verifyWhatsAppBinding
+unbindWhatsApp
+setWhatsAppPin
+removeWhatsAppPin
+getTelegram
+startTelegramLink
+unlinkTelegram
+getSlack
+startSlackLink
+unlinkSlack
+putChatTools
+getAIPhotoReading
+putAIPhotoReading
+
+# Notifications on this phone (docs/spec/mobile-app-m4.md N4)
+listPush
+putPush
+patchPush
+deletePush
+deletePushEndpoint
+
+# Chat links and a customer's storefront orders (taskiem-for-everyone §8.2, §13, stage 2)
+getChatLinkCard
+getChatLink
+newChatLink
+putChatSettings
+myStorefrontOrders
+confirmStorefrontOrders
+
+# Orders on You and saved addresses (taskiem-for-everyone §13, stage 3)
+myOrders
+myOrder
+payMyOrder
+myAddresses
+addMyAddress
+editMyAddress
+deleteMyAddress
+
+# You's settings: deleting the account, the photo (its upload and its bytes are
+# the app's own multipart and image calls, as a chat's files are), pushes,
+# privacy (taskiem-for-everyone §7, §14, stage 3 review fixes)
+deleteAccountStart
+deleteAccountPasskeyOptions
+deleteAccount
+deleteMyPhoto
+myNotifications
+putMyNotifications
+myPrivacy
+
+# Finding people (people-chatting §5, stage 5a): privacy towards people,
+# contacts, looking up a number, a person's link, contact matching and
+# presence. Photos and the QR code are the app's own image calls.
+myPeoplePrivacy
+putMyPeoplePrivacy
+myContacts
+addContact
+renameContact
+removeContact
+contactsKey
+matchContacts
+myPersonLink
+newPersonLink
+myPresence
+lookupPerson
+personByLink
+getPerson
+getPersonLinkCard
+
+# Chats between people and You's one Chats list (people-chatting, stage 5a).
+# Files go as multipart forms and come back as bytes: the app's own calls,
+# as a business chat's files are.
+listAllMyChats
+listPeopleChats
+startPeopleChat
+listPeopleRequests
+listPeopleBlocked
+forwardPeopleMessage
+getPeopleChat
+putPeopleChat
+deletePeopleChat
+acceptPeopleRequest
+declinePeopleRequest
+blockPerson
+unblockPerson
+reportPerson
+readPeopleChat
+peopleMessages
+sendPeopleMessage
+markPeopleMessage
+deletePeopleMessage
+markSplitPaid
+openPeopleCard
+# Stage 5a gaps: typing, search and starred across people chats (the live
+# connection, GET /v1/me/live, is read as a stream: lib/chat/people_live.dart).
+typingPeople
+searchPeople
+starredPeople
+getPayoutAccount
+putPayoutAccount
+deletePayoutAccount
+getMyStanding
+appealMyStanding
+seenMyStanding
+getLawfulRequestCounts
+# Groups (people-chatting §9, stage 5b): files go as multipart forms and
+# come back as bytes, the app's own calls (groupPhoto, putGroupPhoto,
+# sendGroupFile, groupFile, groupLinkQR, groupLinkPhoto), as people chats'.
+listGroups
+createGroup
+listGroupInvites
+acceptGroupInvite
+declineGroupInvite
+searchGroups
+starredGroups
+forwardMessage
+joinGroupByLink
+withdrawGroupJoin
+getGroup
+putGroup
+deleteGroupForMe
+putMyGroup
+leaveGroup
+deleteGroupPhoto
+groupMembers
+addGroupMembers
+setGroupAdmin
+removeGroupMember
+blockGroupMember
+cancelGroupInvite
+groupLink
+newGroupLink
+groupLinkOff
+groupJoinRequests
+approveGroupJoin
+declineGroupJoin
+groupMessages
+groupMedia
+sendGroupMessage
+markGroupMessage
+deleteGroupMessage
+groupMessageInfo
+groupMessageReactions
+openGroupCard
+markGroupSplitPaid
+readGroup
+typingGroup
+groupLinkPreview
+reportGroup
+appealGroup
+
+# Ordering together (people-chatting §10.3, 5b C)
+startBasket
+getBasket
+putBasket
+basketShop
+putMyBasketLines
+deleteBasketLine
+closeBasket
+reopenBasket
+cancelBasket
+handBasket
+placeBasket
+payBasketShare
+sendBasketShareCards
+
+# Saved accounts (saved objects S0): a business's and the person's own
+listSaved
+addSaved
+changeSaved
+removeSaved
+revealSaved
+savedStepUpOptions
+checkAllSaved
+savedProvider
+listBanks
+nameCheck
+listMySaved
+addMySaved
+changeMySaved
+removeMySaved
+revealMySaved
+mySavedStepUpOptions
+readSavedWords
+listMySavedKinds
+addMySavedKind
+changeMySavedKind
+removeMySavedKind
+listSavedKinds
+addSavedKind
+changeSavedKind
+removeSavedKind
+importSaved
+saveOrderCustomer
+listMyBanks
+
+# Pay one person (P1, docs/spec/chat-pay-people.md)
+listPayments
+listPayBanks
+readPayment
+payNameCheck
+createPayment
+getPayment
+confirmPayment
+cancelPayment
+getPayLimits
+putPayLimit
+# Where a staff member is paid, outside payroll (Pay on their page)
+putStaffPayAccount
+getMePin
+putMePin
+deleteMePin
+getPayCollection
+addPayCollection
+clearPayCollection
+payPayCollection
+patchPayCollection
+removePayCollection
+getPayroll
+getPayrollRun
+getPayrollStaff
+putStaffPayrolla
+
+# Pay several people (P3, docs/spec/chat-pay-people.md)
+listPaymentBatches
+createPaymentBatch
+readPaymentList
+getPaymentBatch
+confirmPaymentBatch
+approvePaymentBatch
+cancelPaymentBatch
+payBatchAgain
+
+# Pay a bill by transfer, in the chat (the payments flow, part 1;
+# docs/spec/chat-payments-flow.md), and a customer's invoice by transfer
+askBillTransfer
+getBillTransfer
+getMyInvoiceTransfer
+askMyInvoiceTransfer
+listTools
+readTool
+startTool
+confirmTool
+getRunAnswer
+setToolSettings
+# A code scanned from the home screen (device fields D2)
+scanOffers
+
+# Form steps for you (device fields D1, docs/spec/device-fields.md): the
+# app answers a form step, its location and photo read at the tap; a photo
+# goes as a multipart form through the transport upload.
+listFormRequests
+getFormRequest
+answerFormRequest
+pressToolButton
+
+# Pages (decision 0072, pages G1): the pages a person may open, drawn by
+# the server; making and changing them stays on the web
+listPages
+viewPage
+getPageBlock
+actOnPage
+refreshPage
+# What a business buys U2a: the question on each line and its memory,
+# labels in Money settings (docs/spec/what-a-business-buys.md §6)
+setPurchaseLine
+listItemLinks
+putItemLink
+deleteItemLink
+listSupplierItems
+putSupplierItem
+deleteSupplierItem
+listSpendLabels
+makeSpendLabel
+renameSpendLabel
+mergeSpendLabel
+
+# What a business buys U3: Things we have, spending by label
+# (docs/spec/what-a-business-buys.md §5.3, §5.4)
+listThings
+getThing
+addThing
+patchThing
+getMoneySpending

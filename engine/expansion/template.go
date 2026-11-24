@@ -200,7 +200,7 @@ func (x *templater) template(st map[string]any, depth int, chain []string) ([]an
 	for k, v := range given {
 		params[k] = v
 	}
-	// A parameter only the template's trigger uses (run-payroll's pay day)
+	// A parameter only the template's trigger uses (a monthly template's day of the month)
 	// is not the caller's to give: its trigger is not expanded.
 	for _, p := range tpl.Params {
 		if _, ok := params[p.Name]; !ok && p.Required && tpl.TriggerOnly(p.Name) {

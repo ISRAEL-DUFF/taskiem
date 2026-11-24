@@ -102,7 +102,7 @@ const waitingFlow = `[
 // what they write next still starts a run (it is not refused for the old
 // run's erased key), the old run carries on without keeping it, and
 // nothing of the old run, its AI step's answer and record, or the
-// messages delivered to it as signals, can be read (decision 0062 P2).
+// messages delivered to it as signals, can be read (decision 0074 P2).
 func TestCustomerErasedWhileTheirRunWaits(t *testing.T) {
 	g := newGuardWorld(t, `true`, "", waitingFlow)
 	g.AI = &ai.Fake{Respond: func(ai.Request) (*ai.Response, error) {
@@ -207,7 +207,7 @@ func TestCustomerErasedWhileTheirRunWaits(t *testing.T) {
 
 // What a customer wrote is also sealed under its own subject inside the
 // customer's: erasing that subject (another person named, a value
-// erased) erases it while the customer is kept (decision 0062 P2).
+// erased) erases it while the customer is kept (decision 0074 P2).
 func TestCustomerWordsErasedByTheirOwnSubject(t *testing.T) {
 	g := newGuardWorld(t, `true`, "")
 	const ada = "2348031234567"

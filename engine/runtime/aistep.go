@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/alerts"
@@ -75,7 +77,7 @@ func (a *AISteps) provider(model string) (ai.Provider, string, error) {
 }
 
 // aiEvent runs an ai step's attempt. When the model cannot answer and
-// the step has a fallback (decision 0062 V4, A12), the fallback is its
+// the step has a fallback (decision 0074 V4, A12), the fallback is its
 // output instead: at once for a failure retrying cannot mend, and on the
 // last attempt for one it might.
 func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
@@ -175,7 +177,10 @@ func (w *Worker) aiAttempt(ctx context.Context, p *plan, in any) history.Event {
 	q, _ := in.(map[string]any)
 	masker := pii.NewMasker(p.taint)
 	prompt := masker.Mask(q["prompt"])
-	input, _ := q["input"].(map[string]any)
+	// A location is never given to a model, not even in a field the step
+	// lets personal data through: only that it was answered, its state
+	// and its source (device fields §5).
+	input, _ := pii.HideLocations(q["input"], p.taint).(map[string]any)
 	masked := map[string]any{}
 	var through map[string]any
 	for k, v := range input {
@@ -202,9 +207,9 @@ func (w *Worker) aiAttempt(ctx context.Context, p *plan, in any) history.Event {
 	}
 	question, logged := aiQuestion(prompt, maskedIn), aiQuestion(prompt, logIn)
 	// The conversation so far and the business's instruction, masked
-	// with the same placeholders (decision 0062 V4).
+	// with the same placeholders (decision 0074 V4).
 	// With "history" in personal_data the turns' words reach the model,
-	// their identifiers still masked (decision 0062 D6); without it each
+	// their identifiers still masked (decision 0074 D6); without it each
 	// personal value in them, a whole sealed message among them, is a
 	// placeholder. The record of the call keeps the words redacted either
 	// way, as it does fields let through.
@@ -447,33 +452,75 @@ func redactAnswer(taint pii.Taint, s string) string { return pii.Redact(taint.Re
 // another's whole output to the model, but not an unbounded one.
 const maxAIQuestion = maxStepOutput
 
-// reserveAI checks the tenant's monthly allowance for AI steps, counting the tokens
-// recorded and those the ai steps calling now have reserved, and reserves
-// estimate tokens for this step until release is called (or ttl passes,
-// if its worker dies first). Checks are serialised per tenant, so steps
-// starting at once see each other's reservations. over: the budget is
-// used up, and nothing was reserved; release is safe to call either way.
+// reserveAI checks the tenant's monthly allowance for AI steps and
+// reserves estimate tokens for this step until release is called
+// (ReserveAI with purpose "step").
 func (w *Worker) reserveAI(ctx context.Context, p *plan, limit, estimate int64, ttl time.Duration) (release func(), over bool, err error) {
+	return ReserveAI(ctx, w.Store.Pool, w.Logger, p.c.tenant, Reservation{Run: &p.c.run, Step: p.c.step, Purpose: "step"}, limit, estimate, ttl)
+}
+
+// Reservation is whose model call reserves: an ai step names its run and
+// step; a build, a repair or a chat's call only its purpose.
+type Reservation struct {
+	Run     *uuid.UUID
+	Step    string
+	Purpose string
+}
+
+// AIReserved is the tokens the model calls running now have reserved
+// against the tenant's monthly budget.
+func AIReserved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int64, error) {
+	var n int64
+	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(tokens), 0)::bigint FROM ai_reservations WHERE tenant_id = $1 AND expires_at > now()`, tenant).Scan(&n)
+	return n, err
+}
+
+// aiReservedFor is the tokens reserved now against one of the two
+// allowances: AI steps' (step), or the owner's AI budget (the rest).
+func aiReservedFor(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, step bool) (int64, error) {
+	var n int64
+	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(tokens), 0)::bigint FROM ai_reservations WHERE tenant_id = $1 AND expires_at > now()
+		AND (purpose = 'step') = $2`, tenant, step).Scan(&n)
+	return n, err
+}
+
+// ReserveAI checks the tenant's monthly AI budget, counting the tokens
+// recorded and those the model calls running now have reserved (ai
+// steps', builds', repairs' and chats'), and reserves estimate tokens for
+// this call until release is called (or ttl passes, if its process dies
+// first). Checks are serialised per tenant, so calls starting at once see
+// each other's reservations (decision 0050, finding F49). over: the
+// budget is used up, and nothing was reserved; release is safe to call
+// either way.
+func ReserveAI(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, tenant uuid.UUID, who Reservation, limit, estimate int64,
+	ttl time.Duration) (release func(), over bool, err error) {
 	id := uuid.Must(uuid.NewV7())
 	release = func() {}
-	err = db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem ai budget ' || $1::text, 0))`, p.c.tenant); err != nil {
+	err = db.InTenantTx(ctx, pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem ai budget ' || $1::text, 0))`, tenant); err != nil {
 			return err
 		}
-		used, err := AIStepTokensThisMonth(ctx, tx, p.c.tenant)
+		// AI steps in runs have their own monthly allowance (decision 0074
+		// D7); builds, repairs and chats share the owner's AI budget.
+		step := who.Purpose == "step"
+		count := AITokensThisMonth
+		if step {
+			count = AIStepTokensThisMonth
+		}
+		used, err := count(ctx, tx, tenant)
 		if err != nil {
 			return err
 		}
-		var reserved int64
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(tokens), 0)::bigint FROM ai_reservations WHERE tenant_id = $1 AND expires_at > now()`,
-			p.c.tenant).Scan(&reserved); err != nil {
+		reserved, err := aiReservedFor(ctx, tx, tenant, step)
+		if err != nil {
 			return err
 		}
 		if over = used+reserved >= limit; over {
 			return nil
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO ai_reservations (id, tenant_id, run_id, step_id, tokens, expires_at) VALUES ($1, $2, $3, $4, $5, now() + make_interval(secs => $6))`,
-			id, p.c.tenant, p.c.run, p.c.step, estimate, ttl.Seconds())
+		_, err = tx.Exec(ctx, `INSERT INTO ai_reservations (id, tenant_id, run_id, step_id, purpose, tokens, expires_at)
+			VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, now() + make_interval(secs => $7))`,
+			id, tenant, who.Run, who.Step, who.Purpose, estimate, ttl.Seconds())
 		return err
 	})
 	if err != nil || over {
@@ -481,11 +528,11 @@ func (w *Worker) reserveAI(ctx context.Context, p *plan, limit, estimate int64, 
 	}
 	return func() {
 		ctx := context.WithoutCancel(ctx)
-		if err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `DELETE FROM ai_reservations WHERE id = $1 OR (tenant_id = $2 AND expires_at <= now())`, id, p.c.tenant)
+		if err := db.InTenantTx(ctx, pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `DELETE FROM ai_reservations WHERE id = $1 OR (tenant_id = $2 AND expires_at <= now())`, id, tenant)
 			return err
-		}); err != nil {
-			w.Logger.Error("releasing an ai step's budget reservation", "run", p.c.run, "step", p.c.step, "err", err)
+		}); err != nil && logger != nil {
+			logger.Error("releasing an AI budget reservation", "tenant", tenant, "purpose", who.Purpose, "run", who.Run, "step", who.Step, "err", err)
 		}
 	}, false, nil
 }
@@ -640,7 +687,7 @@ func (w *Worker) sealAIRecord(ctx context.Context, tx pgx.Tx, p *plan, msgs []by
 }
 
 // allowanceAlert tells the owners at 80 % and 100 % of this month's AI
-// step allowance (decision 0062 L10), after the call is recorded, in a
+// step allowance (decision 0074 L10), after the call is recorded, in a
 // transaction of its own: an alert that fails is logged, and never loses
 // the record of a call that was paid for.
 func (w *Worker) allowanceAlert(ctx context.Context, tenant uuid.UUID) {

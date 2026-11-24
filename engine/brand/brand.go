@@ -18,7 +18,22 @@ var ErrInvalid = errors.New("brand: invalid")
 // Themes are the looks a business may pick; the first is the default.
 // clean: light cards and a cover photo; bold: the colour fills the
 // header, a photo grid; editorial: black and white, serif headings.
-var Themes = []string{"clean", "bold", "editorial"}
+// kitchen, fashion, salon and grocery have their own pages; their stylesheet is laid on one of
+// those (Base) for the pages they share (forms, status), with their own look on top, for food,
+// clothing, beauty and bookings, and fresh shopping.
+var Themes = []string{"clean", "bold", "editorial", "kitchen", "fashion", "salon", "grocery"}
+
+// skins maps a skin to the theme it is drawn on.
+var skins = map[string]string{"kitchen": "clean", "fashion": "editorial", "salon": "clean", "grocery": "clean"}
+
+// Base is the theme whose pages and stylesheet a theme is drawn on: itself,
+// or for a skin the theme it restyles.
+func Base(theme string) string {
+	if b, ok := skins[theme]; ok {
+		return b
+	}
+	return theme
+}
 
 // DefaultColor is Taskiem's green, for a business that picked none.
 const DefaultColor = "#0b6e4f"

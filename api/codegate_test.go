@@ -86,3 +86,18 @@ func TestTenantCodeAnswers429And503(t *testing.T) {
 	}
 	close(done)
 }
+
+// A free slot is taken even when the wait ran out on the way to it (on a
+// slow database the cross-replica lease can take longer than the wait):
+// the expired timer must not win a coin toss against the free slot.
+func TestCodeGateFreeSlotAfterWaitRanOut(t *testing.T) {
+	s := &Server{CodeLimits: CodeLimits{Concurrency: 2, PerTenant: 1}}
+	g := s.gate()
+	for i := range 200 {
+		release, err := g.enter(context.Background(), uuid.New(), 0)
+		if err != nil {
+			t.Fatalf("try %d: turned away with a slot free: %v", i, err)
+		}
+		release()
+	}
+}

@@ -25,7 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/knowledge/extract"
 )
 
-// What a business's assistant knows (decision 0062 D12, docs/knowledge.md):
+// What a business's assistant knows (decision 0074 D12, docs/knowledge.md):
 // the owner adds knowledge sources, sees what each gave, approves it, and
 // can refresh, pause or delete it; the api role refreshes them daily.
 

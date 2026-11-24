@@ -411,5 +411,9 @@ func (s *Server) waLinkDecide(ctx context.Context, c *chat, tenant tenantRef, p 
 		return err
 	}
 	s.tellLinkAnswered(ctx, other, cl.Run, answer)
+	if answer == links.Accept {
+		// Each side sees the other's shop from now (business-chat-tools.md §2).
+		s.shopsDue(ctx, cl.Run, tenant.ID, other)
+	}
 	return say(c.t("link.done_"+answer, "name", whatsapp.SafeText(found.Name)))
 }

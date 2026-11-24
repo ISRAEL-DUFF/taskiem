@@ -7,3 +7,5 @@ export {
 export type { ApprovalConfig, CapabilityExtra, CodeConfig, ConnectorExtra, ContainerConfig, Context, Expr, FormConfig, HttpConfig, StepOptions, StepSpec, UssdMenuSpec, Val, Values, WorkflowOptions } from "./builder.js";
 export { celToFunction, compileFunction, ExpressionError, ROOTS } from "./expr.js";
 export { generate, type CodegenOptions } from "./codegen.js";
+export { approveAction, buttons, figure, heading, list, page, pageValue, PAGE_FORMAT, signalAction, status, table, toolAction } from "./page.js";
+export type { PageAction, PageBlock, PageContext, PageDocument, PageFilter, PageSource, PageValue } from "./page.js";

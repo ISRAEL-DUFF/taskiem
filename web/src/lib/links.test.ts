@@ -9,7 +9,7 @@ import {
   looksLikePhone,
   matchLinked,
   requestTo,
-  roleLine,
+  linkedLine, roleLine,
   stateWords,
   type BusinessLink,
   type LinkCard,
@@ -36,6 +36,9 @@ describe("links", () => {
     expect(stateWords("not_accepted")).toEqual({ label: "Not accepted", tone: "muted" });
     expect(stateWords("none")).toBeNull();
     expect(roleLine("supplier")).toBe("They supply you");
+    expect(linkedLine("customer")).toBe("Linked · buys from you");
+    expect(linkedLine("supplier")).toBe("Linked · supplies you");
+    expect(linkedLine(undefined)).toBe("Linked");
     expect(roleLine("customer")).toBe("They buy from you");
     expect(roleLine("both")).toBe("They supply you and buy from you");
   });

@@ -5,7 +5,41 @@ import {
   useRef,
   useState,
 } from "react";
-import { atBottom, followNew, scrollWithin } from "./thread";
+import { atBottom, atNewest, followNew, newestTop, scrollWithin } from "./thread";
+
+/** How far down the thread's content the newest message ends. */
+function newestEnd(el: HTMLElement): number | undefined {
+  const all = el.querySelectorAll("[data-msg]");
+  const last = all[all.length - 1];
+  if (!last) return undefined;
+  return (
+    last.getBoundingClientRect().bottom -
+    el.getBoundingClientRect().top +
+    el.scrollTop
+  );
+}
+
+/** Scrolls to the newest message: the end of the thread, or, with cards after the messages, the newest message at the view's end. */
+function toNewest(el: HTMLElement) {
+  const end = newestEnd(el);
+  const top =
+    end === undefined
+      ? undefined
+      : newestTop({
+          scrollHeight: el.scrollHeight,
+          clientHeight: el.clientHeight,
+          newestEnd: end,
+        });
+  el.scrollTop = top ?? el.scrollHeight;
+}
+
+const atNewestOf = (el: HTMLElement) =>
+  atNewest({
+    scrollTop: el.scrollTop,
+    scrollHeight: el.scrollHeight,
+    clientHeight: el.clientHeight,
+    newestEnd: newestEnd(el),
+  });
 
 /**
  * How a thread scrolls, as WhatsApp Web's, for any list of messages (a
@@ -29,7 +63,18 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
   const stream = useRef<HTMLDivElement>(null);
   const topMark = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  // Kept at the bottom as what is below grows: opened at the end, or
+  // scrolled there by the reader (not opened at the unread or a message).
+  const hold = useRef(false);
+  // Where the reader was at the last scroll: at the very end.
+  const atEnd = useRef(false);
   const placed = useRef(false);
+  // The message the thread was opened or jumped at (not the first unread,
+  // which is placed once, as the app does), kept where it was put as the
+  // thread's size and content settle (the composer arriving under it, a
+  // card above it filling in), until the reader moves the thread or new
+  // messages are followed.
+  const pin = useRef<{ sel: string; block: "start" | "center" } | null>(null);
   const anchor = useRef<{ h: number; top: number } | null>(null);
   const prevNewest = useRef<string>(undefined);
   const jumpTo = useRef<string>(undefined);
@@ -40,6 +85,7 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
   /** The messages are about to be replaced (another conversation, or a jump): place the view afresh, at `id` if given. */
   const reset = useCallback((id?: string) => {
     placed.current = false;
+    pin.current = null;
     prevNewest.current = undefined;
     jumpTo.current = id;
     setNewCount(0);
@@ -55,11 +101,13 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
     const target = el?.querySelector(`[data-msg="${id}"]`);
     if (!el || !target) return false;
     scrollWithin(el, target, "center");
+    pin.current = { sel: `[data-msg="${id}"]`, block: "center" };
     setFlashId(id);
     return true;
   }, []);
   const toBottom = useCallback(() => {
     const el = stream.current;
+    pin.current = null;
     if (el) el.scrollTo({ top: el.scrollHeight });
     setNewCount(0);
   }, []);
@@ -81,17 +129,27 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
         ? el.querySelector(`[data-msg="${id}"]`)
         : el.querySelector("[data-unread]");
       if (target) {
-        scrollWithin(el, target, id ? "center" : "start");
+        const block = id ? "center" : "start";
+        scrollWithin(el, target, block);
+        if (id) pin.current = { sel: `[data-msg="${id}"]`, block };
         if (id) setFlashId(id);
       } else el.scrollTop = el.scrollHeight;
-      stick.current = atBottom(el);
+      stick.current = atNewestOf(el);
+      atEnd.current = atBottom(el);
+      hold.current = !target;
       setAway(!stick.current);
       prevNewest.current = newest;
       return;
     }
     const f = followNew(prevNewest.current, items, stick.current, isMine);
     if (f.kind === "bottom") {
-      el.scrollTop = el.scrollHeight;
+      pin.current = null;
+      // The newest message in view, not what follows it (the Taskiem
+      // conversation's alert cards): an answer is never left out of sight.
+      toNewest(el);
+      // Not held at the end when that leaves the cards below the answer.
+      atEnd.current = atBottom(el);
+      if (!atEnd.current) hold.current = false;
       setNewCount(0);
     } else if (f.kind === "pill") setNewCount((n) => n + f.count);
     prevNewest.current = newest;
@@ -105,6 +163,10 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
   }, [flashId]);
 
   const hasItems = (items?.length ?? 0) > 0;
+  // Watched afresh once older ones are added: the observer tells only of a
+  // change, so a reader still at the top as a page lands (the mark never out
+  // of reach) would otherwise not be given the next.
+  const oldest = items?.[0]?.id;
   useEffect(() => {
     const mark = topMark.current;
     if (
@@ -120,12 +182,59 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
     );
     io.observe(mark);
     return () => io.disconnect();
-  }, [hasOlder, hasItems, loadOlder]);
+    // The oldest is what changes when a page is added above.
+  }, [hasOlder, hasItems, loadOlder, oldest]);
+
+  // A reader at the bottom stays there as what is below grows after the
+  // thread was placed: Taskiem's cards arriving after its messages, a photo
+  // that loads. (Without this, where the thread opened depended on which
+  // came first.)
+  useEffect(() => {
+    const el = stream.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const keep = () => {
+      if (!placed.current || anchor.current) return;
+      const target = pin.current && el.querySelector(pin.current.sel);
+      if (pin.current && target) scrollWithin(el, target, pin.current.block);
+      else if (hold.current && atEnd.current) el.scrollTop = el.scrollHeight;
+    };
+    const sizes = new ResizeObserver(keep);
+    const watch = () => {
+      sizes.disconnect();
+      // The thread itself too: it is shorter once the composer is in.
+      sizes.observe(el);
+      for (const c of Array.from(el.children)) sizes.observe(c);
+    };
+    // The reader moving the thread lets go of the message it was opened at.
+    const letGo = () => {
+      pin.current = null;
+    };
+    const reader = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+    for (const e of reader) el.addEventListener(e, letGo, { passive: true });
+    watch();
+    const kids =
+      typeof MutationObserver === "undefined"
+        ? undefined
+        : new MutationObserver(() => (watch(), keep()));
+    kids?.observe(el, { childList: true });
+    return () => {
+      sizes.disconnect();
+      kids?.disconnect();
+      for (const e of reader) el.removeEventListener(e, letGo);
+    };
+  }, []);
 
   const onScroll = () => {
     const el = stream.current;
     if (!el) return;
-    const near = atBottom(el);
+    const near = atNewestOf(el);
+    // Held at the very end only from there: arriving at it (the reader, or
+    // the thread opening there), not with the newest message merely in view
+    // (toNewest leaves Taskiem's cards below it, and that place stands).
+    const end = atBottom(el);
+    if (!end) hold.current = false;
+    else if (!atEnd.current) hold.current = true;
+    atEnd.current = end;
     stick.current = near;
     setAway(!near);
     if (near) setNewCount(0);

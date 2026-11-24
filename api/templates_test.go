@@ -149,7 +149,7 @@ func TestEmbedTemplates(t *testing.T) {
 	sub := p.sub(t, "Customer", nil)
 	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "x", "allowed_connectors": []string{}, "allowed_templates": []string{"salary-reminder"}})
 	app, _ := p.app(t, map[string]any{"name": "api", "headless": true, "allowed_connectors": []string{"notify", "gmail"},
-		"allowed_templates": []string{"payroll-reminder", "debtor-reminder-sms"}, "end_user_permissions": []string{"workflow.read", "workflow.edit"}})
+		"allowed_templates": []string{"daily-reminder", "debtor-reminder-sms"}, "end_user_permissions": []string{"workflow.read", "workflow.edit"}})
 	u := p.endUser(t, w, app, sub, "cust-1", "", "workflow.read", "workflow.edit")
 
 	list := u.call(200, "GET", "/templates", nil)["templates"].([]any)
@@ -160,15 +160,15 @@ func TestEmbedTemplates(t *testing.T) {
 	for _, x := range list {
 		avail[x.(map[string]any)["id"].(string)] = x.(map[string]any)["available"]
 	}
-	if avail["payroll-reminder"] != true || avail["debtor-reminder-sms"] != false {
+	if avail["daily-reminder"] != true || avail["debtor-reminder-sms"] != false {
 		t.Errorf("available within the app's connectors: %v", avail)
 	}
 	u.call(403, "POST", "/templates/kyc-bvn-check/instantiate", map[string]any{"params": map[string]any{}})
 	if out := u.call(403, "POST", "/templates/debtor-reminder-sms/instantiate", map[string]any{"params": debtorParams}); out["not_allowed"] == nil {
 		t.Errorf("googlesheets is not the app's: %v", out)
 	}
-	u.call(400, "POST", "/templates/payroll-reminder/instantiate", map[string]any{"params": map[string]any{}})
-	out := u.call(201, "POST", "/templates/payroll-reminder/instantiate", map[string]any{"params": map[string]any{"business_name": "Customer Ltd"}})
+	u.call(400, "POST", "/templates/daily-reminder/instantiate", map[string]any{"params": map[string]any{}})
+	out := u.call(201, "POST", "/templates/daily-reminder/instantiate", map[string]any{"params": map[string]any{"message": "Count the till"}})
 	if out["state"] != "draft" {
 		t.Fatalf("instantiate: %v", out)
 	}

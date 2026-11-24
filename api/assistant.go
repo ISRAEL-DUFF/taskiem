@@ -17,7 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ops"
 )
 
-// The business's customer assistant (decision 0062 V6,
+// The business's customer assistant (decision 0074 V6,
 // docs/assistant-guard.md): the owner's pause for every customer, the
 // customers handed to a person, and Taskiem's own switches for the
 // business, which only operators change.

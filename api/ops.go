@@ -124,6 +124,9 @@ func (s *Server) opsRoutes(r chi.Router) {
 		r.Get("/tenants", s.opsTenants)
 		r.Get("/tenants/{id}", s.opsTenant)
 		r.Post("/tenants/{id}/{action}", s.opsTenantAction)
+		s.opsFeaturedRoutes(r)                                     // Explore's Featured row (explore_ops.go)
+		r.Post("/discover/{tenant}/{action}", s.opsDiscoverAction) // Discover's listings (discover.go)
+		s.opsPeopleRoutes(r)                                       // people chats' safety and lawful requests (ops_people.go, lawful.go)
 		r.Get("/audit", s.opsAudit)
 		r.Get("/audit/verify", s.opsAuditVerify)
 		r.Get("/audit/export", s.opsAuditExport)
@@ -354,7 +357,7 @@ func (s *Server) opsVerifyPasskey(ctx context.Context, c credentialJSON, purpose
 }
 
 func (s *Server) opsLimit(w http.ResponseWriter, r *http.Request) bool {
-	if !s.loginLimiter("ops-login:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("ops-login:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many sign-in attempts")
 		return false
 	}
@@ -365,7 +368,7 @@ func (s *Server) opsLoginOptions(w http.ResponseWriter, r *http.Request) {
 	if !s.passkeysOn(w) {
 		return
 	}
-	if !s.limiter("ops-challenge:"+clientIP(r), time.Second, 30).Allow() {
+	if !s.limiter("ops-challenge:"+limitIP(r), time.Second, 30).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many requests")
 		return
 	}
@@ -560,6 +563,14 @@ func (s *Server) opsEnrol(w http.ResponseWriter, r *http.Request) {
 //	ops.status.update        <incident id>/<status>
 //	ops.tenant.suspend, ops.tenant.resume
 //	                         <tenant id>
+//	ops.storefront.review    <review id>/<approve|reject>
+//	ops.storefront.suspend, ops.storefront.restore
+//	                         <tenant id>
+//	ops.report.dismiss, ops.report.action, ops.report.contact
+//	                         <report id>
+//	ops.agent.add            <email, lower case>
+//	ops.agent.suspend, ops.agent.reactivate, ops.agent.retire
+//	                         <agent id>
 var opsStepUpOps = map[string]bool{
 	"ops.catalogue.review": true, "ops.catalogue.revoke": true,
 	"ops.publisher.verify": true, "ops.publisher.suspend": true, "ops.publisher.reinstate": true,
@@ -567,8 +578,10 @@ var opsStepUpOps = map[string]bool{
 	"ops.storefront.review": true, "ops.storefront.suspend": true, "ops.storefront.restore": true,
 	"ops.report.dismiss": true, "ops.report.action": true, "ops.report.contact": true,
 	"ops.agent.add": true, "ops.agent.suspend": true, "ops.agent.reactivate": true, "ops.agent.retire": true,
+	"ops.explore.feature": true, "ops.explore.unfeature": true,
 	"ops.tenant.suspend": true, "ops.tenant.resume": true,
 	"ops.tenant.assistants-stop": true, "ops.tenant.assistants-start": true, "ops.tenant.assistants-beta-on": true, "ops.tenant.assistants-beta-off": true,
+	"ops.discover.remove": true, "ops.discover.restore": true,
 }
 
 func (s *Server) opsStepUpOptions(w http.ResponseWriter, r *http.Request) {

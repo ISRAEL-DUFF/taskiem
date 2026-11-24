@@ -70,11 +70,37 @@ const (
 	// messages are readable by every member).
 	ChatTrade = "chat.trade"
 
-	// The customer assistant's conversations (decision 0062 V7): reading
+	// The customer assistant's conversations (decision 0074 V7): reading
 	// them (masked; revealing needs pii.reveal), and answering customers by
 	// hand, pausing and resuming the assistant for one of them.
 	ConversationRead  = "conversation.read"
 	ConversationReply = "conversation.reply"
+	// OrderHandle is working the shop's orders (chat tools phase 5, a
+	// cashier's or shift manager's): seeing them, accepting or declining,
+	// readying and sending them out, and offering them to riders; not the
+	// storefront's settings, prices, refunds or riders' pay
+	// (StorefrontManage).
+	OrderHandle = "order.handle"
+	// SavedManage adds, changes and removes the business's saved things
+	// (docs/spec/saved-objects.md §5.2): its saved accounts, and later its
+	// places, texts and the rest. Everyone in the business uses them.
+	SavedManage = "saved.manage"
+	// MoneyPay pays people from the business's payments account (P1;
+	// docs/spec/chat-pay-people.md): each payment confirmed with a passkey,
+	// within the limits the owner sets for the role (pay_limits); over them,
+	// the owner's OK. The owner's alone unless given to a role.
+	MoneyPay = "money.pay"
+	// PayrollRead sees the business's payroll as Payrolla keeps it (P4a;
+	// payroll is Payrolla's): its runs, each person's net pay and whether
+	// it arrived, and links staff to Payrolla's employees. The owner's
+	// alone unless given to a role: it shows what people earn.
+	PayrollRead = "payroll.read"
+	// PageEdit makes and changes the business's pages as drafts, and pins
+	// them; PagePublish shows a draft to those its roles let open it
+	// (decision 0072; docs/spec/pages.md §12). Opening a page needs neither:
+	// the page's roles say who may.
+	PageEdit    = "page.edit"
+	PagePublish = "page.publish"
 )
 
 // All are every permission, in the order the role editor lists them.
@@ -82,7 +108,7 @@ var All = []string{WorkflowRead, WorkflowEdit, WorkflowPublish, RunRead, RunStar
 	RunResolve, ApprovalDecide, PIIReveal, PIIErase, SecretManage, ConnectionManage, MemberManage, AuditRead, GitManage, PolicyManage, ConnectorManage, RoleManage, SCIM, AlertManage,
 	TableRead, TableEdit, StorefrontManage, FormLinks,
 	BillingManage, InvoiceRead, InvoiceManage, KeyManage, PartnerRead, PartnerManage,
-	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, ConversationRead, ConversationReply}
+	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, OrderHandle, SavedManage, MoneyPay, PayrollRead, PageEdit, PagePublish, ConversationRead, ConversationReply}
 
 // Descriptions say what each permission lets a person do, for the role
 // editor.
@@ -120,6 +146,12 @@ var Descriptions = map[string]string{
 	SchoolGate:        "Schools: the gate screen only (cleared or see the bursar, never an amount)",
 	LinkManage:        "Link with other businesses on Taskiem: ask, accept, decline, block and end links (audited in both businesses)",
 	ChatTrade:         "Write to linked businesses in their conversations, as the business",
+	OrderHandle:       "Work the orders: see them, accept or decline, ready and send them out, and offer them to riders (not the storefront's settings, prices or refunds)",
+	SavedManage:       "Manage saved things: add, change and remove the business's saved accounts (changing an account number needs a passkey)",
+	MoneyPay:          "Pay people from the business's payments account, each payment with a passkey, within the limits the owner sets (over them, the owner's OK)",
+	PayrollRead:       "See the payroll from Payrolla: each run, what each person is paid and whether it arrived (it shows what people earn)",
+	PageEdit:          "Make and change the business's pages as drafts, and pin them to the menu",
+	PagePublish:       "Publish pages: show a page to the people allowed to open it",
 	ConversationRead:  "See the customer assistant's conversations with customers (numbers and emails hidden unless revealed)",
 	ConversationReply: "Answer customers by hand, and pause or resume the assistant for one customer",
 }
@@ -134,13 +166,18 @@ var Roles = map[string][]string{
 	"owner": All,
 	"admin": {WorkflowRead, WorkflowEdit, WorkflowPublish, RunRead, RunStart, RunCancel, RunResolve, SecretManage, ConnectionManage, MemberManage, AuditRead, GitManage, PolicyManage,
 		ConnectorManage, RoleManage, SCIM, AlertManage, TableRead, TableEdit, StorefrontManage, FormLinks, InvoiceRead, InvoiceManage, SchoolRead, SchoolManage, LinkManage, ChatTrade,
-		ConversationRead, ConversationReply},
-	"builder":  {WorkflowRead, WorkflowEdit, RunRead, RunStart, TableRead, TableEdit, ConversationRead},
-	"operator": {WorkflowRead, RunRead, RunStart, RunCancel, RunResolve, TableRead, InvoiceRead, InvoiceManage, SchoolRead, SchoolManage, ChatTrade, ConversationRead, ConversationReply},
-	"approver": {WorkflowRead, RunRead, ApprovalDecide},
-	"auditor":  {WorkflowRead, RunRead, AuditRead, TableRead, InvoiceRead, SchoolRead, ConversationRead},
-	"viewer":   {WorkflowRead, RunRead, TableRead, InvoiceRead, SchoolRead, ConversationRead},
-	Gate:       {SchoolGate},
+		OrderHandle, SavedManage, PageEdit, PagePublish, ConversationRead, ConversationReply},
+	// Staff who work from chat (chat tools phase 5): a cashier sells, keeps
+	// the stock and works the orders; a shift manager also takes payments,
+	// writes to linked businesses and hands the shift over.
+	"cashier":       {TableRead, TableEdit, OrderHandle, InvoiceRead},
+	"shift_manager": {RunRead, TableRead, TableEdit, OrderHandle, InvoiceRead, InvoiceManage, ChatTrade},
+	"builder":       {WorkflowRead, WorkflowEdit, RunRead, RunStart, TableRead, TableEdit, ConversationRead},
+	"operator":      {WorkflowRead, RunRead, RunStart, RunCancel, RunResolve, TableRead, InvoiceRead, InvoiceManage, SchoolRead, SchoolManage, ChatTrade, ConversationRead, ConversationReply},
+	"approver":      {WorkflowRead, RunRead, ApprovalDecide},
+	"auditor":       {WorkflowRead, RunRead, AuditRead, TableRead, InvoiceRead, SchoolRead, ConversationRead},
+	"viewer":        {WorkflowRead, RunRead, TableRead, InvoiceRead, SchoolRead, ConversationRead},
+	Gate:            {SchoolGate},
 }
 
 // Builtin reports whether role is a built-in role.

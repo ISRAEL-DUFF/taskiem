@@ -9,7 +9,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/voice"
 )
 
-// A workflow that hears and speaks (speech@1, decision 0062 T7) needs the
+// A workflow that hears and speaks (speech@1, decision 0074 T7) needs the
 // service on this Taskiem and the owner's Voice in workflows switch,
 // which is separate from voice notes in Taskiem's own chat and cannot be
 // turned on without a service.

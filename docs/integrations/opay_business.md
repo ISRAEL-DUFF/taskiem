@@ -40,7 +40,7 @@ Every request is `{paramContent, sign}` with the headers `clientAuthKey`, `versi
 
 **Never twice.** The engine's key is `out_order_no`. OPay refuses one it has seen with code 00005; the connector then looks the order up by `outOrderNo` and reports it, so a resend after a lost response returns the original order. Refused as a duplicate yet not found: the outcome stays unknown. 10000 ("system busy"), 11004 and 11005 are unknown outcomes for the create (OPay may have made the order; the engine resends under the same key) and retries for reads; A_1001 (expired) is retried; other codes refuse the step. A made order is read back for its status; when the read fails the order is reported `INITIAL` with OPay's `orderNo`.
 
-**Statuses** (API Basics): `SUCCESS` (money credited), `FAIL`, `CLOSE` (timed out), `CANCEL`, `PENDING` (only from a query); `INITIAL` appears on new terminal orders.
+**Statuses** (API Basics): `SUCCESS` (money credited), `FAIL`, `CLOSE` (timed out), `CANCEL`, `PENDING` (only from a query); `INITIAL` appears on new terminal orders. In the money log (`pos.sale`) only `FAIL`, `CLOSE` and `CANCEL` are declined; a status not listed here is pending, never declined.
 
 ## The general payment webhook
 
@@ -48,7 +48,7 @@ A Super Admin adds Taskiem's address under OPay Business → Integration → Dev
 
 | Trigger | Event | Dedup | Correlation |
 | --- | --- | --- | --- |
-| `payment` | `payment` (one event; the status is in the body) | the `X-Opay-Tranid` header (retries repeat it); the verified body's hash when it is missing | none: the body is encrypted when the key would be read |
+| `payment` | `payment` (one event; the status is in the body) | The payment (`payNo`, else `orderNo`) and its `status`, read from the decrypted notification by the connector's keyer, so a retry is dropped even when OPay encrypts and signs it again with a new timestamp, while the same payment's next status starts its workflows; OPay's `sign` only for a notification naming no payment. Not the `X-Opay-Tranid` header: OPay does not sign it, so a replay within the five minutes could change it and start the sale's workflows again | none: the body is encrypted when the key would be read |
 
 **Deliveries are verified, then decrypted.** The body is OPay's envelope (`clientAuthKey`, `version`, `bodyFormat`, `timestamp`, `paramContent`, `sign`), as the POS Integration page documents for this same URL. The trigger declares `verify: {scheme: connector}` with `secret_field: opay_public_key`: the connector's verifier refuses, with 401, anything that is not a complete envelope of version V1.0.1/JSON, a timestamp more than five minutes from now, or a `sign` that is not OPay's SHA256withRSA over `paramContent` + `timestamp`. Its **enricher** then runs for each workflow the event starts: it checks the envelope's `clientAuthKey` against the connection's in constant time and decrypts `paramContent` with the business's private key, so **a run sees OPay's plain notification** as `trigger.body` (a top-level `data` wrapper is unwrapped): `status`, `orderNo`, `payNo`, `outOrderNo`, `headMerchantId`, `merchantId`, `amount`, `fee`, `feePattern`, `payMethod`, `settlementAmount`, `settlementFee`, `currency`, `sn` (the terminal), `remark`, `senderName`, `senderBank`, `senderAccount` (masked), the recipient, `transactionTime` and `completedTime` (millisecond epochs), `additionalInformation` (JSON text with `rrn`). A delivery whose client auth key or key material is another business's fails to start the run, and OPay retries.
 
@@ -71,4 +71,5 @@ Because the connection's public key is the trigger's "secret", a connection with
 7. **`outOrderNo` limits** (length and characters): the connector sends 35 lowercase letters and digits.
 8. **Whether `transactionType` and `payType`** are in the general webhook's notification as they are in the POS page's (the general page hides them behind "show more parameters"); the templates do not depend on them.
 9. **Rate limits and the TN history's reach back in time** (the seven-day window per call is documented; how far back it goes is not).
-10. **A test business** with a terminal, a client auth key, OPay's public key and the webhook pointed at staging ([needs people, P16](../needs-people.md)).
+10. **Whether a payment's notifications differ only in status**: Taskiem keys a notification on its `payNo` and `status`, so a retry, re-signed or not, is dropped. If OPay sent two notifications for one payment in one status that each matter, the second would be dropped too.
+11. **A test business** with a terminal, a client auth key, OPay's public key and the webhook pointed at staging ([needs people, P16](../needs-people.md)).

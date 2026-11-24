@@ -20,7 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
-// Talk to it here (decision 0062 V7, R10): a member writes to an assistant
+// Talk to it here (decision 0074 V7, R10): a member writes to an assistant
 // as a customer would, from the conversations page. The message goes
 // through the assistant's guard (on a test channel of the member's own, so
 // STOP, the notice and a hand-over can be tried) and starts a sandbox run

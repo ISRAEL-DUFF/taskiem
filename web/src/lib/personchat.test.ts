@@ -1,0 +1,304 @@
+import { describe, expect, it } from "vitest";
+import { ApiError } from "../api";
+import {
+  aboutOrderDraft,
+  theirErrorWords,
+  linkChoices,
+  whatsappHere,
+  withoutTool,
+  basketTotal,
+  cardFigure,
+  cardKicker,
+  changeBasket,
+  chatAboutWords,
+  chatPreview,
+  closedNote,
+  fewLeftWords,
+  headLine,
+  hoursLines,
+  itemsWords,
+  mergeMessages,
+  minutesWords,
+  offersQuestion,
+  openWords,
+  payWords,
+  personFileURL,
+  plainItem,
+  sizeWords,
+  startProblem,
+  stateWords,
+  stopOffersWords,
+  withLatest,
+  cardsKey,
+  cardState,
+  clientFor,
+  deliveryStep,
+  erasedWords,
+  liveCard,
+  mayHaveArrived,
+  photoURL,
+  tradingWords,
+  TRANSFER_WARNING,
+  trustWords,
+  waitingWords,
+  type AppCard,
+  type PersonMessage,
+} from "./personchat";
+
+const msg = (id: string, at: string, extra: Partial<PersonMessage> = {}): PersonMessage => ({
+  id,
+  mine: false,
+  kind: "text",
+  body: id,
+  read_at: null,
+  created_at: at,
+  ...extra,
+});
+
+describe("a person's chats with businesses", () => {
+  it("asks about offers once, and stops them by name", () => {
+    expect(offersQuestion("Mama's Kitchen")).toBe("Get offers from Mama's Kitchen?");
+    expect(stopOffersWords("Mama's Kitchen")).toBe("Stop offers from Mama's Kitchen");
+  });
+
+  it("says why nothing can be written", () => {
+    expect(closedNote({ blocked: true, blocked_you: false, name: "Bola" })).toBe("You blocked Bola. Unblock them to write to them.");
+    expect(closedNote({ blocked: false, blocked_you: true, name: "Bola" })).toBe("Bola is not taking messages from you.");
+    expect(closedNote({ blocked: false, blocked_you: false, name: "Bola" })).toBeNull();
+  });
+
+  it("puts typing before the hours under the name", () => {
+    expect(headLine({ typing: true, hours: { open: true, line: "Open now" } })).toBe("typing…");
+    expect(headLine({ hours: { open: true, line: "Open now, closes at 18:00" } })).toBe("Open now, closes at 18:00");
+    expect(headLine({})).toBe("");
+  });
+
+  it("previews a row", () => {
+    expect(chatPreview({ last: "Is it ready?", last_mine: true, blocked: false, blocked_you: false })).toBe("You: Is it ready?");
+    expect(chatPreview({ last: "Yes", last_mine: false, blocked: false, blocked_you: false })).toBe("Yes");
+    expect(chatPreview({ last: "", last_mine: false, blocked: false, blocked_you: false })).toBe("No messages yet");
+    expect(chatPreview({ last: "Yes", last_mine: false, blocked: true, blocked_you: false })).toBe("You blocked them");
+  });
+
+  it("says an order's state in a customer's words", () => {
+    expect(stateWords("received")).toEqual({ label: "Sent", tone: "plain" });
+    expect(stateWords("awaiting_payment")).toEqual({ label: "To pay", tone: "warn" });
+    expect(stateWords("completed").label).toBe("Done");
+    expect(stateWords("something_new").label).toBe("Something new");
+    expect(stateWords(undefined).label).toBe("");
+  });
+
+  it("names a card's kind and its figure", () => {
+    expect(cardKicker({ type: "order", title: "Order MK-1" })).toBe("Order");
+    expect(cardKicker({ type: "order", title: "Booking MK-2" })).toBe("Booking");
+    expect(cardKicker({ type: "booking", title: "Book Braids" })).toBe("Book");
+    expect(cardKicker({ type: "booking", title: "Booking MK-3", reference: "MK-3" })).toBe("Booking");
+    expect(cardKicker({ type: "pay", title: "Pay for MK-1" })).toBe("Pay");
+    expect(cardKicker({ type: "product", title: "Jollof" })).toBe("Product");
+    expect(cardFigure({ type: "booking", title: "Book Braids", total_kobo: 1_500_000, minutes: 90 })).toBe("₦15,000 · 1 h 30 min");
+    expect(cardFigure({ type: "product", title: "Jollof" })).toBe("");
+    expect(minutesWords(45)).toBe("45 min");
+    expect(minutesWords(60)).toBe("1 h");
+  });
+
+  it("keeps a basket: more, fewer, gone at none, totals with the delivery fee", () => {
+    const rice = { item_id: "r", name: "Rice", price_kobo: 250_000 };
+    let b = changeBasket([], rice, 1);
+    b = changeBasket(b, rice, 1);
+    b = changeBasket(b, { item_id: "s", name: "Stew", price_kobo: 100_000 }, 1);
+    expect(b).toEqual([
+      { ...rice, quantity: 2 },
+      { item_id: "s", name: "Stew", price_kobo: 100_000, quantity: 1 },
+    ]);
+    expect(basketTotal(b)).toBe(600_000);
+    expect(basketTotal(b, 50_000)).toBe(650_000);
+    expect(itemsWords(b)).toBe("3 items");
+    b = changeBasket(b, rice, -2);
+    expect(b.map((l) => l.item_id)).toEqual(["s"]);
+    expect(itemsWords(b)).toBe("1 item");
+    expect(changeBasket([], rice, -1)).toEqual([]);
+  });
+
+  it("names sizes and how few are left", () => {
+    expect(sizeWords({ colour: "Red", size: "42" })).toBe("Red, 42");
+    expect(fewLeftWords(3)).toBe("Only 3 left");
+    expect(fewLeftWords(undefined)).toBe("");
+    expect(fewLeftWords(0)).toBe("");
+    expect(plainItem({ id: "a", name: "A", available: true })).toBe(true);
+    expect(plainItem({ id: "a", name: "A", available: true, sizes: [{ id: "a1", variant: { size: "S" }, available: true }] })).toBe(false);
+  });
+
+  it("says how an order is paid", () => {
+    expect(payWords("at_order", "Bola")).toBe("You pay when you order, by a pay link.");
+    expect(payWords("after_accept", "Bola")).toBe("You pay once Bola accepts your order.");
+    expect(payWords("none", "Bola")).toBe("You pay Bola as you agree with them.");
+  });
+
+  it("merges a thread by id, oldest first, keeping sends under way", () => {
+    const a = msg("a", "2026-11-16T10:00:00Z");
+    const b = msg("b", "2026-11-16T10:01:00Z");
+    const c = msg("c", "2026-11-16T10:02:00Z");
+    expect(mergeMessages([c, a], [b, a]).map((m) => m.id)).toEqual(["a", "b", "c"]);
+    const local = msg("local-1", "2026-11-16T10:03:00Z", { mine: true, local: true });
+    const older = msg("old", "2026-11-16T09:00:00Z");
+    expect(withLatest([older, a, local], [b, c], true).map((m) => m.id)).toEqual(["old", "a", "b", "c", "local-1"]);
+    expect(withLatest([older, a, local], [b, c], false).map((m) => m.id)).toEqual(["b", "c", "local-1"]);
+  });
+
+  it("reads a shop's hours and whether it is open", () => {
+    const day = [{ open: "08:00", close: "18:00" }];
+    expect(hoursLines({ days: [day, day, day, day, day, [{ open: "10:00", close: "14:00" }], []] })).toEqual([
+      "Monday 08:00 to 18:00",
+      "Tuesday 08:00 to 18:00",
+      "Wednesday 08:00 to 18:00",
+      "Thursday 08:00 to 18:00",
+      "Friday 08:00 to 18:00",
+      "Saturday 10:00 to 14:00",
+      "Sunday closed",
+    ]);
+    expect(hoursLines(undefined)).toEqual([]);
+    expect(openWords(true)).toBe("Open now");
+    expect(openWords(false)).toBe("Closed now");
+    expect(openWords(undefined)).toBe("");
+  });
+
+  it("says a refused start plainly", () => {
+    expect(startProblem(410, { link_replaced: true }, "x")).toBe("This link no longer works. Ask the business for its new link.");
+    expect(startProblem(403, { blocked: true }, "x")).toBe("This business is not taking messages from you.");
+    expect(startProblem(409, {}, "Add your phone number first.")).toBe("Add your phone number first.");
+  });
+
+  it("chats about an order, and reads files from the person's own copy", () => {
+    expect(chatAboutWords("Mama's Kitchen")).toBe("Chat with Mama's Kitchen about this order");
+    expect(aboutOrderDraft("MK-2X4F")).toBe("Hello, about my order MK-2X4F: ");
+    expect(personFileURL("c 1", "m/2")).toBe("/v1/me/chats/c%201/files/m%2F2");
+  });
+});
+
+describe("stage 2's review fixes, the person's side", () => {
+  it("counts the orders waiting for These are mine, and shows nothing else of them", () => {
+    expect(waitingWords(3)).toBe("We found 3 orders made with your number before it was on your account. Are they yours?");
+    expect(waitingWords(1)).toBe("We found 1 order made with your number before it was on your account. Is it yours?");
+  });
+
+  it("says what a business has proved in plain words", () => {
+    expect(trustWords({ phone: true, business: false, payments: true, months: 8 })).toBe("Phone checked · Payments through Taskiem · Trading 8 months");
+    expect(trustWords({ phone: true, business: true, payments: false, months: 1 })).toBe("Phone checked · Business checked · Trading 1 month");
+    expect(trustWords({ phone: false, business: false, payments: false, months: 0 })).toBe("New on Taskiem");
+    expect(trustWords(undefined)).toBe("");
+    expect(tradingWords(12)).toBe("Trading 1 year");
+    expect(tradingWords(30)).toBe("Trading 2 years");
+  });
+
+  it("warns about transfers to an account in Taskiem's words", () => {
+    expect(TRANSFER_WARNING).toBe("Pay only through Taskiem's pay links. Taskiem never asks you to send money to a personal account.");
+  });
+
+  it("takes the photo at an avatar's size", () => {
+    expect(photoURL({ urls: { "800": "/b", "320": "/a" } })).toBe("/a");
+    expect(photoURL({ urls: { "2000": "/c" } })).toBe("/c");
+    expect(photoURL(undefined)).toBeUndefined();
+  });
+
+  it("says a conversation closed by an erasure plainly, on both sides", () => {
+    expect(erasedWords(409, "This business erased your details from its records, so this conversation is closed.", "person")).toBe(
+      "This business erased your details from its records, so this conversation is closed.",
+    );
+    expect(erasedWords(409, "this customer's details were erased", "business")).toBe("This customer's details were erased, so this conversation is closed.");
+    expect(erasedWords(409, "You blocked this business.", "person")).toBeNull();
+    expect(erasedWords(403, "erased", "person")).toBeNull();
+  });
+
+  it("keeps a send's client_id when its answer never came and the same words go again", () => {
+    expect(mayHaveArrived(0)).toBe(true);
+    expect(mayHaveArrived(502)).toBe(true);
+    expect(mayHaveArrived(409)).toBe(false);
+    let n = 0;
+    const fresh = () => `new-${++n}`;
+    expect(clientFor({ text: "Hello", client: "c1" }, "Hello", fresh)).toBe("c1");
+    expect(clientFor({ text: "Hello", client: "c1" }, "Hello there", fresh)).toBe("new-1");
+    expect(clientFor(undefined, "Hello", fresh)).toBe("new-2");
+  });
+
+  it("says how an order is paid, on delivery too", () => {
+    expect(payWords("on_delivery", "Mama's Kitchen")).toBe("You pay when it reaches you.");
+  });
+
+  it("names invoice and delivery cards, and follows an order's state and its rider", () => {
+    const delivery: AppCard = {
+      type: "delivery",
+      reference: "MK-1",
+      title: "Delivery of MK-1",
+      line: "A rider is going to collect it",
+      status: "accepted",
+      delivery: { status: "accepted", line: "A rider is going to collect it" },
+    };
+    expect(cardKicker(delivery)).toBe("Delivery");
+    expect(cardKicker({ type: "invoice", title: "Invoice INV-0001" })).toBe("Invoice");
+    expect(cardState(delivery)).toEqual({ label: "Rider coming", tone: "plain" });
+    expect(cardState({ type: "invoice", status: "part_paid" })).toEqual({ label: "Part-paid", tone: "warn" });
+    expect(deliveryStep({ status: "arrived" })).toBe(3);
+    const now = liveCard(delivery, { status: "on_the_way", delivery: { status: "picked_up", line: "On its way to you" } });
+    expect(now.status).toBe("picked_up");
+    expect(now.line).toBe("On its way to you");
+    expect(cardState(now).label).toBe("On the way");
+    const order: AppCard = { type: "order", reference: "MK-1", title: "Order MK-1", status: "received" };
+    expect(liveCard(order, { status: "paid" }).status).toBe("paid");
+    expect(liveCard(order, undefined)).toBe(order);
+    // A product's card is as it was sent.
+    const product: AppCard = { type: "product", title: "Rice", item_id: "i1" };
+    expect(liveCard(product, { status: "paid" })).toBe(product);
+  });
+
+  it("knows when the cards name other orders, so they are read again", () => {
+    const card = (id: string, reference: string, type: AppCard["type"] = "order") => msg(id, `2026-11-17T10:00:0${id}Z`, { kind: "card", card: { type, reference, title: reference } });
+    expect(cardsKey(undefined)).toBe("");
+    expect(cardsKey([msg("1", "2026-11-17T10:00:00Z")])).toBe("");
+    const a = cardsKey([card("1", "MK-2"), card("2", "MK-1")]);
+    expect(a).toBe("MK-1,MK-2|2");
+    // The same order's card again is news (its state may have moved).
+    expect(cardsKey([card("1", "MK-2"), card("2", "MK-1"), card("3", "MK-1", "delivery")])).toBe("MK-1,MK-2|3");
+    // Invoice and product cards are not orders.
+    expect(cardsKey([card("1", "INV-0001", "invoice")])).toBe("");
+  });
+});
+
+describe("a tool asked for on the way into a chat", () => {
+  it("leaves the history state once opened", () => {
+    expect(withoutTool({ tool: "shop" })).toBeNull();
+    expect(withoutTool({ tool: "book", notice: "Started" })).toEqual({ notice: "Started" });
+    expect(withoutTool({ notice: "Started" })).toBeUndefined();
+    expect(withoutTool(null)).toBeUndefined();
+  });
+});
+
+describe("one customer across the app and WhatsApp (§11)", () => {
+  it("says the WhatsApp chat is here too, once it is", () => {
+    expect(whatsappHere({ lines: ["app", "whatsapp"] })).toBe("Your WhatsApp chat with them is here too");
+    expect(whatsappHere({ lines: ["app"] })).toBe("");
+    expect(whatsappHere({})).toBe("");
+  });
+
+  it("offers Chat on Taskiem, Chat on WhatsApp, or both", () => {
+    const wa = { number: "+234 800 000 0001", link: "https://wa.me/2348000000001" };
+    expect(linkChoices({ takes_chats: true, choices: ["whatsapp", "taskiem"], whatsapp: wa })).toEqual({ taskiem: true, whatsapp: wa.link });
+    expect(linkChoices({ takes_chats: false, choices: ["whatsapp"], whatsapp: wa })).toEqual({ taskiem: false, whatsapp: wa.link });
+    expect(linkChoices({ takes_chats: true, choices: ["taskiem"] })).toEqual({ taskiem: true, whatsapp: null });
+    expect(linkChoices({ takes_chats: false, choices: [] })).toEqual({ taskiem: false, whatsapp: null });
+    // An answer without choices: Taskiem while it takes chats.
+    expect(linkChoices({ takes_chats: true })).toEqual({ taskiem: true, whatsapp: null });
+    expect(linkChoices({ takes_chats: true, choices: ["whatsapp", "taskiem"] })).toEqual({ taskiem: true, whatsapp: null });
+    // Only a wa.me link becomes the button's href.
+    for (const link of ["javascript:alert(1)", "http://wa.me/2348000000001", "https://wa.me.evil.test/1", "https://example.com/wa.me/1", ""])
+      expect(linkChoices({ takes_chats: true, choices: ["whatsapp", "taskiem"], whatsapp: { number: wa.number, link } })).toEqual({ taskiem: true, whatsapp: null });
+  });
+});
+
+describe("theirErrorWords", () => {
+  it("says a tool not offered to customers, one gone, too many tries, and the rest as a start", () => {
+    expect(theirErrorWords(new ApiError(409, "This can't be done from here.", [], { not_offered: true }))).toBe("This can't be done from here. Ask them here in the chat.");
+    expect(theirErrorWords(new ApiError(404, "no tool /x", []))).toBe("This isn't available any more.");
+    expect(theirErrorWords(new ApiError(429, "slow down", []))).toBe("Too many tries just now. Try again in a while.");
+    expect(theirErrorWords(new ApiError(409, "that confirmation has expired; start the tool again", [], {}))).toBe("That confirmation has expired; start the tool again");
+  });
+});

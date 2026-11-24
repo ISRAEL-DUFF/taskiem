@@ -105,7 +105,7 @@ func CheckOrigin(s string) error {
 
 // checkRetiredTriggers refuses trigger types that no longer start runs.
 // "whatsapp" was in wd/v1 from the start but nothing ever started a run
-// with it (docs/spec/voice-assistant.md, C12; decision 0062): a message
+// with it (docs/spec/voice-assistant.md, C12; decision 0074): a message
 // to a business's WhatsApp number starts a workflow through the WhatsApp
 // connection's own trigger. The type stays in the schema so versions saved
 // with it still read; saving or publishing one is refused.

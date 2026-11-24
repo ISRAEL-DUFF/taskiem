@@ -82,30 +82,39 @@ func actorType(actor string) string {
 func (v *Vault) Put(ctx context.Context, tenant uuid.UUID, env, name string, value []byte, by string) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `SELECT id FROM secrets WHERE tenant_id = $1 AND environment = $2 AND name = $3`, tenant, env, name).Scan(&id)
-		isNew := errors.Is(err, pgx.ErrNoRows)
-		if err != nil && !isNew {
-			return err
-		}
-		if isNew {
-			id = uuid.Must(uuid.NewV7())
-		}
-		ct, wdek, ver, err := v.encrypt(ctx, tx, tenant, id, env, name, value)
-		if err != nil {
-			return err
-		}
-		if isNew {
-			_, err = tx.Exec(ctx, `INSERT INTO secrets (id, tenant_id, environment, name, ciphertext, wrapped_key, kek_version, aad_version, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, 2, $8)`,
-				id, tenant, env, name, ct, wdek, ver, by)
-		} else {
-			_, err = tx.Exec(ctx, `UPDATE secrets SET ciphertext = $2, wrapped_key = $3, kek_version = $4, aad_version = 2, updated_at = now() WHERE id = $1`, id, ct, wdek, ver)
-		}
-		if err != nil {
-			return err
-		}
-		return audit(ctx, tx, tenant, by, "secret.write", env+"/"+name, map[string]any{"secret_id": id})
+		var err error
+		id, err = v.PutTx(ctx, tx, tenant, env, name, value, by)
+		return err
 	})
 	return id, err
+}
+
+// PutTx is Put inside the caller's transaction (scoped to tenant), so the
+// secret is written, or not, with the caller's other changes.
+func (v *Vault) PutTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, name string, value []byte, by string) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM secrets WHERE tenant_id = $1 AND environment = $2 AND name = $3`, tenant, env, name).Scan(&id)
+	isNew := errors.Is(err, pgx.ErrNoRows)
+	if err != nil && !isNew {
+		return id, err
+	}
+	if isNew {
+		id = uuid.Must(uuid.NewV7())
+	}
+	ct, wdek, ver, err := v.encrypt(ctx, tx, tenant, id, env, name, value)
+	if err != nil {
+		return id, err
+	}
+	if isNew {
+		_, err = tx.Exec(ctx, `INSERT INTO secrets (id, tenant_id, environment, name, ciphertext, wrapped_key, kek_version, aad_version, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, 2, $8)`,
+			id, tenant, env, name, ct, wdek, ver, by)
+	} else {
+		_, err = tx.Exec(ctx, `UPDATE secrets SET ciphertext = $2, wrapped_key = $3, kek_version = $4, aad_version = 2, updated_at = now() WHERE id = $1`, id, ct, wdek, ver)
+	}
+	if err != nil {
+		return id, err
+	}
+	return id, audit(ctx, tx, tenant, by, "secret.write", env+"/"+name, map[string]any{"secret_id": id})
 }
 
 // Get returns a named secret's value; it implements runtime.Secrets. The

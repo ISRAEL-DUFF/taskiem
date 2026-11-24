@@ -1,0 +1,368 @@
+# Menus in the chat: showing people what they can do
+
+Status: **settled** (21 November 2026), written with the founder, who took every recommendation in §2. **M1 to M4 are built** (21 November 2026; see "What M1 built" to "What M4 built" at the end). It follows [the model's help with a message nothing recognised](../languages.md) (PR #217, built 20 November 2026), which it extends.
+
+Builds on: [chat tools](chat-tools.md) (the tools panel, the tool sheets, the forms), [business chat tools](business-chat-tools.md), [the phone app's look](mobile-app-look.md) (Direction B), [saved objects](saved-objects.md) (`@name`), [Schools in the chat](schools-in-the-chat.md), [languages](../languages.md) (the word lists, the model's routing).
+
+## 1. Why
+
+A business runs Taskiem from a chat by typing commands: *sold 3 bags of rice 45,000 cash*, *add rider Musa 0803 123 4567 Ikeja*, *adjust rice -2 spoilt*. There are well over a hundred, and more come with every feature. Until 20 November a message Taskiem did not recognise was answered with all of them, up to 29 dense lines. Since PR #217, the model reads that list for the person and works out the one command they meant, asks for what is missing, or says Taskiem cannot do it.
+
+That helps when the model can name one command. When it cannot, the person is still left with words to guess. Someone who types "my rider issue" or "stock thing" does not want to be told what to type; they want to be **shown what they can do about riders, or stock, and pick**.
+
+So the chat answers with **menus**: the actions of a topic, as rows to tap. Each row shows something at once, opens the form for it already filled in with what the person said, or asks for what it needs one question at a time. The typed command is shown small under each row, for those who want to learn it, and never needed.
+
+## 2. Decisions
+
+The founder took each recommendation (21 November 2026):
+
+1. **When the model is sure of one action and has all it needs, it acts as now**: shows the result, or asks Yes first where the action would change something without asking by itself (PR #217). The menu is for when it is not sure.
+2. **Help becomes the menu of topics, on every channel.** *help* and a topic's word alone (*riders*, *stock*) open menus; *help all* still sends the whole list in words.
+3. **An action with no form yet asks step by step**, in the chat, on every channel. Forms for those actions come in the last phase (§12, M4) and replace the questions in the app and on the web.
+4. **This spec is settled before any building.**
+
+## 3. The catalogue of actions
+
+Today the commands are written down three times: the help's lines (`waHelp`, `wa.help.*`), the code that reads typed words, and the tools panel's tiles (`chatTools`, `schoolTools`; `mobile/lib/chat/tools.dart`, `web/src/lib/tools.ts`). They drift.
+
+There is to be **one catalogue** (`api/chat_actions.go`), and everything comes from it: help in words and as a menu, the model's list, the menus, the tools panel's tiles, and WhatsApp's and Telegram's menus. A new feature adds one entry and appears everywhere.
+
+An **action** has:
+
+| Field | What it is |
+| --- | --- |
+| `id` | Stable, short: `riders.add`, `stock.adjust` |
+| `topic` | The topic it is listed under (§4); an action may be listed under a second topic (selling is in Sales and in Stock) |
+| `title` | What the row says, in the person's language: "Add a rider" (24 characters at most, WhatsApp's limit) |
+| `line` | One line under the title: "Name, phone and the areas they cover" (72 at most) |
+| `icon` | One of the look's icons (`mobile/lib/theme/look_icons.dart`, its web twin) |
+| `perm`, `area` | Who may use it, and the part of Taskiem it belongs to: a row the person may not use, or of a part the business turned off, is not shown (as `waHelp` and `chatAreas` do now) |
+| `does` | `show` (only shows something), `asks` (asks before it changes anything: a money entry, an invoice, a run) or `changes` (changes something when done) |
+| `shortcut` | The typed command, as the help gives it: "add rider Musa 0803 123 4567 Ikeja" |
+| `opens` | How it is done: `show` (the answer, at once), `form` (a form in the app and on the web, by key), `questions` (asked step by step, §7), or `page` (a page on the web, by path) |
+| `fields` | For `questions` and to fill a form: each value it needs, its kind (text, money, number, phone, a choice from a list, a product, a customer, a rider, a date), whether it is needed, and its question |
+
+A shortcut starting with `/` opens a tool as *tools* does today (`waToolsCommand`); an action with no typed command yet ("none yet" in §4) has no shortcut line on its row. A test holds the catalogue to the code: every action's shortcut is read by the chat as that action, and every command the chat reads has an entry. A command with no entry fails the build.
+
+## 4. The topics and their actions
+
+The first catalogue, from what Taskiem does today. *Form* names the form the app and web already have; *questions* are asked step by step until M4.
+
+**Sales**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Record a sale | changes | form: Sell | *sold 3 bags of rice 45,000 cash* |
+| Today's sales | show | show | *how did we do today* |
+| How we did this week | show | show | *how did we do this week* |
+| Hand over a shift | changes | form: Handover | */handover* |
+
+**Stock**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| See what's low | show | show | *stock* |
+| How many of an item | show | show | *stock rice* |
+| Add stock that came in | changes | form: Stock in | *add 50 cartons of Indomie at 8,500* |
+| Add something to count | asks | questions (Do you sell it?) | *add 20 yards of ankara fabric* |
+| Correct a count | changes | questions | *adjust rice -2 spoilt* |
+| Count the shelf | changes | questions (item by item, as now) | *count rice 12, indomie 40* |
+| Record a sale | changes | form: Sell | (as in Sales) |
+
+**Products**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Add a product | changes | form: Product | *add product Jollof rice 2000* |
+| Change a price | changes | form: Product | *price jollof rice 2500* |
+| Hide or show a product | changes | questions | *hide jollof rice* |
+| Add a service | changes | form: Service | *add service Haircut 30 2000* |
+| Price lists | show | form: Price list | */prices* |
+
+**Your page**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| See your page, and its QR code | show | show | *my page*, *qr* |
+| Opening hours | changes | questions | *hours mon-sat 8-6* |
+| Close or open the shop | changes | questions | *close shop* |
+| Other pages (menus) | show | page | *fronts* |
+
+**Orders**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Open orders | show | show | *orders* |
+| One order | show | questions (which) | *order TK-0042* |
+| Mark ready or delivered | changes | questions (which, then which) | *order TK-0042 ready* |
+| Refund an order | changes | questions | *refund TK-0042* |
+
+**Deliveries and riders**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Your riders, and who's free | show | show | *riders* |
+| Add a rider | changes | questions (form in M4) | *add rider Musa 0803 123 4567 Ikeja* |
+| Give an order to a rider | changes | questions (which order, which rider) | *order TK-0042 to Musa* |
+| Take an order back | changes | questions | *release TK-0042* |
+| Today's deliveries | show | show | *deliveries* |
+| Offer every order to riders | changes | questions (Yes) | *turn on deliveries* |
+
+**Bookings**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Today's bookings | show | show | *bookings*, *today* |
+| Move a booking | changes | questions | *move TK-0042 to Sat 11:00* |
+| Cancel a booking | changes | questions | *booking TK-0042 cancel* |
+| Take a day off | changes | questions | *off 25 Dec* |
+
+**Buying from suppliers**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Your suppliers | show | show | *suppliers* |
+| Add a supplier | changes | questions (form in M4) | *add supplier Dangote Depot 0803 123 4567 for rice* |
+| Order from a supplier | changes | questions | *order from Dangote* |
+| Goods received | changes | questions | *received 50 cartons of indomie* |
+| Pay a supplier | changes | questions | *paid Dangote 425,000 transfer* |
+| Your bills | show | page: Bills | */bills* |
+
+**Money**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Record money spent | asks | questions | *spent 12,000 on diesel* |
+| Cash in or out | asks | questions | *cash in 20,000 till* |
+| Money this week | show | page: Money | */money* |
+| Send an invoice | asks | questions | *invoice Ada 25,000 for 5 bags of rice* |
+| Your invoices | show | page: Invoices | */invoices* |
+
+**Customers who owe you**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Who owes you | show | show | *who owes me* |
+| Someone owes you | changes | questions | *Ada owes 5,000* |
+| Someone paid | changes | questions | *Ada paid 2,000 cash* |
+| Send a customer their balance | changes | questions | *send Ada her balance* |
+
+**Staff and tasks**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Your tasks | show | show | *my tasks* |
+| Give someone a task | changes | form: Give a task | *@Tunde count the float by 7am* |
+| Waiting for your approval | show | show | *approvals* |
+
+**Your lists (tables)**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Your lists | show | show | *tables* |
+| Look something up | show | questions | *find customers Ada* |
+| Add to a list | asks | form: Row | *add to customers* |
+| Ask a question about them | show | questions | *how many customers in Ikeja* |
+| Make a new list | changes | questions | *new table* |
+
+**Automations**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| What ran today | show | show | *status* |
+| Run an automation | asks | questions (which) | *run Salary reminders* |
+| Automate something new | asks | questions | *build every Friday text my customers who owe me* |
+| Connect a service | changes | questions | *connect Paystack* |
+
+**Saved things**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Your saved things | show | page | none yet |
+| Save something | asks | questions | *save mum: GTBank 0123456789* |
+| Ask about a saved thing | show | questions | *what's @mum's phone?* |
+| Remind me of a date | changes | questions | *remind me when @car insurance is due* |
+| Your reminders | show | show | *my reminders* |
+| Share a saved thing | asks | questions | *share @our-account with Ada's Kitchen* |
+| Import from a file | changes | page | none (the Saved page) |
+
+The saved things' rows came with saved objects S2 and S3 (built-plan stage 2); Suppliers has **Deliver to a saved place** (*deliver P-7QX4KD to @warehouse*) too. A field may take a saved thing (`saved`, any kind, by its name; `saved_place`, a place) or a person (`person`: a name typed, or a saved person): its chips are the person's own and the business's saved things of that kind, most recently changed first, as `@name`. "Send an invoice" takes its customer so. The model is told the person's saved things by `@name` and kind, never what they hold, so a message about one in any language picks these rows.
+
+**School** (for those who read the school, as the tools panel's school tiles)
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Students | show | page | */students* |
+| Record a payment | asks | form (the app's) | *cash 50k from Mrs Bello for Tunde* (when built: [Schools in the chat](schools-in-the-chat.md) §1) |
+| Who owes, by how late | show | page | none yet |
+| Clearance | show | page | none yet |
+
+**Your account**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
+| Switch business | changes | questions (a choice) | *switch Ada's Kitchen* |
+| Language | changes | questions (a choice) | *language Yoruba* |
+| Sign in on the web | show | show | *sign in* |
+| Your plan | show | show | *plan* |
+
+Message a linked business (*... @Dangote how much is a bag of cement?*) and voice notes are not actions: they stay as the help says them, in a line under the topics menu.
+
+Topics are shown in this order, with those the person cannot use at all left out; from M2, those the person uses most come first (§6.1).
+
+## 5. When a menu is shown
+
+1. **help**: the menu of topics (§6). *help all*: the whole list in words, as today. *help stock* or *help riders*: that topic's menu.
+2. **A topic's word alone**: *riders*, *stock*, *money*, *suppliers*. Where the word is already a command that shows something (*riders* lists them), the answer comes first and the topic's menu under it.
+3. **A message nothing recognises** goes to the model (§8). If it is sure of one action and has its values, it acts as now (decision 1). If it knows the topic but not the action, or the action but not its values, the answer is that topic's menu, with what it understood filled in (§6, §7). If nothing fits, one line saying what Taskiem cannot do, then the topics menu.
+4. **Without the model** (not on the plan, over the budget or the limit): the topic is found by words (§8.3) and its menu shown; with no topic found, "Sorry, I did not understand that." and the topics menu. Nobody is left with a line of text and nothing to press.
+
+A menu never does anything by itself: it is only choices.
+
+## 6. The menu in the Taskiem chat (app and web)
+
+A **menu card** in Taskiem's conversation, drawn in the app's own look (Direction B) on the phone and as the web chat's cards are:
+
+- **A head:** the topic's icon on its colour, its name ("Riders"), and when the model sent it, one plain line of what it understood ("About riders. What would you like to do?").
+- **Rows,** as the tools panel's rows (`TkListRow`; the web's `.tk-row`): the action's icon on its colour, its title and its line, one row each. A row with values from the message says so: "Add a rider: *Musa*". **At most five rows** show in the chat (§6.1).
+- **A foot,** with "All 9 for Products" when the topic has more than five (it opens them all in a sheet over the chat, the tools panel's sheet), and "All topics", which turns the card into the topics menu in place.
+- **A tip,** under the card, only when the model picked a row: that row's shortcut, once ("Next time you can type: *add rider Musa 0803… Ikeja*"). No other row carries its shortcut; *help all* has them all.
+- **The topics menu** is a **grid of tiles**, four to a row, as the tools panel draws its tools: each tile the topic's icon on its colour and its name. Sixteen topics fit in four rows of tiles. A tile pressed turns the card into that topic's menu in place.
+
+### 6.1 Keeping it short
+
+A menu must never fill the screen, so the chat stays a conversation:
+
+1. **Five rows at most** in a topic's menu in the chat; the rest behind "All N" in a sheet.
+2. **Which five:** the row the model picked first, then those the person used most in the last 30 days (pressed or typed, counted per person and business, from M2), then the catalogue's order. Before M2, the catalogue's order, which puts the most common first.
+3. **One row, one line:** a title and its line; no shortcut on the rows.
+4. **One menu open at a time:** when a newer menu arrives, every older one folds to its one line.
+5. **Topics as tiles**, not rows.
+6. **No topic of more than about seven actions:** a topic that grows past that is split, as Products and Your page are.
+
+Measured in the demo (a 390 px wide phone): a topic's menu (a head, five rows, a foot) is about 390 px, and the topics grid about the same. That is under half the screen of a 390 by 844 phone, and about two thirds of the chat's height on a small 360 by 640 one, so the person still sees their own message above it.
+
+**Pressing a row:**
+
+| The row | What happens |
+| --- | --- |
+| `show` | The answer appears in the chat as if the shortcut were typed (cards where the answer has them: a rider list, low stock, an order) |
+| `form` | The form opens as a sheet over the chat (the same sheet the tools panel opens), its fields filled with what the message gave. Its own Save does it, and the result is said in the chat as now |
+| `questions` | The first question appears in the chat (§7) |
+| `page` | The page opens (in the app where it has the screen; else the web, as `openToolPage` does) |
+
+Once a row is pressed, the card **folds** to one line saying what happened, and does not unfold (21 November 2026: "Show again" kept a finished menu alive and in the way):
+
+- **"Riders · You chose Add a rider"**: a row pressed, or a row that opened a tool or a page here.
+- **"Riders · Closed, nothing done"**: its **✕**, in the card's head, so a menu can be put away without choosing.
+- **"Riders · Not used"**: the person typed something else, or a newer menu came (§6.1). A menu stays open only while nothing has been said since it.
+
+How it ended is kept with the menu (`chat_history.menu_done`, migration 00500: `chose:<id>`, `closed`, `passed`) and given in its text as `done` and `chose`, so it folds the same after a reload and on another device. The server ends a person's open menus when they next say something (`settleMenus`); the ✕, and a row that opens a tool or a page (nothing sent to Taskiem), tell it with `POST /v1/taskiem-chat/menus/{id}/close` (`{"chose": id}` for a row). A newer answer makes the card's rows unpressable, as Taskiem's buttons are now (`clearLiveButtons`). In the history the card is kept by its topic and rows' titles only, as buttons are (`keepHistory`).
+
+The card passes the app's rules (`mobile/CLAUDE.md`): light and dark, 340 to 390 wide, large text with nothing cut off, every row 48 px and labelled for screen readers ("Add a rider. Name, phone and the areas they cover. Button."). On the web it passes axe at 390 and 360 in both themes.
+
+## 7. Step by step: questions in the chat
+
+An action that opens `questions` asks for its fields one at a time, in the chat, on every channel. Nothing new is written: the answers **make the action's own command**, and the chat reads it as typed, with its permissions and confirmations as now.
+
+1. Fields the message already gave are taken, said back ("Adding a rider: Musa."), and not asked.
+2. Each missing field is asked with its question: "What's Musa's phone number?" A field that is a choice (a rider, an order, a product, an area, a business) comes as a menu of the choices (the five most likely first, then "Something else" to type it).
+3. A field the person may leave out says so ("Which areas does Musa cover? Send *skip* if any").
+4. An answer is checked as the command would check it (a phone that is not a phone, an amount that is not money), and the question is asked again with why, at most twice, then "Let's leave it for now" and the topic's menu.
+5. With everything, the command is made and read as typed. An action that `changes` shows it first and waits for **Yes** (decision 1; PR #217's confirmation, the same card): "Add rider *Musa*, *0803 123 4567*, covering *Ikeja*? Yes / No". One that `asks` already asks by itself.
+6. *cancel* at any time drops it ("Left it."). Any message that does not answer the question lets it go and is read as a new one, as a found row is now.
+
+The questions are kept as the session's state (`chatData`, as a debt or a money entry is now), with the usual time limit (`waPendingTTL`).
+
+## 8. The model, and finding a topic without it
+
+### 8.1 What the model reads
+
+Instead of the help's lines, the model is given the catalogue, the person's own (their permissions and areas): each topic, and each action's id, title, line and shortcut. It answers one of:
+
+| Kind | With | Then |
+| --- | --- | --- |
+| `action` | an action's id and the values it understood (`{"name": "Musa", "phone": "0803 123 4567"}`) | All needed values: done as now (decision 1). Some missing: the action's form opens filled in (app and web), or its questions start with those taken (§7) |
+| `topic` | a topic's id, and any values | The topic's menu, with what it understood on the rows it fits |
+| `ask` | one short question | As now: the answer is read with the message |
+| `cannot` | one or two sentences | As now, then the topics menu |
+
+Ids and values are checked: an id not in the person's own catalogue, or a value not of its field's kind, is refused, as today's answers are. The model still never confirms: an `action` that `changes` shows its Yes first, whatever the model says.
+
+The other rules stay as built: the prompt redacted, the AI budget, 30 an hour a chat, the call recorded as `understand` without the words, a command from the model read once and never sent back to it.
+
+### 8.2 Values into a form
+
+An action's `fields` name the form's fields. The app and the web open the form with them (`initial` values, as `TaskForm` takes a person and a due time now). A value the form cannot take (a product that is not in the list) is left empty for the person, never guessed.
+
+### 8.3 A topic by its words, without the model
+
+Each topic has **words** in each language's word list (`engine/lang/intents`, drafts for the four languages, like the rest): *rider, dispatch, delivery, okada, bike* for riders; *stock, carton, bag, count, shelf, finished, remain* for stock; *spent, money, cash, transfer, expense* for money; and so on. A message nothing recognises, with no model to ask, that has one topic's words gets that topic's menu. With words of several, the topics menu with those topics first. The words are matched as the chat's other words are (without accents or tone marks, the person's language first, English always).
+
+## 9. On WhatsApp, Telegram and Slack
+
+The same menus, in each app's own way. A row's id is the action's (`act:riders.add`), and a press is read as the row would be in the Taskiem chat: shown, asked step by step, or a link to the form on the web, filled in (as the tool requests' links are now, `chat_tool_requests.go`).
+
+| | Topics menu | A topic's menu | A form |
+| --- | --- | --- | --- |
+| **WhatsApp** | A **list message**: the text, and one button ("Choose") opening the rows in WhatsApp's own pop-up, so the chat stays short; up to 10 rows in all, in sections. More than 10 topics: the 9 most used, then "More…" | A list message: every action of the topic (a topic has at most about seven), each with its title (24 characters) and line (72) | Questions in the chat; a link to the web's form for one that has a form and many fields (products with photos) |
+| **Telegram** | Buttons under the message, two to a row for topics | One button a row, five at most, then "All N" | As WhatsApp |
+| **Slack** | Buttons in the message (Block Kit), five at most, then "More…" | The same | As WhatsApp |
+
+Taskiem's WhatsApp client sends only reply buttons today (`SendButtons`, three at most): **list messages are new** (`SendList` in `engine/whatsapp/graph.go`, the reply read as a button's is now). Lists, like buttons, can be sent only inside WhatsApp's 24-hour window; outside it Taskiem's answers are templates anyway.
+
+On every channel a row can also be chosen by its **number** ("2"), so a menu still works where an app shows it as text.
+
+## 10. What changes for the API
+
+- `GET /v1/chat/actions`: the person's own catalogue (topics, actions, fields), for the tools panel and the composer's `/` list; cached with an ETag, as the kept pages are (K4).
+- A Taskiem message gains `menu`: `{topic, title, line, rows: [{id, title, line, icon, shortcut, opens, form, page, values}], folded}`. The web and the app draw it (§6); other channels get it as §9 says.
+- Pressing a row: `POST /v1/chat` with the row's id as a button's is now (`act:<id>`, with `values` for a form row opened and closed without saving: nothing is sent).
+- `chat_understand.go`: the model's answer kinds of §8.1; the catalogue as its list.
+- `waHelp` is made from the catalogue; *help* answers with the topics menu (§5).
+- OpenAPI, the web's and the app's generated clients (`mobile/api.txt`, `tools/mobilegen`), and the docs (`docs/languages.md`, `docs/spec/chat-tools.md`) follow.
+
+## 11. What the person never meets
+
+No command they must learn; no list of 29 lines unless they ask for it (*help all*); no technical words in a title, a line or a question (Appendix C of [no technical steps](no-technical-steps.md), checked by the same test as the help's lines); no row they cannot use; no change without their Yes or the form's Save.
+
+## 12. Phases
+
+| Phase | What | Done when |
+| --- | --- | --- |
+| **M1** | The catalogue (§3, §4), with the test holding it to the code; `waHelp` made from it; `GET /v1/chat/actions`; the menu card in the app and on the web (§6); *help*, *help all*, *help riders*, a topic's word alone (§5); rows that show, open the existing forms, or open pages; step by step questions (§7) for the rest | Every topic's menu, in the app and on the web, light and dark, both widths, with every row doing what §6 says; questions for every `questions` action; tests for each (server, web e2e, the app's screen tests and pictures) |
+| **M2** | The model answers with `action` and `topic` and values (§8.1); forms filled in (§8.2); topics by words without the model (§8.3); the most used first (§6.1) | A message about riders the model is unsure of shows the riders menu; "add rider Musa" opens the questions with Musa taken; with the model off, "my rider issue" shows the riders menu |
+| **M3** | WhatsApp list messages, Telegram's buttons, Slack's blocks, numbers on every channel (§9) | Each channel's tests: the topics menu, a topic's menu, a row pressed, questions to the end, a link to a form |
+| **M4** | Forms for the actions that ask step by step today and are better as forms: Add a rider, Add a supplier, Correct a count, Order from a supplier, Opening hours, Someone owes you, Record money spent, Send an invoice. In the app and on the web they replace the questions; on WhatsApp and Telegram the questions stay | Each form built in the look ([mobile-screen](../../.claude/skills/mobile-screen/SKILL.md)), filled from the model's values, with the web's twin |
+
+Each phase is its own pull request and leaves the chat working: M1 alone already ends the long list and the dead end.
+
+## 13. Later, not now
+
+- **A row's last values** ("Add stock: 50 cartons of Indomie, again?").
+- **A menu in a customer's own chat with a business** (order, book, pay, my orders): customers have the door's buttons today ([Taskiem for everyone](taskiem-for-everyone.md) §8.4); a menu there is its own plan.
+- **Voice**: a voice note's transcript is read as typed, so it gets menus already; a spoken menu is not planned.
+
+## What M1 built (21 November 2026)
+
+- **The catalogue** (`api/chat_actions.go`), as §4 less the rows with no command yet in a topic that has others; `GET /v1/chat/actions`; a test that holds it together (`api/chat_actions_internal_test.go`): ids, limits, what each opens, and that a question's answers make a whole command.
+- **The menu card** in the Taskiem chat on the web (`web/src/pages/ChatMenu.tsx`) and in the app (`mobile/lib/chat/menu_card.dart`), kept in the history as a message of kind `menu` (migration 00498): the topics as tiles; a topic's five rows, "All N" in a sheet and "All topics"; folded once a row is pressed or a newer menu comes.
+- **When it shows**: *help* and *menu* on every channel (*help all* for every command in words); *help riders* (and any topic's word after *help*) everywhere; a topic's word alone when no command reads it ("sales", "staff"); in the Taskiem chat, a topic's word that is a command ("riders", "stock", "orders") answered as always with the topic's menu under it; and, in the Taskiem chat, with the short answer when nothing understood a message, or when the model says Taskiem cannot do it.
+- **Rows**: an answer, read as the command typed; a form (the app's and the web's tool sheets) or a page opened in place; questions in the chat (§7) with choices as buttons from the business's own records (its riders and their areas, its stock items, its open orders and the coming week's bookings, each as "TK-A1B2C3 · Ada"), answers checked, the command made and read as typed, a Yes first when it changes something.
+- **Elsewhere** (WhatsApp, Telegram, Slack): menus are numbered and answered by a number; rows that open a form or a page answer with their link. Their own lists and buttons are M3.
+- **The words** (titles, lines, questions, and the menus' own phrases) are messages in the language files (`menu.*`), in the person's language where a translation is there. The English is written in the catalogue and held equal to en.json by a test. The other four languages hold the English for now, marked not reviewed and "not translated yet" for a translator.
+
+## What M2 built (21 November 2026)
+
+- **The model picks from the catalogue** (`engine/ai/understand`, `api/chat_understand.go`). It is told the person's own catalogue (each action's id, what it does, its values and an example) and the other commands, and answers an `action` with the values it understood, a `topic` with the action it leans to, a `command` outside the catalogue, a question, or what Taskiem cannot do. An action with every value it needs is done as the row would be (a Yes first when it changes something); with some, those are said back ("Add a rider: Musa.") and the rest asked; a value of the wrong shape, or a choice that is not one of the action's, is asked again. A topic shows its menu with the leaned-to action first and its command as the tip. An id the person may not use is refused and recorded as such.
+- The message reaches the model redacted, as before: a phone number or an account number in it is never a value the model can give, so it is asked.
+- **Topics by their words** when no model can read the message (§8.3): each topic has words, English and Pidgin, matched as the start of a word ("okada", "carton", "owe"); the one topic with the most, and no tie, shows its menu, on every channel. The words are in the catalogue (`topicHints`), not yet in each language's word lists.
+- **The most used first** (§6.1): a row pressed, or an action the model picked, is counted per person and business by day (`chat_action_uses`, migration 00499: the action's id and a count, nothing else; days past thirty deleted as the next use is counted). Each topic's actions, and the topics, come most used first in the last thirty days, in the menus, the catalogue and what the model is told. A command typed in full is not counted yet.
+
+## What M3 built (21 November 2026)
+
+- **WhatsApp list messages** (`whatsapp.List`, `Client.SendList`): a menu is the head line, with a "Choose" button opening its rows (a title of 24 characters, its line of 72 under it). A row chosen comes back as its id (`act:<id>`, `topic:<id>`), read as the Taskiem chat's press is. The topics list holds ten rows: with more topics, nine and "More…", the rest in a second list. A question with more than three choices is a list too; three or fewer stay reply buttons.
+- **Telegram**: a menu's rows are buttons under the message, one to a row; **Slack**: buttons in the message (Block Kit), every row (Slack takes 25).
+- **Numbers** still work everywhere: a menu's row by its place, among the rows as sent.
+- The test WhatsApp server checks WhatsApp's own limits on a list (ten rows, a button of 20, titles of 24, lines of 72).
+
+Not done: two buttons to a row on Telegram for the topics (one to a row for now); Slack shows every row rather than five and "More…".
+
+## What M4 built (21 November 2026)
+
+- **One form, drawn from the catalogue**, rather than a form written for each action: in the app (`ActionFormSheet`, `mobile/lib/chat/menu_card.dart`) and on the web (`ActionForm`, `web/src/pages/ChatMenu.tsx`), an action's form has a field for each of its values (the catalogue gives each a label, from its question's first sentence, a hint, its kind and its fixed choices). The business's own choices (riders and their areas, stock items, open orders, coming bookings) come from `GET /v1/chat/actions/{id}/choices`, as chips under the field. So every action that asked step by step, the eight §12 names and the rest, has its form, in both.
+- Its button sends the values to Taskiem as `form:<id>:<values>`, with the words the person sees ("Add a rider: Musa Bello, 0803 123 4567, Yaba"). The values are checked as the questions check them; with every one needed, the command is made and read as typed, the form's button being the person's yes; else Taskiem says what to fill in.
+- The actions that had a form of their own (record a sale, stock in, a product, a service, a price list, the handover) keep it.
+- When the model knows the action but not every value (M2), the app and the web get its topic's menu with that row first and filled in; the row opens the form with those values in it. WhatsApp, Telegram and Slack keep the questions.
+
+## What S1b added (22 November 2026)
+
+- **Add something to count** (`stock.new`, under Stock; [what a business buys](what-a-business-buys.md) §4.5): *add 20 yards of ankara fabric* asks **Do you sell it?** for something new, on every channel. It asks by itself, so the model's action and its form are read as typed, with no Yes before the question.
+
+## What U2b added (22 November 2026)
+
+- **The question on what is bought** ([what a business buys](what-a-business-buys.md) §6, In chat): an order drafted in chat (`order 1 sewing machine from Singer Ltd`, `@`/`#` mentions, `order from …`) asks, before its Yes and one line at a time, about each line the business's memory does not know: **How should we treat it?** (Just record it, Add to stock, Keep track of it), for Add to stock **Which stock item?** (five items, materials included, and **A new one**, which asks Do you sell it?), then **Label** (three, **Another** to type one, **No label**). Buttons on Telegram, Slack and in the Taskiem chat; on WhatsApp reply buttons for three, a list beyond. A number, or the words typed or spoken, answer too (`keep track of it, machines`, `add to stock, lace`, `just record it`, in the person's language and English). It is not an action of the catalogue: the order's own command asks it.

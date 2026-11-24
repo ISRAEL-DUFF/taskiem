@@ -20,101 +20,84 @@ import (
 	"github.com/israel-duff/taskiem/engine/pii"
 )
 
-// subjectID derives a stable pseudonymous id for a data subject from the
-// value, keyed by the tenant's pseudonymisation key (spec 5.2: hmac(tenant
-// key, bvn)). That key started as tenant key version 1's material and is
-// kept apart from it since migration 00100, so ids never change while
-// tenant keys rotate. A category is lower-case letters and underscores, so
-// no id is another's generation (<subject>~2) or contains its prefix.
-func (v *Vault) subjectID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
+// baseSubjectID derives a stable pseudonymous id for a data subject from
+// the value, keyed by the tenant's pseudonymisation key (spec 5.2:
+// hmac(tenant key, bvn)). That key started as tenant key version 1's
+// material and is kept apart from it since migration 00100, so ids never
+// change while tenant keys rotate.
+func (v *Vault) baseSubjectID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
 	if !validCategory(category) {
-		return "", fmt.Errorf("personal data category %q: want lower-case letters and underscores", category)
+		return "", fmt.Errorf("personal data category %q: want lower-case letters, digits and underscores", category)
 	}
 	key, err := v.pseudonymKey(ctx, tx, tenant)
 	if err != nil {
 		return "", err
 	}
+	if category == "other" {
+		// Free text is no one's: one subject a tenant, not one a text
+		// (pii.Unattributed). Envelopes sealed under a text's own subject
+		// before keep it.
+		value = pii.Unattributed
+	}
 	return subjectIDWith(key, category, value), nil
 }
 
-var categoryRE = regexp.MustCompile(`^[a-z_]+$`)
+// maxGenerations bounds how often one value's subject is erased and
+// started again.
+const maxGenerations = 1000
 
-func validCategory(c string) bool { return categoryRE.MatchString(c) }
-
-// generationsSQL matches a subject's later generations (<base>~2, ~3...)
-// by a range that subject_keys_generations (migration 00321, a
-// text_pattern_ops index) serves: every id that starts with "<base>~" and
-// nothing else, since '~' is the last printable ASCII character before
-// U+007F and ids are ASCII. $2 is the base.
-const generationsSQL = `subject_id ~>=~ ($2 || '~') AND subject_id ~<~ ($2 || chr(127))`
-
-// generations returns a subject's base key state and its later
-// generations: whether the base exists and is shredded, and, only when it
-// is shredded, each generation's shredded state. The base is looked up by
-// primary key; generations only exist once a base was shredded.
-func generations(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, base string) (exists, shredded bool, gens map[string]bool, err error) {
-	err = tx.QueryRow(ctx, `SELECT shredded_at IS NOT NULL FROM subject_keys WHERE tenant_id = $1 AND subject_id = $2`, tenant, base).Scan(&shredded)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, false, nil, nil
+// generation is a value's subject after it was erased g times: an erased
+// person who comes back is a new subject (base~1, base~2, ...), so what
+// was sealed for them before stays erased and they can be sealed again.
+func generation(base string, g int) string {
+	if g == 0 {
+		return base
 	}
-	if err != nil || !shredded {
-		return err == nil, false, nil, err
-	}
-	rows, err := tx.Query(ctx, `SELECT subject_id, shredded_at IS NOT NULL FROM subject_keys WHERE tenant_id = $1 AND `+generationsSQL, tenant, base)
-	if err != nil {
-		return true, true, nil, err
-	}
-	defer rows.Close()
-	gens = map[string]bool{}
-	for rows.Next() {
-		var id string
-		var gone bool
-		if err := rows.Scan(&id, &gone); err != nil {
-			return true, true, nil, err
-		}
-		gens[id] = gone
-	}
-	return true, true, gens, rows.Err()
+	return base + "~" + strconv.Itoa(g)
 }
 
-// liveGeneration is the generation of base sealed under now: base itself
-// while it is not shredded; once it is, the first later generation not
-// shredded (<base>~2, ~3...), or, when none is (renew), the next one, or
-// "" (not renew).
-func liveGeneration(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, base string, renew bool) (string, error) {
-	_, shredded, gens, err := generations(ctx, tx, tenant, base)
-	if err != nil || !shredded {
-		return base, err
-	}
-	for g := 2; ; g++ {
-		id := base + "~" + strconv.Itoa(g)
-		gone, ok := gens[id]
-		switch {
-		case ok && !gone:
-			return id, nil
-		case !ok && renew:
-			return id, nil
-		case !ok:
-			return "", nil
-		}
-	}
-}
-
-// RenewSubjectTx is the subject a person is sealed under now, making its
-// key: their own, or, once that was erased and they came back (a customer
-// who writes again), the next generation of it, <subject>~2, ~3...
-// Erasure is one way (a shredded key is never restored); a person who
-// returns gets a new key, and erasing them again (Erase, by their
-// subject) shreds every generation. Only what names the person afresh
-// calls it: the customer guard for a sender, and a run started by their
-// message (runtime setCustomer). SealTx never moves to a new generation,
-// so plaintext read before an erasure is never sealed readable again.
-func (v *Vault) RenewSubjectTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
-	base, err := v.subjectID(ctx, tx, tenant, category, value)
+// subjectID is the subject a value is sealed under now: the first
+// generation of its base id whose key is not shredded (or does not exist
+// yet).
+func (v *Vault) subjectID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
+	base, err := v.baseSubjectID(ctx, tx, tenant, category, value)
 	if err != nil {
 		return "", err
 	}
-	subject, err := liveGeneration(ctx, tx, tenant, base, true)
+	for g := range maxGenerations {
+		subject := generation(base, g)
+		var shredded bool
+		err := tx.QueryRow(ctx, `SELECT shredded_at IS NOT NULL FROM subject_keys WHERE tenant_id = $1 AND subject_id = $2`, tenant, subject).Scan(&shredded)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && !shredded) {
+			return subject, nil
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	return "", pii.ErrErased
+}
+
+// A category is lower-case letters, digits and underscores, so no id is
+// another's generation (<subject>~1) or contains its prefix.
+var categoryRE = regexp.MustCompile(`^[a-z0-9_]+$`)
+
+func validCategory(c string) bool { return categoryRE.MatchString(c) }
+
+// generationsSQL matches a subject's later generations (<base>~1, ~2...)
+// by a range that subject_keys_generations (a text_pattern_ops index)
+// serves: every id that starts with "<base>~" and nothing else, since '~'
+// is the last printable ASCII character before U+007F and ids are ASCII.
+// $2 is the base.
+const generationsSQL = `subject_id ~>=~ ($2 || '~') AND subject_id ~<~ ($2 || chr(127))`
+
+// RenewSubjectTx is the subject a person is sealed under now, making its
+// key: their own, or, once that was erased and they came back (a customer
+// who writes again), the next generation of it. The customer guard calls
+// it for a sender, and a run started by their message (runtime
+// setCustomer), so the run's key exists before anything is sealed.
+func (v *Vault) RenewSubjectTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
+	subject, err := v.subjectID(ctx, tx, tenant, category, value)
 	if err != nil {
 		return "", err
 	}
@@ -125,45 +108,30 @@ func (v *Vault) RenewSubjectTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 }
 
 // LiveSubjectTx is the subject a person is sealed under now, without
-// making anything: their own, or the generation RenewSubjectTx made when
-// they came back after an erasure. A person erased who has not come back
-// is their own (erased) subject. Lookups of what is kept by a person's
-// current subject (the customer guard's contacts) use it.
+// making anything. Lookups of what is kept by a person's current subject
+// (the customer guard's contacts, a customer's invoices) use it: a person
+// erased who has not come back has a subject nothing is kept under yet.
 func (v *Vault) LiveSubjectTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
-	base, err := v.subjectID(ctx, tx, tenant, category, value)
-	if err != nil {
-		return "", err
-	}
-	subject, err := liveGeneration(ctx, tx, tenant, base, false)
-	if err != nil || subject == "" {
-		return base, err
-	}
-	return subject, nil
+	return v.subjectID(ctx, tx, tenant, category, value)
 }
 
 // SealCurrentTx is SealTx for a value just received from outside (a
-// buffered signal): under the person's generation RenewSubjectTx made when
-// they came back after an erasure, if there is one; it never makes a
-// generation. A person erased who has not come back is pii.ErrErased.
+// buffered signal): under the person's current generation.
 func (v *Vault) SealCurrentTx(ctx context.Context, tx pgx.Tx, t uuid.UUID, category string, value any) (map[string]any, error) {
-	base, err := v.subjectID(ctx, tx, t, category, value)
-	if err != nil {
-		return nil, err
-	}
-	subject, err := liveGeneration(ctx, tx, t, base, false)
-	if err != nil {
-		return nil, err
-	}
-	if subject == "" {
-		return nil, pii.ErrErased
-	}
-	if subject == base {
-		return v.SealTx(ctx, tx, t, category, value)
-	}
-	return v.SealUnderTx(ctx, tx, t, subject, category, value)
+	return v.SealTx(ctx, tx, t, category, value)
 }
 
+// subjectIDWith keys the subject by the value's canonical form
+// (pii.Canonical), so the same person written another way ('0803 123
+// 4567', '+2348031234567') is one subject. Values already canonical keep
+// the ids they had.
 func subjectIDWith(key []byte, category string, value any) string {
+	return rawSubjectIDWith(key, category, pii.Canonical(category, value))
+}
+
+// rawSubjectIDWith is the subject of the value exactly as given, as ids
+// were keyed before they were canonical.
+func rawSubjectIDWith(key []byte, category string, value any) string {
 	raw, _ := json.Marshal(value)
 	m := hmac.New(sha256.New, append([]byte("taskiem/subject/v1\x00"), key...))
 	m.Write([]byte(category + "\x00"))
@@ -209,16 +177,23 @@ func (v *Vault) subjectKey(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, sub
 	return open(kek, wrapped, []byte(tenant.String()+"\x00"+subject))
 }
 
-// SealTx encrypts one personal value under its subject's key. A subject
-// erased stays erased (pii.ErrErased): a person who comes back is sealed
-// under a new generation only once something names them afresh
-// (RenewSubjectTx).
+// SealTx encrypts one personal value under its subject's key.
+// A value whose subject was erased is sealed under its next generation.
 func (v *Vault) SealTx(ctx context.Context, tx pgx.Tx, t uuid.UUID, category string, value any) (map[string]any, error) {
-	subject, err := v.subjectID(ctx, tx, t, category, value)
+	base, err := v.baseSubjectID(ctx, tx, t, category, value)
 	if err != nil {
 		return nil, err
 	}
-	dek, err := v.subjectKey(ctx, tx, t, subject, category, true)
+	var subject string
+	var dek []byte
+	for g := 0; ; g++ {
+		subject = generation(base, g)
+		dek, err = v.subjectKey(ctx, tx, t, subject, category, true)
+		if !errors.Is(err, pii.ErrErased) || g+1 >= maxGenerations {
+			break
+		}
+		// Shredded: the person was erased and came back.
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +245,9 @@ func (v *Vault) OpenTx(ctx context.Context, tx pgx.Tx, t uuid.UUID, env map[stri
 	return out, err
 }
 
-// SubjectFor returns the subject id a value would be sealed under.
+// SubjectFor returns the subject id a value would be sealed under: its
+// current generation, so erasing by value erases the person as they are
+// now (earlier generations were erased already).
 func (v *Vault) SubjectFor(ctx context.Context, tenant uuid.UUID, category string, value any) (string, error) {
 	var s string
 	err := db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -281,10 +258,46 @@ func (v *Vault) SubjectFor(ctx context.Context, tenant uuid.UUID, category strin
 	return s, err
 }
 
-// SubjectForTx is the subject a value is sealed under by SealTx, in the
-// caller's transaction, without sealing anything. It is the value's own
-// subject, erased or not; LiveSubjectTx and RenewSubjectTx follow a
-// person who came back after an erasure.
+// SubjectsFor lists every subject a value's person may be sealed under:
+// the one it is sealed under now (SubjectFor), then those of the ways it
+// was commonly written (pii.Formats) that still hold a key, from before
+// subject ids were canonical. Erasing a person by value erases them all.
+func (v *Vault) SubjectsFor(ctx context.Context, tenant uuid.UUID, category string, value any) ([]string, error) {
+	var out []string
+	err := db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		cur, err := v.subjectID(ctx, tx, tenant, category, value)
+		if err != nil {
+			return err
+		}
+		out = append(out, cur)
+		key, err := v.pseudonymKey(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		seen := map[string]bool{subjectIDWith(key, category, value): true}
+		for _, f := range pii.Formats(category, value) {
+			raw := rawSubjectIDWith(key, category, f)
+			if seen[raw] {
+				continue
+			}
+			seen[raw] = true
+			var live bool
+			err := tx.QueryRow(ctx, `SELECT true FROM subject_keys WHERE tenant_id = $1 AND subject_id = $2 AND shredded_at IS NULL`, tenant, raw).Scan(&live)
+			if errors.Is(err, pgx.ErrNoRows) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			out = append(out, raw)
+		}
+		return nil
+	})
+	return out, err
+}
+
+// SubjectForTx is SubjectFor in the caller's transaction: the subject a
+// value would be sealed under, without sealing anything.
 func (v *Vault) SubjectForTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
 	return v.subjectID(ctx, tx, tenant, category, value)
 }

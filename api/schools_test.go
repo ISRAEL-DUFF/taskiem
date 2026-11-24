@@ -119,7 +119,9 @@ func TestGateSessionIsRefusedEverythingElse(t *testing.T) {
 		}
 		return nil
 	})
-	if err != nil || walked < 200 {
+	// About 545 today: a much lower count means routeSource lost a family
+	// of routes (TestOpenAPIMatchesSource names them).
+	if err != nil || walked < 500 {
 		t.Fatalf("walked %d routes: %v", walked, err)
 	}
 	gate.must(204, "POST", "/v1/auth/logout", nil)

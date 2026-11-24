@@ -66,6 +66,8 @@ type SaleIn struct {
 
 // CounterSale is a recorded sale.
 type CounterSale struct {
+	// Replayed: the key named a sale recorded before, answered again.
+	Replayed   bool       `json:"-"`
 	ID         uuid.UUID  `json:"id"`
 	Reference  string     `json:"reference"`
 	Lines      []SaleLine `json:"lines"`
@@ -195,10 +197,9 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 		return CounterSale{}, err
 	}
 	var x CounterSale
-	var moves []uuid.UUID
 	fresh := false
-	err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
-		moves, fresh = nil, false
+	record := func(tx pgx.Tx) error {
+		fresh = false
 		var err error
 		x, err = scanSale(tx.QueryRow(ctx, `SELECT `+saleCols+` FROM stock_sales WHERE tenant_id = $1 AND key = $2`, tenant, in.Key))
 		if err == nil {
@@ -283,25 +284,29 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 		for _, id := range order {
 			l := each[id]
 			d := -l.Quantity
-			m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Sale, Delta: &d, Reference: x.Reference, Actor: in.Actor,
-				Key: "sale:" + x.ID.String() + ":" + l.ItemID, CostKobo: l.CostKobo})
-			if err != nil {
+			// A product counted by no stock item moves nothing.
+			if _, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Sale, Delta: &d, Reference: x.Reference, Actor: in.Actor,
+				Key: "sale:" + x.ID.String() + ":" + l.ItemID, CostKobo: l.CostKobo}); err != nil && !errors.Is(err, ErrNotCounted) {
 				return err
 			}
-			moves = append(moves, m.ID)
 		}
 		return nil
-	})
+	}
+	err := s.inTx(ctx, tenant, record)
+	// The same key at the same moment: the other request's sale was not
+	// there to read, and its key (or its takings' reference) refused this
+	// one's. It is there now: read again and answer it, as a later retry
+	// would be answered.
+	var clash *pgconn.PgError
+	if errors.As(err, &clash) && clash.Code == "23505" {
+		err = s.inTx(ctx, tenant, record)
+	}
 	if err != nil {
 		return CounterSale{}, err
 	}
 	if !fresh {
+		x.Replayed = true
 		return s.withShort(ctx, tenant, x)
-	}
-	for _, id := range moves {
-		if _, err := s.Apply(ctx, tenant, id); err != nil {
-			break // recorded: the sweep sends it again
-		}
 	}
 	if x.Status == "waiting" {
 		if _, err := s.MatchSales(ctx, tenant); err != nil {

@@ -13,7 +13,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 )
 
-// The quality watch on assistants' WhatsApp numbers (decision 0062 V10,
+// The quality watch on assistants' WhatsApp numbers (decision 0074 V10,
 // C23): Meta rates how a business number's customers receive its messages
 // and lowers its daily limit, or restricts it, when they block or report
 // it. Every few hours Taskiem reads each number an assistant answers on

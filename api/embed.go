@@ -91,7 +91,7 @@ func (s *Server) embedCORS(next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 		// A preflight carries no credentials, so it is paced per address
 		// before its database read (embedding residual).
-		if r.Method == http.MethodOptions && !s.limiter("embed-preflight:"+clientIP(r), embedPreflightEvery, embedPreflightBurst).Allow() {
+		if r.Method == http.MethodOptions && !s.limiter("embed-preflight:"+limitIP(r), embedPreflightEvery, embedPreflightBurst).Allow() {
 			w.Header().Set("Retry-After", "1")
 			writeErr(w, http.StatusTooManyRequests, "too many requests")
 			return

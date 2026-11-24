@@ -26,7 +26,15 @@ Everything between the two businesses is in the conversation: your messages, and
 
 As you type, **@** suggests your linked businesses and **#** the items on a linked supplier's price list, with the price. In the **Taskiem** conversation at the top of the list (your own chat with Taskiem, the same one you have on WhatsApp), *Buy 400 bags of cement from @Dangote and 20 blocks from @Cherry* reads back as two orders, and one **Yes** sends both.
 
-On your phone, the same messages reach you on WhatsApp or Telegram with the business's name in front: *[Dangote Stores] Musa: the rice is ready*. Reply by quoting the message, or send *ask Dangote when is the rice coming*. Owners, admins and operators can write; everyone else can read.
+On your phone, the same messages reach you on WhatsApp or Telegram with the business's name in front: *[Dangote Stores] Musa: the rice is ready*. Reply by quoting the message, or send *ask Dangote when is the rice coming*.
+
+To write to a linked business from your Taskiem chat, start the message with *...*. Put it on its own line, or before the message on the same line:
+
+*... @Dangote how much is a bag of cement?*
+
+The message goes straight to Dangote, and Taskiem only answers *✓ Sent to Dangote Nigeria Ltd*. Mention several businesses to send the same words to each. A photo or a file works the same way: put *... @Dangote* and any words in its caption. A message without *...* is read as always: *Buy 400 bags of cement from @Dangote* still makes an order.
+
+You don't have to type a business's whole name: *@Dangote* finds *Dangote Nigeria Ltd*. If two of your linked businesses start the same way, Taskiem asks which one, and sends nothing until you say more of the name. Owners, admins and operators can write; everyone else can read.
 
 ## Bills and paying
 

@@ -22,7 +22,7 @@ An unclassified error is treated as `unknown_outcome`, the safe default.
 
 ## Reconcile results
 
-A reconcile action returns `found` (with the provider's record, which becomes the step's output), `not_found` (safe to re-send; `attempt_group` is incremented), or `indeterminate` (park in `needs_reconciliation`).
+A reconcile action is given the engine's key in the action's `idempotency.field`, the reference the provider was sent. Where the action has no such field in its body (no `idempotency` block, or a header), the key names nothing the provider can be asked about, so the reconcile is given the step's own input instead (for a refund, the payment it was for), with the key as `reference` unless the input has a `reference` of its own. A reconcile action returns `found` (with the provider's record, which becomes the step's output), `not_found` (safe to re-send; `attempt_group` is incremented), or `indeterminate` (park in `needs_reconciliation`). A handler is told it runs as a reconcile (`Request.Reconciling`), because the same read may also be an ordinary step: `not_found` is an instruction to send again, so a reconcile whose lookup by the key is not confirmed with the provider answers `indeterminate` when it finds nothing.
 
 ## Call deadlines
 
@@ -30,7 +30,7 @@ A write's provider call must start before `EffectIntent.recorded_at + call_timeo
 
 ## Sending a lost chat reply once more
 
-The Phase 1 open question (notifications are `unsafe_write`, yet a duplicate is harmless and a missing message is not) is answered for chat replies by [decision 0062](../decisions/0062-customer-assistant.md) D11, with two opt-ins that must both hold:
+The Phase 1 open question (notifications are `unsafe_write`, yet a duplicate is harmless and a missing message is not) is answered for chat replies by [decision 0074](../decisions/0074-customer-assistant.md) D11, with two opt-ins that must both hold:
 
 - **The action** declares `resend_if_lost: true` in its manifest: only an `unsafe_write` may, and only one whose duplicate is a duplicate chat message (`whatsapp@1` `send_text`, `send_media`, `send_interactive`; `telegram@1` `send_message`, `send_photo`, `send_document`, `send_voice`, `send_audio`). Never a template (billed per message, sent outside the chat window) or anything that moves money.
 - **The step** asks for it: `"effect": {"resend_if_lost": true}`. Publishing refuses it on any other action and on every capability step. The resend spends one of the step's retries, so publishing also refuses it on a step with `"retry": {"max": 0}`: "a reply that is sent again needs at least one retry; remove retry max 0 or resend_if_lost".

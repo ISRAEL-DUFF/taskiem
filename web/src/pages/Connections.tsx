@@ -24,6 +24,7 @@ import {
   splitFields,
   generateRsaKeyPair,
   withMoneyLogWebhooks,
+  type ConnectionWebhook,
   type MoneyLogWebhook,
 } from "../lib/connections";
 import { Help } from "../onboarding";
@@ -42,6 +43,7 @@ import {
 } from "../ui";
 import { Icon } from "../icons";
 import { Copy } from "./Forms";
+import { MadeWebhooks } from "./MadeWebhooks";
 
 interface Conn {
   id: string;
@@ -950,6 +952,8 @@ export function NewConnection({
   // Public keys of the key pairs made here, by field, to show once.
   const [generated, setGenerated] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState("");
+  // Addresses carrying a token Taskiem made for the connection just saved.
+  const [made, setMade] = useState<ConnectionWebhook[]>([]);
   const act = useAction();
   const { main, more } = splitFields(c);
   const linkable = !!c?.auth.oauth2 && !!c.oauth_linkable;
@@ -1077,6 +1081,17 @@ export function NewConnection({
       )}
     </Field>
   );
+  if (made.length > 0)
+    return (
+      <Modal title={`${c?.name ?? "The service"} is connected`} onClose={onDone}>
+        <MadeWebhooks service={c?.name ?? "the service"} hooks={made} />
+        <div className="toolbar">
+          <button type="button" className="primary" onClick={onDone}>
+            Done
+          </button>
+        </div>
+      </Modal>
+    );
   return (
     <Modal
       title={c ? `Connect ${c.name}` : "Connect a service"}
@@ -1085,22 +1100,19 @@ export function NewConnection({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(
-            async () => (
-              warnAbout(
-                await post<Saved>("/v1/connections", {
-                  connector: ref,
-                  environment: env,
-                  name: name || undefined,
-                  credentials: creds,
-                  mode: chosen || undefined,
-                  check: true,
-                }),
-              ),
-              onDone()
-            ),
-            "Connected",
-          );
+          void act.run(async () => {
+            const out = await post<Saved & { webhooks?: ConnectionWebhook[] }>("/v1/connections", {
+              connector: ref,
+              environment: env,
+              name: name || undefined,
+              credentials: creds,
+              mode: chosen || undefined,
+              check: true,
+            });
+            warnAbout(out);
+            if (out?.webhooks?.length) setMade(out.webhooks);
+            else onDone();
+          }, "Connected");
         }}
       >
         {!preset && (

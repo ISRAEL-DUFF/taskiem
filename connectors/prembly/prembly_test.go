@@ -2,10 +2,7 @@ package prembly
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
-	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -23,7 +20,7 @@ func call(t *testing.T, action string, input map[string]any, exchanges ...string
 	}
 	srv := fixture.Serve(t, exs...)
 	return New(Options{BaseURL: srv.URL}).Actions[action].Execute(context.Background(), connector.Request{Input: input, HTTP: srv.Client(),
-		Credentials: map[string]string{"api_key": "sk_test_prembly", "public_key": "pk_test_prembly"}})
+		Credentials: map[string]string{"api_key": "sk_test_prembly"}})
 }
 
 func out(r connector.Response) map[string]any { return r.Output.(map[string]any) }
@@ -225,21 +222,37 @@ func TestBiometrics(t *testing.T) {
 	}
 }
 
-func TestWebhookSignature(t *testing.T) {
-	spec := New(Options{}).Manifest.Triggers["verification"].Verify
-	body := []byte(`{"status":true,"response_code":"00","data":{"widget_info":{"user_ref":"u1"}},"verification":{"status":"VERIFIED"}}`)
-	m := hmac.New(sha256.New, []byte("pk_test_prembly"))
-	m.Write(body)
-	h := http.Header{}
-	h.Set("x-prembly-signature", base64.StdEncoding.EncodeToString(m.Sum(nil)))
-	if err := connector.VerifyWebhook(spec, "pk_test_prembly", h, body); err != nil {
-		t.Errorf("valid: %v", err)
+// TestWebhookNeedsURLToken: Prembly signs webhooks with the business's
+// public key, which its widget is given in the browser, so that signature
+// proves nothing (F55). A delivery is accepted only with the token Taskiem
+// made for the connection in its URL: without it, or with a wrong one, it
+// is refused.
+func TestWebhookNeedsURLToken(t *testing.T) {
+	c := New(Options{})
+	spec := c.Manifest.Triggers["verification"].Verify
+	if spec == nil || spec.Scheme != "query_secret" || spec.Query != "token" || spec.SecretField != "callback_token" {
+		t.Fatalf("verification is verified by %+v, want the connection's callback_token in ?token=", spec)
 	}
-	if connector.VerifyWebhook(spec, "pk_other", h, body) == nil {
-		t.Error("wrong key accepted")
+	var tok *connector.AuthField
+	for i, f := range c.Manifest.Auth.Fields {
+		if f.Key == "public_key" {
+			t.Error("the public key is still a connection field; it verifies nothing")
+		}
+		if f.Key == "callback_token" {
+			tok = &c.Manifest.Auth.Fields[i]
+		}
 	}
-	if connector.VerifyWebhook(spec, "pk_test_prembly", h, append(body, ' ')) == nil {
-		t.Error("tampered body accepted")
+	if tok == nil || !tok.Secret || tok.Generate != "webhook_token" || tok.IsRequired() {
+		t.Fatalf("callback_token must be a secret Taskiem makes (generate: webhook_token): %+v", tok)
+	}
+	if connector.VerifyQuerySecret(spec, "tok_made_by_taskiem", url.Values{"env": {"prod"}}) == nil {
+		t.Error("a delivery without the token was accepted")
+	}
+	if connector.VerifyQuerySecret(spec, "tok_made_by_taskiem", url.Values{"token": {"tok_guessed"}}) == nil {
+		t.Error("a wrong token was accepted")
+	}
+	if err := connector.VerifyQuerySecret(spec, "tok_made_by_taskiem", url.Values{"token": {"tok_made_by_taskiem"}}); err != nil {
+		t.Errorf("the right token: %v", err)
 	}
 }
 

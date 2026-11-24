@@ -33,11 +33,15 @@ Telegram delivers only to `https` URLs on ports 443, 80, 88 or 8443. A local ins
 
 **Approving.** A request comes with **Approve** and **Reject** buttons. A button works once, only from your account, for 24 hours or until the request times out; the web app's rules apply. When the policy needs step-up, Taskiem sends a link: open it signed in to Taskiem and confirm with your passkey or authenticator code within 10 minutes. (The WhatsApp PIN is entered in a WhatsApp form; on Telegram the link is used instead, which satisfies a PIN policy.) If you have linked both WhatsApp and Telegram, a request goes to both, and deciding on either closes it.
 
+**Your tools' answers** come back here when the run ends, as on WhatsApp, with buttons: a card's under it, and a list as one message, its first ten rows as lines and a button for each row's action (*Printer jam · Assign to me*); a button opens that tool filled in ([buttons](tools.md#buttons)).
+
 **Matching payments.** A payment Taskiem could not match to an invoice on its own comes with **Yes, match** and **No**, as on WhatsApp ([matching payments](whatsapp.md#matching-payments)), to members who manage invoices.
+
+**Form steps that ask where you are or for a photo** are answered with Telegram's own location and photo, as on WhatsApp ([form steps](whatsapp.md#for-people-using-taskiem-on-whatsapp)): each marked *sent*, a signature not available here.
 
 **What messages never show** is as on WhatsApp: no secrets, and personal data masked.
 
-**People outside a business** (customers, staff who don't sign in) can get a business's workflow messages from the same bot, without a Taskiem account: they open the business's link and press **Start** ([updates](updates.md)). To them the bot only sends updates, and understands STOP and START.
+**People outside a business** (customers, staff who don't sign in) can get a business's workflow messages from the same bot, without a Taskiem account: they open the business's link and press **Start** ([updates](updates.md)). To them the bot only sends updates, and understands STOP and START; someone with a Taskiem account who takes another business's updates stops and starts them the same way ([stopping](updates.md#stopping)).
 
 ## Connecting a service
 
@@ -54,7 +58,7 @@ An alert channel of kind `telegram` names members by email; each alert goes to t
 | 24-hour window, approved templates outside it, template costs | None: the bot can write to a person at any time after they pressed Start |
 | A 6-digit code sent to the number | A one-time link opened from the account |
 | Forms (Flows) for inputs and the approval PIN | Inputs in chat; step-up by the web link |
-| Own numbers and public menus per organisation | One platform bot; not yet per organisation |
+| Own numbers and public menus per organisation, and so customers' tools | One platform bot; not yet per organisation. Customers' tools are on a business's own WhatsApp number and in the app ([tools](tools.md#customers-tools)) |
 | Phone number as identity | The Telegram user id (never the username, which can change) |
 | Photos (a product's, a logo) through the media API; images sent by link | Photos (the largest size, or an image sent as a file) through `getFile`; images sent with `sendPhoto` by link |
 
@@ -63,7 +67,7 @@ An alert channel of kind `telegram` names members by email; each alert goes to t
 | Concern | Control |
 | --- | --- |
 | Forged updates | `X-Telegram-Bot-Api-Secret-Token` is compared in constant time with `TASKIEM_TELEGRAM_WEBHOOK_SECRET` before the body is read; anything else gets 401 |
-| Retried updates | Each `update_id` is claimed in the database before it is acted on |
+| Retried updates | Each `update_id` is claimed in the database before it is acted on, and a claimed update is then handled to the end (up to 30 seconds) even if Telegram stops waiting for the answer, since its resend is dropped as a duplicate |
 | Who is speaking | A message speaks for the person whose binding holds the sender's Telegram user id, in the organisation the account is working in, with that person's roles there at that moment. Only one-to-one chats with the bot are answered: in a group, anyone present would read the replies |
 | Linking someone else's account | The link is made by the signed-in person after proving it is them, carries 24 random bytes, is stored only as its SHA-256, works once for 10 minutes, and binds the account that opens it. An account belongs to one person |
 | Buttons | Telegram's button data holds 64 bytes, so a button carries `c:<22 random characters>`; the decision token it stands for is kept in `telegram_callbacks`, usable only from the account it was sent to, for 8 days. The token itself is the WhatsApp one: signed, single use, bound to the approver, and checked against its row |

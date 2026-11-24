@@ -70,11 +70,25 @@ func TestChatSignupOnWhatsApp(t *testing.T) {
 	const other = "+2348031230002"
 	offer := w.send(t, other, whatsapptest.Text("hello"))
 	if len(offer) != 1 || !strings.Contains(offer[0].Text, "Do you want to start, for free?") ||
-		fmt.Sprint(buttonIDs(offer[0].Buttons)) != "[su:start su:have su:no]" {
+		fmt.Sprint(buttonIDs(offer[0].Buttons)) != "[su:start su:have su:customer]" || !strings.Contains(offer[0].Text, "Type *no* for not now") {
 		t.Fatalf("offer: %+v", offer)
 	}
-	if got := w.press(t, other, "su:no"); len(got) != 1 || !strings.Contains(got[0].Text, "Send *start* any time") {
+	// WhatsApp allows three buttons: Not now is typed (taskiem-for-everyone §12).
+	if got := w.send(t, other, whatsapptest.Text("No")); len(got) != 1 || !strings.Contains(got[0].Text, "Send *start* any time") {
 		t.Fatalf("not now: %+v", got)
+	}
+	// A button pressed on an older offer still works.
+	if got := w.press(t, other, "su:no"); len(got) != 1 || !strings.Contains(got[0].Text, "Send *start* any time") {
+		t.Fatalf("not now, pressed: %+v", got)
+	}
+	// I'm a customer: where to chat with a business.
+	if got := w.press(t, other, "su:customer"); len(got) != 1 || got[0].Text != "To chat with a business, open its Taskiem link: the business shares it on its page, its receipts and its messages." {
+		t.Fatalf("a customer, with no app link: %+v", got)
+	}
+	w.srv.AppGetURL = "https://taskiem.test/app"
+	if got := w.press(t, other, "su:customer"); len(got) != 1 ||
+		got[0].Text != "To chat with a business, open its Taskiem link, or find it in the Taskiem app: https://taskiem.test/app" {
+		t.Fatalf("a customer: %+v", got)
 	}
 	// No to the terms makes nothing; nor does cancel later on.
 	terms := w.press(t, other, "su:start")
@@ -85,8 +99,16 @@ func TestChatSignupOnWhatsApp(t *testing.T) {
 		t.Fatalf("no: %q", got)
 	}
 	w.say(t, other, "start")
-	if got := w.press(t, other, "su:yes"); len(got) != 1 || !strings.Contains(got[0].Text, "What is your business called?") {
+	// The first question: a business, or workflows (taskiem-for-everyone §18.3).
+	if got := w.press(t, other, "su:yes"); len(got) != 1 || !strings.Contains(got[0].Text, "Is this for a business, or for workflows?") ||
+		fmt.Sprint(buttonIDs(got[0].Buttons)) != "[su:kind:business su:kind:workflows]" {
 		t.Fatalf("yes: %+v", got)
+	}
+	if got := w.say(t, other, "a shop"); !strings.Contains(got, "a business, or for workflows") {
+		t.Fatalf("not a choice: %q", got)
+	}
+	if got := w.press(t, other, "su:kind:business"); len(got) != 1 || !strings.Contains(got[0].Text, "What is your business called?") {
+		t.Fatalf("a business: %+v", got)
 	}
 	if got := w.say(t, other, "cancel"); !strings.Contains(got, "nothing was made") {
 		t.Fatalf("cancel: %q", got)
@@ -98,6 +120,7 @@ func TestChatSignupOnWhatsApp(t *testing.T) {
 	// All the way.
 	w.say(t, ada, "start")
 	w.say(t, ada, "yes")
+	w.press(t, ada, "su:kind:business")
 	if got := w.say(t, ada, "Visit www.evil.example"); !strings.Contains(got, "no links") {
 		t.Fatalf("a link for a name: %q", got)
 	}
@@ -107,7 +130,7 @@ func TestChatSignupOnWhatsApp(t *testing.T) {
 	if got := w.say(t, ada, "Ada Obi"); !strings.Contains(got, "What do you sell") {
 		t.Fatalf("name: %q", got)
 	}
-	if got := w.say(t, ada, "9"); !strings.Contains(got, "What do you sell") {
+	if got := w.say(t, ada, "10"); !strings.Contains(got, "What do you sell") {
 		t.Fatalf("no such choice: %q", got)
 	}
 	if got := w.say(t, ada, "2"); !strings.Contains(got, "How do customers pay you?") {
@@ -138,6 +161,10 @@ func TestChatSignupOnWhatsApp(t *testing.T) {
 	}
 	if fmt.Sprint(actions) != "[tenant.create terms.accept]" {
 		t.Fatalf("audit: %v", actions)
+	}
+	// Provisions is a shop: its areas, as chosen rows, and a business.
+	if got := kindAndAreas(t, w.world, tenant); got != "business: links money orders stock storefront" {
+		t.Errorf("kind and areas: %s", got)
 	}
 	// Asked once, in the sign-up's last message, whether other businesses
 	// find it (business links): the default holds until it answers.
@@ -177,22 +204,127 @@ func TestChatSignupOnWhatsApp(t *testing.T) {
 		t.Fatal("no answer")
 	}
 
-	// Another business: no terms, no name.
-	if got := w.say(t, ada, "new business"); !strings.Contains(got, "What is your business called?") {
+}
+
+// kindAndAreas is a tenant's kind and the areas it has on, from its own
+// rows ("business: money orders", "workflows:").
+func kindAndAreas(t *testing.T, w *world, tenant uuid.UUID) string {
+	t.Helper()
+	var out string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT t.kind || ':' || COALESCE((SELECT ' ' || string_agg(b.area, ' ' ORDER BY b.area)
+		FROM business_areas b WHERE b.tenant_id = t.id AND b.enabled), '') FROM tenants t WHERE t.id = $1`, tenant).Scan(&out); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// A stranger on WhatsApp who wants workflows: their name only, nothing
+// about selling, and a workspace named after them with every area off.
+func TestChatSignupWorkflowsOnWhatsApp(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	chatSignupOn(w.world, "whatsapp")
+	const kemi = "+2348031230021"
+	w.say(t, kemi, "start")
+	w.say(t, kemi, "yes")
+	if got := w.say(t, kemi, "workflows"); !strings.Contains(got, "your name") {
+		t.Fatalf("workflows: %q", got)
+	}
+	done := w.send(t, kemi, whatsapptest.Text("Kemi Ola"))
+	if len(done) != 1 || !strings.Contains(done[0].Text, "Done: *Kemi Ola's workflows* is on Taskiem") || !strings.Contains(done[0].Text, "Send *pin*") ||
+		strings.Contains(done[0].Text, "find us") || fmt.Sprint(buttonIDs(done[0].Buttons)) != "[su:tpl:daily-reminder su:tpl:leave-request]" {
+		t.Fatalf("done: %+v", done)
+	}
+	user, err := w.wa.UserOf(ctx, kemi)
+	if err != nil || user == uuid.Nil {
+		t.Fatalf("the number is linked: %v %v", user, err)
+	}
+	tenant, source, agreed := onboardingOf(t, w.world, user)
+	if source != "whatsapp" || agreed != 2 {
+		t.Fatalf("onboarding: %s, %d terms", source, agreed)
+	}
+	if got := kindAndAreas(t, w.world, tenant); got != "workflows:" {
+		t.Errorf("kind and areas: %s", got)
+	}
+	var rows int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM business_areas WHERE tenant_id = $1`, tenant).Scan(&rows); err != nil || rows != 5 {
+		t.Errorf("every area a row: %d %v", rows, err)
+	}
+	// Never asked to be found.
+	var asked int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM link_settings WHERE tenant_id = $1`, tenant).Scan(&asked); err != nil || asked != 0 {
+		t.Errorf("asked about being found: %d %v", asked, err)
+	}
+	// Another business, for someone with an account: no terms, no name;
+	// the same first question.
+	if got := w.say(t, kemi, "new business"); !strings.Contains(got, "a business, or for workflows") {
 		t.Fatalf("new business: %q", got)
 	}
 	// An approval tapped meanwhile goes where it always went.
-	if got := w.press(t, ada, "tk1.not-a-token"); len(got) != 1 || strings.Contains(got[0].Text, "business name") {
+	if got := w.press(t, kemi, "tk1.not-a-token"); len(got) != 1 || strings.Contains(got[0].Text, "business, or for workflows") {
 		t.Fatalf("a button meanwhile: %+v", got)
 	}
-	w.say(t, ada, "Ada Fashion")
-	w.say(t, ada, "fashion")
-	if got := w.say(t, ada, "transfer"); !strings.Contains(got, "Done: *Ada Fashion*") {
-		t.Fatalf("second: %q", got)
+	if got := w.say(t, kemi, "1"); !strings.Contains(got, "What is your business called?") {
+		t.Fatalf("1 for a business: %q", got)
 	}
-	var businesses int
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM memberships WHERE user_id = $1 AND role = 'owner'`, user).Scan(&businesses); err != nil || businesses != 2 {
-		t.Fatalf("businesses: %d %v", businesses, err)
+	w.say(t, kemi, "Kemi Fashion")
+	w.say(t, kemi, "fashion")
+	if got := w.say(t, kemi, "transfer"); !strings.Contains(got, "Done: *Kemi Fashion*") {
+		t.Fatalf("a business: %q", got)
+	}
+	// Workflows again, for someone with an account: made at once, named
+	// after them.
+	w.say(t, kemi, "new business")
+	made := w.press(t, kemi, "su:kind:workflows")
+	if len(made) != 1 || !strings.Contains(made[0].Text, "Done: *Kemi Ola's workflows*") ||
+		fmt.Sprint(buttonIDs(made[0].Buttons)) != "[su:tpl:daily-reminder su:tpl:leave-request]" {
+		t.Fatalf("workflows: %+v", made)
+	}
+	var kinds string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT string_agg(t.kind, ' ' ORDER BY t.created_at) FROM memberships m JOIN tenants t ON t.id = m.tenant_id
+		WHERE m.user_id = $1 AND m.role = 'owner'`, user).Scan(&kinds); err != nil || kinds != "workflows business workflows" {
+		t.Errorf("Kemi's: %q %v", kinds, err)
+	}
+}
+
+// What a business sells sets the areas it starts with; "something else"
+// keeps every area but Schools, as before the question.
+func TestChatSignupSellsSetAreas(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	chatSignupOn(w.world, "whatsapp")
+	w.srv.ChatSignup.PerHour = 100
+	for i, c := range []struct{ sells, want string }{
+		{"7", "business: links money"},  // services
+		{"5", "business: money"},        // school (its own switch is school_settings)
+		{"8", "business: links orders"}, // deliveries
+		{"9", ""},                       // something else
+	} {
+		number := fmt.Sprintf("+23480312301%02d", 30+i)
+		for _, m := range []string{"start", "yes", "1", fmt.Sprintf("Shop %d", i), "Bisi", c.sells} {
+			w.say(t, number, m)
+		}
+		if got := w.say(t, number, "1"); !strings.Contains(got, "Done") {
+			t.Fatalf("%s: %q", c.sells, got)
+		}
+		user, _ := w.wa.UserOf(ctx, number)
+		tenant, _, _ := onboardingOf(t, w.world, user)
+		got := kindAndAreas(t, w.world, tenant)
+		if c.sells == "9" {
+			// No rows: the default holds (areas.DefaultOn).
+			var rows int
+			if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM business_areas WHERE tenant_id = $1`, tenant).Scan(&rows); err != nil || rows != 0 || got != "business:" {
+				t.Errorf("something else: %s, %d rows %v", got, rows, err)
+			}
+			continue
+		}
+		if got != c.want {
+			t.Errorf("sells %s: %s, want %s", c.sells, got, c.want)
+		}
+		var schoolsOn bool
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM school_settings WHERE tenant_id = $1 AND enabled)`, tenant).Scan(&schoolsOn); err != nil || schoolsOn != (c.sells == "5") {
+			t.Errorf("sells %s: schools %v %v", c.sells, schoolsOn, err)
+		}
 	}
 }
 
@@ -213,6 +345,7 @@ func TestChatSignupLimits(t *testing.T) {
 	for i, n := range []string{"+2348031230011", "+2348031230012"} {
 		w.say(t, n, "start")
 		w.say(t, n, "yes")
+		w.say(t, n, "1")
 		w.say(t, n, fmt.Sprintf("Shop %d", i))
 		w.say(t, n, "Bisi")
 		w.say(t, n, "1")
@@ -266,7 +399,10 @@ func TestChatSignupOnTelegram(t *testing.T) {
 	if len(got) < 1 || !strings.Contains(got[len(got)-1].Text, "Reply Yes") && !strings.Contains(got[len(got)-1].Text, "Reply *Yes*") {
 		t.Fatalf("start: %+v", got)
 	}
-	w.say(t, acct, "yes")
+	if k := w.say(t, acct, "yes"); !strings.Contains(k.Text, "a business, or for workflows") || len(k.Keyboard) != 2 {
+		t.Fatalf("the kind: %+v", k)
+	}
+	w.say(t, acct, "business")
 	w.say(t, acct, "Bisi Salon")
 	w.say(t, acct, "Bisi Ade")
 	w.say(t, acct, "salon")
@@ -303,6 +439,7 @@ func TestChatSignupOnTelegram(t *testing.T) {
 	const acct2 = int64(8102)
 	w.say(t, acct2, "start")
 	w.say(t, acct2, "yes")
+	w.say(t, acct2, "business")
 	w.say(t, acct2, "Chidi Two")
 	w.say(t, acct2, "Chidi")
 	w.say(t, acct2, "2")
@@ -329,6 +466,7 @@ func TestBindingDormant(t *testing.T) {
 	const ada = "+2348031230101"
 	w.say(t, ada, "start")
 	w.say(t, ada, "yes")
+	w.say(t, ada, "business")
 	w.say(t, ada, "Ada Foods")
 	w.say(t, ada, "Ada")
 	w.say(t, ada, "1")
@@ -413,7 +551,7 @@ func TestBindingDormant(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, user).Scan(&email); err != nil || !strings.HasPrefix(email, "released+") {
 		t.Fatalf("the old sign-in name: %q %v", email, err)
 	}
-	for _, m := range []string{"start", "yes", "Bola Phones", "Bola", "4", "1"} {
+	for _, m := range []string{"start", "yes", "business", "Bola Phones", "Bola", "4", "1"} {
 		w.say(t, ada, m)
 	}
 	again, _ := w.wa.UserOf(ctx, ada)
@@ -481,12 +619,133 @@ func TestSignupInOwnWords(t *testing.T) {
 	}
 	// Anything else: the offer, as before.
 	answer = `{"intent":"unknown","argument":""}`
-	if got := w.send(t, "+2348031239503", whatsapptest.Text("abeg who una be")); len(got) != 1 || fmt.Sprint(buttonIDs(got[0].Buttons)) != "[su:start su:have su:no]" {
+	if got := w.send(t, "+2348031239503", whatsapptest.Text("abeg who una be")); len(got) != 1 || fmt.Sprint(buttonIDs(got[0].Buttons)) != "[su:start su:have su:customer]" {
 		t.Fatalf("not routed: %+v", got)
 	}
 	// What the model may not answer for a stranger is not acted on.
 	answer = `{"intent":"status","argument":""}`
-	if got := w.send(t, "+2348031239504", whatsapptest.Text("wetin don fail today o")); len(got) != 1 || fmt.Sprint(buttonIDs(got[0].Buttons)) != "[su:start su:have su:no]" {
+	if got := w.send(t, "+2348031239504", whatsapptest.Text("wetin don fail today o")); len(got) != 1 || fmt.Sprint(buttonIDs(got[0].Buttons)) != "[su:start su:have su:customer]" {
 		t.Fatalf("a command for a stranger: %+v", got)
+	}
+}
+
+// emailOf is a person's sign-in name.
+func emailOf(t *testing.T, w *world, user uuid.UUID) string {
+	t.Helper()
+	var email string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT email FROM users WHERE id = $1`, user).Scan(&email); err != nil {
+		t.Fatal(err)
+	}
+	return email
+}
+
+// A reissued number is a stranger however its binding ends (F18): after
+// a chat-born owner unlinks their number on the web, or links another,
+// the sign-in name made from the old number is released, so the number's
+// next holder signing up is a new person, not the old owner.
+func TestReleasedNumberIsAStranger(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	chatSignupOn(w.world, "whatsapp")
+	const n1, n2, n3 = "+2348031235501", "+2348031235502", "+2348031235503"
+	anon := &client{t: t, base: w.base}
+	// born signs up from number and signs in on the web with the chat's
+	// one-time sign-in link.
+	born := func(number, business string) (uuid.UUID, *client) {
+		for _, m := range []string{"start", "yes", "business", business, "Ada", "1", "1"} {
+			w.say(t, number, m)
+		}
+		u, _ := w.wa.UserOf(ctx, number)
+		if u == uuid.Nil {
+			t.Fatalf("no chat-born account for %s", number)
+		}
+		m := signinLinkRe.FindStringSubmatch(w.say(t, number, "sign in"))
+		if m == nil {
+			t.Fatalf("no sign-in link for %s", number)
+		}
+		out := anon.must(200, "POST", "/v1/auth/chat/link", map[string]any{"token": m[1], "bearer": true})
+		return u, &client{t: t, base: w.base, token: out["token"].(string)}
+	}
+
+	// Unlinked on the web.
+	a, web := born(n1, "Ada Foods")
+	web.must(204, "DELETE", "/v1/me/whatsapp", nil)
+	if e := emailOf(t, w.world, a); !strings.HasPrefix(e, "released+") {
+		t.Fatalf("after unlinking, the sign-in name is %s", e)
+	}
+	for _, m := range []string{"hello", "start", "yes", "business", "Bola Phones", "Bola", "4", "1"} {
+		w.say(t, n1, m)
+	}
+	if b, _ := w.wa.UserOf(ctx, n1); b == uuid.Nil || b == a || memberRoles(t, w.world, b, "Ada Foods") != "" {
+		t.Fatalf("the number's next holder is %v (the old owner %v), in Ada Foods as %q", b, a, memberRoles(t, w.world, b, "Ada Foods"))
+	}
+
+	// Linked to another number on the web.
+	c, web := born(n2, "Chi Foods")
+	web.must(202, "POST", "/v1/me/whatsapp", map[string]any{"number": n3, "password": "chi-web-password-1"})
+	web.must(200, "POST", "/v1/me/whatsapp/verify", map[string]any{"code": codeRe.FindString(w.graph.Last(t, n3).Text)})
+	if e := emailOf(t, w.world, c); !strings.HasPrefix(e, "released+") {
+		t.Fatalf("after linking another number, the sign-in name is %s", e)
+	}
+	for _, m := range []string{"hello", "start", "yes", "business", "Dayo Phones", "Dayo", "4", "1"} {
+		w.say(t, n2, m)
+	}
+	if d, _ := w.wa.UserOf(ctx, n2); d == uuid.Nil || d == c {
+		t.Fatalf("the old number's next holder is %v (the old owner %v)", d, c)
+	}
+
+	// A Telegram account's sign-in name goes with its binding the same way.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE users SET email = 'owner+0123456789abcdef@telegram.taskiem.invalid' WHERE id = $1`, c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO telegram_bindings (user_id, telegram_id) VALUES ($1, 8201)`, c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.App.Exec(ctx, `SELECT taskiem_tg_unbind($1)`, c); err != nil {
+		t.Fatal(err)
+	}
+	if e := emailOf(t, w.world, c); e != "released+"+c.String()+"@telegram.taskiem.invalid" {
+		t.Fatalf("after unlinking Telegram, the sign-in name is %s", e)
+	}
+}
+
+// Workflows on Telegram: the kind's button, the person's name, their own
+// contact last, and a workspace with every area off.
+func TestChatSignupWorkflowsOnTelegram(t *testing.T) {
+	ctx := context.Background()
+	w := newTGWorld(t)
+	chatSignupOn(w.world, "telegram")
+	const acct = int64(8111)
+	w.say(t, acct, "start")
+	kind := w.say(t, acct, "yes")
+	data := ""
+	for _, row := range kind.Keyboard {
+		for _, b := range row {
+			if b.Text == "Workflows" {
+				data = b.Data
+			}
+		}
+	}
+	if data == "" {
+		t.Fatalf("no Workflows button: %+v", kind)
+	}
+	got := w.update(t, acct, func(id int64) []byte { return telegramtest.Callback(id, acct, kind.MessageID, "q1", data) })
+	if len(got) < 1 || !strings.Contains(got[len(got)-1].Text, "your name") {
+		t.Fatalf("after Workflows: %+v", got)
+	}
+	if c := w.say(t, acct, "Tolu Bello"); !c.AskContact {
+		t.Fatalf("contact asked: %+v", c)
+	}
+	got = w.update(t, acct, func(id int64) []byte { return telegramtest.ContactMessage(id, acct, "2348031234611", acct) })
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Tolu Bello's workflows") {
+		t.Fatalf("made: %+v", got)
+	}
+	user, err := w.tg.UserOf(ctx, acct)
+	if err != nil || user == uuid.Nil {
+		t.Fatalf("linked: %v %v", user, err)
+	}
+	tenant, source, _ := onboardingOf(t, w.world, user)
+	if got := kindAndAreas(t, w.world, tenant); source != "telegram" || got != "workflows:" {
+		t.Errorf("%s: %s", source, got)
 	}
 }

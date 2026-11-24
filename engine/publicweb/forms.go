@@ -82,6 +82,13 @@ func (s *Server) ipHashKey() []byte {
 
 // formData is the form template's input.
 type formData struct {
+	// products are the page's products sold in sizes and colours, whose
+	// picks become their sizes' lines (sizes.go).
+	products []storefront.Item
+	// pickError is why a product's pick was not taken into the bag (a
+	// size sold out, or none of those values): kept so a submission is
+	// refused with it rather than sent without the line.
+	pickError string
 	pageData
 	Business string
 	Kind     string
@@ -114,6 +121,26 @@ type formData struct {
 	// Questions are the action's own questions (fronts F1): its form's
 	// fields but the basket and time, drawn as hosted forms' fields.
 	Questions []*field
+	// Step is where an order is in its two pages: "bag" (what is in it,
+	// to change or confirm), "details" (who and where, with the bag as a
+	// summary), or empty (one page, with the whole menu to choose from).
+	// Nothing is kept between them: the bag travels in the address and
+	// the form, so the page has no cookies and works without a script.
+	Step     string
+	Bag      []bagLine
+	BagCount int
+	Subtotal string
+	// DepositPercent is the part of an order paid online when it takes a
+	// deposit; Deposit and Balance are that part of the bag and the rest.
+	DepositPercent   int
+	Deposit, Balance string
+	// MoreHref is where to add more to the bag, ChangeHref where the
+	// bag is changed from the details page.
+	MoreHref, ChangeHref string
+	// PayNow is true when the order is paid as it is sent (the details
+	// step's button says how much); Whats is the business's WhatsApp.
+	PayNow bool
+	Whats  string
 }
 
 type zoneItem struct {
@@ -124,8 +151,16 @@ type zoneItem struct {
 }
 
 type formItem struct {
-	N         int
-	ID        string
+	N  int
+	ID string
+	// Size is a line of a product's size or colour, shown once it is in
+	// the bag; Choose is, on a product sold in sizes and colours, its own
+	// page, where they are picked.
+	Size   bool
+	Choose string
+	// Key names the line's fields: the item's id for its first line in a
+	// bag, <id>~2 to ~9 for the same item with other choices.
+	Key       string
 	Name      string
 	Price     string
 	PriceKobo int64
@@ -133,8 +168,25 @@ type formItem struct {
 	Max       int // the most one order may take: maxQuantity, or the stock left
 	Orderable bool
 	SoldOut   bool
+	// Small is the item's thumbnail, for the bag.
+	Small string
 	// Options are a Food dish's groups, a choice each (fronts F3).
 	Options []formOption
+	// More are the bag's other lines of this item, each with its own
+	// choices (Key <id>~2 and on).
+	More []formItem
+}
+
+// maxVariants is how many lines one item may have in a bag, each with
+// different choices.
+const maxVariants = 9
+
+// lineKey is the key of an item's k-th line in a bag (k from 1).
+func lineKey(id string, k int) string {
+	if k <= 1 {
+		return id
+	}
+	return id + "~" + strconv.Itoa(k)
 }
 
 // formOption is one group of a dish's choices as the form asks it.
@@ -145,24 +197,27 @@ type formOption struct {
 
 type formChoice struct {
 	Value, Label string
-	Selected     bool
+	// Name is the choice on its own, PriceKobo what it adds.
+	Name      string
+	PriceKobo int64
+	Selected  bool
 }
 
 // optionInput is the name of a dish's choice in one of its groups.
 func optionInput(id string, group int) string { return fmt.Sprintf("o.%s.%d", id, group) }
 
-// formOptions are an item's groups for the form, the first choice of each
-// taken.
-func formOptions(it storefront.Item) []formOption {
+// formOptions are an item's groups for the form, under the line's key,
+// the first choice of each taken.
+func formOptions(it storefront.Item, key string) []formOption {
 	var out []formOption
 	for gi, g := range it.Options {
-		o := formOption{Input: optionInput(it.ID, gi), Name: g.Name}
+		o := formOption{Input: optionInput(key, gi), Name: g.Name}
 		for ci, c := range g.Choices {
 			label := c.Name
 			if c.PriceKobo > 0 {
 				label += " (+" + storefront.FormatNaira(c.PriceKobo) + ")"
 			}
-			o.Choices = append(o.Choices, formChoice{Value: strconv.Itoa(ci), Label: label, Selected: ci == 0})
+			o.Choices = append(o.Choices, formChoice{Value: strconv.Itoa(ci), Label: label, Name: c.Name, PriceKobo: c.PriceKobo, Selected: ci == 0})
 		}
 		out = append(out, o)
 	}
@@ -190,9 +245,11 @@ func findAction(list []storefront.PublicAction, ref string) (storefront.PublicAc
 }
 
 // orderable reports whether an item can be put in a basket: available,
-// priced and not sold out.
+// priced and not sold out. A product with sizes and colours is not, until
+// the page lets a customer pick one (phase 4 of the variants plan): an
+// order on the product itself would take stock from a row that keeps none.
 func orderable(it storefront.Item) bool {
-	return it.Available && it.PriceKobo != nil && it.ID != "" && !it.SoldOut()
+	return it.Available && it.PriceKobo != nil && it.ID != "" && !it.SoldOut() && it.Variants == 0
 }
 
 // most is how many of an item one order may take.
@@ -215,7 +272,7 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 		s.page(w, r, http.StatusMethodNotAllowed, "notfound", pageData{Title: "Page not found"})
 		return
 	}
-	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	p, ok, err := s.storefrontPage(r.Context(), site)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: storefront", "storefront", site.ID, "err", err)
@@ -285,6 +342,7 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 		return
 	}
 	if r.Method != http.MethodPost {
+		f.stepFor(r.URL.Query())
 		if item := r.URL.Query().Get("item"); item != "" {
 			for i := range f.Items {
 				if f.Items[i].ID == item && f.Items[i].Orderable {
@@ -324,6 +382,13 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 	if act.Kind == "order" {
 		f.Pickup, f.Delivery, f.DeliveryNote = act.Pickup, act.Delivery, act.DeliveryNote
 		f.PayOnDelivery = act.Delivery && act.PayOnDelivery && act.Payment != "none"
+		f.PayNow, f.Whats = act.Payment == "at_order", p.Model.WhatsLink
+		if !embed {
+			f.BagHref = f.Action
+		}
+		if act.Payment != "none" && act.DepositPercent > 0 && act.DepositPercent < 100 {
+			f.DepositPercent = act.DepositPercent
+		}
 		if act.Delivery {
 			for _, z := range act.Zones {
 				fee := "free delivery"
@@ -340,7 +405,17 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 			f.Fulfilment = "delivery"
 		}
 		if storefront.HasWidget(form, "basket") {
-			f.Items = basketItems(p.Items)
+			f.Items = basketItems(storefront.WithSizes(p.Items))
+			for _, it := range p.Items {
+				if len(it.Sizes) > 0 {
+					f.products = append(f.products, it)
+				}
+			}
+			for i := range f.Items {
+				if f.Items[i].Choose != "" {
+					f.Items[i].Choose = base + "/i/" + f.Items[i].ID
+				}
+			}
 		}
 	}
 	return f
@@ -360,6 +435,9 @@ func (s *Server) showForm(w http.ResponseWriter, r *http.Request, status int, f 
 		token = string(t)
 	}
 	f.Token = token
+	if r.Method == http.MethodPost {
+		f.detailsAgain()
+	}
 	s.renderPrivate(w, r, status, "form.html", f)
 }
 
@@ -401,7 +479,7 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		s.showForm(w, r, http.StatusBadRequest, f, "")
 		return
 	}
-	sub, msg := f.check(v, p.Items)
+	sub, msg := f.check(v, storefront.WithSizes(p.Items))
 	switch {
 	case msg != "":
 	case act.Kind == "hire":
@@ -420,6 +498,12 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 	sub.StatusKey = s.statusKey(idem)
 	if sub.Payment != "on_delivery" {
 		sub.Payment = act.Payment
+	}
+	// An order that takes a deposit pays that part online, the rest being
+	// the order's balance (paid in parts, fronts F5).
+	// One under a naira is not taken: the order is paid in full.
+	if act.Kind == "order" && sub.Payment != "on_delivery" && sub.Payment != "none" {
+		sub.DepositKobo = storefront.ActionOptions{DepositPercent: act.DepositPercent}.OrderDeposit(sub.TotalKobo)
 	}
 	sub.Channel = "direct"
 	if embed {
@@ -508,18 +592,84 @@ func (f *formData) keep(v url.Values) {
 	for _, q := range f.Questions {
 		q.show(v)
 	}
-	for i := range f.Items {
-		if n, err := strconv.Atoi(strings.TrimSpace(v.Get(quantityField + f.Items[i].ID))); err == nil && n > 0 && n <= f.Items[i].Max && f.Items[i].Orderable {
-			f.Items[i].Qty = n
+	f.keepBasket(v)
+}
+
+// keepBasket takes the quantities and the choices a form (or an address)
+// names: an item's first line under its id, its others under <id>~k.
+// A product's pick becomes its size's line first, once: what it could
+// not take is kept in pickError for check.
+func (f *formData) keepBasket(v url.Values) {
+	if msg := f.takeSizePicks(v); msg != "" {
+		f.pickError = msg
+		if f.Error == "" {
+			f.Error = msg
 		}
-		for _, o := range f.Items[i].Options {
-			if picked := v.Get(o.Input); picked != "" {
-				for c := range o.Choices {
-					o.Choices[c].Selected = o.Choices[c].Value == picked
+	}
+	for i := range f.Items {
+		it := &f.Items[i]
+		base := *it
+		base.Qty, base.More = 0, nil
+		it.More = nil
+		f.keepLine(it, v)
+		for k := 2; k <= maxVariants; k++ {
+			key := lineKey(it.ID, k)
+			if v.Get(quantityField+key) == "" {
+				continue
+			}
+			x := base
+			x.Key = key
+			x.Options = make([]formOption, len(base.Options))
+			for gi, o := range base.Options {
+				x.Options[gi] = formOption{Input: optionInput(key, gi), Name: o.Name, Choices: append([]formChoice(nil), o.Choices...)}
+				for c := range x.Options[gi].Choices {
+					x.Options[gi].Choices[c].Selected = c == 0
 				}
+			}
+			if f.keepLine(&x, v) {
+				it.More = append(it.More, x)
 			}
 		}
 	}
+}
+
+// keepLine takes one line's quantity and choices; false when it has none.
+// A choice the item no longer offers takes the line out, saying so,
+// rather than putting another choice in its place. More than one order
+// may take is brought down to the most, saying so, rather than the line
+// left out.
+func (f *formData) keepLine(x *formItem, v url.Values) bool {
+	n, err := strconv.Atoi(strings.TrimSpace(v.Get(quantityField + x.Key)))
+	if err != nil || n <= 0 || x.Max <= 0 || !x.Orderable {
+		return false
+	}
+	if n > x.Max {
+		if f.Error == "" {
+			f.Error = tooMany(x.Max, x.Name)
+		}
+		n = x.Max
+	}
+	for _, o := range x.Options {
+		picked := v.Get(o.Input)
+		if picked == "" {
+			continue
+		}
+		found := false
+		for c := range o.Choices {
+			if o.Choices[c].Value == picked {
+				found = true
+			}
+		}
+		if !found {
+			f.Error = "The choices for " + x.Name + " have changed. Please choose again."
+			return false
+		}
+		for c := range o.Choices {
+			o.Choices[c].Selected = o.Choices[c].Value == picked
+		}
+	}
+	x.Qty = n
+	return true
 }
 
 // check validates a submission and builds it, pricing the basket from the
@@ -550,6 +700,11 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 		if c.Message, bad = text(v.Get("message"), maxOrderNote, true); bad {
 			f.Message = ""
 			return sub, "Please keep your message to 500 characters."
+		}
+		// keep took the picks into the bag; one it could not take
+		// refuses the order, never leaves the line out unsaid.
+		if f.pickError != "" {
+			return sub, f.pickError
 		}
 		if msg := f.basket(v, items, &sub); msg != "" {
 			return sub, msg
@@ -668,7 +823,9 @@ func readAnswers(qs []*field, v url.Values) (map[string]any, string) {
 }
 
 // basket builds the order's lines. Quantities come from the form; ids,
-// names and prices from the catalogue copy, never from the browser.
+// names and prices from the catalogue copy, never from the browser. An
+// item may have several lines (<id>~k), each with its own choices; their
+// quantities together are held to what is left.
 func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront.Submission) string {
 	seen := map[string]bool{}
 	for _, it := range items {
@@ -676,55 +833,68 @@ func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront
 			continue
 		}
 		seen[it.ID] = true
-		raw := strings.TrimSpace(v.Get(quantityField + it.ID))
-		if raw == "" || raw == "0" {
-			continue
-		}
-		n, err := strconv.Atoi(raw)
-		if err != nil || n < 0 || n > maxQuantity {
-			f.clearQty(it.ID)
-			return fmt.Sprintf("Please choose from 0 to %d of %s.", maxQuantity, it.Name)
-		}
-		if n == 0 {
-			continue
-		}
-		if it.SoldOut() {
-			f.clearQty(it.ID)
-			return it.Name + " is sold out. Please choose something else."
-		}
-		if !orderable(it) {
-			f.clearQty(it.ID)
-			return it.Name + " is not available right now. Please choose something else."
-		}
-		if n > most(it) {
-			f.clearQty(it.ID)
-			return fmt.Sprintf("Only %d of %s left. Please choose fewer.", most(it), it.Name)
-		}
-		if len(sub.Basket) == maxLines {
-			return fmt.Sprintf("An order can have up to %d different items.", maxLines)
-		}
-		// A dish's choices, one per group, priced from the copy.
-		picked := make([]int, len(it.Options))
-		for gi := range it.Options {
-			if raw := v.Get(optionInput(it.ID, gi)); raw != "" {
-				if picked[gi], err = strconv.Atoi(raw); err != nil {
-					picked[gi] = -1
+		taken := 0
+		for k := 1; k <= maxVariants; k++ {
+			key := lineKey(it.ID, k)
+			raw := strings.TrimSpace(v.Get(quantityField + key))
+			if raw == "" || raw == "0" {
+				continue
+			}
+			n, err := strconv.Atoi(raw)
+			if err != nil || n < 0 {
+				f.clearQty(it.ID)
+				return fmt.Sprintf("Please choose from 0 to %d of %s.", maxQuantity, it.Name)
+			}
+			if n == 0 {
+				continue
+			}
+			if it.SoldOut() {
+				f.clearQty(it.ID)
+				return it.Name + " is sold out. Please choose something else."
+			}
+			if !orderable(it) {
+				f.clearQty(it.ID)
+				return it.Name + " is not available right now. Please choose something else."
+			}
+			if taken += n; taken > most(it) {
+				f.clearQty(it.ID)
+				return tooMany(most(it), it.Name)
+			}
+			if len(sub.Basket) == maxLines {
+				return fmt.Sprintf("An order can have up to %d different items.", maxLines)
+			}
+			// A dish's choices, one per group, priced from the copy.
+			picked := make([]int, len(it.Options))
+			for gi := range it.Options {
+				if raw := v.Get(optionInput(key, gi)); raw != "" {
+					if picked[gi], err = strconv.Atoi(raw); err != nil {
+						picked[gi] = -1
+					}
 				}
 			}
+			opts, add, ok := it.Choose(picked)
+			if !ok {
+				return "Please choose from the options for " + it.Name + "."
+			}
+			unit := *it.PriceKobo + add
+			line := storefront.Line{ID: it.ID, Name: it.Name, Quantity: n, PriceKobo: unit, LineKobo: unit * int64(n), Options: opts}
+			sub.Basket = append(sub.Basket, line)
+			sub.TotalKobo += line.LineKobo
 		}
-		opts, add, ok := it.Choose(picked)
-		if !ok {
-			return "Please choose from the options for " + it.Name + "."
-		}
-		unit := *it.PriceKobo + add
-		line := storefront.Line{ID: it.ID, Name: it.Name, Quantity: n, PriceKobo: unit, LineKobo: unit * int64(n), Options: opts}
-		sub.Basket = append(sub.Basket, line)
-		sub.TotalKobo += line.LineKobo
 	}
 	if len(sub.Basket) == 0 {
 		return "Please choose at least one item."
 	}
 	return ""
+}
+
+// tooMany says an order asked more of an item than it may take: the
+// stock left, or the most one order takes.
+func tooMany(most int, name string) string {
+	if most < maxQuantity {
+		return fmt.Sprintf("Only %d of %s left. Please choose fewer.", most, name)
+	}
+	return fmt.Sprintf("Please choose from 0 to %d of %s.", maxQuantity, name)
 }
 
 // mapsPin reads a map pin: a link from a maps app, or "latitude,longitude"
@@ -744,22 +914,49 @@ func mapsPin(s string) (string, bool) {
 		return fmt.Sprintf("https://www.google.com/maps?q=%.6f,%.6f", lat, lng), false
 	}
 	u, err := url.Parse(s)
-	if err != nil || u.Scheme != "https" || len(s) > 300 {
+	if err != nil || u.Scheme != "https" || len(s) > 300 || u.User != nil || u.Port() != "" {
 		return "", true
 	}
-	host := strings.ToLower(u.Hostname())
-	for _, h := range mapHosts {
-		if host == h || strings.HasSuffix(host, "."+h) {
+	// The exact host of a maps app, and on a host that serves other
+	// things too only its maps paths: staff and riders open this link,
+	// so it must not be any page (sites.google.com) or a redirect
+	// (google.com/url?q=) that happens to be Google's.
+	paths, ok := mapHosts[strings.ToLower(u.Hostname())]
+	if !ok {
+		return "", true
+	}
+	if len(paths) == 0 {
+		return u.String(), false
+	}
+	for _, p := range paths {
+		if p == "/" && (u.Path == "" || u.Path == "/") || p != "/" && (u.Path == p || strings.HasPrefix(u.Path, p+"/")) {
 			return u.String(), false
 		}
 	}
 	return "", true
 }
 
-var (
-	latLong  = regexp.MustCompile(`^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$`)
-	mapHosts = []string{"google.com", "maps.google.com", "goo.gl", "maps.app.goo.gl", "maps.apple.com", "openstreetmap.org", "waze.com"}
-)
+var latLong = regexp.MustCompile(`^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$`)
+
+// mapHosts are the hosts a map pin's link may be on, each with the paths
+// taken there (none: any path). What the maps apps' own Share gives:
+// maps.app.goo.gl and goo.gl/maps (Google Maps), www.google.com/maps
+// (its address bar, and what Taskiem makes of a shared location),
+// maps.google.com, maps.apple.com, and OpenStreetMap's and Waze's links.
+var mapHosts = map[string][]string{
+	"maps.app.goo.gl":       nil,
+	"goo.gl":                {"/maps"},
+	"www.google.com":        {"/maps"},
+	"google.com":            {"/maps"},
+	"maps.google.com":       {"/", "/maps", "/place", "/dir", "/search"},
+	"maps.apple.com":        nil,
+	"www.openstreetmap.org": nil,
+	"openstreetmap.org":     nil,
+	"osm.org":               nil,
+	"waze.com":              {"/ul", "/live-map"},
+	"www.waze.com":          {"/ul", "/live-map"},
+	"ul.waze.com":           {"/ul"},
+}
 
 // chooseZone marks the delivery area named (exactly as offered) chosen;
 // false when it is none of them.
@@ -779,7 +976,7 @@ func (f *formData) chooseZone(name string) (zoneItem, bool) {
 func (f *formData) clearQty(id string) {
 	for i := range f.Items {
 		if f.Items[i].ID == id {
-			f.Items[i].Qty = 0
+			f.Items[i].Qty, f.Items[i].More = 0, nil
 		}
 	}
 }
@@ -828,7 +1025,11 @@ func basketItems(items []storefront.Item) []formItem {
 			continue
 		}
 		seen[it.ID] = true
-		x := formItem{N: len(out), ID: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut(), Options: formOptions(it)}
+		x := formItem{N: len(out), ID: it.ID, Key: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut(), Options: formOptions(it, it.ID), Small: it.Photo["320"],
+			Size: it.VariantOf != ""}
+		if len(it.Sizes) > 0 && it.Available && !it.SoldOut() {
+			x.Choose = it.ID
+		}
 		if it.PriceKobo != nil {
 			x.PriceKobo, x.Price = *it.PriceKobo, storefront.FormatNaira(*it.PriceKobo)
 		}

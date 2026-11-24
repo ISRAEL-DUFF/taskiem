@@ -1,8 +1,6 @@
 package telemetry
 
 import (
-	"context"
-
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -43,7 +41,12 @@ func (c PoolCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c PoolCollector) Collect(ch chan<- prometheus.Metric) {
-	rows, err := c.Pool.Query(context.Background(), `SELECT pool, queue, ready, leased, oldest_ready_seconds FROM taskiem_pool_stats()`)
+	ctx, done, ok := collecting(&poolCollecting)
+	if !ok {
+		return
+	}
+	defer done()
+	rows, err := c.Pool.Query(ctx, `SELECT pool, queue, ready, leased, oldest_ready_seconds FROM taskiem_pool_stats()`)
 	if err != nil {
 		return
 	}

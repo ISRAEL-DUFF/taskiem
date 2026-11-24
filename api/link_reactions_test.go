@@ -73,10 +73,12 @@ func TestLinkReactions(t *testing.T) {
 		t.Fatalf("one emoji, two people: %v", r)
 	}
 
-	// Not an emoji of the six, not a message of this conversation, and a
-	// member who may not write.
-	if out := react(seller, 400, id, "😀"); out["error"] == nil {
-		t.Errorf("another emoji: %v", out)
+	// Not one emoji (words, markup, two emoji), not a message of this
+	// conversation, and a member who may not write.
+	for _, bad := range []string{"a", "<b>", "👍👍", "👍 ", ""} {
+		if out := react(seller, 400, id, bad); out["error"] == nil {
+			t.Errorf("%q is not one emoji: %v", bad, out)
+		}
 	}
 	react(seller, 404, "0192e2e0-0000-7000-8000-000000000999", "👍")
 	react(viewer, 403, id, "👍")
@@ -114,6 +116,22 @@ func TestLinkReactions(t *testing.T) {
 		t.Fatalf("over the day's limit: %d %v", code, out)
 	}
 	react(seller, 200, id, "👍") // a change of the one given: not a new one
+
+	// Any one emoji is a reaction (the "+" of WhatsApp's pill), a flag or a
+	// person with a skin tone too; it replaces the one before and both see it.
+	for _, e := range []string{"🎉", "🇳🇬", "👩🏽‍💻"} {
+		out := react(seller, 200, id, e)["reactions"].([]any)
+		mine := ""
+		for _, r := range out {
+			if r.(map[string]any)["mine"] == true {
+				mine = r.(map[string]any)["emoji"].(string)
+			}
+		}
+		if mine != e {
+			t.Errorf("%q not kept as mine: %v", e, out)
+		}
+	}
+	react(seller, 200, id, "🙏") // back to what the rest of this test expects
 }
 
 // Stars are a member's own: kept, listed newest first across conversations,

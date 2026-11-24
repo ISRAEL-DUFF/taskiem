@@ -112,6 +112,46 @@
       "text": "Reject",
       "reviewed": false
     },
+    "button.treat_label_another": {
+      "text": "Another",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: a label not offered, typed next"
+    },
+    "button.treat_label_none": {
+      "text": "No label",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: none (shown as Not labelled)"
+    },
+    "button.treat_many_record": {
+      "text": "Just record them",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: no, just record them"
+    },
+    "button.treat_many_yes": {
+      "text": "Yes, one row each",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: yes, a row on Things we have for each"
+    },
+    "button.treat_new_item": {
+      "text": "A new one",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
+    },
+    "button.treat_record": {
+      "text": "Just record it",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes"
+    },
+    "button.treat_stock": {
+      "text": "Add to stock",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: counted into a stock item when it comes"
+    },
+    "button.treat_track": {
+      "text": "Keep track of it",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: each one a row on Things we have"
+    },
     "button.yes": {
       "text": "Yes",
       "reviewed": false
@@ -119,6 +159,16 @@
     "button.yes_add": {
       "text": "Yes, add am",
       "reviewed": false
+    },
+    "button.yes_sell": {
+      "text": "Yes, I sell it",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
+    },
+    "button.no_sell": {
+      "text": "No, I don't",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
     },
     "button.yes_publish": {
       "text": "Yes, publish am",
@@ -308,6 +358,1351 @@
       "text": "{name} no dey here. Languages wey dey here: {languages}.",
       "reviewed": false
     },
+    "menu.about": {
+      "text": "About {topic}. Wetin you wan do?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Heads a topic's menu when Taskiem's model could tell the topic but not the action"
+    },
+    "menu.account.lang": {
+      "text": "Language",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.account.lang.line": {
+      "text": "The language wey I dey take answer you",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.account.plan": {
+      "text": "Your plan",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.account.plan.line": {
+      "text": "Wetin you dey pay, wetin you dey get",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.account.signin": {
+      "text": "Sign in for web",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.account.signin.line": {
+      "text": "Link for your computer",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.account.switch": {
+      "text": "Change business",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.account.switch.line": {
+      "text": "Work for another one",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.anything_else": {
+      "text": "Any other thing?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under a topic's menu shown after that topic's command was answered"
+    },
+    "menu.auto.build": {
+      "text": "Automate new thing",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.auto.build.ask.goal": {
+      "text": "Wetin suppose happen, and when? Like every Friday text my customers wey owe me.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.auto.build.line": {
+      "text": "Talk am, Taskiem go set am up",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.auto.run": {
+      "text": "Run automation",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.auto.run.ask.name": {
+      "text": "Which one? Im name.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.auto.run.line": {
+      "text": "One wey you don get before",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.auto.status": {
+      "text": "Wetin run today",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.auto.status.line": {
+      "text": "And anything wey fail",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.bookings.cancel": {
+      "text": "Cancel booking",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.bookings.cancel.ask.ref": {
+      "text": "Which booking?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.bookings.cancel.line": {
+      "text": "We go tell the customer",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.bookings.move": {
+      "text": "Move booking",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.bookings.move.ask.ref": {
+      "text": "Which booking?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.bookings.move.ask.when": {
+      "text": "To when? Like Sat 11:00.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.bookings.move.line": {
+      "text": "New day or new time",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.bookings.off": {
+      "text": "Take one day off",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.bookings.off.ask.day": {
+      "text": "Which day? Like 25 Dec.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.bookings.off.line": {
+      "text": "No booking for that day",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.bookings.today": {
+      "text": "Today bookings",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.bookings.today.line": {
+      "text": "Who dey come, and when",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.add": {
+      "text": "Add supplier",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.add.ask.for": {
+      "text": "Wetin you dey buy from dem? Send skip if na many things.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.add.ask.name": {
+      "text": "Wetin be the supplier name?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.add.ask.phone": {
+      "text": "Wetin be their phone number?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.add.line": {
+      "text": "Name, phone, wetin dem dey sell",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.bills": {
+      "text": "Your bills",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.bills.line": {
+      "text": "Wetin you owe suppliers",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.got": {
+      "text": "Goods don land",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.got.ask.what": {
+      "text": "Wetin land? Talk how many, like 50 cartons of Indomie.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.got.line": {
+      "text": "E go enter your stock",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.list": {
+      "text": "Your suppliers",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.list.line": {
+      "text": "People wey you dey buy from",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.order": {
+      "text": "Order from supplier",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.order.ask.who": {
+      "text": "From which supplier?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.order.line": {
+      "text": "Wetin you need, we go send am give dem",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.pay": {
+      "text": "Pay supplier",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.pay.ask.amount": {
+      "text": "How much e be?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.pay.ask.how": {
+      "text": "How you pay?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.pay.ask.who": {
+      "text": "Which supplier?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.pay.line": {
+      "text": "We go remove am from their bill",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.check.long": {
+      "text": "E too long. Talk am with fewer words.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer over 150 characters"
+    },
+    "menu.check.money": {
+      "text": "Send amount, like 12,000 or 12k.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not an amount"
+    },
+    "menu.check.number": {
+      "text": "Send number, like 30.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not a number"
+    },
+    "menu.check.phone": {
+      "text": "That one no look like phone number. Try one like 0803 123 4567.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not a phone number"
+    },
+    "menu.check.ref": {
+      "text": "That one no be order number. E dey look like TK-A1B2C3.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not an order's or booking's number"
+    },
+    "menu.buying.deliver": {
+      "text": "Deliver to saved place",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.ask.place": {
+      "text": "Where e dey go? Name of saved place, like warehouse.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.ask.ref": {
+      "text": "Which order? Im number, like P-7QX4KD.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.line": {
+      "text": "Where one order dey go, like @warehouse",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.check.saved": {
+      "text": "That one no be name of saved thing. Names na letters, numbers and -, like mum or our-account.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not a saved thing's name"
+    },
+    "menu.saved.ask": {
+      "text": "Ask about saved thing",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.ask.ask.name": {
+      "text": "Which saved thing? Im name, like mum.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.ask.ask.what": {
+      "text": "Wetin you wan know? Like phone, or the insurance date. Send skip for everything.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.ask.line": {
+      "text": "One detail, like @mum phone",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.import": {
+      "text": "Import from file",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.import.line": {
+      "text": "Spreadsheet of accounts, people, places",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.remind": {
+      "text": "Remind me one date",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.remind.ask.name": {
+      "text": "Which saved thing? Im name, like car.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.remind.ask.what": {
+      "text": "Which of im dates? Like insurance or birthday. Send skip if na only one e get.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.remind.line": {
+      "text": "Saved date, I go tell you for that day",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.reminders": {
+      "text": "Your reminders",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.reminders.line": {
+      "text": "The dates wey you ask make I tell you",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.share": {
+      "text": "Share saved thing",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.share.ask.name": {
+      "text": "Which saved thing? Im name, like our-account.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.share.ask.to": {
+      "text": "With who? Linked business or customer, by name.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.share.line": {
+      "text": "With linked business or customer",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.check.signed": {
+      "text": "Send number, like -2 or 3.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not a number up or down"
+    },
+    "menu.choose": {
+      "text": "Choose one",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The button that opens a menu's list on WhatsApp; at most 20 characters"
+    },
+    "menu.choose_one": {
+      "text": "Choose one from: {choices}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: An answer that is not one of a question's fixed choices"
+    },
+    "menu.form_missing": {
+      "text": "Fill these ones: {fields}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form sent without a value it needs; {fields} are the questions left"
+    },
+    "menu.here_help": {
+      "text": "Na wetin I fit help with be this.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under the topics menu, after the model said Taskiem cannot do something"
+    },
+    "menu.leave": {
+      "text": "Make we leave am for now.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question answered wrongly three times: it is dropped"
+    },
+    "menu.lists.add": {
+      "text": "Add to list",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.lists.add.ask.list": {
+      "text": "To which list?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.lists.add.line": {
+      "text": "One new thing for the list",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.lists.all": {
+      "text": "Your lists",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.lists.all.line": {
+      "text": "Customers, members, anything wey you dey keep",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.lists.find": {
+      "text": "Find something",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.lists.find.ask.list": {
+      "text": "For which list?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.lists.find.ask.words": {
+      "text": "Wetin make I look for?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.lists.find.line": {
+      "text": "For one of your lists",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.lists.new": {
+      "text": "Make new list",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.lists.new.line": {
+      "text": "Anything wey you wan keep",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.money.cash": {
+      "text": "Cash enter or comot",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.money.cash.ask.amount": {
+      "text": "How much e be?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.cash.ask.dir": {
+      "text": "Na cash in, or cash out?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.cash.ask.what": {
+      "text": "For wetin? Send skip if nothing.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.cash.line": {
+      "text": "Till money, safe money",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.money.invoice": {
+      "text": "Send invoice",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.money.invoice.ask.amount": {
+      "text": "How much e be?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.invoice.ask.for": {
+      "text": "For wetin?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.invoice.ask.who": {
+      "text": "Na for who? Name, or saved person like @acme.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.invoice.line": {
+      "text": "To customer, from the chat",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.money.invoices": {
+      "text": "Your invoices",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.money.invoices.line": {
+      "text": "Don send, don pay, and late",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.money.spent": {
+      "text": "Write wetin you spend",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.money.spent.ask.amount": {
+      "text": "How much you spend?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.spent.ask.what": {
+      "text": "For wetin?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.spent.line": {
+      "text": "Diesel, rent, transport",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.money.week": {
+      "text": "Your money",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.money.week.line": {
+      "text": "Wetin enter, wetin comot, and wetin remain",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.more": {
+      "text": "Others…",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The last row of the topics list on WhatsApp, for the rest; at most 24 characters"
+    },
+    "menu.more_line": {
+      "text": "The remaining topics",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under the More… row, and heading the rest of the topics"
+    },
+    "menu.need_answer": {
+      "text": "I need answer before I fit continue. Send *cancel* to stop.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: An empty answer to a question"
+    },
+    "menu.not_yours": {
+      "text": "You no fit do that one here. Send *help* to see wetin you fit do.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row the person may not use"
+    },
+    "menu.open_web": {
+      "text": "{title}: open am for Taskiem on the web.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row with no form or page on this channel"
+    },
+    "menu.orders.move": {
+      "text": "Mark ready or delivered",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.orders.move.ask.ref": {
+      "text": "Which order?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.orders.move.ask.to": {
+      "text": "Na ready, or delivered?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.orders.move.line": {
+      "text": "Move order forward",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.orders.one": {
+      "text": "One order",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.orders.one.ask.ref": {
+      "text": "Which order?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.orders.one.line": {
+      "text": "Find am by im number",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.orders.open": {
+      "text": "Open orders",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.orders.open.line": {
+      "text": "Dey wait, dey make, dey road",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.orders.refund": {
+      "text": "Refund order",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.orders.refund.ask.ref": {
+      "text": "Which order?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.orders.refund.line": {
+      "text": "Money go back to customer",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.owe.add": {
+      "text": "Person dey owe you",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.owe.add.ask.amount": {
+      "text": "How much e be?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.add.ask.for": {
+      "text": "For wetin? Send skip if nothing.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.add.ask.who": {
+      "text": "Who dey owe you?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.add.line": {
+      "text": "Write am for the book",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.owe.list": {
+      "text": "Who dey owe you",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.owe.list.line": {
+      "text": "Everybody, the biggest first",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.owe.paid": {
+      "text": "Person don pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.owe.paid.ask.amount": {
+      "text": "How much e be?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.paid.ask.how": {
+      "text": "Na cash, or transfer?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.paid.ask.who": {
+      "text": "Who pay?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.paid.line": {
+      "text": "E go comot from wetin dem owe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.owe.send": {
+      "text": "Send customer im balance",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.owe.send.ask.who": {
+      "text": "Which customer?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.send.line": {
+      "text": "Friendly reminder",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.page.fronts": {
+      "text": "Other pages",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.page.fronts.line": {
+      "text": "Menu, snacks page",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.page.hours": {
+      "text": "Time wey you dey open",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.page.hours.ask.hours": {
+      "text": "When you dey open? Like mon-sat 8-6.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.page.hours.line": {
+      "text": "Days and time wey you dey open",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.page.see": {
+      "text": "See your page",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.page.see.line": {
+      "text": "Wetin customers dey see, and the QR code",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.page.shut": {
+      "text": "Close or open shop",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.page.shut.ask.do": {
+      "text": "Close the shop, or open am?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.page.shut.line": {
+      "text": "Stop orders small time, or start again",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.pick_topic": {
+      "text": "Pick topic, or just tell me wetin you want for your own words.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under the topics menu, after help"
+    },
+    "menu.products.add": {
+      "text": "Add product",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.products.add.ask.name": {
+      "text": "Wetin be the product name?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.add.ask.price": {
+      "text": "How much e cost?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.add.line": {
+      "text": "Name, price, photo, sizes",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.products.hide": {
+      "text": "Hide or show product",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.products.hide.ask.do": {
+      "text": "Hide am, or show am again?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.hide.ask.name": {
+      "text": "Which product?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.hide.line": {
+      "text": "Comot am from your page for now, or bring am back",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.products.price": {
+      "text": "Change price",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.products.price.ask.name": {
+      "text": "Which product?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.price.ask.price": {
+      "text": "Wetin be the new price?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.price.line": {
+      "text": "New price for one product",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.products.prices": {
+      "text": "Price lists",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.products.prices.line": {
+      "text": "Prices for people wey dey buy wholesale",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.products.service": {
+      "text": "Add service",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.products.service.ask.minutes": {
+      "text": "How many minutes e dey take?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.service.ask.name": {
+      "text": "Wetin be the service name?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.service.ask.price": {
+      "text": "How much e cost?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.service.line": {
+      "text": "Haircut, fitting, one session",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.reply_number": {
+      "text": "Reply with number:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After a numbered menu's head, on the chat apps without menus of their own"
+    },
+    "menu.reply_or_type": {
+      "text": "Reply with number, or type am.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under a question's numbered choices"
+    },
+    "menu.riders.add": {
+      "text": "Add rider",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.add.ask.areas": {
+      "text": "Which areas {name} dey cover? Send skip for anywhere.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.add.ask.areas.label": {
+      "text": "Which area dem dey cover?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: a form's label for the rider's question above, before the rider's name is known: the name as a pronoun"
+    },
+    "menu.riders.add.ask.name": {
+      "text": "Wetin be the rider name?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.add.ask.phone": {
+      "text": "Wetin be {name} phone number?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.add.ask.phone.label": {
+      "text": "Wetin be im phone number?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: a form's label for the rider's question above, before the rider's name is known: the name as a pronoun"
+    },
+    "menu.riders.add.line": {
+      "text": "Name, phone, and the areas wey dem dey cover",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.riders.auto": {
+      "text": "Give riders every order",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.auto.line": {
+      "text": "Riders go take dem as dem dey come",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.riders.back": {
+      "text": "Collect order back",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.back.ask.ref": {
+      "text": "Which order?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.back.line": {
+      "text": "From rider wey no fit go",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.riders.give": {
+      "text": "Give rider one order",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.give.ask.ref": {
+      "text": "Which order?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.give.ask.rider": {
+      "text": "Which rider?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.give.line": {
+      "text": "Pick the order, then pick rider",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.riders.list": {
+      "text": "Riders, who dey free",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.list.line": {
+      "text": "Who don go out, who fit go now",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.riders.today": {
+      "text": "Today deliveries",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.today.line": {
+      "text": "Dey road, don finish, and dey wait",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.sales.handover": {
+      "text": "Hand over shift",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.sales.handover.line": {
+      "text": "Cash and stock when shift dey change",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.sales.sell": {
+      "text": "Write wetin you sell",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.sales.sell.ask.amount": {
+      "text": "How much for everything?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.sales.sell.ask.paid": {
+      "text": "How dem pay?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.sales.sell.ask.what": {
+      "text": "Wetin you sell? Talk how many, like 3 bags of rice.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.sales.sell.line": {
+      "text": "Items, amount, and how dem pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.sales.today": {
+      "text": "Today sales",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.sales.today.line": {
+      "text": "Wetin enter today",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.sales.week": {
+      "text": "How we do this week",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.sales.week.line": {
+      "text": "Sales, money wey enter and comot",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.saved.add": {
+      "text": "Save something",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.saved.add.ask.name": {
+      "text": "Which name make e get? Like mum.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.add.ask.what": {
+      "text": "Wetin make I keep? Like GTBank 0123456789.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.add.line": {
+      "text": "Call am later by im name",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.saved.all": {
+      "text": "Your saved things",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.saved.all.line": {
+      "text": "Accounts, addresses, notes",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.say_another": {
+      "text": "Pick topic, or talk am another way.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under the topics menu, after a message nothing understood"
+    },
+    "menu.school.clear": {
+      "text": "Clearance",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.school.clear.line": {
+      "text": "Who fit write exam",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.school.debtors": {
+      "text": "Who dey owe, how late",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.school.debtors.line": {
+      "text": "With reminder wey you fit send",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.school.pay": {
+      "text": "Write payment",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.school.pay.line": {
+      "text": "Cash or transfer for the desk",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.school.students": {
+      "text": "Students",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.school.students.line": {
+      "text": "By class, with wetin dem owe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.shall": {
+      "text": "{title}: *{command}*\nMake I do am?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The command a menu's questions made, waiting for Yes"
+    },
+    "menu.staff.approvals": {
+      "text": "Approvals wey dey wait",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.staff.approvals.line": {
+      "text": "Cash, discounts, payments",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.staff.give": {
+      "text": "Give person work",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.staff.give.ask.what": {
+      "text": "Wetin dem go do, and by when? Like count the float by 7am.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.staff.give.ask.who": {
+      "text": "Na for who? Their name as e dey for the team.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.staff.give.line": {
+      "text": "With the time wey dem suppose finish am",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.staff.mine": {
+      "text": "Your work",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.staff.mine.line": {
+      "text": "Wetin dey your hand today",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.add": {
+      "text": "Add stock wey land",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.add.ask.cost": {
+      "text": "How much each one cost? Send skip if you no wan talk.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.add.ask.what": {
+      "text": "Wetin land? Talk how many, like 50 cartons of Indomie.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.add.line": {
+      "text": "Wetin land, how many, how much",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.adjust": {
+      "text": "Correct count",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.adjust.ask.by": {
+      "text": "By how many? Use minus for less, like -2.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.adjust.ask.item": {
+      "text": "Which item?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.adjust.ask.why": {
+      "text": "Why? Send skip if you no wan talk.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.adjust.line": {
+      "text": "Spoil, missing, or count wrong",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.count": {
+      "text": "Count wetin dey shelf",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.count.line": {
+      "text": "One by one, wetin really dey there",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.low": {
+      "text": "See wetin don low",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.low.line": {
+      "text": "Items wey wan finish",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.new": {
+      "text": "Add something to count",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.new.ask.what": {
+      "text": "What is it, and how many? Like 20 yards of ankara fabric.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.new.line": {
+      "text": "Something new, sold or used: fabric, thread, bags",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.one": {
+      "text": "How many one item get",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.one.ask.item": {
+      "text": "Which item?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.one.line": {
+      "text": "One item count",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.taken": {
+      "text": "{title}: {values}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Before a menu's next question, what Taskiem already took from the message (its model)"
+    },
+    "menu.tip": {
+      "text": "Next time you fit type: *{command}*",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under a menu: the typed command for the row Taskiem picked"
+    },
+    "menu.topic.account": {
+      "text": "Your account",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.auto": {
+      "text": "Automations",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.bookings": {
+      "text": "Bookings",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.buying": {
+      "text": "Suppliers",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.lists": {
+      "text": "Your lists",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.money": {
+      "text": "Money",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.orders": {
+      "text": "Orders",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.owe": {
+      "text": "Who dey owe you",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.page": {
+      "text": "Your page",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.products": {
+      "text": "Products",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.riders": {
+      "text": "Riders",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.sales": {
+      "text": "Sales",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.saved": {
+      "text": "Saved things",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.school": {
+      "text": "School",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.staff": {
+      "text": "Staff and work",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.stock": {
+      "text": "Stock",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topics": {
+      "text": "Topics",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The title over the topics in a WhatsApp list; at most 24 characters"
+    },
+    "menu.what_do": {
+      "text": "Wetin you wan do?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Heads a menu of the chat (docs/spec/chat-menus.md)"
+    },
     "money.channel.cash": {
       "text": "cash",
       "reviewed": false
@@ -424,6 +1819,18 @@
       "text": "You no go dey get update from {business} for here again. Send START make e start again.",
       "reviewed": false
     },
+    "reach.stopped_dropped": {
+      "text": "You will no longer get updates from {business} here. Send START to get them again. What you were in the middle of here was dropped too.",
+      "reviewed": false
+    },
+    "customer.resumed": {
+      "text": "You fit write {business} for here again, and dem fit answer you.",
+      "reviewed": false
+    },
+    "customer.stopped": {
+      "text": "You no go dey get message from {business} for here again, and wetin you write give dem don delete. Send START make you fit write dem again.",
+      "reviewed": false
+    },
     "reach.stopped_none": {
       "text": "Nobody dey send you update for here.",
       "reviewed": false
@@ -448,38 +1855,6 @@
       "text": "Connect {service}.",
       "reviewed": false
     },
-    "speech.cannot_hear.empty": {
-      "text": "Abeg no vex, I no hear anything for that voice note. Abeg record am again or type your message.",
-      "reviewed": false
-    },
-    "speech.cannot_hear.too_long": {
-      "text": "Abeg no vex, that voice note too long for me. Abeg send short one or type your message.",
-      "reviewed": false
-    },
-    "speech.cannot_hear.unreadable": {
-      "text": "Abeg no vex, I no fit play that voice note. Abeg record am again or type your message.",
-      "reviewed": false
-    },
-    "speech.cannot_hear.unavailable": {
-      "text": "Abeg no vex, I no fit listen to voice note now. Abeg type your message, I go reply you.",
-      "reviewed": false
-    },
-    "ready.speech_hear": {
-      "text": "This Taskiem cannot hear voice notes yet, and this workflow listens to them. Ask whoever runs your Taskiem to set up hearing voice notes.",
-      "reviewed": false
-    },
-    "ready.speech_speak": {
-      "text": "This Taskiem cannot answer by voice yet, and this workflow speaks its replies. Ask whoever runs your Taskiem to set up spoken replies.",
-      "reviewed": false
-    },
-    "ready.voice_in_workflows": {
-      "text": "Voice in workflows is off, so this workflow cannot hear voice notes or answer by voice. Turn it on in Settings.",
-      "reviewed": false
-    },
-    "ready.file_scanner": {
-      "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
-      "reviewed": false
-    },
     "ready.paystack_transfer": {
       "text": "Paystack must on Pay with Transfer for this business: ask Paystack support. Until then customers no fit pay by transfer into the account numbers wey e open.",
       "reviewed": false
@@ -492,16 +1867,20 @@
       "text": "Add the private value {name}.",
       "reviewed": false
     },
+    "ready.saved_invalid": {
+      "text": "The workflow reads saved.{name}, which no saved thing can be called: names are letters, numbers and -, written with _ for -.",
+      "reviewed": false
+    },
+    "ready.saved": {
+      "text": "Save @{name} on the Saved page: the workflow reads it.",
+      "reviewed": false
+    },
     "ready.table": {
       "text": "Make the table {name}.",
       "reviewed": false
     },
     "ready.variable": {
       "text": "Fill {name}.",
-      "reviewed": false
-    },
-    "ready.whatsapp_callback": {
-      "text": "Customers' messages reach this workflow only once {service} sends them to Taskiem. In Meta's App Dashboard, under WhatsApp then Configuration, paste {url} as the callback address, enter the same check value you saved on your connection, and subscribe to messages. Keep the app secret on your connection too, or every message is refused.",
       "reviewed": false
     },
     "rider.arrived": {
@@ -602,6 +1981,38 @@
     },
     "rider.location_kept": {
       "text": "I don collect your location: e dey with the delivery.",
+      "reviewed": false
+    },
+    "rider.jobs": {
+      "text": "Your deliveries now:",
+      "reviewed": false
+    },
+    "rider.job": {
+      "text": "*{reference}* from {business}, go {drop}: {step}",
+      "reviewed": false
+    },
+    "rider.job_offered": {
+      "text": "dem offer am give you. Send ACCEPT or CAN'T.",
+      "reviewed": false
+    },
+    "rider.job_accepted": {
+      "text": "na your own. Send PICKED UP once you collect am.",
+      "reviewed": false
+    },
+    "rider.job_picked_up": {
+      "text": "e dey road. Send ARRIVED for door, or DELIVERED.",
+      "reviewed": false
+    },
+    "rider.job_arrived": {
+      "text": "you don reach door. Send DELIVERED when you hand am over.",
+      "reviewed": false
+    },
+    "money.daily.today": {
+      "text": "Today: {deliveries} deliveries, {bookings} bookings.",
+      "reviewed": false
+    },
+    "money.daily.card": {
+      "text": "Your morning card, each line go open im tool: {link}",
       "reviewed": false
     },
     "rider.no_delivery": {
@@ -754,6 +2165,26 @@
     },
     "door.linked": {
       "text": "E don do: this chat don join your Taskiem account. Send help make you see wetin you fit do here.",
+      "reviewed": false
+    },
+    "door.linked_told": {
+      "text": "A chat was linked to your Taskiem account: {chat}. Not you? Unlink it now in Account on the web.",
+      "reviewed": false
+    },
+    "door.cooling": {
+      "text": "This chat was linked to your account less than 24 hours ago, so it cannot send a sign-in or password link yet. That keeps your account safe if someone else linked it. Sign in on the web the way you usually do: {link}",
+      "reviewed": false
+    },
+    "wa.not_understood_help": {
+      "text": "Send *help* make you see wetin I fit do.",
+      "reviewed": false
+    },
+    "wa.password.off": {
+      "text": "Signing in with WhatsApp or Telegram is off for you, so this chat sends no password link. Reset your password from the sign-in page, with your email: {link}",
+      "reviewed": false
+    },
+    "wa.password.unconfirmed": {
+      "text": "Your email is not confirmed yet, so this chat cannot send a password link. Send *email you@example.com* and open the link we email you. Then send *password* again.",
       "reviewed": false
     },
     "door.tg_joined": {
@@ -1372,6 +2803,296 @@
       "text": "Your table {table} never get {columns} column, wey e dey use. Add am for the app{link}, or those steps go fail.",
       "reviewed": false
     },
+    "wa.public.button_gone": {
+      "text": "This button no dey work again. Send *menu* make you see wetin you fit do here.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a button on an answer that is not this customer's, has expired, or opens nothing now"
+    },
+    "wa.public.done": {
+      "text": "E don do: {label} don finish. Your reference na {reference}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a run ended well but its answer had no words"
+    },
+    "wa.public.failed": {
+      "text": "Sorry, {label} no go through. Your reference na {reference}. Send *menu* make you try again, or write us here.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: the run failed or was stopped; nothing of why is said to a customer"
+    },
+    "wa.public.list_more": {
+      "text": "…and {count} more.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a list answer with more than ten rows; {count} is how many more"
+    },
+    "wa.public.not_offered": {
+      "text": "{label} no fit happen from here. Write us here and we go help you.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool that moves money is never started for a customer"
+    },
+    "wa.public.working": {
+      "text": "{label} don start. Your reference na {reference}. The answer go come here when e ready.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool with an answer has started; the answer follows"
+    },
+    "wa.saved.bank": {
+      "text": "{bank}, account number {number}",
+      "reviewed": false
+    },
+    "wa.saved.bank_name": {
+      "text": "The bank's name for it: {name}",
+      "reviewed": false
+    },
+    "wa.saved.business": {
+      "text": "{org}'s:",
+      "reviewed": false
+    },
+    "wa.saved.head": {
+      "text": "@{name}: {title}",
+      "reviewed": false
+    },
+    "wa.saved.not_checked": {
+      "text": "Its name is not checked with the bank yet.",
+      "reviewed": false
+    },
+    "wa.saved.pick": {
+      "text": "Which @{name}?\n1. Your own: {mine}\n2. {org}'s: {theirs}\nReply 1 or 2.",
+      "reviewed": false
+    },
+    "wa.saved.offer": {
+      "text": "Save {title} as @{name} for next time?",
+      "reviewed": false
+    },
+    "wa.saved.suggest": {
+      "text": "You've invoiced {title} {count} times. Save them as @{name} for next time?",
+      "reviewed": false
+    },
+    "wa.saved.two": {
+      "text": "You have two things called @{name}:",
+      "reviewed": false
+    },
+    "button.keep_mine": {
+      "text": "Keep it to myself",
+      "reviewed": false
+    },
+    "button.save": {
+      "text": "Save",
+      "reviewed": false
+    },
+    "wa.saved.need_bank": {
+      "text": "Which bank is {number} with? Say it again with the bank, like: save {name}: GTBank {number}",
+      "reviewed": false
+    },
+    "wa.saved.own_app": {
+      "text": "On this number only {org}'s saved things are kept and found. Keep your own in the Taskiem app.",
+      "reviewed": false
+    },
+    "wa.saved.share_ask": {
+      "text": "{question}",
+      "reviewed": false
+    },
+    "wa.saved.share_plain": {
+      "text": "Share @{name} with {to}?",
+      "reviewed": false
+    },
+    "wa.saved.share_which": {
+      "text": "Which do you mean? {names}. Say it again with the whole name.",
+      "reviewed": false
+    },
+    "wa.saved.share_nobody": {
+      "text": "No linked business or customer is called {to}.",
+      "reviewed": false
+    },
+    "wa.saved.share_none": {
+      "text": "You have nothing saved as @{name}.",
+      "reviewed": false
+    },
+    "wa.saved.shared": {
+      "text": "Shared @{name} with {to}.",
+      "reviewed": false
+    },
+    "wa.saved.share_left": {
+      "text": "Not shared.",
+      "reviewed": false
+    },
+    "wa.saved.share_reminder": {
+      "text": "Share @{name}? Tap Share or Cancel.",
+      "reviewed": false
+    },
+    "wa.saved.share_not": {
+      "text": "Not shared: {reason}",
+      "reviewed": false
+    },
+    "wa.saved.save_quoted_none": {
+      "text": "Reply to a message from a linked business to save it.",
+      "reviewed": false
+    },
+    "button.share": {
+      "text": "Share",
+      "reviewed": false
+    },
+    "wa.saved.field": {
+      "text": "@{name}: {label}: {value}",
+      "reviewed": false
+    },
+    "wa.saved.field_empty": {
+      "text": "@{name} has no {label} saved.",
+      "reviewed": false
+    },
+    "wa.saved.in_full": {
+      "text": "In full on the Saved page.",
+      "reviewed": false
+    },
+    "wa.invoice.saved_kind": {
+      "text": "@{name} is {kind}: an invoice goes to a person or a business. Write: invoice @someone 25k for \u2026",
+      "reviewed": false
+    },
+    "wa.deliver.to": {
+      "text": "Delivered to @{name}: {address}.",
+      "reviewed": false
+    },
+    "wa.mention.deliver_how": {
+      "text": "To have it delivered to @{name}, end the order with \"deliver to @{name}\".",
+      "reviewed": false
+    },
+    "wa.deliver.set": {
+      "text": "{reference} will be delivered to @{name}: {address}.",
+      "reviewed": false
+    },
+    "wa.deliver.saved_kind": {
+      "text": "@{name} is {kind}: an order is delivered to a place. Write: deliver P-7QX4KD to @warehouse",
+      "reviewed": false
+    },
+    "wa.deliver.no_phone": {
+      "text": "@{name} has no phone for the rider. Add one to it on the Saved page, then try again.",
+      "reviewed": false
+    },
+    "wa.deliver.not": {
+      "text": "Not changed: {reason}",
+      "reviewed": false
+    },
+    "wa.remind.set": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due, and each year after. Say *my reminders* to see them.",
+      "reviewed": false
+    },
+    "wa.remind.set_once": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due. Say *my reminders* to see them.",
+      "reviewed": false
+    },
+    "wa.remind.no_dates": {
+      "text": "@{name} holds no date to remind you of. Give its kind a date field on the Saved page.",
+      "reviewed": false
+    },
+    "wa.remind.which": {
+      "text": "Which of @{name}'s dates? {list}. Say it again with one, like: remind me when @{name} insurance is due",
+      "reviewed": false
+    },
+    "wa.remind.passed": {
+      "text": "@{name}'s {label} was {date}, which has passed. Change it on the Saved page, or ask for a reminder each year.",
+      "reviewed": false
+    },
+    "wa.remind.none": {
+      "text": "You have no reminders. Say, for example: remind me when @car insurance is due",
+      "reviewed": false
+    },
+    "wa.remind.list": {
+      "text": "Your reminders:\n{list}\nTo stop one: stop reminding me about @car",
+      "reviewed": false
+    },
+    "wa.remind.every_year": {
+      "text": ", each year",
+      "reviewed": false
+    },
+    "wa.remind.none_for": {
+      "text": "You have no reminders about @{name}.",
+      "reviewed": false
+    },
+    "wa.remind.stopped": {
+      "text": "No more reminders about @{name}.",
+      "reviewed": false
+    },
+    "wa.saved.not_saved": {
+      "text": "Not saved: {reason}",
+      "reviewed": false
+    },
+    "wa.saved.save_ask": {
+      "text": "Save this as @{name}?\n\n{card}\n\nIt goes in {where}.",
+      "reviewed": false
+    },
+    "wa.saved.save_left": {
+      "text": "Not saved.",
+      "reviewed": false
+    },
+    "wa.saved.save_reminder": {
+      "text": "Tap Save to keep it as @{name}, or Cancel.",
+      "reviewed": false
+    },
+    "wa.saved.saved": {
+      "text": "Saved as @{name}. Type @{name} any time to call it up.",
+      "reviewed": false
+    },
+    "wa.saved.taken": {
+      "text": "You already have something called @{name}. Choose another name.",
+      "reviewed": false
+    },
+    "wa.saved.where_business": {
+      "text": "{org}'s saved things",
+      "reviewed": false
+    },
+    "wa.saved.where_mine": {
+      "text": "your own saved things, which only you see",
+      "reviewed": false
+    },
+    "wa.saved.yours": {
+      "text": "Your own:",
+      "reviewed": false
+    },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": false
+    },
+    "wa.stock.category_more": {
+      "text": "Send *more* make I show you the rest.",
+      "reviewed": false
+    },
+    "wa.stock.which_size": {
+      "text": "{name} get {count} sizes and colours. Talk which one, put the size and colour after the name, like *{example}*.",
+      "reviewed": false
+    },
+    "wa.order.which_size": {
+      "text": "{name} from {business} dey come for sizes and colours: {sizes}. Talk which one, like *{example}*, or choose many at once for your chat with them for Taskiem.",
+      "reviewed": false
+    },
+    "wa.size.which": {
+      "text": "Which {choice} of {name}? Reply with im number, or talk am:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.again": {
+      "text": "Reply with the number of the {choice}, or talk am:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.none": {
+      "text": "{name} no get any for sale for {said}. E dey come for {sizes}.",
+      "reviewed": false
+    },
+    "wa.size.say": {
+      "text": "Which {choice} of {name}? Talk am: {list}",
+      "reviewed": false
+    },
+    "wa.size.say_again": {
+      "text": "Talk the {choice}: {list}",
+      "reviewed": false
+    },
+    "wa.order.no_size": {
+      "text": "{name} from {business} no dey come for {said}. E dey come for {sizes}.",
+      "reviewed": false
+    },
+    "wa.stock.sizes": {
+      "text": "{name}: {count} sizes and colours, {total} for all.\n{lines}",
+      "reviewed": false
+    },
+    "wa.stock.low_tag": {
+      "text": "(e don low)",
+      "reviewed": false
+    },
     "wa.tablemake.denied": {
       "text": "You no fit make or change tables for {org} (e need table.edit).",
       "reviewed": false
@@ -1546,6 +3267,106 @@
     },
     "wa.cancelled": {
       "text": "E don cancel.",
+      "reviewed": false
+    },
+    "wa.treat.ask": {
+      "text": "*{item}* ({count}) from *{supplier}*: how should we treat it?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. An order drafted in chat: a line the business has not said how to treat before"
+    },
+    "wa.treat.how": {
+      "text": "*Just record it*: no stock moves. *Add to stock*: counted in when it comes. *Keep track of it*: each one on Things we have. Or type it, like _keep track of it, Machines_.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Under how should we treat it?: what each answer does, and how to type one with its label"
+    },
+    "wa.treat.item_reminder": {
+      "text": "Pick the stock item *{item}* goes into, or type its name. *A new one* makes it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Which stock item? was answered with something else"
+    },
+    "wa.treat.label": {
+      "text": "Label for *{item}*? Pick one, or type it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: the business's most used labels, Another, No label"
+    },
+    "wa.treat.label_reminder": {
+      "text": "Pick a label for *{item}*, type one, or press *No label*.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. The label question was answered with something else"
+    },
+    "wa.treat.label_type": {
+      "text": "Type the label for *{item}*, like _Machines_.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Another was pressed: the label typed"
+    },
+    "wa.treat.many": {
+      "text": "Put {count} {item} on Things we have, one row each?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 50: asked first"
+    },
+    "wa.treat.new_item": {
+      "text": "*{name}* will be a new stock item. Do you sell it?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A new stock item for a purchase line: one question before it is made"
+    },
+    "wa.treat.no_item": {
+      "text": "None of your stock items is called *{name}*.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A stock item typed for a purchase line is not one of the business's"
+    },
+    "wa.treat.not_labelled": {
+      "text": "Not labelled",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line with no label, said back"
+    },
+    "wa.treat.not_saved": {
+      "text": "*{item}* could not be changed: {reason}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer could not be saved (the order moved on meanwhile)"
+    },
+    "wa.treat.reminder": {
+      "text": "How should we treat *{item}*? Press one, or type *just record it*, *add to stock* or *keep track of it*. *cancel* leaves it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. How should we treat it? was answered with something else"
+    },
+    "wa.treat.saved": {
+      "text": "*{item}*: {how}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer saved and remembered: how it is treated, and its label"
+    },
+    "wa.treat.to_stock": {
+      "text": "Add to stock ({item})",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. How a purchase line is treated, said back: into which stock item"
+    },
+    "wa.treat.too_many": {
+      "text": "{count} {item} are too many to keep track of one by one (at most {max}), so it is just recorded. You can add one row for the lot on Things we have.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 200: it cannot be, and is just recorded"
+    },
+    "wa.treat.which_item": {
+      "text": "Which stock item does *{item}* go into? Pick one, or type its name.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Add to stock was chosen for a purchase line: the stock item, materials included"
+    },
+    "wa.understood.confirm": {
+      "text": "I think say you mean: *{command}*\nMake I do am?",
+      "reviewed": false
+    },
+    "wa.understood.left": {
+      "text": "OK, I don leave am. Talk am again another way, or send *help* make you see wetin I fit do.",
+      "reviewed": false
+    },
+    "wa.yes_stale": {
+      "text": "That button was for something earlier, so nothing was done. Send *yes* to confirm what is waiting now, or *cancel* to drop it.",
+      "reviewed": false
+    },
+    "wa.yes_stale_none": {
+      "text": "That button was for something earlier. Nothing is waiting for an answer now.",
+      "reviewed": false
+    },
+    "wa.yes_stale_public": {
+      "text": "That button was for something earlier, so nothing was started. Send *menu* to see what you can do here.",
       "reviewed": false
     },
     "wa.cancelled_nothing_started": {
@@ -1724,6 +3545,10 @@
       "text": "• *build* and wetin you wan automate, e.g. *build every Friday text my customers who owe me* (e go save as draft after you confirm)",
       "reviewed": false
     },
+    "wa.help.signin": {
+      "text": "• *sign in* for link to the web app; *password* to enter with email; *sign out everywhere*",
+      "reviewed": false
+    },
     "wa.help.cancel": {
       "text": "• *cancel*: drop wetin dey go on",
       "reviewed": false
@@ -1838,6 +3663,10 @@
     },
     "wa.help.intro": {
       "text": "You fit send:",
+      "reviewed": false
+    },
+    "wa.help.saved": {
+      "text": "\u2022 *@* and a saved thing's name: tells it (*@mum*); ask about it (*what's @car insurance due?*); *save mum: GTBank 0123456789*; *remind me when @car insurance is due*; *my reminders*",
       "reviewed": false
     },
     "wa.help.invoice": {
@@ -2232,6 +4061,30 @@
       "text": "Talk am like this: *add rider Musa 0803 123 4567 Lekki Ajah* (the area no compulsory).",
       "reviewed": false
     },
+    "wa.riders.added_linked": {
+      "text": "{name} don be your rider, and dem business don link with your own: your delivery dey reach dem for Taskiem.",
+      "reviewed": false
+    },
+    "wa.riders.added_asked": {
+      "text": "{name} don be your rider. Dem business dey Taskiem, so I don ask am make e link with your own: once e gree, your delivery go dey reach dem for Taskiem.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed": {
+      "text": "I don confirm {reference}: we dey pay {name} {amount}. I go tell you when e land.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_cash": {
+      "text": "I don confirm {reference}: {name} don collect {amount} cash. E dey your money log.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_netted": {
+      "text": "I don confirm {reference}: {name} fee of {amount} comot from the cash wey dem hold. Nothing remain to pay.",
+      "reviewed": false
+    },
+    "wa.riders.confirm_refused": {
+      "text": "I no fit confirm that delivery: {reason}",
+      "reviewed": false
+    },
     "wa.riders.added": {
       "text": "{name} don be your rider. I don send dem link by SMS make dem dey get your delivery for WhatsApp.",
       "reviewed": false
@@ -2307,6 +4160,91 @@
     "wa.run.denied_now": {
       "text": "You no fit start runs for {org} again.",
       "reviewed": false
+    },
+    "wa.tool.yours": {
+      "text": "Your business tools (type the word):",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Heading over the business's own tools listed by tools"
+    },
+    "wa.tool.taken": {
+      "text": "E don already happen: {who} press am for {when}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A once button on a tool's answer or a message, pressed after someone else's press started its run"
+    },
+    "wa.tool.button_gone": {
+      "text": "This button no dey again.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A button whose tool is gone, or which is more than seven days old"
+    },
+    "wa.tool.echo": {
+      "text": "{tool} dey start.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool that only reads, started at once with nothing to show back"
+    },
+    "wa.tool.echo_values": {
+      "text": "{tool} dey start with:\n{values}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool that only reads, started at once: every value read, masked, so a wrong reading is seen"
+    },
+    "wa.tool.step_up": {
+      "text": "{tool} dey move money, so you go confirm am with your passkey for the app or on the web, no be here.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool whose steps move money, called from a chat app"
+    },
+    "wa.page.more": {
+      "text": "…plus {count} more for the page.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A page's short form in a chat app: how many of its list's rows are not shown"
+    },
+    "wa.page.open": {
+      "text": "Open the page: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A page's short form in a chat app: the link to open the page"
+    },
+    "wa.tool.list_empty": {
+      "text": "Nothing dey to show.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool's list answer with no rows and no empty text of its own"
+    },
+    "wa.tool.row_not_yours": {
+      "text": "Dem send that list to another person, or e no dey again.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Someone other than the person a tool's list answer went to chose one of its rows (WhatsApp's list message), or the list is not in this business"
+    },
+    "wa.tool.list_more": {
+      "text": "…and {count} more: see all of dem for the app.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool's list answer with more than ten rows"
+    },
+    "wa.tool.which": {
+      "text": "Which one you mean? Send im number:\n{list}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Two of the business's own tools fit a message (made tools M3): a numbered pick; {list} is one tool a line, with its command"
+    },
+    "wa.tool.read": {
+      "text": "For {tool}, wetin I read na:\n{values}\n\n{prompt}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The reader filled some of a tool's inputs from the message (made tools M3): every value read, masked, then the next input to give"
+    },
+    "wa.tool.saved_none": {
+      "text": "Nothing wey the business save get the name @{name}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool's input given as @name of no saved thing of the business (a person's own saved things are never a tool's)"
+    },
+    "wa.tool.saved_kind": {
+      "text": "@{name} na {kind}: e no fit fill {label}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool's input given as @name of a saved thing that cannot fill it (a bank account, a file); {kind} is what it is, {label} the input"
+    },
+    "wa.tool.saved_not_fit": {
+      "text": "@{name} no fit {label}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool's input given as @name of a saved thing whose words do not fit the input (an address for a number)"
+    },
+    "wa.run.not_yours": {
+      "text": "Na only {roles} fit start {workflow}. Ask owner if you need am.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: run <workflow> by a member whose roles the workflow does not allow (decision 0073); {roles} are role names"
     },
     "wa.run.does_not_fit": {
       "text": "That one no fit: {reason}.\n\n{prompt}",
@@ -2948,13 +4886,30 @@
       "text": " for {price} each",
       "reviewed": false
     },
-    "wa.stock.confirm_new": {
-      "text": "Add *{name}* with {qty}{cost}?",
-      "reviewed": false
+    "wa.stock.ask_sell": {
+      "text": "*{name}* is new: {qty}{cost}. Do you sell it?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Counting in something the business has none of (add 20 yards of ankara fabric): one question before it is added"
     },
-    "wa.stock.confirm_first": {
-      "text": "Start to keep stock with *{name}*: {qty}{cost}? Taskiem go make products table for your items.",
-      "reviewed": false
+    "wa.stock.ask_sell_first": {
+      "text": "Start keeping stock with *{name}*: {qty}{cost}. Do you sell it?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. The first thing counted in, which starts keeping stock: the same question"
+    },
+    "wa.stock.sell_how": {
+      "text": "*Yes* adds it to your products too. *No* only keeps count of it: something you use, not sell.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Under Do you sell it?: what each answer does"
+    },
+    "wa.stock.sell_reminder": {
+      "text": "Do you sell *{name}*? Reply *yes* or *no*, or *cancel* to leave it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Do you sell it? was answered with something else"
+    },
+    "wa.stock.added_material": {
+      "text": "It is counted only: it is not one of your products.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. After adding something not sold (No to Do you sell it?)"
     },
     "wa.stock.confirm_topup": {
       "text": "Add {qty} to *{name}* ({from} → {to}){cost}?",
@@ -2982,10 +4937,6 @@
     },
     "wa.stock.no_price": {
       "text": "E go show for your page once e get price: send *price {name} 9500*.",
-      "reviewed": false
-    },
-    "wa.stock.waiting": {
-      "text": "E don record for *{name}*. E go reach your products table soon.",
       "reviewed": false
     },
     "wa.stock.now": {
@@ -3325,7 +5276,15 @@
       "reviewed": false
     },
     "wa.signin.link": {
-      "text": "Open this link make you choose your password and enter Taskiem for web. E go work once, for one hour; no give anybody:\n{link}",
+      "text": "Open this link to choose your password. E go work once, for one hour; no show anybody:\n{link}\nThen enter for web with your email (the one for *{domain}*) and that password.",
+      "reviewed": false
+    },
+    "wa.signin.chat_link": {
+      "text": "Open this link to enter Taskiem for web. E go work once, for 10 minutes; no show anybody:\n{link}",
+      "reviewed": false
+    },
+    "door.signin_email": {
+      "text": "To enter with password, you need email first: send *email you@example.com* and open the link wey we go email you. Then send *password* again.\nOr send *sign in* for link wey go enter you straight.",
       "reviewed": false
     },
     "wa.signin.sso": {
@@ -3334,6 +5293,38 @@
     },
     "wa.signin.unavailable": {
       "text": "Sign in for web never set up for this Taskiem.",
+      "reviewed": false
+    },
+    "wa.signin.off": {
+      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Sign in on the web with your email and password: {link}",
+      "reviewed": false
+    },
+    "wa.signin.passkey": {
+      "text": "Administrators dey enter Taskiem with their passkey: {link}",
+      "reviewed": false
+    },
+    "chat.signin.code": {
+      "text": "{code} na your Taskiem code to enter. E go expire for 10 minutes. No share am; if no be you ask for am, ignore this message.",
+      "reviewed": false
+    },
+    "chat.signin.told": {
+      "text": "You don enter Taskiem for web with your chat ({device}). No be you? Send *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.on": {
+      "text": "To enter Taskiem with only your passkey don on now: your password and chat no fit enter you for web again. No be you? Send *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.off": {
+      "text": "To enter Taskiem with only your passkey don off now: your password and chat fit enter you again. No be you? Send *sign out everywhere*.",
+      "reviewed": false
+    },
+    "chat.signout.done": {
+      "text": "You don comot from web everywhere: {count} session don end. Your chat still dey as before.",
+      "reviewed": false
+    },
+    "chat.signout.none": {
+      "text": "You no dey inside web anywhere.",
       "reviewed": false
     },
     "wa.status.denied": {
@@ -3888,6 +5879,10 @@
       "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: the debt wey customers dey owe you",
       "reviewed": false
     },
+    "wa.help.direct": {
+      "text": "• Message business wey you link with: start am with *...*, like *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: tap *{cta}* to enter the {count} detail(s) for the row; you go confirm before I add am. Send *cancel* to stop.",
       "reviewed": false
@@ -4044,12 +6039,20 @@
       "text": "Wetin be your business name? (Send *cancel* to stop any time.)",
       "reviewed": false
     },
+    "signup.ask_workspace": {
+      "text": "What should we call this workspace? (Send *cancel* to stop at any point.)",
+      "reviewed": false
+    },
+    "signup.workspace_bad": {
+      "text": "A workspace name needs 2 to 80 characters, and no links or email addresses. What should we call it?",
+      "reviewed": false
+    },
     "signup.ask_name": {
       "text": "And your own name?",
       "reviewed": false
     },
     "signup.ask_sells": {
-      "text": "Wetin you dey sell or do? Reply with number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phone and gadget\n5. School\n6. Salon\n7. Services\n8. Another thing",
+      "text": "Wetin you dey sell or do? Reply with number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phone and gadget\n5. School\n6. Salon\n7. Services\n8. Delivery (I be rider)\n9. Another thing",
       "reviewed": false
     },
     "signup.ask_pays": {
@@ -4126,6 +6129,26 @@
     },
     "signup.tpl.stock-count-reminder": {
       "text": "Count my shelf",
+      "reviewed": false
+    },
+    "signup.ask_kind": {
+      "text": "Is this for a business, or for workflows?\n\n*A business*: sell, take orders and bookings, send invoices, with your staff.\n*Workflows*: get work done for you or your team: forms, reminders, approvals, your other apps.",
+      "reviewed": false
+    },
+    "signup.button_business": {
+      "text": "A business",
+      "reviewed": false
+    },
+    "signup.button_workflows": {
+      "text": "Workflows",
+      "reviewed": false
+    },
+    "signup.starters_workflows": {
+      "text": "Here are two things to start with:",
+      "reviewed": false
+    },
+    "signup.tpl.leave-request": {
+      "text": "Leave requests",
       "reviewed": false
     },
     "dormant.form_title": {
@@ -4230,22 +6253,6 @@
     },
     "wd.ai.through": {
       "text": "Ask the AI model; e go see {fields} as dem be, but other private info go hide from am",
-      "reviewed": false
-    },
-    "wd.ai.conversation": {
-      "text": "Answer in the conversation with the AI model, with personal data hidden from it",
-      "reviewed": false
-    },
-    "wd.ai.conversation_through": {
-      "text": "Answer in the conversation with the AI model, which sees {fields} as they are; other personal data is hidden from it",
-      "reviewed": false
-    },
-    "wd.ai.history_words": {
-      "text": "the conversation's words (its numbers, emails and names stay hidden)",
-      "reviewed": false
-    },
-    "wd.ai.fallback": {
-      "text": "If the AI model cannot answer, it answers with a set reply instead",
       "reviewed": false
     },
     "wd.alongside": {
@@ -4996,6 +7003,66 @@
       "text": "*{from}* talk say their transfer of {amount} ({note}) na for invoice {reference}. If e don count for another invoice, move am for the invoice page.",
       "reviewed": false
     },
+    "order.link.offered_title": {
+      "text": "{from} don give price for {reference}",
+      "reviewed": false
+    },
+    "order.link.offered": {
+      "text": "*{from}* wan pay their own price for order {reference}: {note}. Accept or decline am, or send your own price: counter {reference} 785k",
+      "reviewed": false
+    },
+    "order.link.countered_title": {
+      "text": "{from} don answer your price for {reference}",
+      "reviewed": false
+    },
+    "order.link.countered": {
+      "text": "*{from}* don answer your price for order {reference}: {note}. Accept or decline am, or send your own price: counter {reference} 790k",
+      "reviewed": false
+    },
+    "order.link.seller_countered_title": {
+      "text": "{from} don answer your offer for {reference}",
+      "reviewed": false
+    },
+    "order.link.seller_countered": {
+      "text": "*{from}* don answer your offer for order {reference}: {note}. Accept am, cancel the order, or send your own price: counter {reference} 760k",
+      "reviewed": false
+    },
+    "order.link.button_accept_change": {
+      "text": "Accept",
+      "reviewed": false
+    },
+    "order.link.done_accept_change": {
+      "text": "You don accept their price for {reference}. We don tell them.",
+      "reviewed": false
+    },
+    "deal.owner_title": {
+      "text": "{who} wan agree {amount} with {business}",
+      "reviewed": false
+    },
+    "deal.owner_body": {
+      "text": "Order {reference}: {why}. Accept or decline am for Taskiem chat.",
+      "reviewed": false
+    },
+    "deal.owner_asked": {
+      "text": "That price low pass wetin una business dey collect, so na oga go decide {reference}. We don tell am.",
+      "reviewed": false
+    },
+    "deal.counter_sent": {
+      "text": "We don send am: {amount} for {reference}. Dem fit accept or answer.",
+      "reviewed": false
+    },
+    "deal.counter_none": {
+      "text": "No order dey wait for your price. Open the order for Taskiem to give your price.",
+      "reviewed": false
+    },
+    "deal.counter_which": {
+      "text": "Pass one order dey wait ({references}). Talk which one, like: counter {reference} 750k",
+      "reviewed": false
+    },
+    "deal.counter_how": {
+      "text": "Send your price like this: counter 750k (or counter {reference} 750k).",
+      "reviewed": false
+    },
     "order.link.ordered_title": {
       "text": "{from} send order {reference}",
       "reviewed": false
@@ -5208,6 +7275,34 @@
       "text": "E don reach *{name}*. Their reply go come here, and for Chat for the web.",
       "reviewed": false
     },
+    "chat.direct.wait": {
+      "text": "Now send the message, put *@business* for who e be for, like *@Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.who": {
+      "text": "Na who e be for? Add *@business*, like *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.empty": {
+      "text": "Wetin you wan tell *{name}*? Send *... @{name}* and your message.",
+      "reviewed": false
+    },
+    "chat.direct.hint": {
+      "text": "To send am to *{name}* as message, start am with *...*",
+      "reviewed": false
+    },
+    "chat.direct.sent": {
+      "text": "✓ E don reach {names}.",
+      "reviewed": false
+    },
+    "chat.direct.not_sent": {
+      "text": "E no reach *{name}*: {reason}.",
+      "reviewed": false
+    },
+    "chat.direct.failed": {
+      "text": "E no reach *{name}*: something spoil. Send am give them again.",
+      "reviewed": false
+    },
     "chat.link.photo": {
       "text": "Foto",
       "reviewed": false
@@ -5273,7 +7368,7 @@
       "reviewed": false
     },
     "wa.mention.how": {
-      "text": "Talk how many and wetin from *{name}*, like *20 bags of rice from @{name}*.",
+      "text": "Talk how many and wetin from *{name}*, like *20 bags of rice from @{name}*. To send am to *{name}* as message, start am with *...*",
       "reviewed": false
     },
     "wa.mention.draft": {
@@ -5318,6 +7413,10 @@
     },
     "order.link.over_limit_note": {
       "text": "E dey wait: this order pass the {limit} credit wey {business} give you (you owe {owed}). Pay your bills, or ask dem make dem accept am.",
+      "reviewed": false
+    },
+    "order.link.credit_unchecked_note": {
+      "text": "Waiting: {business} could not check your credit just now, so this order was not accepted by itself. Someone there will look at it.",
       "reviewed": false
     },
     "order.link.over_limit_title": {
@@ -5385,7 +7484,7 @@
       "reviewed": false
     },
     "wa.mention.which": {
-      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "text": "*@{name}* fit be more than one of the businesses wey you link with: {list}. Use more of the name, or pick am for the Chat page.",
       "reviewed": false
     },
     "order.link.auto_changed_title": {
@@ -5753,6 +7852,425 @@
     },
     "customer.hire_late": {
       "text": "{reference} come back {days} days late, so we add late fee of {late_fee}. Wetin remain to pay: {balance}.",
+      "reviewed": false
+    },
+    "customer.chat_order": {
+      "text": "Your order {reference}:",
+      "reviewed": false
+    },
+    "customer.chat_delivery": {
+      "text": "Delivery",
+      "reviewed": false
+    },
+    "customer.chat_total": {
+      "text": "Total",
+      "reviewed": false
+    },
+    "customer.chat_pay_link": {
+      "text": "Pay by bank transfer for here: {link}",
+      "reviewed": false
+    },
+    "customer.chat_pay_door": {
+      "text": "You go pay when e reach you.",
+      "reviewed": false
+    },
+    "customer.chat_paid": {
+      "text": "We don receive your payment, thank you: {reference}. We dey prepare am.",
+      "reviewed": false
+    },
+    "customer.order_ask": {
+      "text": "Make we get your order correct:",
+      "reviewed": false
+    },
+    "customer.order_which": {
+      "text": "{said}: {choices}?",
+      "reviewed": false
+    },
+    "customer.order_size": {
+      "text": "Which {product}? {choices}",
+      "reviewed": false
+    },
+    "customer.order_how_many": {
+      "text": "How many {item}?",
+      "reviewed": false
+    },
+    "customer.order_or": {
+      "text": "or",
+      "reviewed": false
+    },
+    "customer.chat_expired": {
+      "text": "You no pay for your order {reference} on time, so we don cancel am. Write us make you order again.",
+      "reviewed": false
+    },
+    "rider.photo_kept_for": {
+      "text": "Photo kept as proof of delivery for {reference}. Thank you.",
+      "reviewed": false
+    },
+    "rider.photo_kept_which": {
+      "text": "Photo kept as proof of delivery for {reference}. If it is for another order, tap that order.",
+      "reviewed": false
+    },
+    "rider.photo_moved": {
+      "text": "Done: the photo is now kept for {reference}.",
+      "reviewed": false
+    },
+    "link.ended_open.mine": {
+      "text": "You ended the link with {name}. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "reviewed": false
+    },
+    "link.ended_open.theirs": {
+      "text": "{name} ended the link with your business. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "reviewed": false
+    },
+    "link.ended_open.orders": {
+      "text": "orders {refs}",
+      "reviewed": false
+    },
+    "link.ended_open.orders_more": {
+      "text": "orders {refs} and {more} more",
+      "reviewed": false
+    },
+    "link.ended_open.invoices": {
+      "text": "invoices {refs}",
+      "reviewed": false
+    },
+    "link.ended_open.invoices_more": {
+      "text": "invoices {refs} and {more} more",
+      "reviewed": false
+    },
+    "reach.reply_in_app": {
+      "text": "Reply in the Taskiem app: {link}",
+      "reviewed": false
+    },
+    "reach.chat_link": {
+      "text": "To chat with {business}, open {link}",
+      "reviewed": false
+    },
+    "signup.offer_everyone": {
+      "text": "Hello! Taskiem runs your business's errands from this chat: payments, invoices, stock, reminders, your shop page. Do you want to start, for free? If you buy from a business on Taskiem, tap *I'm a customer*. Type *no* for not now.\n\nTo chat in another language, type its name: {languages}.",
+      "reviewed": false
+    },
+    "signup.button_customer": {
+      "text": "I'm a customer",
+      "reviewed": false
+    },
+    "signup.customer": {
+      "text": "To chat with a business, open its Taskiem link, or find it in the Taskiem app: {link}",
+      "reviewed": false
+    },
+    "signup.customer_no_app": {
+      "text": "To chat with a business, open its Taskiem link: the business shares it on its page, its receipts and its messages.",
+      "reviewed": false
+    },
+    "menu.pay.account": {
+      "text": "Pay account number",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.amount": {
+      "text": "How much e be?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.bank": {
+      "text": "Which bank e dey?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.for": {
+      "text": "Wetin e be for?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.number": {
+      "text": "Wetin be the account number? 10 digits.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.line": {
+      "text": "Any bank: we go check the name first",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.list": {
+      "text": "Your payments",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.list.line": {
+      "text": "Don send, dey wait for OK, and don pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.payees": {
+      "text": "People wey you dey pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.payees.line": {
+      "text": "The accounts wey you dey pay, by name",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.payroll": {
+      "text": "Salary payment",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.payroll.line": {
+      "text": "Payrolla runs: who collect, who no collect and why",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.person": {
+      "text": "Pay somebody",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.amount": {
+      "text": "How much e be?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.for": {
+      "text": "Wetin e be for?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.note": {
+      "text": "Small words for their bank statement? Send skip for none.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.who": {
+      "text": "Who you wan pay? One of your saved accounts, like @chidi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.line": {
+      "text": "From your balance, we check am with bank",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.topic.pay": {
+      "text": "Payment",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.check.account": {
+      "text": "Account number na 10 digits, like 0123456789.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not an account number"
+    },
+    "wa.pay.which_bank": {
+      "text": "Which bank is the account with? Send it again with the bank, like: send 45k to 0123456789 gtbank for stock bought.",
+      "reviewed": false
+    },
+    "wa.pay.not": {
+      "text": "Not prepared: {reason}",
+      "reviewed": false
+    },
+    "wa.pay.prepared": {
+      "text": "Ready to pay {amount} to {to}, {bank} {account}, for {for}.",
+      "reviewed": false
+    },
+    "wa.pay.first": {
+      "text": "This is the first payment to this account.",
+      "reviewed": false
+    },
+    "wa.pay.changed": {
+      "text": "This account changed since it was last paid: the owner's OK is asked.",
+      "reviewed": false
+    },
+    "wa.pay.again": {
+      "text": "The same amount went to them in the last day: check it is not paid twice.",
+      "reviewed": false
+    },
+    "wa.pay.confirm_link": {
+      "text": "Nothing is sent yet. To pay, confirm with your passkey: {link}",
+      "reviewed": false
+    },
+    "wa.pay.confirm_app": {
+      "text": "Nothing is sent yet. To pay, confirm it with your passkey in Taskiem, under Pay.",
+      "reviewed": false
+    },
+    "wa.pay.list.how": {
+      "text": "Send the list under pay these, one person for each line, like:\npay these for wages\nChidi 0123456789 GTBank 45k\n@bayo 30k",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Paying several people from the chat: \"pay these\" came with no list under it"
+    },
+    "wa.pay.list.person": {
+      "text": "1 person",
+      "reviewed": false,
+      "context": "Draft, not reviewed: How many people a batch from the chat pays: one"
+    },
+    "wa.pay.list.people": {
+      "text": "{count} people",
+      "reviewed": false,
+      "context": "Draft, not reviewed: How many people a batch from the chat pays: more than one"
+    },
+    "wa.pay.list.ready_link": {
+      "text": "{people}, {amount}. Nothing don go yet: open am to check and pay with your passkey: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A batch prepared from the chat, not sent: how many people, the total, and the link to check and pay it"
+    },
+    "wa.pay.list.ready_app": {
+      "text": "{people}, {amount}. Nothing don go yet: open Pay several for the Taskiem app to check and pay with your passkey.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A batch prepared from the chat, not sent, when there is no link"
+    },
+    "wa.pay.list.held": {
+      "text": "We hold am back, {who}: {problem}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A row of a batch from the chat held out before anything moves, with why"
+    },
+    "wa.pay.list.unread": {
+      "text": "Line {line} no read ({text}): {problem}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A line of a list pasted in the chat that could not be read: its number, the line as sent, and why"
+    },
+    "wa.pay.list.none": {
+      "text": "Nothing ready to pay.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A list pasted in the chat where no line could be prepared; why follows"
+    },
+    "wa.pay.result.paid": {
+      "text": "We don pay {to} {amount}. Bank don receive am.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat was paid: who and how much"
+    },
+    "wa.pay.result.failed": {
+      "text": "E no pay: {to} {amount}. {reason}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat failed: who, how much, and why"
+    },
+    "wa.pay.result.let_go": {
+      "text": "dem let am go, e no send",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Why a row of a batch was not paid: it was let go before it was sent"
+    },
+    "wa.pay.result.rejected": {
+      "text": "E no pay: dem decline the payment of {amount} to {to}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat was declined at its approval"
+    },
+    "wa.pay.result.no_reason": {
+      "text": "The bank no talk why.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Why a payment failed, when the bank gave no reason"
+    },
+    "wa.pay.result.declined": {
+      "text": "dem decline am",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Why a row of a batch was not paid: it was declined at its approval"
+    },
+    "wa.pay.result.batch": {
+      "text": "We don pay {paid} out of {count} people, {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A batch prepared from the chat has ended: how many were paid of how many, and how much was paid"
+    },
+    "wa.pay.result.batch_all": {
+      "text": "We don pay all {count} people, {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A batch prepared from the chat has ended with everyone paid"
+    },
+    "wa.pay.result.batch_not": {
+      "text": "{count} no get pay: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Who in a batch from the chat was not paid, each with why"
+    },
+    "wa.pay.result.batch_one": {
+      "text": "We don pay 1 person, {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A batch prepared from the chat has ended with its one person paid"
+    },
+    "wa.pay.pin_form": {
+      "text": "Or pay am now with your PIN for this form, inside 10 minutes: {amount} to {to}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The message carrying a PIN form bound to one prepared payment (the passkey link was said just before): amount, who is paid"
+    },
+    "bill.transfer.send": {
+      "text": "Send exactly {amount} to {to}, for {reference}.",
+      "reviewed": false
+    },
+    "bill.transfer.good_for": {
+      "text": "Good for {minutes} minutes.",
+      "reviewed": false
+    },
+    "bill.transfer.next": {
+      "text": "I'll say here when it lands.",
+      "reviewed": false
+    },
+    "bill.transfer.asking": {
+      "text": "Getting an account number for {reference}: it comes here in a moment.",
+      "reviewed": false
+    },
+    "bill.transfer.off": {
+      "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.empty": {
+      "text": "Abeg no vex, I no hear anything for that voice note. Abeg record am again or type your message.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.too_long": {
+      "text": "Abeg no vex, that voice note too long for me. Abeg send short one or type your message.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unreadable": {
+      "text": "Abeg no vex, I no fit play that voice note. Abeg record am again or type your message.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unavailable": {
+      "text": "Abeg no vex, I no fit listen to voice note now. Abeg type your message, I go reply you.",
+      "reviewed": false
+    },
+    "ready.speech_hear": {
+      "text": "This Taskiem cannot hear voice notes yet, and this workflow listens to them. Ask whoever runs your Taskiem to set up hearing voice notes.",
+      "reviewed": false
+    },
+    "ready.speech_speak": {
+      "text": "This Taskiem cannot answer by voice yet, and this workflow speaks its replies. Ask whoever runs your Taskiem to set up spoken replies.",
+      "reviewed": false
+    },
+    "ready.voice_in_workflows": {
+      "text": "Voice in workflows is off, so this workflow cannot hear voice notes or answer by voice. Turn it on in Settings.",
+      "reviewed": false
+    },
+    "ready.file_scanner": {
+      "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
+      "reviewed": false
+    },
+    "ready.whatsapp_callback": {
+      "text": "Customers' messages reach this workflow only once {service} sends them to Taskiem. In Meta's App Dashboard, under WhatsApp then Configuration, paste {url} as the callback address, enter the same check value you saved on your connection, and subscribe to messages. Keep the app secret on your connection too, or every message is refused.",
+      "reviewed": false
+    },
+    "wa.stock.confirm_new": {
+      "text": "Add *{name}* with {qty}{cost}?",
+      "reviewed": false
+    },
+    "wa.stock.confirm_first": {
+      "text": "Start to keep stock with *{name}*: {qty}{cost}? Taskiem go make products table for your items.",
+      "reviewed": false
+    },
+    "wa.stock.waiting": {
+      "text": "E don record for *{name}*. E go reach your products table soon.",
+      "reviewed": false
+    },
+    "wd.ai.conversation": {
+      "text": "Answer in the conversation with the AI model, with personal data hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.conversation_through": {
+      "text": "Answer in the conversation with the AI model, which sees {fields} as they are; other personal data is hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.history_words": {
+      "text": "the conversation's words (its numbers, emails and names stay hidden)",
+      "reviewed": false
+    },
+    "wd.ai.fallback": {
+      "text": "If the AI model cannot answer, it answers with a set reply instead",
       "reviewed": false
     },
     "assistant.notice": {

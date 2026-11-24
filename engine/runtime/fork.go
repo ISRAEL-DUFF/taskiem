@@ -51,14 +51,21 @@ func IsNotResumable(err error) (*NotResumableError, bool) {
 
 // forkPlan is what a new run copies from its parent.
 type forkPlan struct {
-	parent     uuid.UUID
-	seed       string
-	trigger    any
-	env        map[string]any
+	parent  uuid.UUID
+	seed    string
+	trigger any
+	env     map[string]any
+	// saved is the failed run's saved things (saved.go): kept, as env is,
+	// so the steps it replays and those it runs read the same.
+	saved      map[string]any
 	failedStep string
 	lastSeq    int64
 	expansion  []byte // the failed run's, kept
 	replays    []replayRow
+	// resumedBy is the fork that already resumed the parent, if one did:
+	// startIn refuses a second (a repeat of the same start is answered by
+	// its dedup receipt first).
+	resumedBy *uuid.UUID
 }
 
 type replayRow struct {
@@ -91,6 +98,12 @@ func (s *Store) planFork(ctx context.Context, tx pgx.Tx, tenant, parent uuid.UUI
 		return nil, &NotResumableError{Reason: fmt.Sprintf("run %s is %s; only failed runs are resumed", parent, run.status)}
 	}
 	fp := &forkPlan{parent: parent, expansion: run.expansion}
+	// A resumed run stays failed. Its fork, not the run, is what to resume
+	// again: two forks would both send the steps after the failure, under
+	// the same seed. The parent's row lock (lockRun) orders racing resumes.
+	if err := tx.QueryRow(ctx, `SELECT id FROM runs WHERE parent_run_id = $1 AND forked_from_seq IS NOT NULL ORDER BY started_at, id LIMIT 1`, parent).Scan(&fp.resumedBy); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
 	if err := tx.QueryRow(ctx, `SELECT COALESCE(idempotency_seed, id::text) FROM runs WHERE id = $1`, parent).Scan(&fp.seed); err != nil {
 		return nil, err
 	}
@@ -121,7 +134,7 @@ func (s *Store) planFork(ctx context.Context, tx pgx.Tx, tenant, parent uuid.UUI
 			if err := json.Unmarshal(e.Payload, &p); err != nil {
 				return nil, err
 			}
-			fp.trigger, fp.env = p.Trigger, p.Env
+			fp.trigger, fp.env, fp.saved = p.Trigger, p.Env, p.Saved
 			continue
 		case history.CompensationStarted, history.CompensationCompleted:
 			return nil, &NotResumableError{Reason: "the run compensated its completed steps when it failed; start a new run instead"}

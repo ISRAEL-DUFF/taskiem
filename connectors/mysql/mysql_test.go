@@ -166,6 +166,13 @@ func TestQueryTruncatesAtMaxRows(t *testing.T) {
 	if out["row_count"] != 2 || out["truncated"] != true || out["rows"].([]any)[1].(map[string]any)["id"] != int64(1) {
 		t.Errorf("output %v", out)
 	}
+	// As the worker delivers it: a step's input is decoded with
+	// encoding/json, so the number is a float64 (it was read as int64
+	// only, and the cap was always the default 1000).
+	out, err = run(t, "query", req, map[string]any{"sql": "SELECT id FROM t", "max_rows": float64(3)})
+	if err != nil || out["row_count"] != 3 || out["truncated"] != true {
+		t.Errorf("max_rows as a float64: %v %v %v", out["row_count"], out["truncated"], err)
+	}
 	out, err = run(t, "query", req, map[string]any{"sql": "SELECT id FROM t", "max_rows": int64(50)})
 	if err != nil || out["row_count"] != 50 || out["truncated"] != false {
 		t.Errorf("exactly max_rows is not truncated: %v %v", out["row_count"], err)

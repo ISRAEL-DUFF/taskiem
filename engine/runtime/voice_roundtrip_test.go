@@ -39,7 +39,7 @@ actions:
     input: { type: object, required: [text], properties: { text: { type: string } } }
 `
 
-// A customer's voice note goes the whole way (decision 0062, review gap
+// A customer's voice note goes the whole way (decision 0074, review gap
 // 20): WhatsApp's media is fetched from a fake Graph API and kept as a run
 // file tied to the sender; a stand-in for speech reads it and speaks a
 // reply as a new run file; send_media uploads that reply to Meta and sends

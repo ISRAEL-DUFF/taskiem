@@ -1,6 +1,6 @@
 # Files in runs
 
-A workflow run sometimes holds a file: a voice note a customer sent, a reply a speech step spoke, a document a step downloaded to pass on. A run never carries the file's bytes. It carries a **reference**, and the file itself is kept in the organisation's own storage ([media](media.md): its Xenibase project's private bucket) for a limited time ([decision 0062](decisions/0062-customer-assistant.md), [plan V1](spec/voice-assistant.md#v1-files-in-runs)).
+A workflow run sometimes holds a file: a voice note a customer sent, a reply a speech step spoke, a document a step downloaded to pass on. A run never carries the file's bytes. It carries a **reference**, and the file itself is kept in the organisation's own storage ([media](media.md): its Xenibase project's private bucket) for a limited time ([decision 0074](decisions/0074-customer-assistant.md), [plan V1](spec/voice-assistant.md#v1-files-in-runs)).
 
 ## A file reference
 
@@ -40,7 +40,7 @@ A run's files go no later than the run itself: when a run ends, its files' time 
 
 A connector call in a run gets `connector.Request.Files` (nil outside a run, or where the deployment keeps no files):
 
-- `Put(ctx, name, data, personal, about...)` keeps bytes and answers the reference. A connector that downloads a customer's media puts it with `personal: true` and says whom it is about (`connector.FileSubject{Category: "phone", Value: from}`): the file is tied to that person's key (`run_files.subject`, migration 00314), and erasing the person deletes it.
+- `Put(ctx, name, data, personal, about...)` keeps bytes and answers the reference. A connector that downloads a customer's media puts it with `personal: true` and says whom it is about (`connector.FileSubject{Category: "phone", Value: from}`): the file is tied to that person's key (`run_files.subject`, migration 00592), and erasing the person deletes it.
 - `Read(ctx, ref)` answers the bytes and the reference, given the reference or its id. Only the run's own organisation's files are found.
 
 The worker binds the store to the run (organisation, environment, workflow and run), so a connector never names an organisation.
@@ -58,7 +58,7 @@ An id the organisation does not have, or a file that has expired, fails the step
 
 ## Storage and records
 
-- `run_files` (migrations 00313, 00314): id, tenant, environment, workflow, run, name, type, size, sha256, storage key, personal, subject (the person's key, when a connector named them), expires_at; forced row-level security. Indexes by subject (for erasure) and by organisation and time (for the daily allowance).
+- `run_files` (migrations 00591, 00592): id, tenant, environment, workflow, run, name, type, size, sha256, storage key, personal, subject (the person's key, when a connector named them), expires_at; forced row-level security. Indexes by subject (for erasure) and by organisation and time (for the daily allowance).
 - The sweep reads expired files through `taskiem_run_files_expired(limit)`, which shows only ids, tenants and storage keys, never names or content.
 - Objects are stored under `runs/` in the private bucket (`files/` for PDFs and photos, as forms keep them).
 

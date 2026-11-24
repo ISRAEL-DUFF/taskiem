@@ -130,16 +130,23 @@ func (g *codeGate) enter(ctx context.Context, tenant uuid.UUID, wait time.Durati
 			g.leases.logger().Warn("tenant code lease unavailable; per-replica share only", "tenant", tenant, "err", err)
 		}
 	}
+	// A free slot is taken first: once the wait has run out (the lease took
+	// that long), a select with the timer too would pick either at random
+	// and turn a request away with a slot free.
 	select {
 	case g.slots <- struct{}{}:
-	case <-timer.C:
-		lease.release()
-		leaveTenant()
-		return nil, errCodeBusy
-	case <-ctx.Done():
-		lease.release()
-		leaveTenant()
-		return nil, errCodeBusy
+	default:
+		select {
+		case g.slots <- struct{}{}:
+		case <-timer.C:
+			lease.release()
+			leaveTenant()
+			return nil, errCodeBusy
+		case <-ctx.Done():
+			lease.release()
+			leaveTenant()
+			return nil, errCodeBusy
+		}
 	}
 	var once sync.Once
 	return func() {

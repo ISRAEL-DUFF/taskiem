@@ -336,7 +336,7 @@ export function catalog(
         ),
     });
   }
-  // Voice and chat (decision 0062 V8): the speech and chat actions an
+  // Voice and chat (decision 0074 V8): the speech and chat actions an
   // assistant uses, set up for a customer's message (trigger.guard), so
   // only for a workflow whose chat trigger answers customers.
   for (const e of guarded ? voiceEntries(connectors) : []) {

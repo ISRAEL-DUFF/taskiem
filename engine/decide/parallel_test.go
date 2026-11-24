@@ -182,3 +182,22 @@ func TestForeachFailureDoesNotWaitForUnstartedSteps(t *testing.T) {
 		t.Errorf("foreach should fail once in-flight steps settle: %s", s.types())
 	}
 }
+
+// A compensation runs against the account the step it undoes used: the
+// step's named connection, not the connector's default (or an ambiguous
+// pick among several).
+func TestCompensationKeepsTheStepsConnection(t *testing.T) {
+	s := newSim(t, wdDoc(`{"id":"p","type":"parallel","config":{"join":"any","branches":[
+	  {"name":"hold","steps":[
+	    {"id":"reserve","type":"connector","connector":"bank@1","action":"hold","connection":"payroll","compensate":{"action":"release","input":{"id":"=steps.reserve.output.id"}}},
+	    {"id":"confirm","type":"signal","needs":["reserve"],"config":{"event":"bank@1:confirmed","correlation":"=steps.reserve.output.id","timeout":"1h"}}]},
+	  {"name":"manual","steps":[{"id":"ok","type":"approval","config":{"role":"ops"}}]}]}}`, ""), map[string]any{})
+	if c := s.payload(history.StepScheduled, "reserve")["connection"]; c != "payroll" {
+		t.Fatalf("forward step connection = %v", c)
+	}
+	s.complete("reserve", map[string]any{"id": "h1"})
+	s.external(history.ApprovalDecided, "ok", 0, history.ApprovalDecidedPayload{Decision: "approved", DecidedBy: "u2"}, history.OriginAPI)
+	if c := s.payload(history.StepScheduled, "compensate:reserve")["connection"]; c != "payroll" {
+		t.Errorf("compensation connection = %v, want payroll", c)
+	}
+}

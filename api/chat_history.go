@@ -214,7 +214,7 @@ func (s *Server) keepHistory(ctx context.Context, tenant, user uuid.UUID, channe
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships WHERE tenant_id = $1 AND user_id = $2)`, tenant, user).Scan(&member); err != nil || !member {
 			return err
 		}
-		env, err := s.Store.PII.SealTx(ctx, tx, tenant, "other", text)
+		env, err := s.sealMemberText(ctx, tx, tenant, user, text)
 		if err != nil {
 			return err
 		}
@@ -236,9 +236,48 @@ func (s *Server) keepHistory(ctx context.Context, tenant, user uuid.UUID, channe
 	return id
 }
 
+// sealMemberText seals what a member wrote under the member's own subject
+// (one key per member, not one per message), and under anyone it names
+// that can be found (pii.SealText): erased with the member, or with them.
+// It is an envelope, or pii.Erased when someone it names was erased.
+func (s *Server) sealMemberText(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, text string) (any, error) {
+	owner, err := s.Store.PII.SealTx(ctx, tx, tenant, "member", user.String())
+	if err != nil {
+		return nil, err
+	}
+	subject, _ := owner["subject"].(string)
+	return pii.SealText(ctx, s.Store.PII, tx, tenant, subject, "other", text)
+}
+
+// openText opens a kept message: sealed under its member and under each
+// person it names, one envelope inside another (pii.SealText).
+func openText(ctx context.Context, c pii.Cipher, tx pgx.Tx, tenant uuid.UUID, env map[string]any) (any, error) {
+	var v any = env
+	for range 16 {
+		e, ok := v.(map[string]any)
+		if !ok || !pii.IsEnvelope(e) {
+			return v, nil
+		}
+		var err error
+		if v, err = c.OpenTx(ctx, tx, tenant, e); err != nil {
+			return nil, err
+		}
+	}
+	return nil, errors.New("chat history: a message sealed too deep")
+}
+
+// unkept marks a send that is already in the history in another form (a
+// diary line told on the phone): recordSent leaves it out.
+type unkeptKey struct{}
+
+func unkept(ctx context.Context) context.Context { return context.WithValue(ctx, unkeptKey{}, true) }
+
 // recordSent keeps a message a channel sent to a member: in the business
 // it names, or the one the conversation is with.
 func (s *Server) recordSent(ctx context.Context, channel, addr string, m whatsapp.Message) {
+	if ctx.Value(unkeptKey{}) != nil {
+		return
+	}
 	tenant := m.Tenant
 	if tenant == uuid.Nil {
 		tenant = chatTenantOf(ctx)
@@ -331,8 +370,78 @@ func (s *Server) recordHeard(ctx context.Context, c *chat) {
 // purgeChatHistory deletes the history past its retention, in every
 // business, through a definer that reads only the expiry.
 func (s *Server) purgeChatHistory(ctx context.Context) error {
-	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_history_purge()`)
+	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_history_purge()`); err != nil {
+		return err
+	}
+	// Customers' messages past their year (customer_chat.go), and the
+	// files of app conversations they held, in each business's storage.
+	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id, path FROM taskiem_customer_messages_purge()`)
+	if err != nil {
+		return err
+	}
+	type gone struct {
+		tenant uuid.UUID
+		path   string
+	}
+	files, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (gone, error) {
+		var g gone
+		return g, r.Scan(&g.tenant, &g.path)
+	})
+	if err != nil {
+		return err
+	}
+	byTenant := map[uuid.UUID][]string{}
+	for _, f := range files {
+		byTenant[f.tenant] = append(byTenant[f.tenant], f.path)
+	}
+	for tenant, paths := range byTenant {
+		s.dropChatFiles(ctx, tenant, paths)
+	}
+	// "At most once per ..." notices past their periods, sign-up offers past
+	// a day, chat-link sign-up codes that led to no chat (migration 00459).
+	_, err = s.Store.Pool.Exec(ctx, `SELECT taskiem_customer_chat_notices_purge()`)
 	return err
+}
+
+// eraseChatFiles deletes from the business's storage the files of the app
+// conversations of erased customers (their subjects), and forgets where
+// they were and their names.
+func (s *Server) eraseChatFiles(ctx context.Context, tenant uuid.UUID, subjects []string) error {
+	var paths []string
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		const theirs = `FROM customer_conversations c WHERE m.tenant_id = $1 AND c.tenant_id = $1 AND c.id = m.conversation_id
+			AND c.subject_id = ANY ($2) AND m.attachment ? 'path'`
+		rows, err := tx.Query(ctx, `SELECT m.attachment ->> 'path' FROM customer_messages m, customer_conversations c
+			WHERE m.tenant_id = $1 AND c.tenant_id = $1 AND c.id = m.conversation_id AND c.subject_id = ANY ($2) AND m.attachment ? 'path'`, tenant, subjects)
+		if err != nil {
+			return err
+		}
+		if paths, err = pgx.CollectRows(rows, pgx.RowTo[string]); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE customer_messages m SET attachment = (m.attachment - 'path' - 'name') || '{"erased": true}'::jsonb `+theirs, tenant, subjects)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	s.dropChatFiles(ctx, tenant, paths)
+	return nil
+}
+
+// dropChatFiles deletes files of app conversations from the business's
+// storage, a hundred at a time; one that cannot be deleted is logged.
+func (s *Server) dropChatFiles(ctx context.Context, tenant uuid.UUID, paths []string) {
+	if s.Media == nil || len(paths) == 0 {
+		return
+	}
+	for len(paths) > 0 {
+		n := min(100, len(paths))
+		if err := s.Media.Delete(context.WithoutCancel(ctx), tenant, media.PrivateBucket, paths[:n]); err != nil {
+			s.Logger.Warn("customer chats: files not deleted from storage", "tenant", tenant, "files", n, "err", err)
+		}
+		paths = paths[n:]
+	}
 }
 
 // --- the web as a channel ---
@@ -451,8 +560,14 @@ func (w *webChannel) Send(ctx context.Context, addr string, m whatsapp.Message) 
 
 func (s *Server) taskiemChatRoutes(r chi.Router) {
 	r.Get("/taskiem-chat", s.taskiemHistory)
+	r.Get("/chat-refs", s.chatRefs)
+	r.Get("/chat/actions", s.chatActionsList)
+	r.Get("/chat/actions/{id}/choices", s.chatActionChoices)
+	r.Post("/chat/actions/{id}/run", s.chatActionRun)
+	r.Get("/chat-card", s.chatCardGet)
 	r.Post("/taskiem-chat", s.taskiemSay)
 	r.Post("/taskiem-chat/files", s.taskiemSend)
+	r.Post("/taskiem-chat/menus/{id}/close", s.closeMenu)
 }
 
 // webMediaID names a file that came with a web message (chat.upload).
@@ -499,20 +614,30 @@ func (s *Server) taskiemAnswer(w http.ResponseWriter, r *http.Request, p *Princi
 		writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
 		return
 	}
-	s.chatHooks()
-	live := &webLive{user: p.UserID}
-	ctx := context.WithValue(r.Context(), webLiveKey{}, live)
-	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), in: msg, upload: upload}
-	err := s.converse(ctx, c, p.UserID)
-	clear(upload) // the file is not kept
+	out, err := s.taskiemRun(r.Context(), p, msg, upload)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	live.mu.Lock()
-	out := slices.Clone(live.msgs)
-	live.mu.Unlock()
 	writeJSON(w, http.StatusOK, taskiemChatOut{Messages: out})
+}
+
+// taskiemRun reads a message on the web as one typed on WhatsApp, and
+// gives what Taskiem said.
+func (s *Server) taskiemRun(ctx context.Context, p *Principal, msg whatsapp.Inbound, upload []byte) ([]TaskiemMessage, error) {
+	s.chatHooks()
+	live := &webLive{user: p.UserID}
+	ctx = context.WithValue(ctx, webLiveKey{}, live)
+	s.settleMenus(ctx, p, msg)
+	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), in: msg, upload: upload}
+	err := s.converse(ctx, c, p.UserID)
+	clear(upload) // the file is not kept
+	if err != nil {
+		return nil, err
+	}
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	return slices.Clone(live.msgs), nil
 }
 
 // taskiemSend is POST /v1/taskiem-chat/files: a voice note or a photo
@@ -585,7 +710,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	err := s.tx(r, func(tx pgx.Tx) error {
-		sql := `SELECT id, channel, inbound, kind, body, buttons, created_at FROM chat_history
+		sql := `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done FROM chat_history
 			WHERE tenant_id = $1 AND user_id = $2 AND expires_at > now()`
 		args := []any{p.TenantID, p.UserID}
 		order := ` ORDER BY created_at DESC, id DESC LIMIT 50`
@@ -606,17 +731,18 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 			m       TaskiemMessage
 			env     map[string]any
 			buttons []string
+			done    *string
 		}
 		got, err := pgx.CollectRows(rows, func(rr pgx.CollectableRow) (row, error) {
 			var x row
-			err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt)
+			err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done)
 			return x, err
 		})
 		if err != nil {
 			return err
 		}
 		for _, x := range got {
-			v, err := s.Store.PII.OpenTx(r.Context(), tx, p.TenantID, x.env)
+			v, err := openText(r.Context(), s.Store.PII, tx, p.TenantID, x.env)
 			switch {
 			case errors.Is(err, pii.ErrErased):
 				x.m.Text = pii.Erased
@@ -625,6 +751,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 			default:
 				x.m.Text, _ = v.(string)
 			}
+			x.m.Text = menuWithDone(x.m.Kind, x.m.Text, x.done)
 			for _, b := range x.buttons {
 				x.m.Buttons = append(x.m.Buttons, TaskiemButton{Title: b})
 			}
@@ -646,7 +773,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 // after a time, oldest first (the live stream's look): the same rows and
 // words as GET /v1/taskiem-chat.
 func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, since time.Time, limit int) ([]TaskiemMessage, error) {
-	rows, err := tx.Query(ctx, `SELECT id, channel, inbound, kind, body, buttons, created_at FROM chat_history
+	rows, err := tx.Query(ctx, `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done FROM chat_history
 		WHERE tenant_id = $1 AND user_id = $2 AND expires_at > now() AND created_at > $3 ORDER BY created_at, id LIMIT $4`, p.TenantID, p.UserID, since, limit)
 	if err != nil {
 		return nil, err
@@ -655,10 +782,11 @@ func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, sinc
 		m       TaskiemMessage
 		env     map[string]any
 		buttons []string
+		done    *string
 	}
 	got, err := pgx.CollectRows(rows, func(rr pgx.CollectableRow) (row, error) {
 		var x row
-		err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt)
+		err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done)
 		return x, err
 	})
 	if err != nil {
@@ -666,7 +794,7 @@ func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, sinc
 	}
 	out := make([]TaskiemMessage, 0, len(got))
 	for _, x := range got {
-		v, err := s.Store.PII.OpenTx(ctx, tx, p.TenantID, x.env)
+		v, err := openText(ctx, s.Store.PII, tx, p.TenantID, x.env)
 		switch {
 		case errors.Is(err, pii.ErrErased):
 			x.m.Text = pii.Erased
@@ -675,6 +803,7 @@ func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, sinc
 		default:
 			x.m.Text, _ = v.(string)
 		}
+		x.m.Text = menuWithDone(x.m.Kind, x.m.Text, x.done)
 		for _, b := range x.buttons {
 			x.m.Buttons = append(x.m.Buttons, TaskiemButton{Title: b})
 		}

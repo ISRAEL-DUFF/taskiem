@@ -53,6 +53,9 @@ describe("the close's words", () => {
       "₦150,000 in on students (2 payments): ₦100,000 into account numbers, ₦50,000 at the desk",
     );
     expect(closeMoneyLine({ money_in: { count: 1, kobo: 100 }, into_accounts: { count: 0, kobo: 0 }, at_the_desk: { count: 1, kobo: 100 } })).toContain("(1 payment)");
+    expect(
+      closeMoneyLine({ money_in: { count: 2, kobo: 6_000_000 }, into_accounts: { count: 0, kobo: 0 }, at_the_desk: { count: 2, kobo: 6_000_000 }, recorded_late: { count: 1, kobo: 4_000_000 } }),
+    ).toBe("₦60,000 in on students (2 payments): ₦0 into account numbers, ₦60,000 at the desk; of it ₦40,000 recorded for earlier days");
     expect(closeMatchedLine({ matched_auto: { count: 1, kobo: 10_000_000 }, matched_person: { count: 1, kobo: 5_000_000 }, unmatched: { count: 0, kobo: 0 } })).toBe(
       "₦100,000 matched by itself, ₦50,000 by a person; ₦0 not matched",
     );

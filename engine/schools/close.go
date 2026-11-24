@@ -351,12 +351,19 @@ type Close struct {
 	CloseBrief
 	TermID *uuid.UUID `json:"term_id,omitempty"`
 	Term   string     `json:"term,omitempty"`
-	// MoneyIn is students' money that landed that day; IntoAccounts the
+	// MoneyIn is students' money that landed that day, with what was
+	// recorded that day for earlier days (RecordedLate); IntoAccounts the
 	// part paid into students' account numbers, AtTheDesk the part posted
 	// at the desk (cash, a transfer to the school's account, POS).
 	MoneyIn      CloseSum `json:"money_in"`
 	IntoAccounts CloseSum `json:"into_accounts"`
 	AtTheDesk    CloseSum `json:"at_the_desk"`
+	// RecordedLate is the part of MoneyIn (and of the two above) recorded
+	// that day for an earlier day: cash posted with an earlier date, a
+	// transfer the bank told of after that night's close had run. No
+	// other close carries it (school_close_entries), so it is in this
+	// day's money, and said apart.
+	RecordedLate CloseSum `json:"recorded_late"`
 	// MatchedAuto and MatchedPerson are the payments counted that day
 	// towards term invoices, by the automatic path and by a person.
 	MatchedAuto   CloseSum `json:"matched_auto"`
@@ -479,7 +486,7 @@ func (s *Schools) CloseDay(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, day
 		c, _, err := s.CloseOf(ctx, tx, tenant, day)
 		return c, false, err
 	}
-	c, err := s.computeClose(ctx, tx, tenant, day)
+	c, err := s.computeClose(ctx, tx, tenant, id, day)
 	if err != nil {
 		return Close{}, false, err
 	}
@@ -498,8 +505,9 @@ func (s *Schools) CloseDay(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, day
 	return c, true, nil
 }
 
-// computeClose reads the day's report.
-func (s *Schools) computeClose(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, day time.Time) (Close, error) {
+// computeClose reads the day's report for the close id, and records the
+// money it counts in (school_close_entries), so no other close counts it.
+func (s *Schools) computeClose(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, day time.Time) (Close, error) {
 	from := lagosStart(day)
 	to := from.AddDate(0, 0, 1)
 	c := Close{UnmatchedList: []CloseItem{}, Pending: []CloseItem{}, Claims: []CloseItem{}, ProblemList: []CloseItem{}}
@@ -508,35 +516,50 @@ func (s *Schools) computeClose(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	} else if ok {
 		c.TermID, c.Term = &t.ID, t.Name+" "+t.Session
 	}
-	// Students' money that landed that day, and what of it is still
-	// unmatched now.
+	// Students' money that landed that day, money recorded that day for
+	// an earlier day, and what of students' money is still unmatched now.
+	// Money is in one close only: a close counts what landed in its day
+	// unless a later day's close, taken first, carries it as recorded
+	// late; and what was recorded in its day for an earlier day unless
+	// that day's close counted it (it ran after the money was recorded:
+	// school_close_entries, or for a close taken before those were kept,
+	// its time).
+	const occurred = `COALESCE(e.occurred_at, e.recorded_at)`
+	const inDay = occurred + ` >= $2 AND ` + occurred + ` < $3`
+	const late = `e.recorded_at >= $2 AND e.recorded_at < $3 AND ` + occurred + ` < $2`
 	rows, err := tx.Query(ctx, `SELECT e.id, e.kind, e.status, e.source, mc.how, mc.customer_id,
-			taskiem_money_entry_countable(e.amount_kobo, e.fee_kobo, e.net), taskiem_money_entry_left(e.id),
-			COALESCE(e.occurred_at, e.recorded_at) >= $2 AND COALESCE(e.occurred_at, e.recorded_at) < $3
+			taskiem_money_entry_countable(e.amount_kobo, e.fee_kobo, e.net), taskiem_money_entry_left(e.id), `+inDay+`, `+late+`,
+			EXISTS (SELECT 1 FROM school_close_entries k WHERE k.entry_id = e.id)
+			OR EXISTS (SELECT 1 FROM school_daily_closes k WHERE k.tenant_id = e.tenant_id AND k.day = (`+occurred+` AT TIME ZONE 'Africa/Lagos')::date
+			           AND k.report <> '{}'::jsonb AND NOT k.report ? 'recorded_late' AND k.ran_at >= e.recorded_at)
 		FROM money_entries e JOIN money_entry_customers mc ON mc.entry_id = e.id
 		WHERE e.tenant_id = $1 AND e.direction = 'in' AND e.status = 'settled' AND mc.customer_id LIKE 'key:student:%'
-		  AND (COALESCE(e.occurred_at, e.recorded_at) >= $2 AND COALESCE(e.occurred_at, e.recorded_at) < $3 OR taskiem_money_entry_left(e.id) > 0)
-		ORDER BY COALESCE(e.occurred_at, e.recorded_at)`, tenant, from, to)
+		  AND (`+inDay+` OR `+late+` OR taskiem_money_entry_left(e.id) > 0)
+		ORDER BY `+occurred, tenant, from, to)
 	if err != nil {
 		return c, err
 	}
+	var counts []uuid.UUID
 	for rows.Next() {
 		var id uuid.UUID
 		var kind, status, source, how, customer string
 		var countable, left int64
-		var inDay bool
-		if err := rows.Scan(&id, &kind, &status, &source, &how, &customer, &countable, &left, &inDay); err != nil {
+		var inDay, late, counted bool
+		if err := rows.Scan(&id, &kind, &status, &source, &how, &customer, &countable, &left, &inDay, &late, &counted); err != nil {
 			rows.Close()
 			return c, err
 		}
-		if inDay {
+		if (inDay || late) && !counted {
+			counts = append(counts, id)
 			c.MoneyIn.add(countable)
 			if how == "account" || kind == "account_credit" {
 				c.IntoAccounts.add(countable)
 			} else if kind == "cash" || kind == "statement" || kind == "pos_sale" {
 				c.AtTheDesk.add(countable)
 			}
-			if source == "lookup" {
+			if late {
+				c.RecordedLate.add(countable)
+			} else if source == "lookup" {
 				c.LookbackFound.add(countable)
 			}
 		}
@@ -550,6 +573,16 @@ func (s *Schools) computeClose(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return c, err
+	}
+	// An entry is one close's: two closes of different days taken at the
+	// same moment cannot both count it.
+	if tag, err := tx.Exec(ctx, `INSERT INTO school_close_entries (entry_id, tenant_id, close_id) SELECT x, $1, $2 FROM unnest($3::uuid[]) x`, tenant, id, counts); err != nil {
+		if code, _ := pgCode(err); code == "23505" {
+			return c, refused("another day's close is being taken at this moment: try again")
+		}
+		return c, err
+	} else if int(tag.RowsAffected()) != len(counts) {
+		return c, fmt.Errorf("schools: the close counted %d entries and kept %d", len(counts), tag.RowsAffected())
 	}
 	// The payments counted that day towards term invoices, by how.
 	rows, err = tx.Query(ctx, `SELECT p.how, p.amount_kobo FROM customer_invoice_payments p JOIN school_term_invoices ti ON ti.invoice_id = p.invoice_id
@@ -682,7 +715,11 @@ func CloseText(c Close, publicURL string) string {
 		fmt.Fprintf(&b, " (%s)", c.Term)
 	}
 	b.WriteString(".\n")
-	fmt.Fprintf(&b, "Money in on students: %s (%d payments): %s into account numbers, %s at the desk.\n", n(c.MoneyIn.Kobo), c.MoneyIn.Count, n(c.IntoAccounts.Kobo), n(c.AtTheDesk.Kobo))
+	fmt.Fprintf(&b, "Money in on students: %s (%d payments): %s into account numbers, %s at the desk", n(c.MoneyIn.Kobo), c.MoneyIn.Count, n(c.IntoAccounts.Kobo), n(c.AtTheDesk.Kobo))
+	if c.RecordedLate.Count > 0 {
+		fmt.Fprintf(&b, "; of it %s recorded for earlier days (%d)", n(c.RecordedLate.Kobo), c.RecordedLate.Count)
+	}
+	b.WriteString(".\n")
 	fmt.Fprintf(&b, "Matched to fees: %s by itself, %s by a person. Not matched: %s.\n", n(c.MatchedAuto.Kobo), n(c.MatchedPerson.Kobo), n(c.Unmatched.Kobo))
 	if c.LookbackFound.Count > 0 {
 		fmt.Fprintf(&b, "Found only by the look-back: %s (%d).\n", n(c.LookbackFound.Kobo), c.LookbackFound.Count)

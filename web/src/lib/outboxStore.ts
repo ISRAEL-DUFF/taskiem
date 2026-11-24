@@ -8,6 +8,8 @@ import { useSyncExternalStore } from "react";
 import { post, upload } from "../api";
 import type { LinkMessage } from "./linkchat";
 import { sendError, type Outgoing } from "./outbox";
+import { sendNotes, type SendAnswer } from "./chattools";
+import { toast } from "../toast";
 
 const EMPTY: Outgoing[] = [];
 const boxes = new Map<string, Outgoing[]>();
@@ -38,6 +40,12 @@ export function useOutbox(link: string): Outgoing[] {
     },
     () => outboxOf(link),
   );
+}
+
+/** A message the server wrote in a conversation for us (a note Taskiem
+ * left): shown there at once, as one sent. */
+export function announce(link: string, m: LinkMessage) {
+  arrivals.forEach((fn) => fn(link, m));
 }
 
 /** Hears every message the server accepted, with its conversation. */
@@ -77,7 +85,7 @@ async function attempt(link: string, clientId: string) {
     });
     try {
       const path = `/v1/link-chats/${link}`;
-      let out: { message: LinkMessage };
+      let out: SendAnswer;
       if (o.file) {
         const form = new FormData();
         form.append("file", o.file, o.file.name);
@@ -86,7 +94,7 @@ async function attempt(link: string, clientId: string) {
         form.append("client_id", o.clientId);
         out = await upload<{ message: LinkMessage }>(`${path}/files`, form);
       } else {
-        out = await post<{ message: LinkMessage }>(`${path}/messages`, {
+        out = await post<SendAnswer>(`${path}/messages`, {
           text: o.body,
           reply_to: o.replyTo,
           mentions:
@@ -98,7 +106,11 @@ async function attempt(link: string, clientId: string) {
         link,
         outboxOf(link).filter((x) => x.clientId !== clientId),
       );
-      arrivals.forEach((fn) => fn(link, out.message));
+      const sent = out.message;
+      if (sent) arrivals.forEach((fn) => fn(link, sent));
+      // Chat tools: Taskiem's answer elsewhere, or copies to others named.
+      for (const n of sendNotes(out))
+        toast(n.text, n.kind, { href: n.href, linkText: n.linkText });
       return;
     } catch (e) {
       const status = (e as { status?: number } | undefined)?.status;

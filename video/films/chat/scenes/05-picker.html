@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>5 · Tag a product, a service or a business</title>
+<link rel="stylesheet" href="../../../kit/kit.css">
+<script src="../../../kit/kit.js"></script>
+<script>window.scene = { duration: 10000 };</script>
+<style>
+/* Scene 5 (video/script.md): "Need 20 more @ri" in Bayo's chat; the
+   picker springs up from the composer with a slight overshoot, its rows
+   40 ms apart (the Main board and the Motion board); the rice is tagged,
+   and sent as a live product card (the Card board); Bayo is typing. */
+@keyframes picker { 0% { opacity: 0; transform: translateY(18px) scale(.96); } 70% { opacity: 1; transform: translateY(-3px) scale(1.005); } 100% { opacity: 1; transform: none; } }
+.picker { position: absolute; left: 10px; right: 10px; bottom: 84px; background: #fff; border-radius: 22px; box-shadow: 0 24px 48px -16px rgba(14,26,20,.35); padding: 12px 8px; z-index: 3; transform-origin: 50% 100%; animation: picker .28s var(--ease) both, k-gone .2s var(--ease) both; animation-delay: 2.5s, 5.7s; }
+.picker .hd { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); padding: 0 10px 6px; }
+.picker .grp { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); padding: 8px 10px 2px; }
+.picker .prow { padding: 7px 10px; border-radius: 14px; }
+.picker .prow.on { background: var(--soft); }
+.ptile { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: none; background: #e9f7d0; }
+.ptile.blue { background: #dce8fb; }
+.typed b { color: var(--pine); }
+.pchip { align-self: center; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; padding: 7px 14px; border-radius: 999px; background: rgba(255,255,255,.9); }
+/* The live product card in a message (Card board). */
+.live { margin: -3px -6px 8px; border-radius: 14px; background: #fff; overflow: hidden; border: 1px solid #dfe8d6; }
+.live .top { display: flex; gap: 12px; padding: 12px; }
+.live .t { width: 56px; height: 56px; border-radius: 12px; background: #f3ead2; display: grid; place-items: center; flex: none; }
+.live small { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+.live b { display: block; font-size: 17px; }
+.live span { font-size: 14px; color: var(--muted); }
+.live .foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-top: 1px solid var(--line); }
+.tagw { color: var(--pine); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="caption">
+    <span class="kicker up" style="--at:.1s">2 · Tools</span>
+    <h1 class="headline up" style="--at:.25s">Tag a product, a service <em>or a business</em>.</h1>
+    <p class="sub up" style="--at:.45s">Type @ and pick: its price and stock come with it.</p>
+  </div>
+  <div class="phone show"><div class="island"></div><div class="screen"><div class="app">
+    <header>
+      <div class="avatar pine">BR</div>
+      <div class="who"><b>Bayo Rice Mills</b><span class="swap"><span class="show-io" style="--out:8.4s">Your supplier · linked</span><span class="show" style="--at:8.4s;color:#1f7a4d;font-weight:600">typing…</span></span></div>
+    </header>
+    <main class="chat">
+      <div class="day">Today</div>
+      <div class="bubble">Morning Ada! New harvest just landed, prices are up a little.<time>8:12</time></div>
+      <div class="pchip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0d3b2e" stroke-width="2" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>Your price list: <b>Rice, 50kg bag</b> ₦76,000 → ₦78,000</div>
+      <div class="bubble mine pop" style="--at:7.2s;max-width:88%">
+        <div class="live">
+          <div class="top"><span class="t"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#6f5420" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6"/></svg></span><div><small>PRODUCT</small><b>Rice, 25kg bag</b><span>₦41,000 a bag · min 5</span></div></div>
+          <div class="foot"><span class="pill warn">Your stock: 4 left</span><span class="btn pine" style="min-height:36px">Order</span></div>
+        </div>
+        Need 20 more <span class="tagw">@Rice, 25kg bag</span><time>8:15 ✓✓</time>
+      </div>
+    </main>
+    <footer>
+      <span class="round" style="background:#fff;box-shadow:0 1px 2px rgba(14,26,20,.12)" data-icon="tools"></span>
+      <span class="box typed">
+        <span class="show-io" style="--at:1.0s;--out:6.9s">Need</span>&nbsp;<span class="show-io" style="--at:1.3s;--out:6.9s">20</span>&nbsp;<span class="show-io" style="--at:1.6s;--out:6.9s">more</span>&nbsp;<span class="swap"><b class="show-io" style="--at:2.0s;--out:5.8s">@ri</b><b class="show-io" style="--at:5.8s;--out:6.9s">@Rice, 25kg bag</b></span>
+      </span>
+      <span class="round" style="background:#0d3b2e" data-icon="send"></span>
+    </footer>
+    <section class="picker">
+      <div class="hd in" style="--at:2.55s"><span>Matches for <b style="color:#0e1a14">ri</b></span><span>Tag a thing or a business</span></div>
+      <div class="grp in" style="--at:2.57s">PRODUCTS</div>
+      <div class="prow on in" style="--at:2.59s"><span class="ptile" data-icon="box"></span><div class="nm"><b>Rice, 50kg bag</b><span>₦78,000 · 42 in stock</span></div><span class="chip">Enter</span></div>
+      <div class="prow in" style="--at:2.63s"><span class="ptile" data-icon="box"></span><div class="nm"><b>Rice, 25kg bag</b><span>₦41,000</span></div><span class="pill warn">4 left</span></div>
+      <div class="grp in" style="--at:2.67s">SERVICES</div>
+      <div class="prow in" style="--at:2.71s"><span class="ptile blue" data-icon="clock"></span><div class="nm"><b>Rice milling, per bag</b><span>₦2,500 · 30 min</span></div></div>
+      <div class="grp in" style="--at:2.75s">BUSINESSES</div>
+      <div class="prow in" style="--at:2.79s"><span class="avatar lime">RF</span><div class="nm"><b>Rivers Foods Ltd</b><span>Linked · buys from you</span></div></div>
+      <div class="prow in" style="--at:2.83s"><span class="avatar pine" data-icon="spark"></span><div class="nm"><b>Taskiem</b><span>Ask Taskiem to do it for you</span></div></div>
+    </section>
+    <i class="tap" data-at="5300" style="left:180px;top:494px"></i>
+    <i class="tap" data-at="6900" style="left:356px;top:791px"></i>
+  </div></div></div>
+</div>
+</body>
+</html>

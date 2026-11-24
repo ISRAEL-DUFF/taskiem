@@ -15,7 +15,7 @@ import (
 	"unicode/utf8"
 )
 
-// Speech turns text into a voice reply (decision 0062 D5, plan V3): one
+// Speech turns text into a voice reply (decision 0074 D5, plan V3): one
 // small interface in front of a text-to-speech service, a fake for tests,
 // and the OpenAI-compatible speech endpoint, built from OpenAI's public
 // text-to-speech guide and API reference (developers.openai.com: "Text to

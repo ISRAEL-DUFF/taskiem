@@ -256,6 +256,20 @@ func (b *Book) ContactAtTx(ctx context.Context, tx pgx.Tx, tenant, contact uuid.
 	return h, err == nil, err
 }
 
+// ContactOfTx is the business's contact that addr is linked to on channel
+// (and not stopped), in tx (the tenant's scope): who a button sent in
+// answer to their message is signed for.
+func (b *Book) ContactOfTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, addr string) (uuid.UUID, bool, error) {
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT c.id FROM reach_contacts c JOIN reach_channels ch ON ch.contact_id = c.id
+		WHERE c.tenant_id = $1 AND ch.channel = $2 AND ch.address_hash = $3 AND ch.stopped_at IS NULL ORDER BY c.id LIMIT 1`,
+		tenant, channel, b.AddressHash(channel, addr)).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return id, false, nil
+	}
+	return id, err == nil, err
+}
+
 // --- what a chat address says (no tenant: SECURITY DEFINER functions) ---
 
 // Stop stops the business that reached addr most recently; its name, or
@@ -292,6 +306,21 @@ func (b *Book) Businesses(ctx context.Context, channel, addr string) ([]string, 
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// Reacher is a business reaching a chat address.
+type Reacher struct {
+	Tenant uuid.UUID
+	Name   string
+}
+
+// BusinessList is Businesses with each business's id, most recent first.
+func (b *Book) BusinessList(ctx context.Context, channel, addr string) ([]Reacher, error) {
+	rows, err := b.Pool.Query(ctx, `SELECT tenant_id, business FROM taskiem_reach_business_list($1, $2)`, channel, b.AddressHash(channel, addr))
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[Reacher])
 }
 
 // --- link codes ---

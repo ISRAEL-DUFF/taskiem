@@ -172,7 +172,11 @@ func (s *Server) tgReceive(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	ctx := r.Context()
+	// Once claimed, an update is handled to the end whether or not
+	// Telegram waits for the answer: its resend would be dropped as a
+	// duplicate. Bounded as WhatsApp's are (F52).
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 30*time.Second)
+	defer cancel()
 	// At most once: an update is claimed before it is acted on.
 	fresh, err := tg.ClaimInbound(ctx, u.ID)
 	if err != nil {
@@ -224,8 +228,8 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 	}
 	// Updates from a business for someone outside it (reach.go): its
 	// link's code, then the phone the bot asked for.
-	if code, ok := strings.CutPrefix(in.Text, "/start u_"); ok && u.Kind == "message" {
-		return s.reachStart(ctx, tg, reach.Telegram, addr, strings.TrimSpace(code))
+	if code, ok := reachStartCode(in.Text); ok && u.Kind == "message" {
+		return s.reachStart(ctx, tg, reach.Telegram, addr, code)
 	}
 	if u.Kind == "message" && u.Contact != nil {
 		if done, err := s.reachContact(ctx, u); done || err != nil {
@@ -303,6 +307,9 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		if done, err := s.riderWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
 			return err
 		}
+		if done, err := s.riderJobsWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
+			return err
+		}
 		if done, err := s.riderDeliveryWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
 			return err
 		}
@@ -329,6 +336,7 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		}
 		return s.tgUnbound(ctx, addr, in.Text)
 	}
+	start := false
 	switch {
 	case u.Kind == "callback":
 		payload, ok, err := tg.ResolveCallback(ctx, u.FromID, u.CallbackData)
@@ -350,13 +358,19 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		// A file, its caption as the text (a list for a table).
 		in.Type = "document"
 		in.Document = &whatsapp.Media{ID: u.Document.FileID, MimeType: u.Document.MimeType, Name: u.Document.Name}
+	case u.Location != "":
+		// A location shared: a clock-in carries it (staff_clock.go), as
+		// on WhatsApp.
+		in.Type, in.Text, in.Location = "location", "", u.Location
 	case in.Text == "":
-		return nil // a sticker, a location: nothing to act on
+		return nil // a sticker: nothing to act on
 	default:
 		// Telegram's commands are /help, /approvals...: read as the words.
+		// "/start" is help, unless it brings back a business's updates.
+		start = strings.HasPrefix(in.Text, "/") && reachWord(in.Text) == "start"
 		in.Text = tgCommandWords(in.Text, tg.Config.BotUsername)
 	}
-	return s.converse(ctx, &chat{ch: tg, addr: addr, in: in}, user)
+	return s.converse(ctx, &chat{ch: tg, addr: addr, in: in, start: start}, user)
 }
 
 // tgCommandWords reads "/help" (or "/help@bot", or "/start" with nothing
@@ -524,4 +538,18 @@ func (s *Server) tgSendAlertItem(ctx context.Context, it whatsapp.OutboxItem) er
 	m := whatsapp.AlertMessage(name, kind, title, body, l, detail)
 	_, err = s.Telegram.Send(ctx, addr, whatsapp.Message{Text: m.Text})
 	return err
+}
+
+// reachStartCode is the code of a business's updates link opened in
+// Telegram: "/start u_" and then the code, nothing else. A link code of
+// one's own account (IssueLinkCode) is 32 random base64url characters and
+// may itself begin "u_" (one in 4,096), so the prefix alone is not enough:
+// only "u_" and a whole updates code is one.
+func reachStartCode(text string) (string, bool) {
+	code, ok := strings.CutPrefix(text, "/start u_")
+	code = strings.TrimSpace(code)
+	if !ok || !reach.CodeRe.MatchString(code) {
+		return "", false
+	}
+	return code, true
 }

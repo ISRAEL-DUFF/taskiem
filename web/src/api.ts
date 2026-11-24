@@ -105,9 +105,26 @@ export async function api<T = unknown>(
   );
 }
 
+// The server's clock, from its answers' Date header: a countdown follows
+// the server's time, not the phone's (a phone set wrong by minutes would
+// say a number is good when it is not). Seconds apart is the header's
+// own rounding, and ignored.
+let skewMs = 0;
+
+function noteServerDate(date: string | null | undefined) {
+  if (!date) return;
+  const at = Date.parse(date);
+  if (Number.isNaN(at)) return;
+  const d = at - Date.now();
+  skewMs = Math.abs(d) > 5_000 ? d : 0;
+}
+
+/** Now, by the server's clock as far as its answers tell. */
+export const serverNow = () => Date.now() + skewMs;
+
 /** POSTs a multipart form (file uploads); the browser sets its boundary. */
-export function upload<T = unknown>(path: string, form: FormData): Promise<T> {
-  return request<T>("POST", path, form, {});
+export function upload<T = unknown>(path: string, form: FormData, method: "POST" | "PUT" = "POST"): Promise<T> {
+  return request<T>(method, path, form, {});
 }
 
 /** POSTs a file as the raw request body, with its own Content-Type (storefront photos). */
@@ -115,6 +132,16 @@ export function uploadFile<T = unknown>(path: string, file: Blob): Promise<T> {
   return request<T>("POST", path, file, {
     "Content-Type": file.type || "application/octet-stream",
   });
+}
+
+/** POSTs a multipart form (a photo with a step); the browser sets the boundary. */
+export function postForm<T = unknown>(path: string, form: FormData): Promise<T> {
+  return request<T>("POST", path, form, {});
+}
+
+/** PUTs a multipart form (the person's photo); the browser sets the boundary. */
+export function putForm<T = unknown>(path: string, form: FormData): Promise<T> {
+  return request<T>("PUT", path, form, {});
 }
 
 /** GETs a binary response (an image) with the session, as a Blob. */
@@ -161,6 +188,7 @@ async function request<T>(
   } catch {
     throw new ApiError(0, OFFLINE);
   }
+  noteServerDate(res.headers?.get?.("Date"));
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   let data: Record<string, unknown>;
@@ -170,7 +198,11 @@ async function request<T>(
     data = { error: text };
   }
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith("/v1/auth/"))
+    // A 401 that asks for another step is not this session ending: a
+    // business's own sign-in first (single sign-on, a passkey, a second
+    // proof), or a code or PIN that was wrong or ran out. Any other 401
+    // outside signing in is (changing the phone number included).
+    if (res.status === 401 && !path.startsWith("/v1/auth/") && !keepsSession(data, path))
       window.dispatchEvent(new Event("taskiem:unauthorised"));
     noteEnded(res.status, data);
     throw new ApiError(
@@ -187,6 +219,21 @@ async function request<T>(
     );
   }
   return data as T;
+}
+
+/** A 401 that asks for a step while the session goes on (§5.4, §5.5). */
+export function keepsSession(body: Record<string, unknown>, path = ""): boolean {
+  if (switchStep(body) || body.code_wrong || body.ticket_expired || body.tries_left !== undefined || body.password_wrong) return true;
+  // A passkey refused while deleting the account (its proof, not the session).
+  return path === "/v1/me/delete" && /passkey/i.test(String(body.error ?? ""));
+}
+
+/** What a business asks for before a switch into it (POST /v1/me/switch). */
+export function switchStep(body: Record<string, unknown>): Lock | null {
+  if (body.sso_required) return "sso_required";
+  if (body.passkey_required) return "passkey_required";
+  if (body.second_proof_required) return "second_proof_required";
+  return null;
 }
 
 /** A part of Taskiem the business turned off answers 404 with area_off.
@@ -213,6 +260,13 @@ export const patch = <T>(path: string, body?: unknown) =>
   api<T>("PATCH", path, body ?? {});
 export const del = <T>(path: string, body?: unknown) =>
   api<T>("DELETE", path, body);
+
+/** A JSON write with headers of its own (a chat tool's mark). */
+export const sendWith = <T>(method: string, path: string, body: unknown, headers: Record<string, string>) =>
+  request<T>(method, path, JSON.stringify(body ?? {}), {
+    "Content-Type": "application/json",
+    ...headers,
+  });
 
 /** A POST with an Idempotency-Key header: retried with the same key, the
  * server makes or sends nothing more (invoices: creating and sending). */
@@ -260,9 +314,41 @@ export interface TermsAsked {
   privacy_version: string;
 }
 
+/** What a business asks of this session before it opens (§5.4). */
+export type Lock = "sso_required" | "passkey_required" | "second_proof_required";
+
+/** The ways this person can prove a new device is theirs. */
+export interface ProofWays {
+  passkey: boolean;
+  email: boolean;
+  pin: boolean;
+  /** The account's password (POST /v1/auth/second-proof/password). */
+  password?: boolean;
+}
+
+/** One of the person's businesses, for the switcher. */
+export interface Business {
+  id: string;
+  name: string;
+  /** A business, or a workflows workspace. */
+  kind?: "business" | "workflows";
+  /** The session is in it. */
+  current?: boolean;
+  locked?: boolean;
+  lock?: Lock | null;
+}
+
 export interface Me {
-  /** Null for a person with no membership answering invitations. */
+  /** Null on the person's own side (You): a personal session. */
   tenant_id: string | null;
+  /** A personal session: the person's own side, in no business. */
+  personal?: boolean;
+  /** The person's businesses, each with what it asks first (the switcher). */
+  businesses?: Business[];
+  /** Whether this device must prove itself before a business opens. */
+  second_proof?: { required: boolean; device_proved: boolean; ways: ProofWays };
+  /** A business, or a workflows workspace (taskiem-for-everyone §18.2). */
+  tenant_kind?: "business" | "workflows";
   /** Signed in only to answer invitations: no organisation yet. */
   invitations_only?: boolean;
   roles: string[];
@@ -273,13 +359,23 @@ export interface Me {
     name: string;
     email_verified?: boolean;
     email_placeholder?: boolean;
+    /** Whether the person may sign in with a code or link sent to their chat. */
+    chat_signin?: boolean;
+    /** Whether the person signs in only with their passkey. */
+    passkey_only?: boolean;
+    /** The account's phone, as +234…; null when it has none. */
+    phone?: string | null;
+    /** The person's own photo (GET /v1/me/photo), shown on their own side only. */
+    photo?: { url: string; updated_at: string } | null;
   };
   /** Whether the member has an authenticator app enrolled for step-up. */
   totp?: boolean;
   /** How this session signed in. */
-  auth_method?: "password" | "passkey" | "sso";
+  auth_method?: "password" | "passkey" | "sso" | "chat" | "phone";
   /** An administrator who must add a passkey before anything else. */
   enrol_passkey?: boolean;
+  /** Why the person is held to passkeys here: personal, deployment or business. */
+  passkey_reason?: string;
   /** What the member proves themselves with to add or remove a passkey or
    * authenticator: a passkey or authenticator if they have one, else their
    * password. */
@@ -292,6 +388,8 @@ export interface Me {
   tenant_name?: string;
   /** Whether the business has the Schools area on (docs/schools.md). */
   schools?: boolean;
+  /** The business delivers for other businesses (a rider): its chat has the Availability tool. */
+  delivers?: boolean;
   /** Which parts of Taskiem the business uses, by area (docs/spec/business-areas.md). */
   areas?: Partial<Record<"storefront" | "orders" | "stock" | "money" | "links" | "schools", boolean>>;
   /** A gate session: the gate screen only; the server refuses the rest. */
@@ -306,6 +404,17 @@ export interface Invitation {
   tenant: string;
   roles: string[];
   invited_at: string;
+}
+
+/** POST /v1/me/invitations/{tenant}/accept. From a personal session the
+ * session moves into the business, unless its rules ask for a step first
+ * (sign_in, with the ways a second proof can be given). */
+export interface InvitationAccepted {
+  tenant_id: string;
+  roles: string[];
+  personal?: boolean;
+  sign_in?: Lock | "session_ended";
+  ways?: ProofWays;
 }
 
 export interface WorkflowSummary {
@@ -421,8 +530,8 @@ export interface AuthField {
   refuse?: { prefix: string; message: string }[];
   /** The value spans lines (a PEM key): a text area. */
   multiline?: boolean;
-  /** A value Taskiem makes for the person: rsa_key_pair makes a key pair in the browser, keeps the private key and shows the public key to paste at the provider. */
-  generate?: "rsa_key_pair";
+  /** A value Taskiem makes for the person: rsa_key_pair makes a key pair in the browser, keeps the private key and shows the public key to paste at the provider; webhook_token is made by the server when the connection is saved, never typed, and shown once inside the webhook address (ConnectionWebhook). */
+  generate?: "rsa_key_pair" | "webhook_token";
 }
 
 /** A capability (schemas/capabilities-v1.json) and the rails that can do it (GET /v1/capabilities). */

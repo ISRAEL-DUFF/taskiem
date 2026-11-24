@@ -51,6 +51,11 @@ func saleLines(items []stock.Item, asked []saleItem, amount *int64) ([]stock.Sal
 		if !ok {
 			return nil, errNoItem
 		}
+		// A material is counted, not sold (what a business buys §4.5), as
+		// chat's sold and stock@1 refuse it.
+		if it.Material {
+			return nil, fmt.Errorf("%w: %s is only counted, not sold: count it out with an adjustment", errBadRequest, it.Name)
+		}
 		price := int64(0)
 		switch {
 		case a.PriceKobo != nil:
@@ -60,7 +65,7 @@ func saleLines(items []stock.Item, asked []saleItem, amount *int64) ([]stock.Sal
 		case amount == nil:
 			return nil, fmt.Errorf("%w: %s", errNoPrice, it.Name)
 		}
-		lines = append(lines, stock.SaleLine{ItemID: it.ID, Item: it.Name, Quantity: a.Quantity, Unit: it.Unit, PriceKobo: price, CostKobo: it.CostKobo})
+		lines = append(lines, stock.SaleLine{ItemID: it.ID, Item: it.Name, Quantity: a.Quantity, Unit: it.SaleUnit(), PriceKobo: price, CostKobo: it.CostKobo})
 	}
 	return lines, nil
 }
@@ -116,7 +121,24 @@ func (s *Server) recordSale(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if !x.Replayed {
+		s.diaryChange(r.Context(), p, saleWords(x.Lines, x.AmountKobo, x.PaidHow))
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"sale": x})
+}
+
+// saleWords is a sale's diary line: "Sold 2 Rice 50kg, 1 Garri: ₦160,000
+// (cash)".
+func saleWords(lines []stock.SaleLine, amount int64, how string) string {
+	var parts []string
+	for _, l := range lines {
+		parts = append(parts, fmt.Sprintf("%d %s", l.Quantity, l.Item))
+	}
+	words := "Sold " + strings.Join(parts, ", ") + ": " + naira(amount)
+	if how != "" {
+		words += " (" + strings.ReplaceAll(how, "pos", "POS") + ")"
+	}
+	return words
 }
 
 // lagosDay reads ?day=2026-10-29, today in Lagos when absent.

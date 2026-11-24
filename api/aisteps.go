@@ -42,7 +42,7 @@ func aiSteps(doc []byte, find expansion.Templates) (*wd.Definition, error) {
 }
 
 // aiStepsInPlan reports whether the tenant's plan has an allowance for AI
-// steps (ai_step_monthly_tokens, decision 0062 D7): it, not the ai
+// steps (ai_step_monthly_tokens, decision 0074 D7): it, not the ai
 // feature (AI building's), decides. A failure to read the limits says no.
 func (s *Server) aiStepsInPlan(ctx context.Context, tenant uuid.UUID) bool {
 	lim, err := s.Store.LimitsFor(ctx, tenant)

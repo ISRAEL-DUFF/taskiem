@@ -52,12 +52,21 @@ func (w wagelyWorld) subTenant(t *testing.T, parent uuid.UUID) uuid.UUID {
 }
 
 // connect stores an iswallet connection as the API does: credentials in
-// the vault, its wallets indexed for routing.
+// the vault, its wallets indexed for routing. A sub-tenant's connection is
+// provisioned by its partner, as only those route events (00320).
 func (w wagelyWorld) connect(t *testing.T, tenant uuid.UUID, creds map[string]string) {
 	t.Helper()
 	m := iswallet.New(iswallet.Options{}).Manifest
+	var parent *uuid.UUID
+	if err := w.DB.Admin.QueryRow(ctx, `SELECT parent_id FROM tenants WHERE id = $1`, tenant).Scan(&parent); err != nil {
+		t.Fatal(err)
+	}
+	by := ""
+	if parent != nil {
+		by = "partner:" + parent.String() + "/key:test"
+	}
 	if err := db.InTenantTx(ctx, w.DB.App, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		id, err := w.Vault.CreateConnectionTx(ctx, tx, tenant, "prod", "iswallet", "main", "api_key", creds, "test", "")
+		id, err := w.Vault.CreateConnectionTx(ctx, tx, tenant, "prod", "iswallet", "main", "api_key", creds, "test", by)
 		if err != nil {
 			return err
 		}

@@ -62,11 +62,13 @@ plans:
       container_minutes_monthly: 0
       speech_seconds_monthly: 1800   # PLACEHOLDER (VP7): voice notes heard and replies spoken
       max_data_tables: 3
+      max_pages: 10
       storefront_items: 50
       storefront_orders_monthly: 300
       storefront_bookings_monthly: 300
       sms_monthly: 100
       link_messages_daily: 200
+      max_saved_objects: 2000
       embed_sites: 1
     features: {receive_money: true}
 
@@ -95,11 +97,13 @@ plans:
       container_minutes_monthly: 0
       speech_seconds_monthly: 3600   # PLACEHOLDER (VP7): voice notes heard and replies spoken
       max_data_tables: 5
+      max_pages: 10
       storefront_items: 500
       storefront_orders_monthly: 1500
       storefront_bookings_monthly: 1500
       sms_monthly: 500
       link_messages_daily: 500
+      max_saved_objects: 3000
       embed_sites: 3
     features: {receive_money: true, storefront_pay_on_order: true}
   - id: starter
@@ -127,9 +131,11 @@ plans:
       container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
       speech_seconds_monthly: 3600   # PLACEHOLDER (VP7): voice notes heard and replies spoken
       max_data_tables: 10
+      max_pages: 10
       storefront_items: 2000
       sms_monthly: 1000
       link_messages_daily: 1000
+      max_saved_objects: 5000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true}
 
   - id: growth
@@ -157,9 +163,11 @@ plans:
       container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
       speech_seconds_monthly: 18000   # PLACEHOLDER (VP7): voice notes heard and replies spoken
       max_data_tables: 50
+      max_pages: 50
       storefront_items: 2000
       sms_monthly: 1000
       link_messages_daily: 2000
+      max_saved_objects: 10000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true}
 
   - id: business
@@ -187,9 +195,11 @@ plans:
       container_minutes_monthly: 600   # PLACEHOLDER (CS3): 0 = container steps off
       speech_seconds_monthly: 36000   # PLACEHOLDER (VP7): voice notes heard and replies spoken
       max_data_tables: 0
+      max_pages: 0
       storefront_items: 2000
       sms_monthly: 1000
       link_messages_daily: 5000
+      max_saved_objects: 25000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true, sso: true, embedded: true}
     partner:
       max_subtenants: 50
@@ -218,6 +228,8 @@ plans:
       whatsapp_templates_monthly: 100000
       container_minutes_monthly: 3000   # PLACEHOLDER (CS3): 0 = container steps off
       speech_seconds_monthly: 0   # PLACEHOLDER (VP7): voice notes heard and replies spoken (0: no limit)
+      max_saved_objects: 100000
+      max_pages: 0
     features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true, sso: true, scim: true, custom_roles: true, white_label: true, byok: true, embedded: true}
     partner:
       max_subtenants: 0

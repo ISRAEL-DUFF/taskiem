@@ -1,6 +1,6 @@
 # Conversations with customers
 
-A business's assistant answers its customers on its own WhatsApp number or Telegram bot ([decision 0062](decisions/0062-customer-assistant.md), [plan V7](spec/voice-assistant.md#v7-conversations-page)). **Conversations** (`/conversations`) is where the business watches it:
+A business's assistant answers its customers on its own WhatsApp number or Telegram bot ([decision 0074](decisions/0074-customer-assistant.md), [plan V7](spec/voice-assistant.md#v7-conversations-page)). **Conversations** (`/conversations`) is where the business watches it:
 - what each customer said and what was answered;
 - answering a customer by hand when they ask for a person;
 - the assistant's month in numbers;
@@ -62,5 +62,5 @@ A member writes as a customer would, and sees what the assistant would answer:
 
 ## For operators
 
-- **Storage.** `assistant_turns` (migration 00322), under forced row-level security; text in sealed envelopes. The hourly sweep in the `api` role finds the businesses with turns past their days through `taskiem_conversation_turns_due` (ids and days only) and deletes them in each business's scope.
+- **Storage.** `assistant_turns` (migration 00600), under forced row-level security; text in sealed envelopes. The hourly sweep in the `api` role finds the businesses with turns past their days through `taskiem_conversation_turns_due` (ids and days only) and deletes them in each business's scope.
 - **API.** `/v1/conversations` (assistants and customers), `/thread` (a conversation; `reveal=true` with `pii.reveal`), `/reply`, `/templates`, `/pause`, `/resume`, `/metrics`, `/test` (and `DELETE /test` to start again) and `/test/{run}`. The page asks again for new messages every 15 seconds, except while numbers are shown (each showing is audited).

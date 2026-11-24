@@ -14,9 +14,9 @@ import (
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
-// A person erased stays erased for SealTx; only RenewSubjectTx (a customer
-// who writes again) gives them a new generation, which Erase, named by any
-// generation, shreds with the rest (decision 0062 P2).
+// A person erased is sealed afresh under a new generation (<subject>~1,
+// ~2...), which Erase, named by any generation, shreds with the rest
+// (decision 0074 P2).
 func TestSubjectGenerations(t *testing.T) {
 	d := dbtest.New(t)
 	v := localVault(t, d)
@@ -72,54 +72,31 @@ func TestSubjectGenerations(t *testing.T) {
 	if err := v.Erase(ctx, tn, base, "test"); err != nil {
 		t.Fatal(err)
 	}
-	// Erased: SealTx refuses, SubjectForTx stays the base, and nothing
-	// moves on to a new generation by itself.
-	if _, err := seal(ada); !errors.Is(err, pii.ErrErased) {
-		t.Fatalf("sealing an erased person: %v", err)
+	// Erased: the person is sealed afresh under the next generation; what
+	// was sealed for them before stays erased.
+	next := base + "~1"
+	if live, renewed := subjects(); live != next || renewed != next {
+		t.Fatalf("after erasure: live %q, renewed %q, want %q", live, renewed, next)
+	}
+	current, err := seal(ada)
+	if err != nil || current["subject"] != next {
+		t.Fatalf("sealing after erasure: %v %v", current, err)
 	}
 	in(func(tx pgx.Tx) error {
-		s, err := v.SubjectForTx(ctx, tx, tn, "phone", ada)
-		if err != nil || s != base {
-			t.Errorf("SubjectForTx after erasure: %q %v", s, err)
-		}
-		if live, err := v.LiveSubjectTx(ctx, tx, tn, "phone", ada); err != nil || live != base {
-			t.Errorf("LiveSubjectTx before they came back: %q %v", live, err)
-		}
-		if _, err := v.SealCurrentTx(ctx, tx, tn, "phone", ada); !errors.Is(err, pii.ErrErased) {
-			t.Errorf("SealCurrentTx before they came back: %v", err)
+		again, err := v.SealCurrentTx(ctx, tx, tn, "phone", ada)
+		if err != nil || again["subject"] != next {
+			t.Errorf("SealCurrentTx after erasure: %v %v", again, err)
 		}
 		return nil
 	})
-	// They come back: a new generation, which SealCurrentTx follows.
-	live, renewed := subjects()
-	if renewed != base+"~2" || live != base {
-		t.Fatalf("they came back: live (read before renewing) %q, renewed %q", live, renewed)
-	}
-	if again, _ := subjects(); again != base+"~2" {
-		t.Fatalf("live after renewing: %q", again)
-	}
-	var current map[string]any
-	in(func(tx pgx.Tx) error {
-		var err error
-		current, err = v.SealCurrentTx(ctx, tx, tn, "phone", ada)
-		return err
-	})
-	if current["subject"] != base+"~2" {
-		t.Fatalf("SealCurrentTx after they came back: %v", current)
-	}
 	if got, err := open(current); err != nil || got != ada {
 		t.Fatalf("open the new generation: %v %v", got, err)
 	}
 	if _, err := open(before); !errors.Is(err, pii.ErrErased) {
 		t.Fatalf("the first generation opened again: %v", err)
 	}
-	// SealTx still refuses: plaintext read before the erasure is never
-	// sealed readable again by it.
-	if _, err := seal(ada); !errors.Is(err, pii.ErrErased) {
-		t.Fatalf("SealTx after they came back: %v", err)
-	}
 	// Erased again, named by their generation: every generation goes.
-	if err := v.Erase(ctx, tn, base+"~2", "test"); err != nil {
+	if err := v.Erase(ctx, tn, next, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := open(current); !errors.Is(err, pii.ErrErased) {
@@ -128,7 +105,7 @@ func TestSubjectGenerations(t *testing.T) {
 	if err := v.Erase(ctx, tn, base, "test"); !errors.Is(err, secrets.ErrNotFound) {
 		t.Fatalf("erasing twice: %v", err)
 	}
-	if _, renewed := subjects(); renewed != base+"~3" {
+	if _, renewed := subjects(); renewed != base+"~2" {
 		t.Fatalf("third time: %q", renewed)
 	}
 	// Erasing by the base reaches the generations.

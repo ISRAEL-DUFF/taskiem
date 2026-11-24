@@ -36,8 +36,12 @@ type fakePaystack struct {
 	mu     sync.Mutex
 	txns   map[string]map[string]any
 	charge string // status charge_authorization answers (default success)
-	srv    *httptest.Server
-	calls  map[string]int
+	// lose is how many charges are made and their answer lost (a gateway's
+	// 504 after the card was charged); verifyDown makes verify answer 500.
+	lose       int
+	verifyDown bool
+	srv        *httptest.Server
+	calls      map[string]int
 }
 
 func newFakePaystack(t *testing.T) *fakePaystack {
@@ -71,6 +75,10 @@ func newFakePaystack(t *testing.T) *fakePaystack {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		f.calls["verify"]++
+		if f.verifyDown {
+			w.WriteHeader(500)
+			return
+		}
 		tx, ok := f.txns[r.PathValue("ref")]
 		if !ok {
 			w.WriteHeader(404)
@@ -92,6 +100,11 @@ func newFakePaystack(t *testing.T) *fakePaystack {
 		tx := map[string]any{"id": 2, "reference": ref, "amount": body["amount"], "currency": "NGN", "status": f.charge, "channel": "card",
 			"authorization": map[string]any{"authorization_code": body["authorization_code"], "channel": "card", "reusable": true, "last4": "4081", "brand": "visa", "exp_month": "12", "exp_year": "2030"}}
 		f.txns[ref] = tx
+		if f.lose > 0 {
+			f.lose--
+			w.WriteHeader(http.StatusGatewayTimeout)
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": true, "message": "Charge attempted", "data": tx})
 	})
 	f.srv = httptest.NewServer(mux)
@@ -592,10 +605,14 @@ func TestLifecycle(t *testing.T) {
 	if len(inv) != 2 || inv[0].Kind != "renewal" || inv[0].Status != "paid" || inv[1].Status != "paid" {
 		t.Fatalf("renewal invoice: %+v", inv)
 	}
-	// Gapless within a year, restarting each year: the clock starts at
-	// today's date, so near year end the renewal opens the next year.
-	if want := nextNumber(t, inv[1].Number, w.clock.Now().Year()); !strings.HasSuffix(inv[1].Number, "-000001") || inv[0].Number != want {
-		t.Fatalf("numbering: %s then %s, want %s", inv[1].Number, inv[0].Number, want)
+	// Numbers run per year (TKM-2026-000001): a renewal that falls in the
+	// next year starts it again, as the test's clock (today's date) may.
+	want := "-000002"
+	if inv[0].Number[:8] != inv[1].Number[:8] {
+		want = "-000001"
+	}
+	if !strings.HasSuffix(inv[1].Number, "-000001") || !strings.HasSuffix(inv[0].Number, want) {
+		t.Fatalf("numbering: %s %s", inv[1].Number, inv[0].Number)
 	}
 
 	// A declined renewal falls past due again.
@@ -1117,6 +1134,45 @@ func TestInvoicePaidTwice(t *testing.T) {
 
 // TestDunningWaitsForPendingCharge: a renewal charge the bank has not
 // answered yet is not charged again by the next reminder (R1).
+// A card charge whose answer is lost (a timeout, a gateway's 504) after
+// the card was charged is asked about, not taken as failed: the card is
+// not charged again for the same invoice. When the provider cannot say
+// either, the charge stays pending, dunning does not charge again, and
+// reconciliation settles it.
+func TestChargeAnswerLostIsNotChargedAgain(t *testing.T) {
+	w := newWorld(t)
+	tenant := w.e.Tenant
+	w.checkoutAndPay(t, tenant, "growth") // saves the card
+	w.pay.lose = 1
+	w.clock.add(32 * 24 * time.Hour)
+	if err := w.svc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if s := w.sub(t, tenant); s.Status != billing.StatusActive || w.pay.calls["charge"] != 1 {
+		t.Fatalf("answer lost: %+v, %d charges", s, w.pay.calls["charge"])
+	}
+
+	// The provider cannot say either.
+	w.pay.lose, w.pay.verifyDown = 1, true
+	w.clock.add(32 * 24 * time.Hour)
+	for range 2 {
+		if err := w.svc.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+		w.clock.add(time.Hour)
+	}
+	if s := w.sub(t, tenant); s.Status != billing.StatusPastDue || w.pay.calls["charge"] != 2 {
+		t.Fatalf("answer lost, verify down: %+v, %d charges", s, w.pay.calls["charge"])
+	}
+	w.pay.verifyDown = false
+	if err := w.svc.Reconcile(ctx, 2*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if s := w.sub(t, tenant); s.Status != billing.StatusActive || w.pay.calls["charge"] != 2 {
+		t.Fatalf("reconciled: %+v, %d charges", s, w.pay.calls["charge"])
+	}
+}
+
 func TestDunningWaitsForPendingCharge(t *testing.T) {
 	w := newWorld(t)
 	tenant := w.e.Tenant

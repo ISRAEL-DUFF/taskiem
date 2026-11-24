@@ -135,7 +135,7 @@ func stepOutput(t *testing.T, w *world, ref runtime.RunRef, step string) string 
 // A business's assistant answers only customers' new private messages,
 // tells a new customer what it is, honours STOP and START, a limit per
 // customer, a request for a person, the kinds of message it reads, the
-// owner's pause and Taskiem's switches (decision 0062 V6).
+// owner's pause and Taskiem's switches (decision 0074 V6).
 func TestCustomerGuard(t *testing.T) {
 	g := newGuardWorld(t, `{"per_minute":3,"per_day":100}`, "")
 	const ada, bola = "2348031234567", "2348039876543"
@@ -403,7 +403,7 @@ func TestCustomerGuardNoticeAndStopWhileOff(t *testing.T) {
 	}
 }
 
-// Several quick messages get one answer (decision 0062 V10, L5): the run of
+// Several quick messages get one answer (decision 0074 V10, L5): the run of
 // an earlier message finds a newer one waiting and stays quiet; the newest
 // answers, with what was written before it since the last answer.
 func TestCustomerGuardGather(t *testing.T) {

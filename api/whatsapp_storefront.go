@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -58,9 +59,16 @@ type chatShop struct {
 	// ReopenAt: closed for today, the page opens again by itself then.
 	ReopenAt  *time.Time `json:"reopen_at,omitempty"`
 	Reference string     `json:"reference,omitempty"` // ready, delivered
+	// Category and From: a category's items being shown 10 at a time
+	// (stock_category), and where the next page starts.
+	Category string `json:"category,omitempty"`
+	From     int    `json:"from,omitempty"`
 	// Pick are the items offered for a numbered pick, when a name matched
 	// several.
 	Pick []shopChoice `json:"pick,omitempty"`
+	// Size is a product's size being picked one choice at a time
+	// (whatsapp_sizes.go).
+	Size *sizeAsk `json:"size,omitempty"`
 	// Nonce is the row write's idempotency key.
 	Nonce string `json:"nonce,omitempty"`
 	// StockChat is a stock change being confirmed (whatsapp_stock.go).
@@ -98,15 +106,8 @@ var (
 		{Name: "price", Title: "Price (₦)", Type: "number"},
 		{Name: "photo", Title: "Photo", Type: "text"},
 		{Name: "available", Title: "Available", Type: "boolean"},
-		{Name: "stock", Title: "Stock", Type: "integer"},
-		{Name: "unit", Title: "Unit", Type: "text"},
-		{Name: "cost_price", Title: "Cost price (₦)", Type: "number"},
-		{Name: "reorder_level", Title: "Reorder at", Type: "integer"},
-		{Name: "target_level", Title: "Order up to", Type: "integer"},
-		{Name: "supplier", Title: "Supplier", Type: "text"},
 	}
-	productMapping = storefront.Columns{Name: "name", Price: "price", PriceUnit: "naira", Photo: "photo", Available: "available", Stock: "stock",
-		Unit: "unit", CostPrice: "cost_price", ReorderLevel: "reorder_level", TargetLevel: "target_level", Supplier: "supplier"}
+	productMapping = storefront.Columns{Name: "name", Price: "price", PriceUnit: "naira", Photo: "photo", Available: "available"}
 	serviceColumns = []datatables.Column{
 		{Name: "name", Title: "Name", Type: "text", Required: true},
 		{Name: "price", Title: "Price (₦)", Type: "number"},
@@ -152,6 +153,9 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 		return strings.Trim(strings.Join(f[n:], " "), " ?!")
 	}
 	var do func() error
+	// Working the orders is a cashier's too (order.handle); the rest is
+	// the storefront's.
+	need := PermStorefrontManage
 	switch {
 	case cmd == "make my page" || cmd == "make my shop" || cmd == "my page" || cmd == "my shop" || cmd == "my storefront":
 		do = func() error { return s.waMyPage(ctx, c) }
@@ -183,8 +187,10 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 	case cmd == "open shop" || cmd == "open my shop" || cmd == "reopen shop" || cmd == "reopen":
 		do = func() error { return s.waShopOpen(ctx, c) }
 	case s.Orders != nil && (cmd == "orders" || cmd == "my orders" || cmd == "open orders"):
+		need = PermOrders
 		do = func() error { return s.waShopOrders(ctx, c) }
 	case s.Orders != nil && orderCmd.MatchString(cmd):
+		need = PermOrders
 		m := orderCmd.FindStringSubmatch(cmd)
 		ref, move := strings.ToUpper(m[1]), m[2]
 		switch move {
@@ -198,7 +204,7 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 	default:
 		return false, nil
 	}
-	if !c.p.Can(PermStorefrontManage) {
+	if !c.p.Can(need) {
 		return true, c.say(ctx, s, c.t("wa.shop.denied", "org", c.tenant.Name))
 	}
 	return true, do()
@@ -210,6 +216,10 @@ func (s *Server) waShopReply(ctx context.Context, c *chat, text, cmd string) err
 	sh := c.data.Shop
 	switch c.state {
 	case stateCollecting:
+		if sh.Action == "stock_treat" && sh.StockChat != nil && sh.StockChat.Purchase != nil && sh.StockChat.Purchase.Treat != nil {
+			// The question on an order's lines (chat_purchase_treat.go).
+			return s.waTreatReply(ctx, c, text, cmd)
+		}
 		if sh.Action == "setup" {
 			return s.waShopSetup(ctx, c, text)
 		}
@@ -218,6 +228,9 @@ func (s *Server) waShopReply(ctx context.Context, c *chat, text, cmd string) err
 		}
 		if sh.StockChat != nil && sh.StockChat.Count != nil && sh.StockChat.Count.Asking {
 			return s.waStockCountAnswer(ctx, c, text)
+		}
+		if sh.Size != nil {
+			return s.waSizeAnswer(ctx, c, text)
 		}
 		if len(sh.Pick) > 0 {
 			if strings.HasPrefix(sh.Action, "stock_") {
@@ -231,6 +244,9 @@ func (s *Server) waShopReply(ctx context.Context, c *chat, text, cmd string) err
 			return s.waShopPick(ctx, c, text)
 		}
 	case stateConfirming:
+		if sh.Action == "stock_new" {
+			return s.waStockSellReply(ctx, c, cmd)
+		}
 		switch cmd {
 		case "yes", "y", "confirm":
 			if strings.HasPrefix(sh.Action, "stock_") {
@@ -338,7 +354,7 @@ func (s *Server) waMyPage(ctx context.Context, c *chat) error {
 	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		now := time.Now().In(storefront.Lagos)
 		day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, storefront.Lagos)
-		return tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE tenant_id = $1 AND kind = 'order' AND created_at >= $2`, c.tenant.ID, day).Scan(&count)
+		return tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE tenant_id = $1 AND kind IN ('order', 'app') AND created_at >= $2`, c.tenant.ID, day).Scan(&count)
 	}); err != nil {
 		return err
 	}
@@ -654,6 +670,7 @@ func (s *Server) waShopPublish(ctx context.Context, c *chat) error {
 		s.Logger.Warn("chat: refreshing the catalogue", "tenant", c.tenant.ID, "err", err)
 		return c.say(ctx, s, c.t("wa.shop.publish_failed", "reason", tablesChatReason(err)))
 	}
+	s.prewarmPublish(ctx, c.tenant.ID, false)
 	var sf storefront.Storefront
 	var held bool
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
@@ -775,6 +792,16 @@ func (s *Server) shopCatalogue(ctx context.Context, c *chat, create bool) (store
 		return sf, t, false, c.say(ctx, s, c.t("wa.shop.no_catalogue"))
 	}
 	return sf, t, err == nil, err
+}
+
+// countColumn stands for where a product's count is kept, for the chat's
+// "stock <item> <n>": on stock items, not a column of the catalogue, so
+// it is there whenever stock can be kept ("" when it cannot).
+func (s *Server) countColumn() string {
+	if s.Stock.Ready() {
+		return "stock"
+	}
+	return ""
 }
 
 // shopColumn says the catalogue has no column for what (ok false).
@@ -961,6 +988,51 @@ func matchItems(items []storefront.Item, name string) []storefront.Item {
 	return part
 }
 
+// shopHolders leaves out the sizes and colours taken off sale and, for a
+// change of stock, has a product sold in sizes and colours stand for them
+// (it keeps no stock of its own).
+func shopHolders(items, match []storefront.Item, stockChange bool) []storefront.Item {
+	out := make([]storefront.Item, 0, len(match))
+	seen := map[string]bool{}
+	add := func(it storefront.Item) {
+		if !seen[it.ID] && (it.VariantOf == "" || it.Available) {
+			seen[it.ID] = true
+			out = append(out, it)
+		}
+	}
+	for _, it := range match {
+		if !stockChange || it.Variants == 0 {
+			add(it)
+			continue
+		}
+		for _, v := range items {
+			if v.VariantOf == it.ID {
+				add(v)
+			}
+		}
+	}
+	return out
+}
+
+// shopSizesOfOne is the product's name and how many of its sizes and
+// colours the matches are, when they are all one product's (0 else).
+func shopSizesOfOne(items, match []storefront.Item) (string, int) {
+	if len(match) < 2 || match[0].VariantOf == "" {
+		return "", 0
+	}
+	for _, it := range match {
+		if it.VariantOf != match[0].VariantOf {
+			return "", 0
+		}
+	}
+	for _, it := range items {
+		if it.ID == match[0].VariantOf {
+			return it.Name, len(match)
+		}
+	}
+	return "", 0
+}
+
 func numberedChoices(pick []shopChoice) string {
 	lines := make([]string, len(pick))
 	for i, p := range pick {
@@ -1009,7 +1081,7 @@ func (s *Server) waShopChange(ctx context.Context, c *chat, action, args string)
 		return err
 	}
 	col := map[string]string{"price": sf.CatalogueColumns.Price, "hide": sf.CatalogueColumns.Available, "show": sf.CatalogueColumns.Available,
-		"stock": sf.CatalogueColumns.Stock}[action]
+		"stock": s.countColumn()}[action]
 	what := map[string]string{"price": "price", "hide": "available", "show": "available", "stock": "stock"}[action]
 	if ok, err := s.shopColumn(ctx, c, col, what); !ok || err != nil {
 		return err
@@ -1018,7 +1090,17 @@ func (s *Server) waShopChange(ctx context.Context, c *chat, action, args string)
 	if err != nil {
 		return err
 	}
-	match := matchItems(items, name)
+	match := shopHolders(items, matchItems(items, name), action == "stock")
+	// A product sold in sizes and colours named without one size: by the
+	// values said in any order, the rest asked one choice at a time.
+	if _, n := shopSizesOfOne(items, match); n > 1 || len(match) == 0 {
+		if done, err := s.shopSized(ctx, c, sh, name); done || err != nil {
+			return err
+		}
+		if product, n := shopSizesOfOne(items, match); n > shopPickMax {
+			return c.say(ctx, s, whichSizeOf(c, product, n, match[0].Name))
+		}
+	}
 	switch {
 	case len(match) == 0:
 		return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(name)))
@@ -1159,6 +1241,7 @@ func (s *Server) shopRepublish(ctx context.Context, c *chat) (storefront.Storefr
 	if err := s.SyncStorefront(ctx, c.tenant.ID); err != nil {
 		s.Logger.Warn("chat: refreshing the catalogue", "tenant", c.tenant.ID, "err", err)
 	}
+	s.prewarmPublish(ctx, c.tenant.ID, true)
 	var sf storefront.Storefront
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		var err error
@@ -1398,7 +1481,7 @@ func (s *Server) waShopOrderMove(ctx context.Context, c *chat, ref, move string)
 	}
 	status := c.t("wa.shop.status." + o.Status)
 	if move == "ready" {
-		if o.Kind != "order" && o.Kind != "trade" || o.Status != "accepted" && o.Status != "paid" {
+		if o.Kind != "order" && o.Kind != "app" && o.Kind != "trade" || o.Status != "accepted" && o.Status != "paid" {
 			return c.say(ctx, s, c.t("wa.shop.not_ready_now", "ref", ref, "status", status))
 		}
 		return s.shopAsk(ctx, c, &chatShop{Action: "ready", Reference: ref}, c.t("wa.shop.confirm_ready", "ref", ref))
@@ -1416,7 +1499,13 @@ func (s *Server) waShopOrderMove(ctx context.Context, c *chat, ref, move string)
 // waShopApply does the confirmed change.
 func (s *Server) waShopApply(ctx context.Context, c *chat) error {
 	sh := c.data.Shop
-	if !c.p.Can(PermStorefrontManage) {
+	// Readying and completing an order are working the orders (a
+	// cashier's too); the rest is the storefront's.
+	need := PermStorefrontManage
+	if sh != nil && (sh.Action == "ready" || sh.Action == "delivered") {
+		need = PermOrders
+	}
+	if !c.p.Can(need) {
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return err
 		}
@@ -1536,7 +1625,7 @@ func (s *Server) shopChangeItem(ctx context.Context, c *chat) error {
 		return err
 	}
 	m := sf.CatalogueColumns
-	if sh.Action == "stock" && s.Stock.Ready() && m.Stock != "" {
+	if sh.Action == "stock" && s.Stock.Ready() {
 		return s.shopCountItem(ctx, c, sf)
 	}
 	set := map[string]any{}
@@ -1545,8 +1634,6 @@ func (s *Server) shopChangeItem(ctx context.Context, c *chat) error {
 		set[m.Price] = priceCell(*sh.PriceKobo, m)
 	case "hide", "show":
 		set[m.Available] = sh.Action == "show"
-	case "stock":
-		set[m.Stock] = *sh.Stock
 	}
 	for col := range set {
 		if col == "" {
@@ -1557,8 +1644,28 @@ func (s *Server) shopChangeItem(ctx context.Context, c *chat) error {
 			return err
 		}
 	}
+	// A product sold in sizes and colours: those without a price of their
+	// own take its new one.
+	var product stock.Item
+	var ssh stockShop
+	if sh.Action == "price" && s.Stock.Ready() {
+		if sshop, items, err := s.stockItems(ctx, c.tenant.ID); err == nil {
+			ssh = sshop
+			for _, it := range items {
+				if it.ID == sh.Row {
+					product = it
+				}
+			}
+		}
+	}
 	if _, ok, err := s.shopWrite(ctx, c, t, sh.Row, set); !ok || err != nil {
 		return err
+	}
+	if product.HasSizes() {
+		s.sizesFollow(ctx, c.tenant.ID, ssh, product, "", "wa-"+sh.Nonce, set, stockDetails{})
+	}
+	if product.VariantOf != "" {
+		s.markOwnPrice(ctx, c.tenant.ID, ssh, product)
 	}
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return err
@@ -1734,7 +1841,7 @@ func (s *Server) shopReady(ctx context.Context, c *chat, ref string) error {
 	if !ok || err != nil {
 		return err
 	}
-	if o.Kind != "order" && o.Kind != "trade" || o.Status != "accepted" && o.Status != "paid" {
+	if o.Kind != "order" && o.Kind != "app" && o.Kind != "trade" || o.Status != "accepted" && o.Status != "paid" {
 		return c.say(ctx, s, c.t("wa.shop.not_ready_now", "ref", ref, "status", c.t("wa.shop.status."+o.Status)))
 	}
 	sf, err := s.shopOf(ctx, c)

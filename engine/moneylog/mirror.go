@@ -43,6 +43,9 @@ var Columns = []datatables.Column{
 	{Name: "source", Title: "Source", Type: "text", Required: true},
 	{Name: "note", Title: "Note", Type: "text"},
 	{Name: "corrects", Title: "Corrects entry", Type: "text"},
+	// The label's id (what a business buys §5.4): reports find its name,
+	// and the label it was merged into, when they are read.
+	{Name: "label_id", Title: "Label", Type: "text"},
 }
 
 // Rows writes and finds rows of a tenant's data tables project.
@@ -250,7 +253,7 @@ func (m *Mirror) Tenant(ctx context.Context, tenant uuid.UUID) error {
 	var list []waiting
 	err := db.InTenantTx(ctx, m.Log.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rs, err := tx.Query(ctx, `SELECT id, occurred_at, recorded_at, direction, kind, amount_kobo, fee_kobo, currency, status, channel, reference,
-			COALESCE(event, ''), payer, source, COALESCE(note, ''), corrects FROM money_entries
+			COALESCE(event, ''), payer, source, COALESCE(note, ''), corrects, label_id FROM money_entries
 			WHERE tenant_id = $1 AND mirrored_at IS NULL ORDER BY recorded_at, id LIMIT 200`, tenant)
 		if err != nil {
 			return err
@@ -259,7 +262,7 @@ func (m *Mirror) Tenant(ctx context.Context, tenant uuid.UUID) error {
 			var w waiting
 			e := &w.e
 			err := r.Scan(&e.ID, &e.OccurredAt, &e.RecordedAt, &e.Direction, &e.Kind, &e.AmountKobo, &e.FeeKobo, &e.Currency, &e.Status, &e.Channel,
-				&e.Reference, &e.Event, &w.payer, &e.Source, &e.Note, &e.Corrects)
+				&e.Reference, &e.Event, &w.payer, &e.Source, &e.Note, &e.Corrects, &e.LabelID)
 			return w, err
 		})
 		if err != nil {
@@ -288,6 +291,36 @@ func (m *Mirror) Tenant(ctx context.Context, tenant uuid.UUID) error {
 	}
 	for _, w := range list {
 		if err := m.copy(ctx, tenant, w.e); err != nil {
+			return err
+		}
+	}
+	return m.erasures(ctx, tenant)
+}
+
+// erasures replaces the payer of kept rows whose payer was erased after
+// they were copied (queued by the erasure trigger, 00382). An entry is
+// otherwise never changed; this write is Taskiem's alone.
+func (m *Mirror) erasures(ctx context.Context, tenant uuid.UUID) error {
+	var ids []uuid.UUID
+	if err := db.InTenantTx(ctx, m.Log.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT entry_id FROM money_log_erasures WHERE tenant_id = $1 ORDER BY queued_at, entry_id LIMIT 200`, tenant)
+		if err != nil {
+			return err
+		}
+		ids, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		return err
+	}); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if _, err := m.Rows.Call(ctx, tenant, "update_rows", map[string]any{"table": Table, "set": map[string]any{"payer": pii.Erased},
+			"filters": []any{map[string]any{"column": "entry_id", "op": "eq", "value": id.String()}}, "max_affected": 1, "return": "minimal"}, erasedKey(id)); err != nil {
+			return err
+		}
+		if err := db.InTenantTx(ctx, m.Log.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `DELETE FROM money_log_erasures WHERE tenant_id = $1 AND entry_id = $2`, tenant, id)
+			return err
+		}); err != nil {
 			return err
 		}
 	}
@@ -361,7 +394,16 @@ func Row(e Entry) map[string]any {
 	if e.Corrects != nil {
 		r["corrects"] = e.Corrects.String()
 	}
+	if e.LabelID != nil {
+		r["label_id"] = e.LabelID.String()
+	}
 	return r
+}
+
+// erasedKey is the idempotency key of an entry's payer being erased.
+func erasedKey(id uuid.UUID) string {
+	h := sha256.Sum256([]byte("taskiem money_log erased " + id.String()))
+	return "tsk-" + base64.RawURLEncoding.EncodeToString(h[:])[:22]
 }
 
 // rowKey is the insert's idempotency key: the same entry, the same key.

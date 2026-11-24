@@ -64,11 +64,17 @@ func TestInviteOnWhatsApp(t *testing.T) {
 	if got := w.press(t, ada, terms[0].Buttons[0].ID); len(got) != 1 || !strings.Contains(got[0].Text, "You are in Acme") {
 		t.Fatalf("joined: %+v", got)
 	}
+	// The owner is told in the background: delivered before the owner says
+	// anything more, or it lands among the replies to what they say next.
+	w.srv.WaitBackground()
+	if told := w.graph.Last(t, ownerNumber); !strings.Contains(told.Text, "joined Acme") {
+		t.Fatalf("the owner told: %+v", told)
+	}
 	user, _ := w.wa.UserOf(ctx, ada)
 	if user == uuid.Nil || memberRoles(t, w.world, user, "Acme") != "viewer" {
 		t.Fatalf("membership: %v %q", user, memberRoles(t, w.world, user, "Acme"))
 	}
-	if got := w.say(t, ada, "help"); !strings.Contains(got, "status") {
+	if got := w.say(t, ada, "help all"); !strings.Contains(got, "status") {
 		t.Fatalf("the conversation: %q", got)
 	}
 	// Pressed again: it was answered.
@@ -190,7 +196,7 @@ func TestSlackInviteAndAskToJoin(t *testing.T) {
 	}
 	n := len(w.fake.to("U0BEN"))
 	w.event(t, dm("Ev3", "U0BEN", "help"), slackSecret)
-	if s := w.says("U0BEN", n); len(s) != 1 || !strings.Contains(s[0], "status") {
+	if s := w.says("U0BEN", n); len(s) != 1 || !strings.Contains(s[0], "Pick a topic") {
 		t.Fatalf("Ben's conversation: %v", s)
 	}
 

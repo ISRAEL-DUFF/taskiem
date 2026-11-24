@@ -1,40 +1,148 @@
+import type { ExploreCard } from "./explore";
+import type { SavedCard } from "./saved";
 // Mentions in the composer (business links L4, §5.5): "@" suggests linked
 // businesses, "#" items with their unit and price; a pick puts the name
 // in the text and, in a conversation, a structured reference beside it.
 
 export interface Suggestion {
-  kind: "business" | "item";
+  /** A linked business, an item of a price list, a service, Taskiem, or
+   * a category of items (picking it opens them, filtered). */
+  kind:
+    | "business"
+    | "item"
+    | "service"
+    | "taskiem"
+    | "category"
+    | "invoice"
+    | "bill"
+    | "order"
+    | "purchase"
+    | "customer"
+    | "saved"
+    /** Save "mum"…: a name nothing has yet, to save as (saved objects S1). */
+    | "save-new";
   /** The link (a business) or the seller's item id. */
   id: string;
   name: string;
   /** A second line: "₦9,500 a bag", or the business. */
   sub?: string;
+  /** A short word on the right: "4 left". */
+  badge?: string;
+  /** A business we are not linked with, found in Explore: picking it
+   * shows its card (with Connect) rather than tagging it. */
+  explore?: ExploreCard;
+  /** An item's category ("Sneakers") and its words (the storefront's
+   * description): search reads both, after the name. */
+  category?: string;
+  words?: string;
+  /** A saved thing (saved objects S1): its kind, and a text's words, which
+   * a pick puts in the box in place of what was typed. */
+  savedKind?: string;
+  body?: string;
+  /** Whose saved thing it is: the person's own, or their business's. */
+  savedOwner?: "mine" | "business";
+  /** A saved thing that holds what is sensitive (saved.MakeCard's rule):
+   * sharing it asks first. */
+  savedSensitive?: boolean;
+  /** A saved file's name and type: picked, it is attached as itself. */
+  savedFile?: { name: string; type: string };
 }
 
 /** A mention as a message stores it. */
 export interface Mention {
-  kind: "business" | "item";
+  kind: "business" | "item" | "service" | "invoice" | "bill" | "order" | "purchase" | "saved";
   name: string;
   link?: string;
   item_id?: string;
   unit?: string;
   price_kobo?: number;
+  /** One of the sender's own services, and how long it takes. */
+  service_id?: string;
+  minutes?: number;
+  /** An invoice or an order between the two businesses: our id for it
+   * (on our copy only), and its status when it was named. */
+  ref?: string;
+  status?: string;
+  /** A saved thing shared (saved objects S1), as it was when sent. */
+  saved?: SavedCard;
 }
 
+/** What "/" picks to tag (phase 2 additions): "/invoice" (invoices and
+ * bills), "/bill", "/order" (orders and purchases), "/purchase",
+ * "/product", "/customer", then a space or "/" and the words to find. */
+export type RefKind = "invoice" | "bill" | "order" | "purchase" | "product" | "customer";
+
+export const REF_KINDS: RefKind[] = ["invoice", "bill", "order", "purchase", "product", "customer"];
+
+/** The picker's heading for each. */
+export const REF_LABEL: Record<RefKind, string> = {
+  invoice: "Invoices and bills",
+  bill: "Bills",
+  order: "Orders",
+  purchase: "Your orders to suppliers",
+  product: "Products",
+  customer: "Customers",
+};
+
 export interface MentionQuery {
-  mark: "@" | "#";
+  mark: "@" | "#" | "/";
   query: string;
   /** Where the mark is in the text. */
   start: number;
+  /** "/": what is being picked; none for "/mum", which looks for a saved
+   * thing by its name (saved objects §15 1). */
+  kind?: RefKind;
+}
+
+const REF_STATUS: Record<string, string> = {
+  sent: "sent",
+  open: "to pay",
+  part_paid: "part-paid",
+  paid: "paid",
+  overdue: "overdue",
+  void: "cancelled",
+  disputed: "questioned",
+  paying: "being paid",
+  received: "new",
+  changed: "changed",
+  accepted: "accepted",
+  dispatched: "on the way",
+  delivered: "delivered",
+  declined: "declined",
+  cancelled: "cancelled",
+  confirmed: "confirmed",
+  part_received: "part received",
+};
+
+/** An invoice's or an order's status, as a reference shows it. */
+export const refStatusWords = (s: string) =>
+  REF_STATUS[s] ?? s.replaceAll("_", " ");
+
+/** "/invoice ada" or "/invoices/ada": the kind and the words, or null. */
+function refQuery(after: string): { kind: RefKind; query: string } | null {
+  const m = /^(invoice|bill|order|purchase|product|customer)s?[/ ](.*)$/i.exec(after);
+  if (!m) return null;
+  return { kind: (m[1] ?? "").toLowerCase() as RefKind, query: m[2] ?? "" };
 }
 
 /** The mention being typed before the caret: "@" or "#" at the start or
  * after a space, then up to 40 characters on the line; null when none. */
 export function mentionQuery(text: string, caret: number): MentionQuery | null {
   const before = text.slice(0, caret);
-  for (let i = before.length - 1; i >= 0 && before.length - i <= 41; i--) {
+  for (let i = before.length - 1; i >= 0 && before.length - i <= 51; i--) {
     const ch = before.charAt(i);
     if (ch === "\n") return null;
+    if (ch === "/" && (i === 0 || /\s|\(/.test(before.charAt(i - 1)))) {
+      const after = before.slice(i + 1);
+      const r = refQuery(after);
+      if (r) return { mark: "/", query: r.query, start: i, kind: r.kind };
+      // "/mum": a word that names no document looks for a saved thing.
+      // ("/invoice" alone stays the tool's.)
+      if (/^[a-z0-9][a-z0-9_-]{0,31}$/i.test(after) && !/^(invoice|bill|order|purchase|product|customer)s?$/i.test(after)) return { mark: "/", query: after, start: i };
+      continue;
+    }
+    // "@" and "#" look back 40 characters; "/invoice " a little further.
+    if (before.length - i > 41) continue;
     if (
       (ch === "@" || ch === "#") &&
       (i === 0 || /\s|\(/.test(before.charAt(i - 1)))
@@ -45,23 +153,68 @@ export function mentionQuery(text: string, caret: number): MentionQuery | null {
   return null;
 }
 
+/** Whether a word of the text starts with q. */
+const wordStarts = (text: string, q: string) =>
+  text.startsWith(q) || text.split(/\s+/).some((w) => w.startsWith(q));
+
 /** The suggestions a query fits: a word of the name starting with it
- * first, then the name holding it; six at most. */
-export function suggest(list: Suggestion[], query: string): Suggestion[] {
+ * first, then the name holding it, then those whose category or words
+ * hold it ("nike" finds a shoe whose description says Nike); six at most. */
+export function suggest(list: Suggestion[], query: string, limit: number | null = 6): Suggestion[] {
   const q = query.trim().toLowerCase();
   const starts: Suggestion[] = [];
   const holds: Suggestion[] = [];
+  const about: Suggestion[] = [];
   for (const s of list) {
     const n = s.name.toLowerCase();
-    if (
-      q === "" ||
-      n.startsWith(q) ||
-      n.split(/\s+/).some((w) => w.startsWith(q))
-    )
-      starts.push(s);
+    if (q === "" || wordStarts(n, q)) starts.push(s);
     else if (n.includes(q)) holds.push(s);
+    else if (
+      (s.category ?? "").toLowerCase().includes(q) ||
+      (s.words ?? "").toLowerCase().includes(q)
+    )
+      about.push(s);
   }
-  return [...starts, ...holds].slice(0, 6);
+  const all = [...starts, ...holds, ...about];
+  return limit === null ? all : all.slice(0, limit);
+}
+
+/** The categories of a list with how many items each has, the most used
+ * first (then by name). */
+export function categoriesOf(
+  list: { category?: string }[],
+): { name: string; count: number }[] {
+  const n = new Map<string, { name: string; count: number }>();
+  for (const it of list) {
+    const c = it.category?.trim();
+    if (!c) continue;
+    const k = c.toLowerCase();
+    const got = n.get(k);
+    if (got) got.count++;
+    else n.set(k, { name: c, count: 1 });
+  }
+  return [...n.values()].sort(
+    (a, b) => b.count - a.count || a.name.localeCompare(b.name),
+  );
+}
+
+/** The categories a query names, as the picker's first rows: "Sneakers ·
+ * 48 items"; two at most, none for an empty query. */
+export function categorySuggestions(
+  categories: { name: string; count: number }[],
+  query: string,
+): Suggestion[] {
+  const q = query.trim().toLowerCase();
+  if (q === "") return [];
+  return categories
+    .filter((c) => wordStarts(c.name.toLowerCase(), q))
+    .slice(0, 2)
+    .map((c) => ({
+      kind: "category" as const,
+      id: c.name,
+      name: c.name,
+      sub: `${c.count} ${c.count === 1 ? "item" : "items"}`,
+    }));
 }
 
 /** The text with the query replaced by the picked name and a space, and
@@ -71,8 +224,36 @@ export function insertMention(
   q: MentionQuery,
   caret: number,
   name: string,
+  kind?: string,
 ): { text: string; caret: number } {
-  const head = text.slice(0, q.start) + q.mark + name + " ";
+  // A thing picked with "/" is written as "#" writes an item: "#INV-0104";
+  // a saved thing found with "/mum" as its "@mum". Picked under another
+  // chip of the picker (menus-everywhere.md §7): a business or a saved
+  // thing as "@", an invoice or an order as "#" (a customer as typed: in a
+  // group "@" names a member).
+  const mark =
+    kind === "business" || kind === "saved"
+      ? "@"
+      : kind === "invoice" || kind === "bill" || kind === "order" || kind === "purchase"
+        ? "#"
+        : q.mark === "/"
+          ? q.kind
+            ? "#"
+            : "@"
+          : q.mark;
+  const head = text.slice(0, q.start) + mark + name + " ";
+  return { text: head + text.slice(caret), caret: head.length };
+}
+
+/** The text with the query replaced by words (a saved text's), and where
+ * the caret goes: after them, with nothing of the "@" left. */
+export function insertWords(
+  text: string,
+  q: MentionQuery,
+  caret: number,
+  words: string,
+): { text: string; caret: number } {
+  const head = text.slice(0, q.start) + words;
   return { text: head + text.slice(caret), caret: head.length };
 }
 
@@ -84,9 +265,13 @@ export function stillNamed<T extends { kind: string; name: string }>(
   const lower = text.toLowerCase();
   const out: T[] = [];
   for (const p of picked) {
-    const token = (p.kind === "item" ? "#" : "@") + p.name.toLowerCase();
+    const name = p.name.toLowerCase();
+    // An item may be written "#Rice" or, from the picker, "@Rice".
+    const named =
+      lower.includes("@" + name) ||
+      (p.kind !== "business" && lower.includes("#" + name));
     if (
-      lower.includes(token) &&
+      named &&
       !out.some((o) => o.kind === p.kind && o.name === p.name)
     )
       out.push(p);
@@ -103,14 +288,16 @@ export function mentionParts(
   const lower = text.toLowerCase();
   const found: { at: number; len: number; m: Mention }[] = [];
   for (const m of mentions) {
-    const token = (m.kind === "item" ? "#" : "@") + m.name;
-    let from = 0;
-    for (;;) {
-      const at = lower.indexOf(token.toLowerCase(), from);
-      if (at < 0) break;
-      if (!found.some((f) => at < f.at + f.len && f.at < at + token.length))
-        found.push({ at, len: token.length, m });
-      from = at + token.length;
+    const tokens = m.kind === "business" ? ["@" + m.name] : ["#" + m.name, "@" + m.name];
+    for (const token of tokens) {
+      let from = 0;
+      for (;;) {
+        const at = lower.indexOf(token.toLowerCase(), from);
+        if (at < 0) break;
+        if (!found.some((f) => at < f.at + f.len && f.at < at + token.length))
+          found.push({ at, len: token.length, m });
+        from = at + token.length;
+      }
     }
   }
   found.sort((a, b) => a.at - b.at);
@@ -124,3 +311,103 @@ export function mentionParts(
   if (pos < text.length) out.push({ text: text.slice(pos) });
   return out;
 }
+
+/** A group of the picker: "Products", "Services", "Businesses", or the
+ * Taskiem row (no heading). */
+export interface SuggestionGroup {
+  label: string;
+  items: Suggestion[];
+}
+
+export const TASKIEM: Suggestion = {
+  kind: "taskiem",
+  id: "taskiem",
+  name: "Taskiem",
+  sub: "Ask Taskiem to do it for you",
+};
+
+/** The picker's groups for "@" with chat tools (chat-tools.md §3): things
+ * first (products, services), then businesses, then Taskiem; a few of
+ * each, the ones a word of the name starts with first. */
+export function groupSuggestions(
+  query: string,
+  src: {
+    items: Suggestion[];
+    services?: Suggestion[];
+    businesses: Suggestion[];
+    /** Found in Explore for these words: not linked, after the linked. */
+    unlinked?: Suggestion[];
+    /** The categories offered (the business's own, in its Taskiem chat);
+     * else the items' own. */
+    categories?: { name: string; count: number }[];
+    /** The person's saved things, then the business's (saved objects). */
+    saved?: Suggestion[];
+  },
+  taskiem: boolean,
+): SuggestionGroup[] {
+  const out: SuggestionGroup[] = [];
+  const add = (label: string, list: Suggestion[] | undefined, n: number, more: Suggestion[] = []) => {
+    const got = suggest(list ?? [], query).slice(0, n);
+    const names = new Set(got.map((s) => s.name.toLowerCase()));
+    const all = [...got, ...more.filter((s) => !names.has(s.name.toLowerCase())).slice(0, 3)];
+    if (all.length > 0) out.push({ label, items: all });
+  };
+  // A category the words name comes first: it opens its items, filtered.
+  const cats = categorySuggestions(src.categories ?? categoriesOf(src.items), query);
+  if (cats.length > 0) out.push({ label: "Categories", items: cats });
+  add("Products", src.items, 4);
+  add("Services", src.services, 3);
+  add("Saved", src.saved, 4);
+  add("Businesses", src.businesses, 4, src.unlinked);
+  // Taskiem is always offered last, as the designs show: it can do what
+  // the words ask, whatever they name.
+  if (taskiem) out.push({ label: "", items: [TASKIEM] });
+  return out;
+}
+
+/** A business found in Explore, as the picker lists it: "Not linked ·
+ * Yaba" (or where the asking stands). Linked ones and those we blocked
+ * are not offered here. */
+export function unlinkedSuggestion(c: ExploreCard): Suggestion | null {
+  const where = c.area ? ` · ${c.area}` : "";
+  switch (c.state) {
+    case "none":
+    case "ended":
+    case "not_accepted":
+      return { kind: "business", id: c.business, name: c.name, sub: `Not linked${where}`, explore: c };
+    case "requested":
+      return { kind: "business", id: c.business, name: c.name, sub: "Not linked · you asked to link", explore: c };
+    case "asked_us":
+      return { kind: "business", id: c.business, name: c.name, sub: "Not linked · asked you to link", explore: c };
+    default:
+      return null;
+  }
+}
+
+/** The picker's chips (menus-everywhere.md §7), in its order. */
+export const CHIPS = {
+  all: "All",
+  product: "Products",
+  service: "Services",
+  invoice: "Invoices",
+  order: "Orders",
+  customer: "Customers",
+  business: "Businesses",
+  saved: "Saved",
+} as const;
+export type Chip = keyof typeof CHIPS;
+
+/** The chip "/invoice" and the like open on. */
+export function chipOf(kind?: RefKind): Chip {
+  if (!kind) return "all";
+  if (kind === "bill") return "invoice";
+  if (kind === "purchase") return "order";
+  return kind;
+}
+
+/** The kinds a chip searches on the server. */
+export const CHIP_KINDS: Partial<Record<Chip, string>> = {
+  invoice: "invoice,bill",
+  order: "order,purchase",
+  customer: "customer",
+};

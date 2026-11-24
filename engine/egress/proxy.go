@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -217,27 +218,50 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request, g *grant) {
 		idle = 2 * time.Minute
 	}
 	done := make(chan struct{}, 2)
+	// The tunnel is idle only when neither direction moves: a client
+	// downloading sends nothing for minutes, and half-closing the
+	// upstream then would read to many servers as the client going away.
+	var last atomic.Int64
+	last.Store(time.Now().UnixNano())
 	pipe := func(dst, src net.Conn, r io.Reader) {
 		b := make([]byte, 32<<10)
 		for {
 			_ = src.SetReadDeadline(time.Now().Add(idle))
 			n, err := r.Read(b)
 			if n > 0 {
+				last.Store(time.Now().UnixNano())
 				if _, werr := dst.Write(b[:n]); werr != nil {
 					break
 				}
+			}
+			if ne := net.Error(nil); errors.As(err, &ne) && ne.Timeout() {
+				if time.Since(time.Unix(0, last.Load())) < idle {
+					continue // the other direction is busy
+				}
+				// Idle both ways: close the whole tunnel, which ends the
+				// other pipe too.
+				_ = client.Close()
+				_ = upstream.Close()
+				break
 			}
 			if err != nil {
 				break
 			}
 		}
+		// The source ended (EOF) or failed: pass the half-close on.
 		if tc, ok := dst.(interface{ CloseWrite() error }); ok {
 			_ = tc.CloseWrite()
 		}
 		done <- struct{}{}
 	}
-	// Bytes the client sent after its CONNECT request are in buf.
-	go pipe(upstream, client, buf)
+	// Bytes the client sent after its CONNECT request are in buf; past
+	// them, read the client directly, so a read deadline that passed is
+	// never a buffered error.
+	var fromClient io.Reader = client
+	if n := buf.Reader.Buffered(); n > 0 {
+		fromClient = io.MultiReader(io.LimitReader(buf.Reader, int64(n)), client)
+	}
+	go pipe(upstream, client, fromClient)
 	go pipe(client, upstream, upstream)
 	<-done
 	<-done

@@ -66,10 +66,26 @@ func (c *client) lookupBVN(ctx context.Context, req connector.Request) (connecto
 	if err != nil {
 		return connector.Response{}, err
 	}
-	if inc, _ := req.Input["include_image"].(bool); !inc {
-		delete(e, "image")
+	fields := []string{"bvn", "first_name", "middle_name", "last_name", "date_of_birth", "gender", "phone_number1"}
+	if inc, _ := req.Input["include_image"].(bool); inc {
+		fields = append(fields, "image")
 	}
-	return connector.Response{Output: e}, nil
+	return connector.Response{Output: only(e, fields...)}, nil
+}
+
+// only is the output built from the named fields of Dojah's entity, the
+// ones the manifest's output schema lists and declares personal. Dojah's
+// entity carries more (addresses, a second phone, an email, whatever it
+// adds later), and a field passed through without a declaration would be
+// stored in run history unsealed.
+func only(e map[string]any, fields ...string) map[string]any {
+	out := make(map[string]any, len(fields))
+	for _, k := range fields {
+		if v, ok := e[k]; ok && v != nil {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 func (c *client) lookupNIN(ctx context.Context, req connector.Request) (connector.Response, error) {
@@ -78,8 +94,7 @@ func (c *client) lookupNIN(ctx context.Context, req connector.Request) (connecto
 	if err != nil {
 		return connector.Response{}, err
 	}
-	delete(e, "photo")
-	return connector.Response{Output: e}, nil
+	return connector.Response{Output: only(e, "nin", "first_name", "last_name", "date_of_birth")}, nil
 }
 
 func (c *client) balance(ctx context.Context, req connector.Request) (connector.Response, error) {

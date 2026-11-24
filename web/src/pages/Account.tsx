@@ -1,17 +1,9 @@
+import { PhoneSetting } from "./ChangeNumber";
 import { useState } from "react";
-import { del, get, post, put, type Invitation } from "../api";
+import { ApiError, del, get, post, put, type Invitation, type InvitationAccepted } from "../api";
 import { useAuth } from "../auth";
-import { addPasskey, passkeysSupported, proof } from "../passkeys";
-import {
-  ErrorBox,
-  Field,
-  Items,
-  PageHeader,
-  Row,
-  fmtTime,
-  useAction,
-  useLoad,
-} from "../ui";
+import { addPasskey, passkeysSupported, proof, stepUpAssert } from "../passkeys";
+import { ErrorBox, Field, Items, PageHeader, Row, fmtTime, useAction, useLoad, PasswordInput } from "../ui";
 import { ChangePassword } from "./Password";
 import { savedTheme, setTheme, type Theme } from "../theme";
 
@@ -26,7 +18,7 @@ interface Passkey {
 /** What the member types to prove it is them before changing a factor:
  * nothing when they have a passkey (the browser asks for it), else their
  * authenticator code or password. */
-function ProofField({
+export function ProofField({
   to,
   value,
   onChange,
@@ -53,8 +45,7 @@ function ProofField({
   if (f.password)
     return (
       <Field label={`Your password, to ${to}`}>
-        <input
-          type="password"
+        <PasswordInput
           autoComplete="current-password"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -62,6 +53,48 @@ function ProofField({
       </Field>
     );
   return null;
+}
+
+/** Offers a new confirmation link when a factor change was refused
+ * because the person's email is not confirmed yet: a password on an
+ * unconfirmed email may be one whoever added them chose. */
+export function ConfirmEmailFirst({ error }: { error: unknown }) {
+  const [sent, setSent] = useState("");
+  const act = useAction();
+  const reauth = error instanceof ApiError ? error.body.reauth : undefined;
+  if (!Array.isArray(reauth) || !reauth.includes("verify_email")) return null;
+  return (
+    <div className="notice" role="status" data-testid="confirm-email-first">
+      <p>
+        Confirm your email with the link we sent you, then try again. Until then
+        your password cannot add a passkey or authenticator.
+      </p>
+      <ErrorBox error={act.error} />
+      {sent ? (
+        <p>{sent}</p>
+      ) : (
+        <button
+          className="small"
+          disabled={act.busy}
+          onClick={() =>
+            void act.run(
+              async () =>
+                setSent(
+                  (
+                    await post<{ status?: string }>(
+                      "/v1/me/email/verify/resend",
+                    )
+                  ).status ?? "Your email is confirmed: try again.",
+                ),
+              false,
+            )
+          }
+        >
+          Send me a new link
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** The member's passkeys: sign-in and step-up with the device's lock. */
@@ -82,6 +115,7 @@ export function Passkeys({ onAdded }: { onAdded?: () => void }) {
         cannot be phished. It also answers step-up on approvals.
       </p>
       <ErrorBox error={list.error ?? act.error} />
+      <ConfirmEmailFirst error={act.error} />
       {list.data && list.data.passkeys.length > 0 && (
         <Items label="Passkeys">
           {list.data.passkeys.map((k) => (
@@ -181,77 +215,83 @@ interface WhatsAppBinding {
   dormant?: boolean;
 }
 
-/** The WhatsApp approval PIN: entered in a WhatsApp form, it confirms
- * decisions whose policy accepts it (step_up whatsapp_pin). */
-function WhatsAppPin({
-  pin,
-  onChange,
-}: {
-  pin: NonNullable<WhatsAppBinding["pin"]>;
-  onChange: () => void;
-}) {
+/** The person's one PIN (GET/PUT/DELETE /v1/me/pin): it approves on
+ * WhatsApp and pays small amounts in WhatsApp's form or the app's pad when a
+ * passkey is not to hand. Behind a passkey or an authenticator it pays at
+ * once; set without (a first PIN, or moments after signing in again) it
+ * pays 24 hours on. */
+interface MePin {
+  set: boolean;
+  set_at?: string;
+  locked_until?: string;
+  pays_from?: string;
+  change_without: boolean;
+  change_without_until?: string;
+}
+
+function YourPin() {
   const { me } = useAuth();
+  const pin = useLoad<MePin>(() => get<MePin>("/v1/me/pin"), []);
   const [value, setValue] = useState("");
+  const [again, setAgain] = useState("");
   const [typed, setTyped] = useState("");
   const act = useAction();
+  const p = pin.data;
   const strong = me?.factors?.passkey || me?.factors?.totp;
+  const waiting = p?.pays_from && new Date(p.pays_from).getTime() > Date.now();
+  // Without a passkey or an authenticator, only a first PIN or one changed
+  // moments after signing in again.
+  const may = !!p && (strong || p.change_without);
   return (
-    <div data-testid="whatsapp-pin">
-      <h3>Approval PIN</h3>
+    <section className="card" data-testid="your-pin">
+      <h2 style={{ marginTop: 0 }}>Your PIN</h2>
       <p className="hint">
-        Six digits you enter in WhatsApp to confirm approvals whose policy
-        allows a WhatsApp PIN. Policies asking for a passkey or authenticator
-        code still send you here. Five wrong PINs lock it for 15 minutes.
+        Six digits for when your passkey is not to hand: it approves on
+        WhatsApp, and pays up to ₦100,000 (₦200,000 a day) in WhatsApp&rsquo;s
+        form or the app. Taskiem never asks for it in a message. Five wrong
+        PINs lock it for 15 minutes.
       </p>
-      <ErrorBox error={act.error} />
-      {pin.set && (
+      <ErrorBox error={pin.error ?? act.error} />
+      {p?.set && (
         <div className="row">
-          <p className="grow">
+          <p className="grow" data-testid="your-pin-state">
             PIN set{" "}
-            {pin.set_at && <span className="hint">{fmtTime(pin.set_at)}</span>}
-            {pin.locked_until && (
-              <strong> · locked until {fmtTime(pin.locked_until)}</strong>
-            )}
+            {p.set_at && <span className="hint">{fmtTime(p.set_at)}</span>}
+            {waiting && p.pays_from && <> · can pay from {fmtTime(p.pays_from)}</>}
+            {p.locked_until && <strong> · locked until {fmtTime(p.locked_until)}</strong>}
           </p>
           <button
             className="danger"
             disabled={act.busy}
             onClick={() =>
-              confirm("Remove your WhatsApp PIN?") &&
-              void act.run(
-                async () => (await del("/v1/me/whatsapp/pin"), onChange()),
-                "PIN removed",
-              )
+              confirm("Remove your PIN?") &&
+              void act.run(async () => (await del("/v1/me/pin"), pin.reload()), "PIN removed")
             }
           >
             Remove
           </button>
         </div>
       )}
-      {strong ? (
+      {p && may && (
         <form
           className="row"
           style={{ alignItems: "flex-end" }}
           onSubmit={(e) => {
             e.preventDefault();
-            void act.run(
-              async () => (
-                await put("/v1/me/whatsapp/pin", {
-                  pin: value,
-                  ...(await proof(me?.factors, typed, "whatsapp.pin")),
-                }),
-                setValue(""),
-                setTyped(""),
-                onChange()
-              ),
-              "PIN saved",
-            );
+            void act.run(async () => {
+              if (value !== again) throw new Error("The two PINs are not the same.");
+              const body: Record<string, unknown> = { pin: value };
+              // Behind a passkey or an authenticator: it pays at once.
+              if (strong) Object.assign(body, await proof(me?.factors, typed, "pin.set"));
+              await put("/v1/me/pin", body);
+              setValue("");
+              setAgain("");
+              setTyped("");
+              pin.reload();
+            }, "PIN saved");
           }}
         >
-          <Field
-            label={pin.set ? "New PIN" : "PIN"}
-            hint="Not one digit repeated, nor a run like 123456"
-          >
+          <Field label={p.set ? "New PIN" : "PIN"} hint="Not one digit repeated, nor a run like 123456">
             <input
               type="password"
               inputMode="numeric"
@@ -261,18 +301,30 @@ function WhatsAppPin({
               onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
             />
           </Field>
-          <ProofField to="set the PIN" value={typed} onChange={setTyped} />
-          <button type="submit" disabled={act.busy || value.length !== 6}>
-            {pin.set ? "Change PIN" : "Set PIN"}
+          <Field label="The same PIN again">
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              maxLength={6}
+              value={again}
+              onChange={(e) => setAgain(e.target.value.replace(/\D/g, ""))}
+            />
+          </Field>
+          {strong && <ProofField to="set the PIN" value={typed} onChange={setTyped} />}
+          <button type="submit" disabled={act.busy || value.length !== 6 || again.length !== 6}>
+            {p.set ? "Change PIN" : "Set PIN"}
           </button>
         </form>
-      ) : (
-        <p className="hint">
-          Add a passkey or an authenticator first: the PIN stands in for them in
-          WhatsApp.
+      )}
+      {p && !strong && (
+        <p className="hint" data-testid="your-pin-hold">
+          {p.change_without
+            ? "Without a passkey, a PIN set now can pay from 24 hours on."
+            : "To change it without a passkey, sign out, sign in again and change it within 10 minutes; it can pay from 24 hours on."}
         </p>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -332,7 +384,13 @@ function Telegram() {
             className="danger"
             disabled={act.busy}
             onClick={() =>
-              confirm("Unlink Telegram?") &&
+              confirm(
+                /^owner\+.*@telegram\.taskiem\.invalid$/.test(
+                  me?.user?.email ?? "",
+                )
+                  ? "Unlink Telegram? Your account was made in a chat: its sign-in name comes from this Telegram account and is released with it. Add your email first, so you can still sign in."
+                  : "Unlink Telegram?",
+              ) &&
               void act.run(
                 async () => (
                   await del("/v1/me/telegram"),
@@ -531,7 +589,13 @@ function WhatsApp() {
             className="danger"
             disabled={act.busy}
             onClick={() =>
-              confirm("Unlink this number?") &&
+              confirm(
+                /^owner\+.*@phone\.taskiem\.invalid$/.test(
+                  me?.user?.email ?? "",
+                )
+                  ? "Unlink this number? Your account was made in a chat: its sign-in name comes from this number and is released with it. Add your email first, so you can still sign in."
+                  : "Unlink this number?",
+              ) &&
               void act.run(
                 async () => (await del("/v1/me/whatsapp"), b.reload()),
                 "WhatsApp unlinked",
@@ -621,8 +685,10 @@ function WhatsApp() {
           </button>
         </form>
       )}
-      {b.data.number && b.data.flows && b.data.pin && (
-        <WhatsAppPin pin={b.data.pin} onChange={b.reload} />
+      {b.data.number && b.data.flows && (
+        <p className="hint">
+          Your PIN, for approving here, is under <a href="#your-pin">Your PIN</a>.
+        </p>
       )}
     </section>
   );
@@ -692,7 +758,7 @@ export function Invitations({
   onJoined,
 }: {
   always?: boolean;
-  onJoined?: () => void;
+  onJoined?: (accepted: InvitationAccepted, invitation: Invitation) => void;
 }) {
   const list = useLoad(
     () => get<{ invitations: Invitation[] }>("/v1/me/invitations"),
@@ -730,11 +796,12 @@ export function Invitations({
               disabled={act.busy}
               onClick={() =>
                 void act.run(
-                  async () => (
-                    await post(`/v1/me/invitations/${i.tenant_id}/accept`),
-                    onJoined ? onJoined() : list.reload()
-                  ),
-                  "Joined",
+                  async () => {
+                    const r = await post<InvitationAccepted>(`/v1/me/invitations/${i.tenant_id}/accept`);
+                    if (onJoined) onJoined(r, i);
+                    else list.reload();
+                  },
+                  onJoined ? false : "Joined",
                 )
               }
             >
@@ -780,10 +847,21 @@ export function Account() {
         description="Your sign-in methods, invitations, and linked WhatsApp number, Telegram account and Slack."
       />
       <Appearance />
+      {me?.user && (
+        <section className="card">
+          <h2 style={{ marginTop: 0 }}>Phone</h2>
+          <PhoneSetting />
+        </section>
+      )}
       <Invitations />
       <AddEmail />
       <ChangePassword />
+      <ChatSignIn />
       <Passkeys />
+      <PasskeyOnly />
+      <div id="your-pin">
+        <YourPin />
+      </div>
       <WhatsApp />
       <Telegram />
       <Slack />
@@ -795,6 +873,7 @@ export function Account() {
           fifteen minutes lock codes out for fifteen minutes.
         </p>
         <ErrorBox error={act.error} />
+        <ConfirmEmailFirst error={act.error} />
         {me?.totp && !pending && (
           <>
             <p>
@@ -906,7 +985,79 @@ export function Account() {
 }
 
 /** Light, dark, or the device's setting; kept in this browser (theme.ts). */
-function Appearance() {
+/** "Only sign in with my passkey" (docs/spec/optional-passkeys.md §4):
+ * off by default; on and off are each confirmed with the passkey, and it
+ * needs one to be on. */
+function PasskeyOnly() {
+  const { me, refresh } = useAuth();
+  const act = useAction();
+  if (!me?.user || !me.factors) return null;
+  const on = !!me.user.passkey_only;
+  const has = !!me.factors.passkey;
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Only sign in with my passkey</h2>
+      <p className="hint">
+        {on
+          ? "On: your password and your chat no longer sign you in on the web; only your passkey does. Turning it off needs your passkey."
+          : has
+            ? "Off: you can sign in with your password, your chat or your passkey. Turn it on so only your passkey works, even if your password is found out."
+            : "Add a passkey above first. Then you can choose to sign in only with it."}
+      </p>
+      <ErrorBox error={act.error} />
+      {(has || on) && (
+        <button
+          type="button"
+          disabled={act.busy || !passkeysSupported()}
+          onClick={() =>
+            void act.run(async () => {
+              const passkey = await stepUpAssert("account.reauth", on ? "passkey_only.off" : "passkey_only.on");
+              await put("/v1/me/passkey-only", { on: !on, passkey });
+              await refresh();
+            }, false)
+          }
+        >
+          {on ? "Turn off" : "Turn on"}
+        </button>
+      )}
+    </section>
+  );
+}
+
+/** Signing in on the web with a code or link sent to the person's WhatsApp
+ * or Telegram (docs/spec/chat-sign-in.md): on by default; off, no code is
+ * sent and links from chat are refused. */
+function ChatSignIn() {
+  const { me, refresh } = useAuth();
+  const act = useAction();
+  const on = me?.user?.chat_signin;
+  if (on === undefined) return null;
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Sign in with WhatsApp or Telegram</h2>
+      <p className="hint">
+        {on
+          ? "You can sign in here with a code sent to your WhatsApp or Telegram, or by sending sign in to Taskiem in your chat. Each time, your chat is told."
+          : "Off: no code is sent to your chat, and sign-in links from your chat do not work."}
+      </p>
+      <ErrorBox error={act.error} />
+      <button
+        type="button"
+        disabled={act.busy}
+        onClick={() =>
+          void act.run(async () => {
+            await put("/v1/me/chat-signin", { on: !on });
+            await refresh();
+          }, false)
+        }
+      >
+        {on ? "Turn off" : "Turn on"}
+      </button>
+    </section>
+  );
+}
+
+export function Appearance() {
   const [theme, set] = useState<Theme>(savedTheme);
   const choices: [Theme, string][] = [
     ["light", "Light"],

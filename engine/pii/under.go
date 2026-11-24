@@ -45,7 +45,7 @@ func IsTombstone(env map[string]any) bool {
 }
 
 // Under is a cipher that seals free text and names under one person's
-// subject as well as their own (decision 0062 P2): in a run started by a
+// subject as well as their own (decision 0074 P2): in a run started by a
 // customer's message, their words, the transcript of their voice note and
 // the replies made from them are all erased with that customer, wherever
 // they were copied in the run's history or archive. Each such value is an

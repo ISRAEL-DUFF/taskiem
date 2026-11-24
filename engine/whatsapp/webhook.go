@@ -66,6 +66,10 @@ type Inbound struct {
 	// (WhatsApp's context.id; Telegram's reply_to_message): a reply in a
 	// linked business's conversation (business links L3).
 	Quoted string
+	// ProfileName is the name the sender gave WhatsApp (contacts.profile),
+	// as WhatsApp sends it with the message: what a business's customer is
+	// called until its own book names them.
+	ProfileName string
 }
 
 // MapsLink is a latitude and longitude as a maps link.
@@ -106,6 +110,12 @@ func Parse(body []byte) ([]Inbound, error) {
 					Metadata struct {
 						PhoneNumberID string `json:"phone_number_id"`
 					} `json:"metadata"`
+					Contacts []struct {
+						Profile struct {
+							Name string `json:"name"`
+						} `json:"profile"`
+						WaID string `json:"wa_id"`
+					} `json:"contacts"`
 					Messages []struct {
 						ID      string `json:"id"`
 						From    string `json:"from"`
@@ -175,6 +185,11 @@ func Parse(body []byte) ([]Inbound, error) {
 			}
 			for _, m := range c.Value.Messages {
 				in := Inbound{ID: m.ID, From: m.From, PhoneNumberID: c.Value.Metadata.PhoneNumberID, Type: m.Type, Quoted: m.Context.ID}
+				for _, k := range c.Value.Contacts {
+					if k.WaID == m.From {
+						in.ProfileName = k.Profile.Name
+					}
+				}
 				switch m.Type {
 				case "text":
 					in.Text = m.Text.Body
@@ -265,6 +280,70 @@ func ParseTemplateStatuses(body []byte) ([]TemplateStatusUpdate, error) {
 				why = append(why, strings.TrimSpace(v.Other.Title+": "+v.Other.Description))
 			}
 			out = append(out, TemplateStatusUpdate{WABA: e.ID, Event: v.Event, MetaID: anyID(v.ID), Name: v.Name, Language: v.Language, Reason: strings.Join(why, "; ")})
+		}
+	}
+	return out, nil
+}
+
+// StatusUpdate is WhatsApp's word on a message a number sent: sent,
+// delivered, read or failed (with its reason).
+type StatusUpdate struct {
+	PhoneNumberID string
+	ID            string // the wamid of the message sent
+	Status        string
+	Failure       string
+}
+
+// ParseStatuses reads the statuses of messages a number sent, from a
+// messages webhook (value.statuses); none when it carries none.
+func ParseStatuses(body []byte) ([]StatusUpdate, error) {
+	var d struct {
+		Entry []struct {
+			Changes []struct {
+				Field string `json:"field"`
+				Value struct {
+					Metadata struct {
+						PhoneNumberID string `json:"phone_number_id"`
+					} `json:"metadata"`
+					Statuses []struct {
+						ID     string `json:"id"`
+						Status string `json:"status"`
+						Errors []struct {
+							Code    int    `json:"code"`
+							Title   string `json:"title"`
+							Message string `json:"message"`
+						} `json:"errors"`
+					} `json:"statuses"`
+				} `json:"value"`
+			} `json:"changes"`
+		} `json:"entry"`
+	}
+	if err := json.Unmarshal(body, &d); err != nil {
+		return nil, err
+	}
+	var out []StatusUpdate
+	for _, e := range d.Entry {
+		for _, c := range e.Changes {
+			if c.Field != "messages" {
+				continue
+			}
+			for _, st := range c.Value.Statuses {
+				switch st.Status {
+				case "sent", "delivered", "read", "failed":
+				default:
+					continue
+				}
+				u := StatusUpdate{PhoneNumberID: c.Value.Metadata.PhoneNumberID, ID: st.ID, Status: st.Status}
+				if len(st.Errors) > 0 {
+					u.Failure = st.Errors[0].Title
+					if st.Errors[0].Message != "" {
+						u.Failure = st.Errors[0].Message
+					}
+				}
+				if u.ID != "" {
+					out = append(out, u)
+				}
+			}
 		}
 	}
 	return out, nil

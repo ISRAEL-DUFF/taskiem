@@ -88,7 +88,7 @@ var (
 		Name: "taskiem_otp", Category: "AUTHENTICATION",
 		Body: "{{1}} is your verification code. For your security, do not share this code. This code expires in 10 minutes.",
 		Vars: []string{"code"}, Examples: []string{"123456"}, Buttons: []TemplateButton{{Type: "copy_code", Text: "Copy code"}},
-		Purpose: "The code that binds a number to a Taskiem account (Account > WhatsApp).",
+		Purpose: "The code that binds a number to a Taskiem account (Account > WhatsApp), and that signs in on the web with WhatsApp.",
 	}
 	TplApprovalRequest = Template{
 		Name: "taskiem_approval_request", Category: "UTILITY",
@@ -150,12 +150,35 @@ var (
 		Buttons:  []TemplateButton{{Type: "url", Text: "Open", Host: HostApp, Path: "/chat"}},
 		Purpose:  "A message from a linked business in the conversation between them, to the people who write in it, outside the window; {{2}} is the sender's first name and the words on one line (or what was sent: a photo, a voice note, a file), or 'open the chat' when they are not shown.",
 	}
+	// A business's reply to a customer who wrote to its own number
+	// (chat-five-more-flows.md, customers' conversations), once the 24
+	// hours since they last wrote have passed: their answer reopens the
+	// conversation, as any message of theirs does.
+	TplCustomerReply = Template{
+		Name: "taskiem_customer_reply", Category: "UTILITY",
+		Body:     "[{{1}}] Reply to your message: {{2}} Answer here to carry on.",
+		Vars:     []string{"business", "message"},
+		Examples: []string{"Mama Put Kitchen", "Yes, we deliver to Yaba. It is ₦1,500."},
+		Purpose:  "A reply from the business to a customer who wrote to its own number, sent after the 24 hours since they last wrote; {{2}} is the reply on one line.",
+	}
 	TplUpdate = Template{
 		Name: "taskiem_update", Category: "UTILITY",
 		Body:     "[{{1}}] Update on {{2}}: {{3}}",
 		Vars:     []string{"tenant", "about", "message"},
 		Examples: []string{"Ada Stores", "your leave request", "Your leave is approved."},
 		Purpose:  "A workflow's message to someone outside the business who asked for updates (notify@1 message): about says what they asked about.",
+	}
+	// TplUpdateChat is TplUpdate with a button to chat with the business in
+	// the Taskiem app or the browser (docs/spec/taskiem-for-everyone.md §12):
+	// sent in its place outside the 24 hours only once the deployment says
+	// it is approved (TASKIEM_WA_UPDATE_CHAT_TEMPLATE).
+	TplUpdateChat = Template{
+		Name: "taskiem_update_chat", Category: "UTILITY",
+		Body:     "[{{1}}] Update on {{2}}: {{3}} Reply in the Taskiem app.",
+		Vars:     []string{"tenant", "about", "message"},
+		Examples: []string{"Ada Stores", "your order", "Your order is on its way."},
+		Buttons:  []TemplateButton{{Type: "url", Text: "Reply in Taskiem", Host: HostApp, Path: "/m/{{1}}", Var: "chat", Example: "k7m2p9q4wx"}},
+		Purpose:  "An update to someone outside the business, as taskiem_update, from a business that offers its chat link in updates: the button opens its chat link.",
 	}
 
 	// Money and schools (docs/invoices.md, docs/schools.md): what goes to
@@ -198,6 +221,18 @@ var (
 		Examples: []string{"Ada Stores", "Ada Obi", "viewer"},
 		Buttons:  []TemplateButton{{Type: "quick_reply", Text: "Join"}, {Type: "quick_reply", Text: "Stop"}},
 		Purpose:  "An invitation from an owner to join their business, to a number that may never have written to Taskiem; the quick replies carry Join and Stop.",
+	}
+	// A task for a staff member (docs/spec/chat-five-more-flows.md, flow
+	// 2), to someone who has not written in the last 24 hours: their
+	// business is the opt-in; the quick replies carry Done and Can't for
+	// this task.
+	TplStaffTask = Template{
+		Name: "taskiem_staff_task", Category: "UTILITY",
+		Body:     "[{{1}}] {{2}} asked you: {{3}}. Tap Done when it is done, or Can't and say why.",
+		Vars:     []string{"tenant", "giver", "task"},
+		Examples: []string{"Ada Kitchen", "Ada Obi", "count the cash float by 07:00"},
+		Buttons:  []TemplateButton{{Type: "quick_reply", Text: "Done"}, {Type: "quick_reply", Text: "Can't"}},
+		Purpose:  "A task an owner or manager gave a staff member, outside the window; the quick replies carry Done and Can't for this task.",
 	}
 	TplMatchQuestion = Template{
 		Name: "taskiem_match_question", Category: "UTILITY",
@@ -268,8 +303,8 @@ var (
 )
 
 // AllTemplates lists the library, for documentation, submission and tests.
-var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate, TplLinkMessage,
-	TplInvoice, TplBalance, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite}
+var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate, TplUpdateChat, TplLinkMessage, TplCustomerReply,
+	TplInvoice, TplBalance, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite, TplStaffTask}
 
 var placeholder = regexp.MustCompile(`\{\{(\d+)\}\}`)
 

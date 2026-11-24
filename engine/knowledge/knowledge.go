@@ -1,4 +1,4 @@
-// Package knowledge is what a business's assistant knows (decision 0062
+// Package knowledge is what a business's assistant knows (decision 0074
 // D12, plan V5b, docs/knowledge.md): its knowledge sources (the About my
 // business page, its storefront, a data table, its own verified website,
 // a file, a Google Sheet, its books' items) read as text, split into

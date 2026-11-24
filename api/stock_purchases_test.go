@@ -28,7 +28,7 @@ func withPurchases(w *world) *stock.Purchases {
 		w.srv.Messages = &sender.Queue{Vault: w.env.Vault, HashKey: hash}
 	}
 	w.srv.Purchases = &stock.Purchases{Pool: w.env.DB.App, Vault: w.env.Vault, Book: w.srv.Reach, Chat: []string{"whatsapp"}, Messages: w.srv.Messages,
-		PageBase: "https://forms.test", Stock: w.srv.Stock, Cost: w.srv.StockCost}
+		PageBase: "https://forms.test", Stock: w.srv.Stock}
 	return w.srv.Purchases
 }
 
@@ -186,10 +186,37 @@ func TestPurchaseOrdersByChat(t *testing.T) {
 	if r := w.say(t, on, "suppliers"); !strings.Contains(r, "• Dangote Depot: 0 open orders, owed ₦571,000") {
 		t.Fatalf("suppliers: %q", r)
 	}
+	// The money words naming the supplier owed ("paid 100,000 Dangote",
+	// "spent 100,000 on cement at Dangote") pay its order, not an expense
+	// of their own that the order's payment would count again (PR review
+	// fix).
+	// So do the bought words ("we bought from Dangote 100,000").
+	w.srv.ResetLimiters()
+	for _, text := range []string{"paid 100,000 Dangote", "spent 100,000 on cement at dangote", "we bought from Dangote 100,000",
+		"I bought cement from dangote for 100,000"} {
+		if r := w.say(t, on, text); !strings.Contains(r, "Paid *Dangote Depot* ₦100,000 by transfer, for "+ref+"?") {
+			t.Fatalf("%s: %q", text, r)
+		}
+		w.say(t, on, "cancel")
+	}
 	owner.must(200, "POST", "/v1/stock/purchases/"+id+"/pay", map[string]any{"amount_kobo": 57100000, "paid_how": "cash"}, "Idempotency-Key", "pay-2")
 	if out := owner.must(200, "GET", "/v1/stock/suppliers", nil)["suppliers"].([]any)[0].(map[string]any); out["owed_kobo"] != float64(0) {
 		t.Fatalf("paid up: %v", out)
 	}
+	// Paid up: the same words are an expense, labelled as typed.
+	if r := w.say(t, on, "paid 15,000 Dangote"); !strings.HasSuffix(r, "Record ₦15,000 spent on Dangote (Dangote)?") {
+		t.Fatalf("paid up, an expense: %q", r)
+	}
+	w.say(t, on, "no")
+	if r := w.say(t, on, "we bought from Dangote 15,000"); !strings.HasSuffix(r, "Record ₦15,000 spent on Dangote (Dangote)?") {
+		t.Fatalf("bought, paid up, an expense: %q", r)
+	}
+	w.say(t, on, "no")
+	// Bought in a unit is stock counted in, not an expense.
+	if r := w.say(t, on, "we bought 10 bags of rice at 1,500"); strings.Contains(r, "Record ₦") || !strings.Contains(r, "Add 10 bags to *Rice* (20 bags → 30 bags) at ₦1,500 each?") {
+		t.Fatalf("bought in a unit: %q", r)
+	}
+	w.say(t, on, "cancel")
 
 	// Above the limit, the one who drafts it does not send it.
 	owner.must(200, "PUT", "/v1/stock/settings", map[string]any{"purchase_limit_kobo": 100000}, "Idempotency-Key", "set")
@@ -211,7 +238,7 @@ func TestPurchaseOrdersByChat(t *testing.T) {
 	if out := owner.must(200, "POST", "/v1/stock/purchases/low", nil, "Idempotency-Key", "low-1"); len(out["purchases"].([]any)) != 0 {
 		t.Fatalf("low: %v", out)
 	}
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*order from Dangote*") {
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*order from Dangote*") {
 		t.Errorf("help: %q", r)
 	}
 }

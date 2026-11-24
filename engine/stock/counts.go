@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -124,6 +125,17 @@ func CountTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in CountIn) (Stoc
 		if l.Counted < 0 || l.Counted > MaxDelta {
 			return StockCount{}, nil, fmt.Errorf("%w: how many %s is a whole number, 0 or more", ErrCount, l.Item)
 		}
+		// What Taskiem has is the stock item's count now, whatever the
+		// screen showed: a sale since is not a loss.
+		c, ok, err := productstock.ItemOfTx(ctx, tx, tenant, l.ItemID)
+		if err != nil {
+			return StockCount{}, nil, err
+		}
+		l.Expected = nil
+		if ok {
+			n := c.Count
+			l.Expected = &n
+		}
 		if l.CostKobo != nil {
 			lost += l.Lost() * *l.CostKobo
 		}
@@ -160,21 +172,15 @@ func CountTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in CountIn) (Stoc
 	return c, moves, err
 }
 
-// RecordCount records a count, then sends its movements to the table.
+// RecordCount records a count and its movements in one transaction.
 func (s *Stock) RecordCount(ctx context.Context, tenant uuid.UUID, in CountIn) (StockCount, error) {
 	var c StockCount
-	var moves []Movement
-	if err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
+	err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
 		var err error
-		c, moves, err = CountTx(ctx, tx, tenant, in)
+		c, _, err = CountTx(ctx, tx, tenant, in)
 		return err
-	}); err != nil {
-		return c, err
-	}
-	for _, m := range moves {
-		_, _ = s.Apply(ctx, tenant, m.ID)
-	}
-	return c, nil
+	})
+	return c, err
 }
 
 // CountsTx lists the latest counts.
@@ -193,7 +199,7 @@ func CountsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]St
 
 // CostSQL is a movement m's item's cost in SQL: when it moved, else the
 // last one known; 0 when none was ever given.
-const CostSQL = `COALESCE(m.cost_kobo, (SELECT c.cost_kobo FROM stock_movements c WHERE c.tenant_id = m.tenant_id AND c.item_id = m.item_id
+const CostSQL = `COALESCE(m.cost_kobo, (SELECT c.cost_kobo FROM stock_movements c WHERE c.tenant_id = m.tenant_id AND c.stock_item_id = m.stock_item_id
 	AND c.cost_kobo IS NOT NULL ORDER BY c.created_at DESC LIMIT 1), 0)`
 
 // ShrinkItem is one item's movement over a period.
@@ -223,13 +229,13 @@ type Shrink struct {
 // the largest loss first.
 func ShrinkTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to time.Time) (Shrink, error) {
 	out := Shrink{From: from, To: to, Items: []ShrinkItem{}}
-	rows, err := tx.Query(ctx, `SELECT m.item_id, (array_agg(m.item ORDER BY m.done_at DESC))[1],
+	rows, err := tx.Query(ctx, `SELECT m.stock_item_id::text, (array_agg(m.item ORDER BY m.created_at DESC))[1],
 			COALESCE(sum(m.change) FILTER (WHERE m.reason = 'received' AND m.change > 0), 0),
-			COALESCE(-sum(m.change) FILTER (WHERE m.reason IN ('sale', 'order') AND m.change < 0), 0),
+			GREATEST(COALESCE(-sum(m.change) FILTER (WHERE m.reason = 'sale' AND m.change < 0 OR m.reason = 'order'), 0), 0),
 			COALESCE(-sum(m.change) FILTER (WHERE m.reason IN ('count', 'adjustment') AND m.change < 0), 0),
 			COALESCE(-sum(m.change * `+CostSQL+`) FILTER (WHERE m.reason IN ('count', 'adjustment') AND m.change < 0), 0)
-		FROM stock_movements m WHERE m.tenant_id = $1 AND m.status = 'done' AND m.done_at >= $2 AND m.done_at < $3 AND m.change IS NOT NULL
-		GROUP BY m.item_id`, tenant, from, to)
+		FROM stock_movements m WHERE m.tenant_id = $1 AND m.created_at >= $2 AND m.created_at < $3
+		GROUP BY m.stock_item_id`, tenant, from, to)
 	if err != nil {
 		return out, err
 	}

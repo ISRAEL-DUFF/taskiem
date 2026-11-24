@@ -7,7 +7,10 @@ import { triggerWords } from "../lib/home";
 export type StepNodeData = { step: Step; invalid: boolean; status?: string };
 export type StepFlowNode = Node<StepNodeData, "step">;
 /** What starts the workflow, drawn before its first steps; not a step. */
-export type TriggerFlowNode = Node<{ words: string; type: string; status?: string; detail?: string }, "trigger">;
+export type TriggerFlowNode = Node<
+  { words: string; type: string; status?: string; detail?: string },
+  "trigger"
+>;
 export const TRIGGER_NODE = "__trigger";
 
 /** What starts the workflow as a card left of the steps that need nothing,
@@ -15,22 +18,42 @@ export const TRIGGER_NODE = "__trigger";
 export function triggerCard(
   steps: GraphNode[],
   trigger: Trigger,
-  extra: Partial<Omit<TriggerFlowNode, "data">> & { data?: Partial<TriggerFlowNode["data"]> } = {},
-): { node: TriggerFlowNode; edges: { id: string; source: string; target: string; deletable: boolean; className: string }[] } | null {
+  extra: Partial<Omit<TriggerFlowNode, "data">> & {
+    data?: Partial<TriggerFlowNode["data"]>;
+  } = {},
+): {
+  node: TriggerFlowNode;
+  edges: {
+    id: string;
+    source: string;
+    target: string;
+    deletable: boolean;
+    className: string;
+  }[];
+} | null {
   const roots = steps.filter((n) => !(n.step.needs ?? []).length);
   if (roots.length === 0) return null;
   return {
     node: {
       id: TRIGGER_NODE,
       type: "trigger",
-      position: { x: Math.min(...steps.map((n) => n.position.x)) - 300, y: roots.reduce((a, n) => a + n.position.y, 0) / roots.length },
+      position: {
+        x: Math.min(...steps.map((n) => n.position.x)) - 300,
+        y: roots.reduce((a, n) => a + n.position.y, 0) / roots.length,
+      },
       draggable: false,
       deletable: false,
       selectable: false,
       ...extra,
       data: { words: triggerWords(trigger), type: trigger.type, ...extra.data },
     },
-    edges: roots.map((n) => ({ id: `${TRIGGER_NODE}->${n.id}`, source: TRIGGER_NODE, target: n.id, deletable: false, className: "trigger-edge" })),
+    edges: roots.map((n) => ({
+      id: `${TRIGGER_NODE}->${n.id}`,
+      source: TRIGGER_NODE,
+      target: n.id,
+      deletable: false,
+      className: "trigger-edge",
+    })),
   };
 }
 
@@ -41,13 +64,19 @@ export function summary(s: Step): string {
     case "capability":
       return `${words(s.uses)} · ${s.connection ? `via ${s.connection}` : "whichever rail is connected"}`;
     case "template":
-      return s.template !== undefined ? `${words(s.template.replaceAll("-", " "))} · its steps run here` : "One of your workflows · its steps run here";
+      return s.template !== undefined
+        ? `${words(s.template.replaceAll("-", " "))} · its steps run here`
+        : "One of your workflows · its steps run here";
     case "callback":
-      return s.config?.timeout ? `wait up to ${s.config.timeout} to be called back` : "wait to be called back";
+      return s.config?.timeout
+        ? `wait up to ${s.config.timeout} to be called back`
+        : "wait to be called back";
     case "ai":
       return `${s.config.history ? "answer in the conversation" : "ask the AI model"} · ${s.config.personal_data?.length ? `sees ${s.config.personal_data.join(", ")}` : "personal data hidden"}${s.config.fallback ? " · has a set reply" : ""}`;
     case "subflow":
-      return s.config.wait === false ? "start one of your workflows · carry on" : "run one of your workflows · wait for it";
+      return s.config.wait === false
+        ? "start one of your workflows · carry on"
+        : "run one of your workflows · wait for it";
     case "respond":
       return `answer ${s.config.status ?? 200}`;
     case "http":
@@ -57,14 +86,35 @@ export function summary(s: Step): string {
     case "container":
       return `${s.config.image.split("@")[0]?.split("/").pop() ?? "container"} · ${s.config.network === "egress" ? "egress" : "no network"}`;
     case "wait":
-      return "duration" in s.config ? `wait ${s.config.duration}` : `until ${s.config.until}`;
+      return "duration" in s.config
+        ? `wait ${s.config.duration}`
+        : `until ${s.config.until}`;
     case "signal":
       return s.config.event;
     case "approval":
-      return [s.config.role && `role ${s.config.role}`, s.config.count && s.config.count > 1 && `${s.config.count} approvers`].filter(Boolean).join(", ") || "approval";
+      return (
+        [
+          s.config.role && `role ${s.config.role}`,
+          s.config.count && s.config.count > 1 && `${s.config.count} approvers`,
+        ]
+          .filter(Boolean)
+          .join(", ") || "approval"
+      );
     case "form": {
       const to = s.config.to;
-      return `${s.config.title} · ${"role" in to ? `role ${to.role}` : "phone" in to ? to.phone || "phone" : to.email || "email"}`;
+      const who =
+        to === "starter"
+          ? "who started it"
+          : "role" in to
+            ? `role ${to.role}`
+            : "member" in to
+              ? "a member"
+              : "link" in to
+                ? "a link"
+                : "phone" in to
+                  ? to.phone || "phone"
+                  : to.email || "email";
+      return `${s.config.title} · ${who}`;
     }
     case "foreach":
       return `each of ${s.config.items} · ${s.config.steps.length} steps`;
@@ -78,7 +128,8 @@ export function summary(s: Step): string {
 }
 
 /** "send_sms" as "Send sms", "paystack" as "Paystack". */
-const words = (id: string) => (id.charAt(0).toUpperCase() + id.slice(1)).replaceAll("_", " ");
+const words = (id: string) =>
+  (id.charAt(0).toUpperCase() + id.slice(1)).replaceAll("_", " ");
 
 /** Each kind of step in plain words, and its icon. */
 const KINDS: Record<string, [string, string]> = {
@@ -106,7 +157,11 @@ export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {
   const s = data.step;
   const [kind, icon] = KINDS[s.type] ?? [words(s.type), "workflows"];
   return (
-    <div className={`step-node${selected ? " selected" : ""}${data.invalid ? " invalid" : ""}${data.status ? ` status-${data.status}` : ""}`} data-testid={`node-${s.id}`} data-status={data.status}>
+    <div
+      className={`step-node${selected ? " selected" : ""}${data.invalid ? " invalid" : ""}${data.status ? ` status-${data.status}` : ""}`}
+      data-testid={`node-${s.id}`}
+      data-status={data.status}
+    >
       <Handle type="target" position={Position.Left} />
       <span className="step-icon" aria-hidden="true">
         <Icon name={icon} />
@@ -115,14 +170,19 @@ export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {
         <div className="type">
           {kind}
           {data.status && (
-            <span className={`badge ${data.status}`} style={{ marginLeft: 6, height: 18, fontSize: 11 }}>
+            <span
+              className={`badge ${data.status}`}
+              style={{ marginLeft: 6, height: 18, fontSize: 11 }}
+            >
               {data.status}
             </span>
           )}
         </div>
         <div className="title">{s.name || s.id}</div>
         <div className="sub">{summary(s)}</div>
-        {s.when && s.type !== "transform" && <div className="sub">when {s.when}</div>}
+        {s.when && s.type !== "transform" && (
+          <div className="sub">when {s.when}</div>
+        )}
       </div>
       <Handle type="source" position={Position.Right} />
     </div>
@@ -131,7 +191,11 @@ export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {
 
 export function TriggerNode({ data }: NodeProps<TriggerFlowNode>) {
   return (
-    <div className={`step-node trigger-node${data.status ? ` status-${data.status}` : ""}`} data-testid="node-trigger" title={data.status ? undefined : "Change when it runs"}>
+    <div
+      className={`step-node trigger-node${data.status ? ` status-${data.status}` : ""}`}
+      data-testid="node-trigger"
+      title={data.status ? undefined : "Change when it runs"}
+    >
       <span className="step-icon" aria-hidden="true">
         <Icon name={data.type === "schedule" ? "clock" : "bolt"} />
       </span>

@@ -147,7 +147,9 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 	allowed := map[string]bool{"taskiem_public_host(text)": true, "taskiem_public_embed_origins(uuid)": true,
 		"taskiem_public_storefront(uuid)": true, "taskiem_public_storefront_catalogue(uuid)": true,
 		// Fronts (F3): a front's list, by its table.
-		"taskiem_public_storefront_list(uuid,text)":               true,
+		"taskiem_public_storefront_list(uuid,text)": true,
+		// How many are left of a page's counted products, and nothing else of its stock (what a business buys §4.1, 00502).
+		"taskiem_product_left(uuid,text[])":                       true,
 		"taskiem_public_submit(uuid,text,text,bytea,bytea,bytea)": true, "taskiem_public_order_status(text,bytea)": true, "taskiem_public_order_money(text,bytea)": true,
 		// Bookings (S4): the services and free time, holding a slot, a booking's status and the customer's changes.
 		"taskiem_public_storefront_services(uuid)": true, "taskiem_public_busy(uuid,timestamp with time zone,timestamp with time zone)": true,
@@ -164,7 +166,11 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		"taskiem_public_form(text)": true, "taskiem_public_form_link(bytea)": true, "taskiem_public_form_request(bytea)": true,
 		"taskiem_public_form_submit(uuid,uuid,uuid,bytea,text,bytea,bytea,bytea)": true, "taskiem_public_form_upload(uuid,text,bytea)": true,
 		"taskiem_public_form_code(uuid,bytea,bytea,bytea)": true, "taskiem_public_form_code_check(uuid,bytea,bytea)": true,
-		"taskiem_public_form_status(text,bytea)": true, "taskiem_public_report(text,text,text,text,bytea,bytea)": true,
+		// A code asked for with who asks and the number across forms (E10, migration 00444).
+		"taskiem_public_form_code_ask(uuid,bytea,bytea,bytea,bytea,bytea)": true,
+		"taskiem_public_form_status(text,bytea)":                           true, "taskiem_public_report(text,text,text,text,bytea,bytea)": true,
+		// A form over its own submission limit is guarded for an hour (forms 7.3, F68b).
+		"taskiem_public_form_tripped(uuid)": true,
 		// Own domains (S6): a storefront's primary domain, where its other hosts redirect.
 		"taskiem_public_storefront_domain(uuid)": true,
 		// Email triggers (N10): the mail role checks a recipient and leaves a sealed message.

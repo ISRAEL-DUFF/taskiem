@@ -14,7 +14,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/runfiles"
 )
 
-// Files in and out (decision 0062, docs/integrations/telegram.md), from the
+// Files in and out (decision 0074, docs/integrations/telegram.md), from the
 // Bot API documentation: getFile answers a file_path, downloaded from
 // https://api.telegram.org/file/bot<token>/<file_path> within an hour; a
 // bot can download files up to 20 MB. sendVoice takes OGG/Opus, MP3 or

@@ -48,6 +48,7 @@ func (s *Server) invoiceRoutes(r chi.Router) {
 	s.matchingRoutes(r)
 	s.moneyRoutes(r)
 	s.moneyReportRoutes(r)
+	s.moneyLabelRoutes(r)
 }
 
 func invoiceErr(err error) error {
@@ -171,6 +172,7 @@ func (s *Server) createInvoice(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.diaryChange(r.Context(), p, "Made invoice "+x.Number+" for "+naira(x.TotalKobo))
 	maskInvoice(&x)
 	writeJSON(w, http.StatusCreated, x)
 }
@@ -209,10 +211,22 @@ func (s *Server) sendInvoice(w http.ResponseWriter, r *http.Request) {
 	if key == "" {
 		key = "api:" + uuid.NewString()
 	}
+	// Sent before: this send is a reminder (the diary says which).
+	var again bool
+	_ = s.tx(r, func(tx pgx.Tx) error {
+		cur, err := s.Invoices.Get(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
+		again = err == nil && cur.SentAt != nil
+		return nil
+	})
 	out, err := s.Invoices.Send(r.Context(), p.TenantID, chi.URLParam(r, "id"), p.Actor(), key)
 	if err != nil {
 		s.fail(w, r, invoiceErr(err))
 		return
+	}
+	if again {
+		s.diaryChange(r.Context(), p, "Sent a reminder for invoice "+out.Invoice.Number)
+	} else {
+		s.diaryChange(r.Context(), p, "Sent invoice "+out.Invoice.Number)
 	}
 	maskInvoice(&out.Invoice)
 	writeJSON(w, http.StatusOK, out)
@@ -239,6 +253,7 @@ func (s *Server) voidInvoice(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.diaryChange(r.Context(), p, "Cancelled invoice "+x.Number)
 	maskInvoice(&x)
 	writeJSON(w, http.StatusOK, x)
 }
@@ -344,6 +359,12 @@ func (s *Server) putCreditTerms(w http.ResponseWriter, r *http.Request) {
 // check is cheap and the date turns at midnight in Lagos).
 func (s *Server) RunInvoices(ctx context.Context) error {
 	s.chatHooks()
+	// Explore's scores (explore.go), whatever else runs here.
+	go s.runExploreScores(ctx)
+	// The queued pushes (push.go), to browsers and the app.
+	go s.RunPush(ctx)
+	// Approvals waiting, in the bell (whatsapp_approvals.go).
+	go s.RunApprovalBell(ctx)
 	if s.Invoices == nil {
 		<-ctx.Done()
 		return nil
@@ -376,15 +397,12 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 
 // runInvoicePayments issues the accounts and links invoice pages and
 // chat ask for and starts the runs invoices being paid queued (every
-// second), looks their payments up (every 30
-// seconds), matches the money that came in (every 10 seconds) and looks
-// for leaks (every 15 minutes).
+// second), looks their payments up (every 30 seconds), matches the money
+// that came in (every 10 seconds) and looks for leaks (every 15
+// minutes). Each runs in a loop of its own: the provider lookups can take
+// a while, and must not hold back a customer waiting for an account
+// number or a paid invoice's run.
 func (s *Server) runInvoicePayments(ctx context.Context) {
-	drain, check, match, leak := time.NewTicker(time.Second), time.NewTicker(30*time.Second), time.NewTicker(10*time.Second), time.NewTicker(15*time.Minute)
-	defer drain.Stop()
-	defer check.Stop()
-	defer match.Stop()
-	defer leak.Stop()
 	detector := &leaks.Detector{Pool: s.Invoices.Pool, Logger: s.Logger}
 	if s.Invoices.LinkReceived == nil {
 		// A payment through a customer's link is the customer's money.
@@ -392,32 +410,45 @@ func (s *Server) runInvoicePayments(ctx context.Context) {
 			return s.matcher().LinkPaid(ctx, tenant, link, r)
 		}
 	}
+	go every(ctx, 30*time.Second, func() {
+		if err := s.Invoices.CheckPayments(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("invoices: payments", "err", err)
+		}
+	})
+	go every(ctx, 10*time.Second, func() {
+		if err := s.matcher().Tick(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("invoices: matching", "err", err)
+		}
+	})
+	go every(ctx, 15*time.Minute, func() {
+		if err := detector.Tick(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("invoices: leaks", "err", err)
+		}
+	})
+	every(ctx, time.Second, func() {
+		if err := s.Invoices.Drain(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("invoices: requests", "err", err)
+		}
+		if err := s.Invoices.StartPaid(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("invoices: runs on paid", "err", err)
+		}
+		if err := s.Invoices.StartPayments(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("invoices: runs on payments", "err", err)
+		}
+	})
+}
+
+// every calls fn each interval, after the first interval, until ctx ends.
+// A slow call delays only its own loop.
+func every(ctx context.Context, interval time.Duration, fn func()) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-drain.C:
-			if err := s.Invoices.Drain(ctx); err != nil && ctx.Err() == nil {
-				s.Logger.Error("invoices: requests", "err", err)
-			}
-			if err := s.Invoices.StartPaid(ctx); err != nil && ctx.Err() == nil {
-				s.Logger.Error("invoices: runs on paid", "err", err)
-			}
-			if err := s.Invoices.StartPayments(ctx); err != nil && ctx.Err() == nil {
-				s.Logger.Error("invoices: runs on payments", "err", err)
-			}
-		case <-check.C:
-			if err := s.Invoices.CheckPayments(ctx); err != nil && ctx.Err() == nil {
-				s.Logger.Error("invoices: payments", "err", err)
-			}
-		case <-match.C:
-			if err := s.matcher().Tick(ctx); err != nil && ctx.Err() == nil {
-				s.Logger.Error("invoices: matching", "err", err)
-			}
-		case <-leak.C:
-			if err := detector.Tick(ctx); err != nil && ctx.Err() == nil {
-				s.Logger.Error("invoices: leaks", "err", err)
-			}
+		case <-t.C:
+			fn()
 		}
 	}
 }

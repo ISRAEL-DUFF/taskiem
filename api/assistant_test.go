@@ -16,7 +16,7 @@ import (
 // The owner pauses the assistant for everyone and resumes a customer
 // handed to a person; Taskiem's operators stop a business's assistants
 // and put it in the beta, with a reason and a passkey, in both audits
-// (decision 0062 V6).
+// (decision 0074 V6).
 func TestAssistantSwitches(t *testing.T) {
 	ctx := context.Background()
 	w := opsWorld(t)

@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/csvsafe"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/schools"
 )
@@ -87,7 +88,7 @@ func (s *Server) listSchoolDebtors(w http.ResponseWriter, r *http.Request) {
 		cw := csv.NewWriter(&buf)
 		_ = cw.Write([]string{"Class", "Admission number", "Name", "Balance", "Due on", "Days past due", "Aging", "Last reminder", "Reminded on", "Promise", "Promised by", "Plan", "Next instalment"})
 		for _, x := range d.Debtors {
-			row := []string{x.Class, x.AdmissionNumber, x.Name, invoicing.Naira(x.BalanceKobo), x.DueOn, strconv.Itoa(x.DaysPastDue), schools.BucketWords[x.Bucket], "", "", "", "", "", ""}
+			row := []string{csvsafe.Text(x.Class), csvsafe.Text(x.AdmissionNumber), csvsafe.Text(x.Name), invoicing.Naira(x.BalanceKobo), x.DueOn, strconv.Itoa(x.DaysPastDue), schools.BucketWords[x.Bucket], "", "", "", "", "", ""}
 			if x.LastReminder != nil {
 				row[7], row[8] = strconv.Itoa(x.LastReminder.Rung), x.LastReminder.At.Format("2006-01-02")
 			}

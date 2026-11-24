@@ -32,10 +32,11 @@ func TestNormalisePhone(t *testing.T) {
 		{"002348031234567", "+2348031234567", true},
 		{"09012345678", "+2349012345678", true},
 		{"07012345678", "+2347012345678", true},
-		{"+2341234567890", "", false}, // a landline-shaped number
-		{"+23480312345", "", false},   // too short
-		{"+447700900123", "", false},  // not an allowed country
-		{"+881612345678", "", false},  // satellite: premium routes
+		{"+234 0803 123 4567", "+2348031234567", true}, // the 0 after +234 dropped (phone.Normalise)
+		{"+2341234567890", "", false},                  // a landline-shaped number
+		{"+23480312345", "", false},                    // too short
+		{"+447700900123", "", false},                   // not an allowed country
+		{"+881612345678", "", false},                   // satellite: premium routes
 		{"8031234567", "", false},
 		{"0803123456a", "", false},
 		{"", "", false},

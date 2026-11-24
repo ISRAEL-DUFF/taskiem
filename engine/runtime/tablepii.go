@@ -11,7 +11,7 @@ import (
 )
 
 // tablePIIPaths are the places a Xenibase row action carries the
-// personal columns of the business's data table it names (decision 0062
+// personal columns of the business's data table it names (decision 0074
 // V5, A5). The manifest can only declare whole rows personal, and only
 // values are sealed, never objects; so the columns the table marks
 // personal (and its phone and email columns) are sealed cell by cell:

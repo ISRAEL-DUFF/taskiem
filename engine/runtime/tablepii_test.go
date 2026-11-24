@@ -37,7 +37,7 @@ actions:
       - { field: output.rows, category: other }
 `
 
-// A conversation kept in a data table (decision 0062 V5, A5): what the
+// A conversation kept in a data table (decision 0074 V5, A5): what the
 // table marks personal is sealed cell by cell in the run's history, both
 // written and read; the turns read back reach the model with their words
 // (the step lets history through, D6) but not the customer's number; and

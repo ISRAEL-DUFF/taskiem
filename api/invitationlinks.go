@@ -29,7 +29,7 @@ var errInvitationLink = errors.New("invitation link not valid")
 // checkInvitationLink reads a link's token, within the per-address and
 // per-link rates. It answers the request itself when the token is no good.
 func (s *Server) checkInvitationLink(w http.ResponseWriter, r *http.Request, token string) (user, tenant uuid.UUID, email string, ok bool) {
-	if !s.loginLimiter("invitation:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("invitation:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many attempts")
 		return
 	}

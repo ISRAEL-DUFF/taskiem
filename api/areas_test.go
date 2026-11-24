@@ -332,6 +332,18 @@ func TestSignupKinds(t *testing.T) {
 	if got := state(signUp("Both Ltd", "f@signup.test", []string{"service", "school"})); got != "links,money,schools" {
 		t.Errorf("service and school: %s", got)
 	}
+	// A rider (docs/spec/chat-riders.md): orders and links, the chat tools
+	// on from the start, and a profile that says it delivers.
+	rider := signUp("Musa Rides", "musa@signup.test", []string{"delivery"})
+	if got := state(rider); got != "links,orders" {
+		t.Errorf("delivery: %s", got)
+	}
+	if got := rider.must(200, "GET", "/v1/settings/chat-tools", nil); got["chat_tools"] != true {
+		t.Errorf("a rider's chat tools: %v", got)
+	}
+	if got := rider.must(200, "GET", "/v1/business-profile", nil); got["delivers"] != true {
+		t.Errorf("a rider's profile: %v", got)
+	}
 
 	// A business with nothing on is refused the parts, and can turn one on.
 	bare := signUp("Bare Ltd", "g@signup.test", []string{})

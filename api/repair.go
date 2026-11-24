@@ -327,7 +327,7 @@ func (s *Server) processRepairJob(ctx context.Context, j repairJob) (string, str
 			return out
 		},
 		Find:      s.callables(ctx, j.tenant),
-		Meter:     aiMeter{s: s, tenant: j.tenant},
+		Meter:     aiMeter{s: s, tenant: j.tenant, purpose: "repair", ttl: repairTimeout + time.Minute},
 		Recorder:  repairRecorder{s: s, repair: id, tenant: j.tenant, provider: s.AI.Provider.Name()},
 		Effort:    s.AI.Effort,
 		MaxTokens: s.AI.MaxTokens,

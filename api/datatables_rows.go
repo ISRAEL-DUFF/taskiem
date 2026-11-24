@@ -24,8 +24,11 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/csvsafe"
 	"github.com/israel-duff/taskiem/engine/datatables"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // Rows go through the connector's actions on the data_tables connection,
@@ -63,13 +66,24 @@ func idempotencyKey(r *http.Request) (string, error) {
 	return k, nil
 }
 
+// optionalKey is the request's Idempotency-Key when it sent one, "" when
+// it sent none.
+func optionalKey(r *http.Request) (string, error) {
+	k := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if k != "" && !keyCharset.MatchString(k) {
+		return "", fmt.Errorf("%w: Idempotency-Key is 1 to 255 letters, digits, dashes and underscores", errBadRequest)
+	}
+	return k, nil
+}
+
 // tableRows is the table in the path with the connector ready to act on
 // its rows.
 type tableRows struct {
-	table datatables.Table
-	conn  *connector.Connector
-	creds map[string]string
-	hc    *http.Client
+	tenant uuid.UUID
+	table  datatables.Table
+	conn   *connector.Connector
+	creds  map[string]string
+	hc     *http.Client
 }
 
 func (s *Server) tableRows(r *http.Request) (tableRows, error) {
@@ -87,7 +101,7 @@ func (s *Server) tableRowsFor(ctx context.Context, tenant uuid.UUID, t datatable
 	if err != nil {
 		return tableRows{}, err
 	}
-	return tableRows{table: t, conn: conn, creds: creds, hc: hc}, nil
+	return tableRows{tenant: tenant, table: t, conn: conn, creds: creds, hc: hc}, nil
 }
 
 // writable refuses changing a kept table's rows (datatables.ErrKept).
@@ -109,6 +123,14 @@ func (tr tableRows) call(ctx context.Context, s *Server, action string, in map[s
 	resp, err := tr.conn.Actions[action].Execute(ctx, req)
 	if err != nil {
 		return nil, err
+	}
+	if datatables.WritesRows(action) && tr.tenant != uuid.Nil {
+		// An open page over the table is told (pages §9, pages_live.go).
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tr.tenant}, func(tx pgx.Tx) error {
+			return datatables.MarkRowsChanged(ctx, tx, tr.tenant, tr.table.Name)
+		}); err != nil {
+			s.Logger.Warn("tables: marking the rows changed", "err", err)
+		}
 	}
 	out, _ := resp.Output.(map[string]any)
 	return out, nil
@@ -203,6 +225,10 @@ func rowsOf(out map[string]any) []any {
 	return rows
 }
 
+// maxAnyFilters is the most filters an any group holds (the connector's
+// own limit).
+const maxAnyFilters = 20
+
 type rowsQuery struct {
 	Filters []json.RawMessage `json:"filters"`
 	Order   []json.RawMessage `json:"order"`
@@ -240,6 +266,24 @@ func (s *Server) queryTableRows(w http.ResponseWriter, r *http.Request) {
 			var m map[string]any
 			if err := json.Unmarshal(raw, &m); err != nil {
 				return nil, fmt.Errorf("%w: %s[%d] is not an object", errBadRequest, what, i)
+			}
+			if group, has := m["any"]; has && what == "filters" {
+				// One of these holds: a search across several columns.
+				list, ok := group.([]any)
+				if !ok || len(list) == 0 || len(list) > maxAnyFilters || len(m) != 1 {
+					return nil, fmt.Errorf("%w: %s[%d]: any is a list of 1 to %d filters, alone in its object", errBadRequest, what, i, maxAnyFilters)
+				}
+				for j, sub := range list {
+					sm, ok := sub.(map[string]any)
+					if !ok || sm["any"] != nil {
+						return nil, fmt.Errorf("%w: %s[%d].any[%d] is not a filter", errBadRequest, what, i, j)
+					}
+					if col, _ := sm["column"].(string); !tr.known(col) {
+						return nil, fmt.Errorf("%w: %s[%d].any[%d]: the table has no column %q", errBadRequest, what, i, j, col)
+					}
+				}
+				out = append(out, m)
+				continue
 			}
 			col, _ := m["column"].(string)
 			if !tr.known(col) {
@@ -342,6 +386,9 @@ func (s *Server) insertTableRows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.auditRows(r, tr, "table.row.insert", map[string]any{"rows": len(checked), "affected": out["affected"], "replayed": out["replayed"] == true})
+	if out["replayed"] != true && len(rows) == 1 {
+		s.rowDiary(r, tr.table, rows[0], true)
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"affected": out["affected"], "rows": rowsOf(out), "replayed": out["replayed"] == true})
 }
 
@@ -401,6 +448,9 @@ func (s *Server) updateTableRow(w http.ResponseWriter, r *http.Request) {
 		row = rows[0]
 	}
 	s.auditRows(r, tr, "table.row.update", map[string]any{"row_id": id, "replayed": out["replayed"] == true})
+	if out["replayed"] != true {
+		s.rowDiary(r, tr.table, req.Set, false)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"affected": out["affected"], "row": row, "replayed": out["replayed"] == true})
 }
 
@@ -767,20 +817,14 @@ func (s *Server) auditRows(r *http.Request, tr tableRows, action string, detail 
 	}
 }
 
-// csvFormulaStart are the first characters spreadsheets read as a formula.
-const csvFormulaStart = "=+-@\t\r"
-
-// csvSafe guards an exported text cell against formula injection (CSV
-// injection): a value a spreadsheet would run as a formula gets a leading
-// apostrophe, which spreadsheets show as text and hide. Only text-like
-// columns: a number stays a number. Import takes the apostrophe off again
+// csvSafe guards an exported text cell against formula injection with the
+// guard every export shares (engine/csvsafe). Only text-like columns: a
+// number stays a number. Import takes the apostrophe off again
 // (csvUnescape), so an export imports back unchanged.
 func csvSafe(colType, v string) string {
 	switch colType {
 	case "text", "phone", "email", "json":
-		if v != "" && strings.ContainsRune(csvFormulaStart, rune(v[0])) {
-			return "'" + v
-		}
+		return csvsafe.Text(v)
 	}
 	return v
 }
@@ -789,9 +833,7 @@ func csvSafe(colType, v string) string {
 func csvUnescape(colType, v string) string {
 	switch colType {
 	case "text", "phone", "email", "json":
-		if len(v) > 1 && v[0] == '\'' && strings.ContainsRune(csvFormulaStart, rune(v[1])) {
-			return v[1:]
-		}
+		return csvsafe.Unguard(v)
 	}
 	return v
 }
@@ -824,4 +866,57 @@ func quoteAll(list []string) []string {
 		out[i] = strconv.Quote(s)
 	}
 	return out
+}
+
+// rowDiary tells a row added or changed by a person as a diary line
+// (chat_changes.go): a service, when the table is the storefront's
+// services; another table's row only when a chat tool saved it
+// (X-Taskiem-Diary), so imports and page edits stay quiet.
+func (s *Server) rowDiary(r *http.Request, t datatables.Table, row map[string]any, added bool) {
+	p := principalFrom(r.Context())
+	if p == nil || p.UserID == uuid.Nil {
+		return
+	}
+	var sf storefront.Storefront
+	_ = s.tx(r, func(tx pgx.Tx) (err error) {
+		sf, err = storefront.Get(r.Context(), tx, p.TenantID)
+		return err
+	})
+	if sf.ServicesTable != nil && *sf.ServicesTable == t.ID {
+		m := sf.ServicesColumns
+		name, _ := row[m.Name].(string)
+		if name == "" && added {
+			return
+		}
+		if !added {
+			if name == "" {
+				name = "a service"
+			}
+			s.diaryChange(r.Context(), p, "Changed the service "+name)
+			return
+		}
+		line := "New service: " + name
+		if v, ok := row[m.Duration]; ok && m.Duration != "" {
+			line += fmt.Sprintf(", %v min", v)
+		}
+		if v, ok := row[m.Price]; ok && m.Price != "" {
+			if f, ok := v.(float64); ok {
+				line += ", " + naira(int64(f*100))
+			}
+		}
+		s.diaryChange(r.Context(), p, line)
+		return
+	}
+	if r.Header.Get("X-Taskiem-Diary") == "" {
+		return
+	}
+	title := t.Title
+	if title == "" {
+		title = t.Name
+	}
+	if added {
+		s.diaryChange(r.Context(), p, "Added a row to "+title)
+	} else {
+		s.diaryChange(r.Context(), p, "Changed a row of "+title)
+	}
 }

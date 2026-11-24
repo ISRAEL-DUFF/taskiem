@@ -80,7 +80,8 @@ func linkFatal(err error) error {
 	case errors.As(err, &unlinked):
 		return fmt.Errorf("%s: %w", unlinked.Error(), effects.ErrFatal)
 	case errors.Is(err, links.ErrInvalid), errors.Is(err, links.ErrState), errors.Is(err, errConflict), errors.Is(err, errBadRequest),
-		errors.Is(err, stock.ErrPurchase), errors.Is(err, stock.ErrNoSupplier), errors.Is(err, stock.ErrNoItem), errors.Is(err, stock.ErrNotTracked):
+		errors.Is(err, stock.ErrPurchase), errors.Is(err, stock.ErrNoSupplier), errors.Is(err, stock.ErrNoItem), errors.Is(err, stock.ErrNotTracked),
+		errors.Is(err, stock.ErrTrackAsk), errors.Is(err, stock.ErrTrackTooMany):
 		return fmt.Errorf("%s: %w", plainRefusal(err), effects.ErrFatal)
 	}
 	return err
@@ -156,11 +157,11 @@ func linkNamed(ctx context.Context, tx pgx.Tx, name string) (links.Link, error) 
 			return l, nil
 		}
 	}
-	var found []links.Link
-	for _, l := range active {
-		if strings.Contains(strings.ToLower(l.Name), want) {
-			found = append(found, l)
-		}
+	// The start of a name (links.Named: "Dangote" for Dangote Nigeria
+	// Ltd), then, as before it, a name containing the words.
+	found := links.Named(active, name)
+	if len(found) == 0 {
+		found = containing(active, want)
 	}
 	switch len(found) {
 	case 1:
@@ -173,6 +174,17 @@ func linkNamed(ctx context.Context, tx pgx.Tx, name string) (links.Link, error) 
 		names[i] = l.Name
 	}
 	return links.Link{}, fmt.Errorf("%w: %q could be %s", links.ErrInvalid, name, strings.Join(names, ", "))
+}
+
+// containing is the links whose name contains want (lower case).
+func containing(active []links.Link, want string) []links.Link {
+	var found []links.Link
+	for _, l := range active {
+		if strings.Contains(strings.ToLower(l.Name), want) {
+			found = append(found, l)
+		}
+	}
+	return found
 }
 
 // --- bills ---
@@ -408,8 +420,10 @@ func (s *Server) linkOrderStep(ctx context.Context, p *Principal, c linkconn.Cal
 // --- prices and orders to linked suppliers ---
 
 // priceListed finds an item on a supplier's list: its item id, its name,
-// or the business's own item linked to it (by id or name).
-func priceListed(items []links.PriceItem, linked []links.ItemLink, own map[string]stock.Item, want string) (links.PriceItem, bool) {
+// or one the business remembers adding to the stock item of its own item
+// named (by id or name: a product's stock item, or a material).
+func priceListed(listed []links.PriceItem, linked []stock.Remembered, own map[string]stock.Item, want string) (links.PriceItem, bool) {
+	items := orderable(listed)
 	w := strings.ToLower(strings.TrimSpace(want))
 	for _, it := range items {
 		if it.ItemID == want || strings.ToLower(it.Name) == w {
@@ -417,8 +431,16 @@ func priceListed(items []links.PriceItem, linked []links.ItemLink, own map[strin
 		}
 	}
 	for _, l := range linked {
-		o, ok := own[l.ItemID]
-		if l.ItemID != want && (!ok || strings.ToLower(o.Name) != w) {
+		if l.StockItemID == nil {
+			continue
+		}
+		named := false
+		for id, o := range own {
+			if o.StockItemID == l.StockItemID.String() && (id == want || strings.ToLower(o.Name) == w) {
+				named = true
+			}
+		}
+		if !named {
 			continue
 		}
 		for _, it := range items {
@@ -436,6 +458,78 @@ func priceListed(items []links.PriceItem, linked []links.ItemLink, own map[strin
 	}
 	if len(found) == 1 {
 		return found[0], true
+	}
+	return links.PriceItem{}, false
+}
+
+// orderable is a list's items as they are ordered, in its order: a
+// product sold in sizes and colours as each of its sizes, named in full
+// ("Air Max 90 – 42, Black"); a product with none on sale, not at all.
+func orderable(listed []links.PriceItem) []links.PriceItem {
+	flat := links.Flat(listed)
+	out := make([]links.PriceItem, 0, len(flat))
+	for _, it := range listed {
+		if len(it.Sizes) == 0 {
+			if x, ok := flat[it.ItemID]; ok {
+				out = append(out, x)
+			}
+			continue
+		}
+		for _, z := range it.Sizes {
+			out = append(out, flat[z.ItemID])
+		}
+	}
+	return out
+}
+
+// topUpSizes brings each product sold in sizes up to its minimum, its
+// sizes together: the low sizes alone may come to less than the supplier
+// takes, and the order would be refused. What is short goes on the
+// product's first low size, and the line says so. Prices are each size's
+// at the order's totals (quantity breaks counted together).
+func topUpSizes(listed []links.PriceItem, lines []any) {
+	flat := links.Flat(listed)
+	products := map[string]links.PriceItem{}
+	for _, it := range listed {
+		products[it.ItemID] = it
+	}
+	together := map[string]int64{}
+	first := map[string]map[string]any{}
+	for _, l := range lines {
+		m := l.(map[string]any)
+		it := flat[m["item"].(string)]
+		if it.VariantOf == "" {
+			continue
+		}
+		together[it.VariantOf] += m["quantity"].(int64)
+		if first[it.VariantOf] == nil {
+			first[it.VariantOf] = m
+		}
+	}
+	for product, n := range together {
+		if short := int64(products[product].MinQuantity) - n; short > 0 {
+			m := first[product]
+			m["quantity"] = m["quantity"].(int64) + short
+			m["topped_up"] = short
+			together[product] += short
+		}
+	}
+	for _, l := range lines {
+		m := l.(map[string]any)
+		if it := flat[m["item"].(string)]; it.VariantOf != "" {
+			m["price_kobo"] = links.PriceAt(it, together[it.VariantOf])
+		}
+	}
+}
+
+// sizedProductNamed is the product sold in sizes and colours on the list
+// that the words name: it is not ordered itself, but by its sizes.
+func sizedProductNamed(items []links.PriceItem, want string) (links.PriceItem, bool) {
+	w := strings.ToLower(strings.TrimSpace(want))
+	for _, it := range items {
+		if len(it.Sizes) > 0 && (it.ItemID == want || strings.ToLower(it.Name) == w) {
+			return it, true
+		}
 	}
 	return links.PriceItem{}, false
 }
@@ -479,7 +573,7 @@ func (s *Server) linkPriceOf(ctx context.Context, p *Principal, c linkconn.Call)
 		if len(got) == 0 {
 			return fmt.Errorf("%w: %s shares no price list with you", links.ErrState, l.Name)
 		}
-		linked, err := links.ItemLinksTx(ctx, tx, p.TenantID, l.ID)
+		linked, err := stock.ItemLinksTx(ctx, tx, p.TenantID, l.ID)
 		if err != nil {
 			return err
 		}
@@ -513,12 +607,7 @@ func (s *Server) linkLowOrders(ctx context.Context, p *Principal, c linkconn.Cal
 			}
 			onlyLink = l.ID
 		}
-		rows, err := tx.Query(ctx, `SELECT l->>'item_id' FROM purchase_orders o, jsonb_array_elements(o.lines) l
-			WHERE o.tenant_id = $1 AND o.status IN ('drafted', 'sent', 'confirmed', 'part_received')`, p.TenantID)
-		if err != nil {
-			return err
-		}
-		ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		onOrder, err := stock.OnOrderTx(ctx, tx, p.TenantID)
 		if err != nil {
 			return err
 		}
@@ -532,18 +621,23 @@ func (s *Server) linkLowOrders(ctx context.Context, p *Principal, c linkconn.Cal
 		}
 		var sups []supplierList
 		for _, l := range lists {
-			linked, err := links.ItemLinksTx(ctx, tx, p.TenantID, l.LinkID)
+			linked, err := stock.ItemLinksTx(ctx, tx, p.TenantID, l.LinkID)
 			if err != nil {
 				return err
 			}
-			listed := map[string]links.PriceItem{}
-			for _, it := range l.Items {
-				listed[it.ItemID] = it
-			}
+			listed := links.Flat(l.Items)
 			sl := supplierList{list: l, byItem: map[string]links.PriceItem{}}
+			// Their items we remember adding to a stock item: each of our
+			// items counted by it (a product's, or a material).
 			for _, il := range linked {
-				if it, ok := listed[il.SellerItemID]; ok && it.Available {
-					sl.byItem[il.ItemID] = it
+				it, ok := listed[il.SellerItemID]
+				if !ok || !it.Available || il.StockItemID == nil {
+					continue
+				}
+				for _, o := range items {
+					if _, had := sl.byItem[o.ID]; !had && o.StockItemID == il.StockItemID.String() {
+						sl.byItem[o.ID] = it
+					}
 				}
 			}
 			sups = append(sups, sl)
@@ -556,7 +650,7 @@ func (s *Server) linkLowOrders(ctx context.Context, p *Principal, c linkconn.Cal
 		var drafts []*draft
 		bySup := map[uuid.UUID]*draft{}
 		for _, it := range stock.Low(items) {
-			if slices.Contains(ids, it.ID) {
+			if it.OnOrder(onOrder) {
 				continue
 			}
 			pick := -1
@@ -588,7 +682,13 @@ func (s *Server) linkLowOrders(ctx context.Context, p *Principal, c linkconn.Cal
 			d.total += qty * listed.PriceKobo
 		}
 		for _, d := range drafts {
-			orders = append(orders, map[string]any{"business": d.sup.list.Business, "link": d.sup.list.LinkID.String(), "items": d.lines, "total_kobo": d.total})
+			topUpSizes(d.sup.list.Items, d.lines)
+			total := int64(0)
+			for _, l := range d.lines {
+				m := l.(map[string]any)
+				total += m["quantity"].(int64) * m["price_kobo"].(int64)
+			}
+			orders = append(orders, map[string]any{"business": d.sup.list.Business, "link": d.sup.list.LinkID.String(), "items": d.lines, "total_kobo": total})
 		}
 		return nil
 	})
@@ -614,12 +714,14 @@ func (s *Server) linkPlaceOrder(ctx context.Context, p *Principal, c linkconn.Ca
 	var business string
 	drafted := false // by this step before: the same order, no second draft
 	key := "link-" + c.Key
+	var link uuid.UUID
+	var lines []orderLineIn
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		l, err := linkNamed(ctx, tx, inStr(c.Input, "business"))
 		if err != nil {
 			return err
 		}
-		business = l.Name
+		business, link = l.Name, l.ID
 		var id uuid.UUID
 		switch err := tx.QueryRow(ctx, `SELECT id FROM purchase_orders WHERE tenant_id = $1 AND key = $2`, p.TenantID, key).Scan(&id); {
 		case err == nil:
@@ -636,16 +738,18 @@ func (s *Server) linkPlaceOrder(ctx context.Context, p *Principal, c linkconn.Ca
 		if len(got) == 0 {
 			return fmt.Errorf("%w: %s shares no price list with you", links.ErrState, l.Name)
 		}
-		linked, err := links.ItemLinksTx(ctx, tx, p.TenantID, l.ID)
+		linked, err := stock.ItemLinksTx(ctx, tx, p.TenantID, l.ID)
 		if err != nil {
 			return err
 		}
-		lines := make([]orderLineIn, 0, len(raw))
 		for _, r := range raw {
 			m, _ := r.(map[string]any)
 			name := inStr(m, "item")
 			it, ok := priceListed(got[0].Items, linked, own, name)
 			if !ok {
+				if pr, ok := sizedProductNamed(got[0].Items, name); ok {
+					return fmt.Errorf("%w: %s comes in sizes and colours: name each one, like %q", links.ErrInvalid, pr.Name, pr.Sizes[0].Name)
+				}
 				return fmt.Errorf("%w: %q is not on %s's price list", links.ErrInvalid, name, l.Name)
 			}
 			line := orderLineIn{SellerItemID: it.ItemID, Quantity: inInt(m, "quantity")}
@@ -658,12 +762,31 @@ func (s *Server) linkPlaceOrder(ctx context.Context, p *Principal, c linkconn.Ca
 			}
 			lines = append(lines, line)
 		}
-		x, err = s.draftFromPricesTx(ctx, tx, p, l.ID, lines, own, inStr(c.Input, "note"), key)
-		if err != nil {
-			return err
-		}
-		return wfAudit(ctx, tx, p, "purchase.draft", x.Reference, map[string]any{"purchase_id": x.ID, "link": l.ID})
+		return nil
 	})
+	if err == nil && !drafted {
+		// A supplier's size: the business's own size of the same values,
+		// added to its product when it lacks it (trade_sizes.go).
+		audit := func(tx pgx.Tx, action, target string, detail map[string]any) error {
+			return wfAudit(ctx, tx, p, action, target, detail)
+		}
+		var resolved []orderLineIn
+		if resolved, err = s.resolveSizeLines(ctx, p, audit, link, lines, key); err == nil {
+			if len(resolved) > 0 {
+				lines = resolved
+			}
+			if own, _, err = s.ownItems(ctx, p.TenantID); err == nil {
+				err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+					var err error
+					x, err = s.draftFromPricesTx(ctx, tx, p, link, lines, own, inStr(c.Input, "note"), key)
+					if err != nil {
+						return err
+					}
+					return wfAudit(ctx, tx, p, "purchase.draft", x.Reference, map[string]any{"purchase_id": x.ID, "link": link})
+				})
+			}
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

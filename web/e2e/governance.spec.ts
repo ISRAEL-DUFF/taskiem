@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
+import { confirmEmail } from "./confirm";
 import { totp } from "./totp";
 
 async function signIn(page: Page, email: string) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -36,6 +37,7 @@ test("a policy routes an approval that needs an authenticator code", async ({
     password: "correct horse battery",
     roles: ["approver", "treasury"],
   });
+  confirmEmail("ann@e2e.test");
 
   // The owner writes the policy on the Policies page.
   await page.getByRole("link", { name: "Approval policies" }).click();

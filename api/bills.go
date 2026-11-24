@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/spend"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -43,6 +44,8 @@ func (s *Server) billRoutes(r chi.Router) {
 	r.With(read).Get("/bills/{id}", s.getBill)
 	r.With(read).Get("/bills/{id}/payments", s.listBillPayments)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/pay", s.payBill)
+	r.With(manage, s.tenantWide).Post("/bills/{id}/transfer", s.askBillTransfer)
+	r.With(manage).Get("/bills/{id}/transfer", s.getBillTransfer)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/payments/{payment}/confirm-pair", s.confirmBillPair)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/declare", s.declareBillPaid)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/query", s.queryBill)
@@ -50,7 +53,7 @@ func (s *Server) billRoutes(r chi.Router) {
 }
 
 type billsOut struct {
-	Bills []links.Bill `json:"bills"`
+	Bills []billWithWays `json:"bills"`
 }
 
 func (s *Server) listBills(w http.ResponseWriter, r *http.Request) {
@@ -61,9 +64,19 @@ func (s *Server) listBills(w http.ResponseWriter, r *http.Request) {
 	}
 	var out billsOut
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		out.Bills, err = links.ListBillsTx(r.Context(), tx, status, 200)
-		return err
+		list, err := links.ListBillsTx(r.Context(), tx, status, 200)
+		if err != nil {
+			return err
+		}
+		out.Bills = make([]billWithWays, 0, len(list))
+		for _, b := range list {
+			v, err := s.billView(r.Context(), tx, principalFrom(r.Context()), b)
+			if err != nil {
+				return err
+			}
+			out.Bills = append(out.Bills, v)
+		}
+		return nil
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -72,10 +85,13 @@ func (s *Server) listBills(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getBill(w http.ResponseWriter, r *http.Request) {
-	var b links.Bill
+	var b billWithWays
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		b, err = links.GetBillTx(r.Context(), tx, chi.URLParam(r, "id"))
+		x, err := links.GetBillTx(r.Context(), tx, chi.URLParam(r, "id"))
+		if err != nil {
+			return err
+		}
+		b, err = s.billView(r.Context(), tx, principalFrom(r.Context()), x)
 		return err
 	}); err != nil {
 		s.fail(w, r, billErr(err))
@@ -339,6 +355,7 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 	var buyer, link uuid.UUID
 	var created bool
 	var bill links.Mirror
+	var transferTold string
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
 		clear := func() error {
 			_, err := tx.Exec(ctx, `DELETE FROM link_mirrors_due WHERE tenant_id = $1 AND invoice_id = $2`, seller, invoice)
@@ -368,7 +385,7 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, seller).Scan(&name); err != nil {
 			return err
 		}
-		lines, err := json.Marshal(x.Lines)
+		lines, err := billLines(ctx, tx, seller, x)
 		if err != nil {
 			return err
 		}
@@ -388,6 +405,30 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 				return err
 			}
 		}
+		// Paying by transfer: whether the seller's provider gives a number
+		// for one payment, and the newest the invoice has.
+		// (A connection that could not be read just now keeps what the bill
+		// had.)
+		if s.Invoices.Rails != nil {
+			if rl, err := s.Invoices.Rails.Resolve(ctx, seller, x.Connection); err == nil {
+				on := rl.Transfer != nil
+				longer := on && rl.Transfer.MaxMinutes > invoicing.AccountMinutes
+				bill.PayByTransfer, bill.TransferLonger = &on, &longer
+			}
+		}
+		all, err := invoicing.Accounts(ctx, tx, x.ID)
+		if err != nil {
+			return err
+		}
+		for _, a := range all {
+			// The newest number given (a failed ask on the seller's own page
+			// is not the buyer's to see).
+			if a.Kind == "transfer" && a.AccountNumber != "" && (a.Status == "open" || a.Status == "paid") {
+				bill.Transfer = &links.BillTransfer{Seq: a.Seq, BankName: a.BankName, AccountNumber: a.AccountNumber, AccountName: a.AccountName,
+					AmountKobo: a.AmountKobo, Status: a.Status, ExpiresAt: a.ExpiresAt, PaidAt: x.PaidAt, CreatedAt: a.CreatedAt}
+				break
+			}
+		}
 		if err := clear(); err != nil {
 			return err
 		}
@@ -397,8 +438,31 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		if _, err := links.EnterTx(ctx, tx, link, "link.bill", detail, links.Actor{Type: "system", ID: "link-mirror"}); err != nil {
 			return err
 		}
-		created, err = links.MirrorBillTx(ctx, tx, buyer, bill)
-		return err
+		if created, err = links.MirrorBillTx(ctx, tx, buyer, bill); err != nil {
+			return err
+		}
+		// A number paid into: both chats told once, paid in full or part.
+		if t := bill.Transfer; t != nil && !bill.Voided {
+			event := ""
+			switch {
+			case bill.PaidKobo >= bill.AmountKobo:
+				event = "transfer_paid"
+			case t.Status == "paid":
+				event = "transfer_part"
+			}
+			if event != "" {
+				told, err := links.TellTransferTx(ctx, tx, buyer, link, x.ID, fmt.Sprintf("%d:%s", t.Seq, event))
+				if err != nil {
+					return err
+				}
+				if told {
+					transferTold = event
+				}
+			}
+		}
+		// Its stock lines take Stock bought, as an order paid by hand
+		// does, so the spending report does not depend on that.
+		return spend.BillLabelsTx(ctx, tx, buyer, link, bill.Lines, "system:link-mirror")
 	})
 	if errors.As(err, new(*links.OtherOffError)) {
 		// The buyer has turned Money off: nothing crosses, and the invoice
@@ -407,6 +471,12 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 	}
 	if err != nil || link == uuid.Nil {
 		return false, err
+	}
+	if transferTold != "" {
+		s.background(ctx, "bill transfer paid", func(ctx context.Context) {
+			paid := bill.PaidKobo
+			s.billCards(ctx, link, seller, buyer, bill.Reference, transferTold, false, &paid, "")
+		})
 	}
 	if created {
 		s.background(ctx, "bill arrived", func(ctx context.Context) {
@@ -444,11 +514,7 @@ func (s *Server) tellHoldersSent(ctx context.Context, tenant uuid.UUID, perms []
 	buttons func(lang.Tag) []whatsapp.Button, sent func(channel, addr, id string)) {
 	var to []linkTold
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE role = ANY ($1)`, holdingAll(perms...))
-		if err != nil {
-			return err
-		}
-		users, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		users, err := holdersTx(ctx, tx, perms...)
 		if err != nil {
 			return err
 		}
@@ -517,18 +583,63 @@ func (s *Server) tellNotice(ctx context.Context, tenant, from uuid.UUID, n links
 	})
 }
 
-// holdingAll are the built-in roles holding every one of perms.
+// holdersTx are the people of the business in scope whose role holds every
+// one of perms ("a|b": either): a built-in role, or the business's own
+// role (which wins over a built-in one of the same name, as loadRoles).
+func holdersTx(ctx context.Context, tx pgx.Tx, perms ...string) ([]uuid.UUID, error) {
+	args := []any{holdingAll(perms...)}
+	custom := []string{"true"}
+	for _, p := range perms {
+		args = append(args, strings.Split(p, "|"))
+		custom = append(custom, fmt.Sprintf("r.permissions && $%d::text[]", len(args)))
+	}
+	rows, err := tx.Query(ctx, `SELECT DISTINCT m.user_id FROM memberships m
+		LEFT JOIN roles r ON r.tenant_id = m.tenant_id AND r.name = m.role
+		WHERE (r.name IS NULL AND m.role = ANY ($1)) OR (r.name IS NOT NULL AND `+strings.Join(custom, " AND ")+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	users, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, err
+	}
+	// Someone told of their own doing is told nothing (a handover).
+	if except, ok := ctx.Value(exceptUserKey{}).(uuid.UUID); ok {
+		users = slices.DeleteFunc(users, func(u uuid.UUID) bool { return u == except })
+	}
+	return users, nil
+}
+
+// exceptUserKey leaves a person out of those told (withoutUser).
+type exceptUserKey struct{}
+
+// withoutUser is ctx telling everyone but user.
+func withoutUser(ctx context.Context, user uuid.UUID) context.Context {
+	return context.WithValue(ctx, exceptUserKey{}, user)
+}
+
+// holdingAll are the built-in roles holding every one of perms ("a|b":
+// either of them).
 func holdingAll(perms ...string) []string {
+	has := func(r, perm string) bool {
+		for _, p := range strings.Split(perm, "|") {
+			if slices.Contains(access.Roles[r], p) {
+				return true
+			}
+		}
+		return false
+	}
 	var out []string
-	for _, r := range access.Holding(perms[0]) {
+	for _, r := range access.BuiltinNames() {
 		ok := true
-		for _, p := range perms[1:] {
-			ok = ok && slices.Contains(access.Roles[r], p)
+		for _, p := range perms {
+			ok = ok && has(r, p)
 		}
 		if ok {
 			out = append(out, r)
 		}
 	}
+	slices.Sort(out)
 	return out
 }
 
@@ -553,6 +664,10 @@ func billWords(l lang.Tag, b links.Mirror) (string, string) {
 // an invoice, as before: the last word is not an invoice number).
 func (s *Server) waBillCommand(ctx context.Context, c *chat, text, cmd string) (bool, error) {
 	f := strings.Fields(text)
+	// "pay INV-0042": an account number to pay the bill by transfer.
+	if len(f) >= 2 && strings.EqualFold(f[0], "pay") && billNumberRe.MatchString(f[len(f)-1]) {
+		return s.waPayBill(ctx, c, strings.Join(f[1:], " "))
+	}
 	one := len(f) >= 2 && strings.EqualFold(f[0], "bill") && (len(f) == 2 || billNumberRe.MatchString(f[len(f)-1]))
 	switch {
 	case cmd == "bills" || cmd == "my bills" || cmd == "bills due":
@@ -776,14 +891,17 @@ func (s *Server) payBill(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := principalFrom(r.Context())
+	var bill links.Bill
 	pay, err := s.startBillPay(r.Context(), p.TenantID, chi.URLParam(r, "id"), in.AmountKobo, p.ActorType()+":"+p.Actor(), p.Actor(),
 		func(tx pgx.Tx, b links.Bill, pay links.BillPayment) error {
+			bill = b
 			return auditTx(r, tx, "bill.pay", b.Reference, map[string]any{"amount_kobo": pay.AmountKobo, "payment": pay.ID})
 		})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	s.diaryChange(r.Context(), p, buyerStepWords("pay", bill.Reference, bill.SupplierName, pay.AmountKobo))
 	writeJSON(w, http.StatusAccepted, billPayOut{Payment: pay, RunID: *pay.RunID})
 }
 
@@ -965,6 +1083,7 @@ func (s *Server) declareBillPaid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.tellNotice(r.Context(), seller, p.TenantID, n, "/invoices/"+b.Reference)
+	s.diaryChange(r.Context(), p, buyerStepWords("declare", b.Reference, b.SupplierName, in.AmountKobo))
 	writeJSON(w, http.StatusOK, b)
 }
 
@@ -997,6 +1116,7 @@ func (s *Server) queryBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.tellNotice(r.Context(), seller, p.TenantID, n, "/invoices/"+b.Reference)
+	s.diaryChange(r.Context(), p, buyerStepWords("query", b.Reference, b.SupplierName, 0))
 	writeJSON(w, http.StatusOK, b)
 }
 
@@ -1079,4 +1199,65 @@ func (s *Server) settleInvoiceQuery(w http.ResponseWriter, r *http.Request) {
 		s.tellNotice(r.Context(), buyer, p.TenantID, n, "/bills")
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"number": number, "settled": true})
+}
+
+// billLines are an invoice's lines as its bill holds them. An invoice
+// raised for a linked order also says, on each line it raised from one of
+// the order's, the seller's own item (seller_item_id) and the buyer's
+// order (purchase_id), read here in the seller's scope: the buyer's
+// expense is split by them (engine/spend, what a business buys §8). A
+// line matched to none (an extra, a delivery charge, an amendment) says
+// neither and is Not labelled.
+func billLines(ctx context.Context, tx pgx.Tx, seller uuid.UUID, x invoicing.Invoice) (json.RawMessage, error) {
+	var purchase uuid.UUID
+	var raw []byte
+	var ordered []links.OrderLine
+	err := tx.QueryRow(ctx, `SELECT source_id, lines FROM link_orders WHERE tenant_id = $1 AND invoice_id = $2`, seller, x.ID).Scan(&purchase, &raw)
+	switch {
+	case err == nil:
+		if err := json.Unmarshal(raw, &ordered); err != nil {
+			return nil, err
+		}
+	case !errors.Is(err, pgx.ErrNoRows):
+		return nil, err
+	}
+	out, err := matchBillLines(x.Lines, ordered, purchase)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(out)
+}
+
+// matchBillLines are an invoice's lines, each matched to the order line it
+// was raised from (raiseOrderInvoice: the item, with its unit, at the
+// agreed price; each order line once) naming that line's seller item and
+// the buyer's order, purchase.
+func matchBillLines(lines []invoicing.Line, ordered []links.OrderLine, purchase uuid.UUID) ([]map[string]any, error) {
+	out := make([]map[string]any, len(lines))
+	used := make([]bool, len(ordered))
+	for i, l := range lines {
+		raw, err := json.Marshal(l)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(raw, &out[i]); err != nil {
+			return nil, err
+		}
+		if l.Kind != "" || l.Amendment != "" {
+			continue
+		}
+		for j, o := range ordered {
+			d := o.Item
+			if o.Unit != "" {
+				d += " (" + o.Unit + ")"
+			}
+			if used[j] || o.ItemID == "" || d != l.Description || o.PriceKobo != l.UnitKobo {
+				continue
+			}
+			used[j] = true
+			out[i]["seller_item_id"], out[i]["purchase_id"] = o.ItemID, purchase
+			break
+		}
+	}
+	return out, nil
 }

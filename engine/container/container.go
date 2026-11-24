@@ -17,6 +17,7 @@
 package container
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -129,9 +130,22 @@ type Outcome struct {
 const ResultPrefix = "TASKIEM-RESULT "
 
 // Encode is the outcome as the shim's result line.
+// HTML is not escaped: an output is JSON already and keeps its size,
+// but for U+2028 and U+2029, which grow from 3 bytes to 6.
 func (o Outcome) Encode() string {
-	raw, _ := json.Marshal(o)
-	return ResultPrefix + base64.StdEncoding.EncodeToString(raw)
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(o)
+	return ResultPrefix + base64.StdEncoding.EncodeToString(bytes.TrimRight(b.Bytes(), "\n"))
+}
+
+// ResultLineBytes bounds the result line for an output limit, so the
+// runner reads enough of the log for any output within it: the output
+// at most doubles when encoded (U+2028, U+2029), the logs grow at most
+// sixfold (control characters as \u00XX), and base64 adds a third.
+func ResultLineBytes(outputBytes int) int {
+	return (2*outputBytes+6*LogBytes+4<<10)*4/3 + 8<<10
 }
 
 // ParseOutcome finds the result line in a container's log.

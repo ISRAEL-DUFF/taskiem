@@ -8,6 +8,7 @@
 | [Idempotency keys](idempotency.md) | `idempotency` in manifests, `effect` in steps | `engine/effects` |
 | [Workflow tests `wd-test/v1`](wd-test-v1.md) (Phase 2) | `*.test.json` files | `engine/wdtest` |
 | [WebAssembly connector ABI `taskiem-connector/v1`](connector-wasm-v1.md) (Phase 2) | module imports and exports | `engine/wasmconn`, `sdk/connectorsdk` |
+| [Page `page/v1`](page-v1.md) ([decision 0072](../decisions/0072-pages.md)) | `schemas/page-v1.schema.json` | `engine/pages` |
 
 "Frozen" means Phase 1 builds against these as written. A change during Phase 1 needs a decision-log entry; a breaking change after Phase 1 needs a new schema version and a migration tool (build plan, "Release cadence").
 
@@ -17,4 +18,5 @@ Changes recorded during Phase 1:
 - `wd/v1` trigger type `storefront` (an addition; nothing existing changed), and its `booking` action (S4, also an addition): [decision 0036](../decisions/0036-storefronts.md), [storefronts](../storefronts.md).
 - `wd/v1` trigger type `form` and step type `form` (S7, additions; nothing existing changed), with the `forms` mock in `wd-test/v1`: [decision 0037](../decisions/0037-forms.md), [forms](../spec/forms.md).
 - `connector/v1` rule 17, `auth.modes`: live and test as hosts, chosen per connection (an addition; connections without a mode are unchanged).
+- `wd/v1` rule 9: an `http` step cannot be `reconcilable_write` (refused at publish, not by the schema, so versions already published still load; their unknown outcomes park): it has no reconcile action to ask with.
 - `wd/v1` webhook trigger `methods`, `auth: basic` and `jwt`, `jwt` settings and `cors` (additions; a webhook without them is unchanged, POST only), with test calls: [webhook triggers](wd-v1.md#webhook-triggers).

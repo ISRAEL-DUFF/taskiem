@@ -46,7 +46,7 @@ func TestWhatsAppLanguages(t *testing.T) {
 	if !strings.Contains(got2, yo("lang.switched", "language", "Yorùbá")) || !strings.Contains(got2, yo("lang.draft_note")) {
 		t.Fatalf("switched: %q", got2)
 	}
-	if got := w.say(t, "+2348010000001", "help"); !strings.Contains(got, yo("wa.help.intro")) || !strings.Contains(got, "*language*") {
+	if got := w.say(t, "+2348010000001", "help all"); !strings.Contains(got, yo("wa.help.intro")) || !strings.Contains(got, "*language*") {
 		t.Fatalf("help in Yoruba: %q", got)
 	}
 	// Yoruba words work, and English ones still do.
@@ -83,7 +83,7 @@ func TestWhatsAppLanguages(t *testing.T) {
 
 	// The tenant turns its languages off: English again, whatever was chosen.
 	owner.must(200, "PUT", "/v1/languages", map[string]any{"languages": []string{}})
-	if got := w.say(t, "+2348010000001", "help"); !strings.Contains(got, "You can send:") {
+	if got := w.say(t, "+2348010000001", "help all"); !strings.Contains(got, "You can send:") {
 		t.Fatalf("off again: %q", got)
 	}
 	// Changes are audited.
@@ -100,17 +100,21 @@ func TestWhatsAppModelRoutesOtherLanguages(t *testing.T) {
 	owner := w.tenant(t, "Acme", "owner@acme.test")
 	w.bind(t, owner, "+2348010000003")
 
-	// English never goes to the model.
+	// English is never routed by the model: what nothing recognised goes
+	// to it only for help with the person's own commands (chat_understand.go).
 	w.say(t, "+2348010000003", "what is going on with my stuff")
-	if n := len(fake.Requests()); n != 0 {
-		t.Fatalf("English sent to the model: %d", n)
+	for _, req := range fake.Requests() {
+		if !strings.Contains(ai.PromptText(req), "<commands>") {
+			t.Fatalf("English routed by the model: %s", ai.PromptText(req))
+		}
 	}
+	before := len(fake.Requests())
 	w.say(t, "+2348010000003", "language yo")
 	got := w.say(t, "+2348010000003", "Ṣé nǹkan kan bàjẹ́? Pe mi lórí 08031234567")
 	if !strings.Contains(got, yo("wa.status.none")) {
 		t.Fatalf("routed: %q", got)
 	}
-	reqs := fake.Requests()
+	reqs := fake.Requests()[before:]
 	if len(reqs) != 1 || !strings.Contains(ai.PromptText(reqs[0]), "Yoruba (yo)") || strings.Contains(ai.PromptText(reqs[0]), "08031234567") {
 		t.Fatalf("request: %d %v", len(reqs), reqs)
 	}
@@ -251,4 +255,38 @@ func countRows(t *testing.T, w *world, q string) int {
 		t.Fatal(err)
 	}
 	return n
+}
+
+// A chat's words do not stay in ai_interactions (finding F50): a message
+// routed through the model, and the model's answer, named people and
+// amounts that pattern redaction leaves, kept in plain text for good. The
+// record keeps the tokens and what happened, for the budget and billing.
+func TestChatModelCallsKeepNoText(t *testing.T) {
+	w := newWAWorld(t)
+	fake := &ai.Fake{Respond: func(req ai.Request) (*ai.Response, error) {
+		return &ai.Response{Text: `{"intent":"owes","argument":"Chinedu Okafor owes 15000 for rice"}`, StopReason: "end_turn", Model: "fake-model",
+			Usage: ai.Usage{InputTokens: 300, OutputTokens: 20}}, nil
+	}}
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN, lang.PCM}, Model: fake}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	w.bind(t, owner, "+2348010000004")
+	w.say(t, "+2348010000004", "language pcm")
+	w.say(t, "+2348010000004", "Chinedu Okafor for Ikeja owe me 15k for rice")
+	if n := len(fake.Requests()); n < 1 {
+		t.Fatalf("%d model requests", n)
+	}
+	// Nor does the model's help with a message nothing recognised.
+	var words int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM ai_interactions WHERE messages::text || ' ' || COALESCE(response, '') ~ '(Chinedu|rice)'`).Scan(&words); err != nil || words != 0 {
+		t.Fatalf("words kept: %d %v", words, err)
+	}
+	var kept string
+	var tokens int64
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT messages::text || ' ' || COALESCE(response, ''), total_tokens FROM ai_interactions
+		WHERE kind = 'intent' AND outcome = 'valid' AND build_id IS NULL`).Scan(&kept, &tokens); err != nil {
+		t.Fatal(err)
+	}
+	if tokens != 320 || strings.Contains(kept, "Chinedu") || strings.Contains(kept, "15") || strings.Contains(kept, "rice") {
+		t.Fatalf("recorded %q, %d tokens", kept, tokens)
+	}
 }

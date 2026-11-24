@@ -14,7 +14,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/effects"
 )
 
-// webhook registers a bot's one webhook (decision 0021; decision 0062 C7),
+// webhook registers a bot's one webhook (decision 0021; decision 0074 C7),
 // so the owner never calls setWebhook by hand. A bot has one webhook,
 // which is why it is the connection's, whichever workflows use the bot;
 // and setting it stops whatever else read the bot's updates (another

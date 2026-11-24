@@ -1,4 +1,4 @@
-# A business's customer assistant (docs/assistant-guard.md, decision 0062
+# A business's customer assistant (docs/assistant-guard.md, decision 0074
 # V6): what a workflow answering customers does besides talking. Acts for
 # the run's organisation and needs no connection. channel and sender are a
 # guarded trigger's (trigger.guard.channel, trigger.guard.sender).
@@ -122,7 +122,7 @@ actions:
     title: Gather a customer's quick messages
     description: >-
       For a customer who sends several short messages in a row, so they get
-      one answer (decision 0062 V10, L5): after a short wait, latest says
+      one answer (decision 0074 V10, L5): after a short wait, latest says
       whether this run's message is still their newest one waiting for an
       answer (when it is not, the run for the newer one answers, and this
       one stays quiet), and earlier is what they wrote before it since they

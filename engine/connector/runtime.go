@@ -24,9 +24,21 @@ type Request struct {
 	// to be sent (database clock), for providers whose duplicate protection
 	// expires; zero for reads.
 	KeyFirstSent time.Time
-	Attempt      int
-	Logger       *slog.Logger
-	HTTP         *http.Client
+	// Reconciling is set when the engine runs the action as another
+	// action's reconcile (contract: action-classes.md), with the key in
+	// Input. A not-found answer then has the engine send the effect again,
+	// so a connector whose lookup by the key is not confirmed with the
+	// provider answers effects.ErrIndeterminate instead of ErrNotFound: the
+	// step parks for a person.
+	Reconciling bool
+	Attempt     int
+	// Secrets are the secret values this call was given (the connection's
+	// secret fields, the step's secrets): a runtime that writes what an
+	// action logs (the WebAssembly host) takes them out of each line
+	// before it is cut or written. The worker's Logger scrubs them too.
+	Secrets []string
+	Logger  *slog.Logger
+	HTTP    *http.Client
 	// Dial opens egress-guarded TCP connections for connectors that do not
 	// speak HTTP (databases, SFTP).
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -169,6 +181,11 @@ type Connector struct {
 	// Enrichers complete a verified delivery before its runs start (a
 	// record the provider left out). Keyed by trigger; optional.
 	Enrichers map[string]Enricher
+	// Keyers give a verified delivery's dedup key, for triggers whose
+	// manifest dedup cannot read the event itself (an encrypted body).
+	// Keyed by trigger; optional. Deliveries to a tenant's own address
+	// only.
+	Keyers map[string]Keyer
 	// CheckCredentials, when set, refuses a connection's credentials
 	// before they are saved (a combination of fields the connector cannot
 	// use safely). Its error is shown to whoever saves them.
@@ -230,6 +247,12 @@ const TenantPrefix = "x_"
 // (docs/connector-submissions.md), distinct from built-ins and from
 // tenants' own x_ connectors.
 const CataloguePrefix = "p_"
+
+// BuiltIn says whether id is one of Taskiem's own connectors: neither a
+// tenant's (x_) nor a publisher's in the catalogue (p_).
+func BuiltIn(id string) bool {
+	return !strings.HasPrefix(id, TenantPrefix) && !strings.HasPrefix(id, CataloguePrefix)
+}
 
 // TenantSource returns a tenant's own connectors and the catalogue
 // connectors it installed.
@@ -394,6 +417,17 @@ func (c *Connector) Check() error {
 			return fmt.Errorf("connector %s: enricher %q is not a trigger in the manifest", c.Manifest.ID, name)
 		}
 	}
+	for name := range c.Keyers {
+		t, ok := c.Manifest.Triggers[name]
+		if !ok {
+			return fmt.Errorf("connector %s: keyer %q is not a trigger in the manifest", c.Manifest.ID, name)
+		}
+		if t.Split != "" {
+			// A keyer reads the whole delivery: it would give every item
+			// one key.
+			return fmt.Errorf("connector %s: keyer %q is for a trigger that splits its deliveries", c.Manifest.ID, name)
+		}
+	}
 	if o := c.Manifest.Auth.OAuth2; o != nil && (len(o.LinkedFields) > 0) != (c.Link != nil) {
 		return fmt.Errorf("connector %s: auth.oauth2.linked_fields and a Link handler go together", c.Manifest.ID)
 	}
@@ -439,7 +473,7 @@ func (r *Registry) Pins() map[string]string {
 // CodedError gives an action's error a code a workflow can branch on in
 // on_error (steps.<id>.error.code), besides its kind: window_closed when
 // WhatsApp refuses a message outside the customer's 24-hour window
-// (decision 0062 C13).
+// (decision 0074 C13).
 type CodedError struct {
 	Code string
 	Err  error

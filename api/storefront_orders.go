@@ -145,6 +145,8 @@ func (s *Server) getStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 	ref := chi.URLParam(r, "reference")
 	var o storefront.Order
 	var pays []storefront.OrderPayment
+	var orders int
+	var savedAs string
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		o, err = s.Orders.GetOrder(r.Context(), tx, principalFrom(r.Context()).TenantID, ref)
@@ -152,6 +154,14 @@ func (s *Server) getStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 			return pgx.ErrNoRows
 		}
 		if err != nil {
+			return err
+		}
+		// How many orders its customer has made: one is a new customer's
+		// first, which the page offers to save (saved objects S3).
+		if orders, err = customerOrdersTx(r.Context(), tx, principalFrom(r.Context()).TenantID, ref); err != nil {
+			return err
+		}
+		if savedAs, err = customerSavedTx(r.Context(), tx, principalFrom(r.Context()).TenantID, o.Customer); err != nil {
 			return err
 		}
 		// The money matched to it (docs/matching.md), undone with
@@ -168,7 +178,7 @@ func (s *Server) getStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 	if !reveal {
 		maskCustomer(&o.Customer)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"order": o, "payments": pays, "revealed": reveal})
+	writeJSON(w, http.StatusOK, map[string]any{"order": o, "payments": pays, "revealed": reveal, "customer_orders": orders, "customer_saved": savedAs})
 }
 
 // maskCustomer leaves enough to recognise a customer: a name's first
@@ -193,16 +203,46 @@ func maskCustomer(c *storefront.Customer) {
 // RunStorefrontOrders takes submissions from the inbox every second, asks
 // the payment provider about waiting payments every 30 seconds, and every
 // 15 applies customers' and owners' changes, sweeps bookings and moves
-// riders' deliveries on (offers that ran out, quiet riders).
+// riders' deliveries on (offers that ran out, quiet riders); every hour it
+// erases the customer's details of ended orders past retention.
 func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 	s.chatHooks()
+	// Staff: who is late, shifts left open (staff_clock.go).
+	go every(ctx, time.Minute, func() {
+		if err := s.StaffTick(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("staff: the job", "err", err)
+		}
+	})
+	// Reminders on saved things' dates, told in the morning (saved_reminders.go).
+	go every(ctx, time.Minute, func() {
+		if err := s.SavedRemindersTick(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("saved: the reminders", "err", err)
+		}
+	})
+	// The phone index's one-time fill: orders made before it, a few
+	// businesses at a time (docs/spec/taskiem-for-everyone.md §13).
+	if s.PhoneIndex.Ready() {
+		go every(ctx, 10*time.Minute, func() {
+			if _, err := s.PhoneIndex.Backfill(ctx, 20); err != nil && ctx.Err() == nil {
+				s.Logger.Error("phone index: filling it", "err", err)
+			}
+		})
+	}
 	if s.Orders == nil {
 		<-ctx.Done()
 		return nil
 	}
-	tick, payments, bookings := time.NewTicker(time.Second), time.NewTicker(30*time.Second), time.NewTicker(15*time.Second)
+	// The provider lookups run in a loop of their own (as invoices' do,
+	// invoices.go): a slow provider must not hold back the order inbox.
+	go every(ctx, 30*time.Second, func() {
+		if err := s.Orders.CheckPayments(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("storefront: payments", "err", err)
+		}
+	})
+	tick, bookings := time.NewTicker(time.Second), time.NewTicker(15*time.Second)
+	retention := time.NewTicker(time.Hour)
+	defer retention.Stop()
 	defer tick.Stop()
-	defer payments.Stop()
 	defer bookings.Stop()
 	for {
 		select {
@@ -212,9 +252,11 @@ func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 			if err := s.Orders.Drain(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("storefront: inbox", "err", err)
 			}
-		case <-payments.C:
-			if err := s.Orders.CheckPayments(ctx); err != nil && ctx.Err() == nil {
-				s.Logger.Error("storefront: payments", "err", err)
+		case <-retention.C:
+			// Ended orders past the business's retention lose their
+			// customer's details (docs/storefronts.md, Privacy).
+			if err := s.Orders.ForgetExpired(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("storefront: retention", "err", err)
 			}
 		case <-bookings.C:
 			if err := s.Orders.CheckBookings(ctx); err != nil && ctx.Err() == nil {

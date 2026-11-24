@@ -663,7 +663,7 @@ func ruleBooksByCapability(def *wd.Definition, reg connector.Lookup) (bool, stri
 }
 
 // ruleCustomerGuard: an assistant answering customers on a chat starts on
-// a chat trigger the customer guard watches (decision 0062 V6): STOP, a
+// a chat trigger the customer guard watches (decision 0074 V6): STOP, a
 // person, limits and the notice before any run (A13).
 func ruleCustomerGuard(def *wd.Definition, _ connector.Lookup) (bool, string) {
 	if def.Trigger.Type != "connector_event" {

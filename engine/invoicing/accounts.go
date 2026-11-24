@@ -48,8 +48,11 @@ const (
 	MaxPerHour    = 5
 	MaxPerInvoice = 20
 	// AccountMinutes is the lifetime asked for an account, kept within
-	// the rail's range.
-	AccountMinutes = 30
+	// the rail's range (60 minutes: the payments flow, settled 5).
+	AccountMinutes = 60
+	// LongestMinutes asks for the longest the rail gives ("I need
+	// longer").
+	LongestMinutes = -1
 	// WatchAfterExpiry is how long an account is still checked for a
 	// payment after it expires: a transfer started in time can land late.
 	WatchAfterExpiry = 48 * time.Hour
@@ -98,6 +101,13 @@ func (a Account) Open(now time.Time) bool {
 // with the payment id the rail will report, is written before the rail
 // is asked, so money paid into it is found even if the answer is lost.
 func (s *Invoices) Issue(ctx context.Context, tenant, invoice uuid.UUID, kind string, amountKobo int64) (Account, error) {
+	return s.IssueFor(ctx, tenant, invoice, kind, amountKobo, 0)
+}
+
+// IssueFor is Issue with how long an account number is good for: minutes
+// (0: AccountMinutes; LongestMinutes: the longest the rail gives), kept
+// within the rail's range.
+func (s *Invoices) IssueFor(ctx context.Context, tenant, invoice uuid.UUID, kind string, amountKobo int64, minutes int) (Account, error) {
 	if s.Rails == nil {
 		return Account{}, fmt.Errorf("%w: payments are not set up on this server", ErrNoRail)
 	}
@@ -142,7 +152,8 @@ func (s *Invoices) Issue(ctx context.Context, tenant, invoice uuid.UUID, kind st
 			if o.Kind != kind {
 				continue
 			}
-			if o.AmountKobo == amount && (o.Open(now) || o.Status == "requested" && o.CreatedAt.After(now.Add(-time.Minute))) {
+			// The open one again; "I need longer" (the longest) asks a new one.
+			if o.AmountKobo == amount && minutes != LongestMinutes && (o.Open(now) || o.Status == "requested" && o.CreatedAt.After(now.Add(-time.Minute))) {
 				a = o
 				return nil
 			}
@@ -180,7 +191,14 @@ func (s *Invoices) Issue(ctx context.Context, tenant, invoice uuid.UUID, kind st
 	}
 	in := map[string]any{"amount_kobo": a.AmountKobo, "customer": s.payer(x), "description": "Invoice " + x.Number}
 	if kind == "transfer" {
-		in["expires_minutes"] = min(max(AccountMinutes, rail.Transfer.MinMinutes), rail.Transfer.MaxMinutes)
+		want := AccountMinutes
+		switch {
+		case minutes == LongestMinutes:
+			want = rail.Transfer.MaxMinutes
+		case minutes > 0:
+			want = minutes
+		}
+		in["expires_minutes"] = min(max(want, rail.Transfer.MinMinutes), rail.Transfer.MaxMinutes)
 	}
 	return s.ask(ctx, tenant, a, rail, capab, in, PaymentKey(tenant, invoice, kind, a.Seq))
 }
@@ -417,7 +435,12 @@ func (s *Invoices) Drain(ctx context.Context) error {
 			}
 			continue
 		}
-		a, err := s.Issue(ctx, q.Tenant, q.Invoice, q.Kind, q.AmountKobo)
+		// A bill's request may ask for the longest the rail gives.
+		minutes := 0
+		if m, ok := q.ReplyTo["minutes"].(float64); ok {
+			minutes = int(m)
+		}
+		a, err := s.IssueFor(ctx, q.Tenant, q.Invoice, q.Kind, q.AmountKobo, minutes)
 		if err != nil {
 			s.log().Warn("invoice account", "tenant", q.Tenant, "invoice", q.Invoice, "kind", q.Kind, "err", err)
 			s.noteUnavailable(ctx, q, err)
@@ -460,13 +483,31 @@ type watched struct {
 	invoice, order, link *uuid.UUID
 }
 
+// checkEvery is how often an account's payment is looked up, and so how
+// long a pass's claim on it lasts; checkBudget is how long one tenant's
+// pass starts new lookups, below it. A lookup still under way when the
+// claim lapses may be asked again by another replica: that is a read, and
+// a payment is counted once (Received).
+const (
+	checkEvery  = 30 * time.Second
+	checkBudget = 20 * time.Second
+)
+
 func (s *Invoices) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	now := s.now()
 	var list []watched
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+accountCols+`, invoice_id, order_id, customer_link_id FROM customer_invoice_accounts
-			WHERE tenant_id = $1 AND status IN ('requested', 'open') AND (checked_at IS NULL OR checked_at < $2)
-			ORDER BY checked_at NULLS FIRST LIMIT 50`, tenant, now.Add(-30*time.Second))
+		// The accounts are claimed as they are read (checked_at set now,
+		// rows another replica is reading skipped), so api replicas split
+		// the lookups rather than each asking the provider about every one.
+		// The pick is materialised: as an IN subquery the planner may
+		// rescan it, and each rescan skips the rows just locked.
+		//nolint:misspell // MATERIALIZED is the SQL keyword
+		rows, err := tx.Query(ctx, `WITH c AS MATERIALIZED (SELECT id AS claimed FROM customer_invoice_accounts
+			  WHERE tenant_id = $1 AND status IN ('requested', 'open') AND (checked_at IS NULL OR checked_at < $2)
+			  ORDER BY checked_at NULLS FIRST LIMIT 50 FOR UPDATE SKIP LOCKED)
+			UPDATE customer_invoice_accounts SET checked_at = $3 FROM c WHERE id = c.claimed
+			RETURNING `+accountCols+`, invoice_id, order_id, customer_link_id`, tenant, now.Add(-checkEvery), now)
 		if err != nil {
 			return err
 		}
@@ -482,7 +523,15 @@ func (s *Invoices) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	started := time.Now()
 	for _, w := range list {
+		// The claim lasts checkEvery: past checkBudget, the rest is left
+		// for the next pass (any replica's), so a slow provider neither
+		// holds this tenant's pass for minutes nor lets another replica
+		// look up what this one is about to.
+		if time.Since(started) > checkBudget {
+			break
+		}
 		// Stop watching an account well after it expired, and a link after
 		// a week: nothing more will come.
 		end := w.CreatedAt.Add(WatchLinks)
@@ -544,17 +593,35 @@ type Received struct {
 	AmountKobo int64
 	Connection string
 	Account    uuid.UUID
+	// Entry is the money log entry of the payment, when the caller holds
+	// it (matching, of an entry it is looking at): two transfers into one
+	// account number are two entries with one PaymentID. Nil: the entry is
+	// found, or written, by the payment's id.
+	Entry *uuid.UUID
 }
+
+// overpaid is how money is a customer's (money_entry_customers.how) with
+// no one asked: it was paid into the account Taskiem gave for an invoice
+// of theirs, and the invoice did not take all of it.
+const overpaid = "invoice"
 
 // Received counts a payment into an invoice's account or link towards
 // it, exactly (the reference is the one Taskiem gave), once, and tells a
-// run waiting on the invoice when it becomes paid.
+// run waiting on the invoice when it becomes paid. The invoice takes what
+// is due on it and no more (CountPayment): what is left of the money, or
+// all of it when the invoice is already paid, is the customer's credit
+// (docs/matching.md#more-than-is-due), counted towards the next invoice
+// sent to them; where the invoice names no customer it is ErrState and
+// left for a person. An invoice that takes no payment (void) is ErrState
+// too, with the money recorded all the same.
 func (s *Invoices) Received(ctx context.Context, tenant, invoice uuid.UUID, r Received) error {
 	var x Invoice
 	var became bool
+	var refused error
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var entry *uuid.UUID
-		if s.MoneyLog != nil {
+		refused = nil
+		entry := r.Entry
+		if entry == nil && s.MoneyLog != nil {
 			// The same movement the rail's payment.received event is: one
 			// entry whichever is heard first, and the match names it.
 			amount := r.AmountKobo
@@ -565,21 +632,76 @@ func (s *Invoices) Received(ctx context.Context, tenant, invoice uuid.UUID, r Re
 			}
 			entry = &id
 		}
-		var err error
-		x, became, err = s.RecordPayment(ctx, tx, tenant, invoice.String(), PaymentIn{AmountKobo: r.AmountKobo, PaymentID: r.PaymentID, EntryID: entry,
-			Connection: r.Connection, How: "exact", By: "system:" + r.Connection, Reasons: []string{"paid into the account Taskiem gave for this invoice"}})
+		// Counted in a savepoint: an invoice that takes no payment (void)
+		// leaves the money recorded for a person to match, and the account
+		// paid, so it is not polled again.
+		sp, err := tx.Begin(ctx)
 		if err != nil {
 			return err
 		}
-		if r.Account != uuid.Nil {
-			_, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, r.Account)
+		x, became, err = s.RecordPayment(ctx, sp, tenant, invoice.String(), PaymentIn{AmountKobo: r.AmountKobo, PaymentID: r.PaymentID, EntryID: entry,
+			Connection: r.Connection, How: "exact", By: "system:" + r.Connection, Reasons: []string{"paid into the account Taskiem gave for this invoice"}})
+		switch {
+		case errors.Is(err, ErrState):
+			if rerr := sp.Rollback(ctx); rerr != nil {
+				return rerr
+			}
+			refused, became = err, false
+		case err != nil:
+			return err
+		default:
+			if err := sp.Commit(ctx); err != nil {
+				return err
+			}
 		}
+		// What the invoice did not take is its customer's money: all of it
+		// when the invoice was already paid, else what was over.
+		if entry != nil && (refused == nil || errors.Is(refused, ErrNothingDue)) {
+			kept, err := s.keepOver(ctx, tx, tenant, invoice, *entry, r.Connection)
+			if err != nil {
+				return err
+			}
+			if kept {
+				refused = nil
+			}
+		}
+		if r.Account == uuid.Nil {
+			return nil // a refusal is answered below, with the money recorded
+		}
+		_, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, r.Account)
 		return err
 	})
+	if err == nil {
+		err = refused
+	}
 	if err != nil || !became {
 		return err
 	}
 	return s.Paid(ctx, tenant, x)
+}
+
+// keepOver makes what is left of an entry, paid into the account Taskiem
+// gave for an invoice, the invoice's customer's credit; kept is false
+// when nothing is left, or the invoice names no customer (the money is
+// then a person's to match). Money that is someone's already stays theirs.
+func (s *Invoices) keepOver(ctx context.Context, tx pgx.Tx, tenant, invoice, entry uuid.UUID, connection string) (bool, error) {
+	left, ok, err := moneylog.LockLeft(ctx, tx, entry)
+	if err != nil || !ok || left <= 0 {
+		return false, err
+	}
+	var customer *string
+	if err := tx.QueryRow(ctx, `SELECT customer_id FROM customer_invoices WHERE tenant_id = $1 AND id = $2`, tenant, invoice).Scan(&customer); err != nil {
+		return false, err
+	}
+	if customer == nil || *customer == "" {
+		return false, nil
+	}
+	if err := MarkCustomers(ctx, tx, tenant, entry, *customer, nil, overpaid, "system:"+connection); err != nil {
+		return false, err
+	}
+	var whose string
+	err = tx.QueryRow(ctx, `SELECT customer_id FROM money_entry_customers WHERE tenant_id = $1 AND entry_id = $2`, tenant, entry).Scan(&whose)
+	return err == nil && whose == *customer, err
 }
 
 // noteUnavailable records that a request found no payments connection able

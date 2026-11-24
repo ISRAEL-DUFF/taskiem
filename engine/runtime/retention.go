@@ -231,3 +231,22 @@ func (s *Scheduler) purgeReceipts(ctx context.Context) error {
 	}
 	return nil
 }
+
+// purgeSessions deletes sign-in sessions that expired more than 30 days
+// ago (a revoked one keeps its expiry), with their client IPs
+// (docs/privacy.md), sessionPurgeBatch per call, up to sessionPurgeBatches
+// calls per pass; the rest waits for the next pass.
+func (s *Scheduler) purgeSessions(ctx context.Context) error {
+	for range sessionPurgeBatches {
+		var n int64
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_purge_sessions($1)`, sessionPurgeBatch).Scan(&n); err != nil || n < sessionPurgeBatch {
+			return err
+		}
+	}
+	return nil
+}
+
+const (
+	sessionPurgeBatch   = 5000
+	sessionPurgeBatches = 20
+)

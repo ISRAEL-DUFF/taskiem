@@ -17,6 +17,39 @@ export function atBottom(m: {
   return m.scrollHeight - m.scrollTop - m.clientHeight <= NEAR_BOTTOM;
 }
 
+/**
+ * Where to scroll to show the newest message at the bottom of the view,
+ * when something follows it in the thread (the alert cards after the
+ * Taskiem conversation's messages): the scrollTop that puts the end of the
+ * newest message, less a little room, at the view's end. Undefined when
+ * nothing of note follows it, so the end of the thread is the place.
+ * `newestEnd` is how far down the content the newest message ends.
+ */
+export function newestTop(m: {
+  scrollHeight: number;
+  clientHeight: number;
+  newestEnd: number;
+}): number | undefined {
+  if (m.scrollHeight - m.newestEnd <= NEAR_BOTTOM) return undefined;
+  return Math.max(0, m.newestEnd + 16 - m.clientHeight);
+}
+
+/** Whether the reader is at the newest message: the thread's end, or the
+ * newest message ending within the view, with only what follows it below. */
+export function atNewest(m: {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+  newestEnd?: number;
+}): boolean {
+  if (atBottom(m)) return true;
+  if (m.newestEnd === undefined) return false;
+  return (
+    m.newestEnd <= m.scrollTop + m.clientHeight + NEAR_BOTTOM &&
+    m.newestEnd > m.scrollTop
+  );
+}
+
 /** The first message the other side sent that this side has not read, and how
  * many there are: where "N unread messages" goes. */
 export function firstUnread(

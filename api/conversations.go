@@ -22,7 +22,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/speech"
 )
 
-// The conversations page (decision 0062 V7, docs/conversations.md): the
+// The conversations page (decision 0074 V7, docs/conversations.md): the
 // business's assistants, their customers, what was said with each (words
 // shown with numbers and emails hidden, unless revealed by someone who may,
 // audited), answering a customer by hand through the same connection, and
@@ -224,9 +224,9 @@ func (s *Server) customerHint(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	return channelWhere(channel) + " customer " + shortMark(subject)
 }
 
-// contactOf is a customer's row: their sender (opened) and when they last
+// assistantContactOf is a customer's row: their sender (opened) and when they last
 // wrote; ErrNoContact when there is none.
-func (s *Server) contactOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, subject string) (sender string, last time.Time, sealed map[string]any, err error) {
+func (s *Server) assistantContactOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, subject string) (sender string, last time.Time, sealed map[string]any, err error) {
 	err = tx.QueryRow(ctx, `SELECT sender, last_inbound_at FROM assistant_contacts WHERE tenant_id = $1 AND channel = $2 AND subject = $3`,
 		tenant, channel, subject).Scan(&sealed, &last)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -432,7 +432,7 @@ func (s *Server) replyByHand(w http.ResponseWriter, r *http.Request) {
 	var state string
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		if sender, last, _, err = s.contactOf(ctx, tx, p.TenantID, req.Channel, req.Customer); err != nil {
+		if sender, last, _, err = s.assistantContactOf(ctx, tx, p.TenantID, req.Channel, req.Customer); err != nil {
 			return err
 		}
 		var tenantStatus string
@@ -717,7 +717,7 @@ func (s *Server) pauseCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 	err := s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
-		sender, _, _, err := s.contactOf(ctx, tx, p.TenantID, req.Channel, req.Customer)
+		sender, _, _, err := s.assistantContactOf(ctx, tx, p.TenantID, req.Channel, req.Customer)
 		if err != nil {
 			return err
 		}

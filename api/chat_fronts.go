@@ -792,7 +792,7 @@ func matchListed(items []listedItem, name string) []listedItem {
 // front's own list.
 func (s *Server) frontAskChange(ctx context.Context, c *chat, sh *chatShop, it listedItem) error {
 	if it.Table == "" {
-		col := map[string]string{"price": it.Columns.Price, "hide": it.Columns.Available, "show": it.Columns.Available, "stock": it.Columns.Stock}[sh.Action]
+		col := map[string]string{"price": it.Columns.Price, "hide": it.Columns.Available, "show": it.Columns.Available, "stock": s.countColumn()}[sh.Action]
 		what := map[string]string{"price": "price", "hide": "available", "show": "available", "stock": "stock"}[sh.Action]
 		if ok, err := s.shopColumn(ctx, c, col, what); !ok || err != nil {
 			return err

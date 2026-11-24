@@ -386,6 +386,13 @@ func (s *Server) invoiceForContact(ctx context.Context, tx pgx.Tx, b invoiceButt
 // buttons once the queue has issued the account number, or failed
 // (invoicing.Invoices.Answered).
 func (s *Server) InvoiceAnswered(ctx context.Context, q invoicing.Request, a invoicing.Account, issueErr error) {
+	if q.Channel == "bill" {
+		// A linked buyer's bill asked for it (bill_transfer.go).
+		if err := s.billTransferAnswered(ctx, q, a, issueErr); err != nil {
+			s.Logger.Warn("bills: answering a transfer", "tenant", q.Tenant, "invoice", q.Invoice, "err", err)
+		}
+		return
+	}
 	if err := s.invoiceAnswer(ctx, q, a, issueErr); err != nil {
 		s.Logger.Warn("invoices: answering in chat", "tenant", q.Tenant, "invoice", q.Invoice, "channel", q.Channel, "err", err)
 	}

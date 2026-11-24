@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 )
 
@@ -201,6 +202,11 @@ func (o *Orders) payOrder(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *C
 	if !ord.Matchable() {
 		return nil, fmt.Errorf("%w: %s is not waiting for a payment (%s)", ErrDecision, ord.Reference, strings.ReplaceAll(ord.Status, "_", " "))
 	}
+	// An order paid in shares never takes more than is left: money over it
+	// is the payer's, to be sent back.
+	if ord.PaidInShares && ord.PaidKobo+p.AmountKobo > ord.Payable() {
+		return nil, fmt.Errorf("%w: %s has %s left to pay", ErrDecision, ord.Reference, FormatNaira(max(ord.Payable()-ord.PaidKobo, 0)))
+	}
 	// Less than the deposit or the total: a part, counted; the order waits
 	// for the rest.
 	if ord.PaidKobo+p.AmountKobo < ord.Payable() {
@@ -249,6 +255,22 @@ func (o *Orders) Paid(ctx context.Context, tenant uuid.UUID, c Counted) error {
 		if err := o.AfterPaid(ctx, tenant, c.Order); err != nil {
 			o.log().Warn("storefront: after a payment", "reference", c.Order.Reference, "err", err)
 		}
+	}
+	if c.Became && c.Order.Kind == "chat" {
+		// An order confirmed from a customer's message (phase 2): paid by
+		// transfer, its stock goes now, and the customer is told in their
+		// thread.
+		if _, err := o.LowerStock(ctx, tenant, c.Order.Reference); err != nil {
+			o.log().Warn("storefront: lowering a paid chat order's stock", "reference", c.Order.Reference, "err", err)
+		}
+		// Paid at the door, dispatch tells them (D4).
+		if o.ChatNotify != nil && c.Order.Payment != "on_delivery" {
+			text := lang.Default().Text(o.CustomerLanguage(ctx, tenant), "customer.chat_paid", "reference", c.Order.Reference)
+			if err := o.ChatNotify(ctx, tenant, c.Order, text); err != nil {
+				o.log().Warn("storefront: telling a customer their order is paid", "reference", c.Order.Reference, "err", err)
+			}
+		}
+		return nil
 	}
 	if !c.Became && !c.Step || !c.wake {
 		return nil
@@ -308,6 +330,13 @@ func checkoutChannel(connection string) string {
 func paystackConnection(connection string) (string, bool) {
 	c, name, ok := strings.Cut(checkoutChannel(connection), "/")
 	return name, ok && c == "paystack"
+}
+
+// PaysByCard is whether a form's connection takes card payments through
+// Taskiem's pay links (so an order's shares can each have one).
+func PaysByCard(connection string) bool {
+	_, card := paystackConnection(connection)
+	return card
 }
 
 // Matchables lists the tenant's orders that can still be paid, newest

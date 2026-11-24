@@ -2,12 +2,7 @@ package storefront
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,59 +13,184 @@ import (
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
-// Stock reads and changes the stock column of a tenant's catalogue table,
-// at Xenibase (the live table, not the copy).
-type Stock interface {
-	// Read returns a row's stock. tracked is false when the catalogue maps
-	// no stock column, or the row is gone or holds no count.
-	Read(ctx context.Context, tenant uuid.UUID, row string) (n int64, tracked bool, err error)
-	// Change sets a row's stock to to only while it is still from; applied
-	// is false when it had moved. Sending the same key again replays the
-	// first answer rather than changing it twice.
-	Change(ctx context.Context, tenant uuid.UUID, row string, from, to int64, key string) (applied bool, err error)
-}
+// Stock is kept on stock items apart from the catalogue
+// (docs/spec/what-a-business-buys.md §4, decision 0070): neither the
+// catalogue table nor its copy holds a count. A product is counted by a
+// stock item (product_stock), and how many are left of it is how many
+// whole sales that stock item covers (its count over the product's uses).
+// It is read when the copy is read: by the business through
+// engine/productstock (Catalogue, CatalogueItems), by the public page and
+// a linked buyer through taskiem_product_left (WithLeft), so a sale
+// changes no copy.
 
 // Mover records an accepted order's lines as stock movements (reason
-// order) and sends them to the table, answering the items there were not
-// enough of (engine/stock). Lines of one row are one movement.
+// order), answering the items there were not enough of (engine/stock).
+// Lines of one row are one movement.
 type Mover interface {
 	OrderLines(ctx context.Context, tenant, order uuid.UUID, reference string, lines []Line) (short []string, err error)
 }
 
-// XenibaseStock is Stock over the tenant's data tables connection,
-// through the connector and the egress guard, so any role can use it.
-type XenibaseStock struct {
+// Returner puts back the stock an order took when it ends with its goods
+// still on the shelf: declined, cancelled, left refund due or not paid
+// for in time (engine/stock), in the transaction that ends the order, once
+// however often it is asked.
+type Returner interface {
+	ReturnOrderTx(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUID, reference string) error
+}
+
+// returnStockTx puts an ended order's stock back, in the transaction that
+// ended it.
+func (o *Orders) returnStockTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ord Order) error {
+	r, ok := o.Moves.(Returner)
+	if !ok || (ord.Kind != "order" && ord.Kind != "trade" && ord.Kind != "chat" && ord.Kind != "app") {
+		return nil
+	}
+	return r.ReturnOrderTx(ctx, tx, tenant, ord.ID, ord.Reference)
+}
+
+// lowerStock takes an accepted order's quantities off the stock items of
+// its products, and returns the items there were not enough of. Each is a
+// movement keyed on the order and the row: a retried step lowers once.
+func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([]string, error) {
+	short := []string{}
+	if ord.Kind == "trade" {
+		// A linked business's order (business links §7): its lines matched
+		// to the catalogue's items are lowered, the rest are not ours.
+		var mine []Line
+		for _, l := range ord.Basket {
+			if l.ID != "" {
+				mine = append(mine, l)
+			}
+		}
+		ord.Basket = mine
+	}
+	if o.Moves == nil || (ord.Kind != "order" && ord.Kind != "trade" && ord.Kind != "chat" && ord.Kind != "app") || len(ord.Basket) == 0 {
+		return short, nil
+	}
+	more, err := o.Moves.OrderLines(ctx, tenant, ord.ID, ord.Reference, ord.Basket)
+	if err != nil {
+		return nil, err
+	}
+	return append(short, more...), nil
+}
+
+// LeftIDs is the ids how many are left is asked for of items: each item's,
+// and each of its sizes'.
+func LeftIDs(items []Item) []string {
+	ids := make([]string, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.ID)
+		for _, z := range it.Sizes {
+			ids = append(ids, z.ID)
+		}
+	}
+	return ids
+}
+
+// WithLeft puts on items how many are left of each, by id (what
+// productstock.LeftTx or taskiem_product_left answers): an item's own, and
+// a product sold in sizes and colours each size's and theirs together
+// (unknown when a size is not counted, as rollUpVariants has it). An item
+// not in left is not counted, and keeps no count.
+func WithLeft(items []Item, left map[string]int64) {
+	for i := range items {
+		it := &items[i]
+		it.Stock = nil
+		if len(it.Sizes) == 0 {
+			if n, ok := left[it.ID]; ok {
+				it.Stock = &n
+			}
+			continue
+		}
+		var sum int64
+		all := true
+		for j := range it.Sizes {
+			z := &it.Sizes[j]
+			z.Stock = nil
+			n, ok := left[z.ID]
+			if !ok {
+				all = false
+				continue
+			}
+			z.Stock = &n
+			sum += n
+		}
+		if all {
+			it.Stock = &sum
+		}
+	}
+}
+
+// withoutCounts is items as the copy keeps them: with no count.
+func withoutCounts(items []Item) []Item {
+	out := make([]Item, len(items))
+	for i, it := range items {
+		it.Stock = nil
+		if len(it.Sizes) > 0 {
+			sizes := make([]Size, len(it.Sizes))
+			for j, z := range it.Sizes {
+				z.Stock = nil
+				sizes[j] = z
+			}
+			it.Sizes = sizes
+		}
+		out[i] = it
+	}
+	return out
+}
+
+// LeftTx puts on the business's items how many are left of each, read in
+// its scope (productstock.LeftTx).
+func LeftTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Item) error {
+	left, err := productstock.LeftTx(ctx, tx, tenant, LeftIDs(items))
+	if err != nil {
+		return err
+	}
+	WithLeft(items, left)
+	return nil
+}
+
+// counted puts on each item counted by a stock item how many are left of
+// it (productstock), before sizes are rolled up into their products, and
+// the stock item's unit where one sale uses one of it. Items not counted
+// keep no count.
+func counted(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Item) error {
+	ids := make([]string, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
+	}
+	counts, err := productstock.CountsTx(ctx, tx, tenant, ids)
+	if err != nil {
+		return err
+	}
+	for i := range items {
+		if c, ok := counts[items[i].ID]; ok {
+			n := c.Left()
+			items[i].Stock = &n
+			if c.Uses <= 1 {
+				items[i].Unit = c.Unit
+			}
+		}
+	}
+	return nil
+}
+
+// XenibaseCatalogue reads a tenant's catalogue table at Xenibase (the
+// live table, not the copy), through the connector and the egress guard,
+// so any role can use it: what stock reads its products from outside the
+// API (engine/stock), and the live price check (Live).
+type XenibaseCatalogue struct {
 	Pool     *pgxpool.Pool
 	Registry *connector.Registry
 	Vault    *secrets.Vault
 	Guard    *egress.Guard
 }
 
-// target finds the catalogue table and its stock column; column is empty
-// when stock is not tracked.
-func (x *XenibaseStock) target(ctx context.Context, tenant uuid.UUID) (table, column string, err error) {
-	err = db.InTenantTx(ctx, x.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		sf, err := Get(ctx, tx, tenant)
-		if err != nil || sf.CatalogueTable == nil || sf.CatalogueColumns.Stock == "" {
-			return err
-		}
-		t, err := datatables.GetTable(ctx, tx, *sf.CatalogueTable)
-		if err != nil {
-			return err
-		}
-		if err := datatables.Writable(t); err != nil {
-			return err // a kept table is never a catalogue (api/storefront.go): never write one
-		}
-		table, column = t.Name, sf.CatalogueColumns.Stock
-		return nil
-	})
-	return table, column, err
-}
-
-func (x *XenibaseStock) call(ctx context.Context, tenant uuid.UUID, action string, in map[string]any, key string) (map[string]any, error) {
+func (x *XenibaseCatalogue) call(ctx context.Context, tenant uuid.UUID, action string, in map[string]any, key string) (map[string]any, error) {
 	reg, err := x.Registry.For(ctx, tenant.String())
 	if err != nil {
 		return nil, err
@@ -97,15 +217,23 @@ func (x *XenibaseStock) call(ctx context.Context, tenant uuid.UUID, action strin
 	if err != nil {
 		return nil, err
 	}
+	if x.Pool != nil {
+		// An open page over the catalogue is told (pages §9); failing
+		// that, it is pulled to refresh.
+		_ = datatables.MarkStepRowsChanged(ctx, x.Pool, tenant, action, in)
+	}
 	out, _ := resp.Output.(map[string]any)
 	return out, nil
 }
 
 // catalogue finds the tenant's catalogue table and its mapping; table is
 // empty when there is none.
-func (x *XenibaseStock) catalogue(ctx context.Context, tenant uuid.UUID) (table string, m Columns, err error) {
+func (x *XenibaseCatalogue) catalogue(ctx context.Context, tenant uuid.UUID) (table string, m Columns, err error) {
 	err = db.InTenantTx(ctx, x.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		sf, err := Get(ctx, tx, tenant)
+		if errors.Is(err, ErrNotFound) {
+			return nil
+		}
 		if err != nil || sf.CatalogueTable == nil {
 			return err
 		}
@@ -121,7 +249,7 @@ func (x *XenibaseStock) catalogue(ctx context.Context, tenant uuid.UUID) (table 
 
 // Row reads one row of the tenant's catalogue table by its id (none when
 // it is gone), with its mapping.
-func (x *XenibaseStock) Row(ctx context.Context, tenant uuid.UUID, id string) ([]map[string]any, Columns, error) {
+func (x *XenibaseCatalogue) Row(ctx context.Context, tenant uuid.UUID, id string) ([]map[string]any, Columns, error) {
 	table, m, err := x.catalogue(ctx, tenant)
 	if err != nil || table == "" {
 		return nil, m, err
@@ -142,8 +270,8 @@ func (x *XenibaseStock) Row(ctx context.Context, tenant uuid.UUID, id string) ([
 }
 
 // Rows reads every row of the tenant's catalogue table (up to MaxItems +
-// 1), with its mapping: what stock reads items from, outside the API.
-func (x *XenibaseStock) Rows(ctx context.Context, tenant uuid.UUID) ([]map[string]any, Columns, error) {
+// 1), with its mapping: what stock reads products from, outside the API.
+func (x *XenibaseCatalogue) Rows(ctx context.Context, tenant uuid.UUID) ([]map[string]any, Columns, error) {
 	table, m, err := x.catalogue(ctx, tenant)
 	if err != nil || table == "" {
 		return nil, m, err
@@ -174,199 +302,8 @@ func (x *XenibaseStock) Rows(ctx context.Context, tenant uuid.UUID) ([]map[strin
 	return out, m, nil
 }
 
-// Tracks reports whether the tenant's catalogue keeps stock: a catalogue
-// table mapped with a stock column.
-func (x *XenibaseStock) Tracks(ctx context.Context, tenant uuid.UUID) (bool, error) {
-	_, col, err := x.target(ctx, tenant)
-	if errors.Is(err, ErrNotFound) {
-		return false, nil
-	}
-	return col != "", err
-}
-
-func (x *XenibaseStock) Read(ctx context.Context, tenant uuid.UUID, row string) (int64, bool, error) {
-	table, col, err := x.target(ctx, tenant)
-	if err != nil || col == "" {
-		return 0, false, err
-	}
-	page, err := x.call(ctx, tenant, "read_rows", map[string]any{"table": table, "limit": 1, "select": "id," + col,
-		"filters": []any{map[string]any{"column": "id", "op": "eq", "value": row}}}, "")
-	if err != nil {
-		return 0, false, err
-	}
-	rows, _ := page["rows"].([]any)
-	if len(rows) == 0 {
-		return 0, false, nil
-	}
-	m, _ := rows[0].(map[string]any)
-	n, ok := num(m[col])
-	return int64(n), ok, nil
-}
-
-func (x *XenibaseStock) Change(ctx context.Context, tenant uuid.UUID, row string, from, to int64, key string) (bool, error) {
-	table, col, err := x.target(ctx, tenant)
-	if err != nil || col == "" {
-		return false, err
-	}
-	out, err := x.call(ctx, tenant, "update_rows", map[string]any{"table": table, "set": map[string]any{col: to},
-		"max_affected": 1, "return": "minimal", "filters": []any{
-			map[string]any{"column": "id", "op": "eq", "value": row},
-			map[string]any{"column": col, "op": "eq", "value": from},
-		}}, key)
-	if err != nil {
-		return false, err
-	}
-	n, _ := num(out["affected"])
-	return n > 0, nil
-}
-
-// stockStep is one catalogue row's change for an order, recorded on the
-// order before it is sent.
-type stockStep struct {
-	From      int64 `json:"from"`
-	To        int64 `json:"to"`
-	Done      bool  `json:"done"`
-	Short     bool  `json:"short,omitempty"`
-	Untracked bool  `json:"untracked,omitempty"`
-}
-
-// stockAttempts bounds how often a row is read again when other orders
-// keep moving its stock.
-const stockAttempts = 5
-
-// lowerStock takes an accepted order's quantities off the stock, never
-// below zero, and returns the items there were not enough of. Each change
-// is recorded on the order before it is sent, so a retried step sends the
-// same change with the same key: it lands once.
-func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([]string, error) {
-	short := []string{}
-	if ord.Kind == "trade" {
-		// A linked business's order (business links §7): its lines matched
-		// to the catalogue's items are lowered, the rest are not ours.
-		var mine []Line
-		for _, l := range ord.Basket {
-			if l.ID != "" {
-				mine = append(mine, l)
-			}
-		}
-		ord.Basket = mine
-	}
-	if o.Stock == nil || (ord.Kind != "order" && ord.Kind != "trade") || len(ord.Basket) == 0 {
-		return short, nil
-	}
-	var rec map[string]stockStep
-	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var raw []byte
-		if err := tx.QueryRow(ctx, `SELECT stock FROM storefront_orders WHERE tenant_id = $1 AND id = $2`, tenant, ord.ID).Scan(&raw); err != nil {
-			return err
-		}
-		if raw != nil {
-			return json.Unmarshal(raw, &rec)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if rec == nil {
-		rec = map[string]stockStep{}
-	}
-	if o.Moves != nil {
-		// Lines lowered before stock movements (recorded on the order) stay
-		// lowered; the rest are movements.
-		var lines []Line
-		for _, l := range ord.Basket {
-			if st, ok := rec[l.ID]; ok && st.Done {
-				if st.Short {
-					short = append(short, l.Name)
-				}
-				continue
-			}
-			lines = append(lines, l)
-		}
-		if len(lines) == 0 {
-			return short, nil
-		}
-		more, err := o.Moves.OrderLines(ctx, tenant, ord.ID, ord.Reference, lines)
-		if err != nil {
-			return nil, err
-		}
-		return append(short, more...), nil
-	}
-	save := func() error {
-		raw, _ := json.Marshal(rec)
-		return db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `UPDATE storefront_orders SET stock = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, ord.ID, raw)
-			return err
-		})
-	}
-	for _, l := range ord.Basket {
-		for attempt := 0; ; attempt++ {
-			st, ok := rec[l.ID]
-			if ok && st.Done {
-				break
-			}
-			if attempt == stockAttempts {
-				return nil, fmt.Errorf("the stock of %s kept changing; try again", l.Name)
-			}
-			if !ok {
-				n, tracked, err := o.Stock.Read(ctx, tenant, l.ID)
-				if err != nil {
-					return nil, err
-				}
-				st = stockStep{From: n, To: max(0, n-int64(l.Quantity)), Short: n < int64(l.Quantity)}
-				if !tracked {
-					st = stockStep{Done: true, Untracked: true}
-				}
-				rec[l.ID] = st
-				if err := save(); err != nil {
-					return nil, err
-				}
-				if !tracked {
-					break
-				}
-			}
-			applied, err := o.Stock.Change(ctx, tenant, l.ID, st.From, st.To, stockKey(ord.ID, l.ID, st.From))
-			if err != nil {
-				return nil, err
-			}
-			if applied {
-				st.Done = true
-				rec[l.ID] = st
-				if err := o.copyStock(ctx, tenant, ord.storefront, l.ID, st.To); err != nil {
-					return nil, err
-				}
-			} else {
-				delete(rec, l.ID) // another order moved it first: read it again
-			}
-			if err := save(); err != nil {
-				return nil, err
-			}
-			if applied {
-				break
-			}
-		}
-		if rec[l.ID].Short {
-			short = append(short, l.Name)
-		}
-	}
-	return short, nil
-}
-
-// copyStock puts a row's new stock into the catalogue copy, so the page
-// and forms show it at once rather than at the next refresh.
-func (o *Orders) copyStock(ctx context.Context, tenant, sf uuid.UUID, row string, n int64) error {
-	return db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		// Stock is kept on the catalogue's table only (fronts §5.2).
-		_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(item, '{stock}', to_jsonb($4::bigint))
-			WHERE c.tenant_id = $1 AND c.storefront_id = $2 AND c.row_id = $3 AND c.table_name = `+catalogueTableSQL, tenant, sf, row, n)
-		return err
-	})
-}
-
-// stockKey is the Idempotency-Key of one change: the order, the row and
-// the count it changes from.
-func stockKey(order uuid.UUID, row string, from int64) string {
-	h := sha256.Sum256([]byte(order.String() + "\x00" + row + "\x00" + strconv.FormatInt(from, 10)))
-	return "tsk-sf-" + hex.EncodeToString(h[:16])
+// PhoneIndexer writes an order's phone to the phone index, in the order's
+// transaction (engine/phoneindex.Index).
+type PhoneIndexer interface {
+	WriteTx(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUID, phone string) error
 }

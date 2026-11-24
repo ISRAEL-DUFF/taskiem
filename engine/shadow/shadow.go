@@ -48,8 +48,10 @@ type Step struct {
 
 // Recording is a run as recorded.
 type Recording struct {
-	Trigger  any                        `json:"trigger"`
-	Env      map[string]any             `json:"env,omitempty"`
+	Trigger any            `json:"trigger"`
+	Env     map[string]any `json:"env,omitempty"`
+	// Saved are the saved things the run read when it started (S3).
+	Saved    map[string]any             `json:"saved,omitempty"`
 	Policies map[string]json.RawMessage `json:"policies,omitempty"`
 	Steps    map[string]*Step           `json:"steps"`
 	Order    []string                   `json:"order"`
@@ -81,7 +83,7 @@ func Record(hist []history.Event) (*Recording, error) {
 			if err := json.Unmarshal(e.Payload, &p); err != nil {
 				return nil, err
 			}
-			rec.Trigger, rec.Env = p.Trigger, p.Env
+			rec.Trigger, rec.Env, rec.Saved = p.Trigger, p.Env, p.Saved
 			for name, snap := range p.Policies {
 				if rec.Policies == nil {
 					rec.Policies = map[string]json.RawMessage{}
@@ -197,6 +199,7 @@ func (rec *Recording) Case(name string, def *wd.Definition, reg connector.Lookup
 	c.Name = name
 	c.Trigger = rec.Trigger
 	c.Env = rec.Env
+	c.Saved = rec.Saved
 	for _, id := range rec.Order {
 		s := rec.Steps[id]
 		switch s.Kind {

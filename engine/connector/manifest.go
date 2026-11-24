@@ -4,6 +4,8 @@
 package connector
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -169,6 +171,30 @@ func (m *Manifest) Clients() []string {
 	return out
 }
 
+// PlatformAppUses are the places a manifest asks for one of Taskiem's own
+// OAuth registrations by name (auth.oauth2.client, platform_client_fields,
+// auth.modes[i].client). Only a built-in may: the app's secret goes to the
+// token URL the manifest names, and platform_client_fields copies it into
+// the connection's credentials, so a tenant's or a publisher's connector
+// asking for one would get it (F1).
+func (m *Manifest) PlatformAppUses() []string {
+	var out []string
+	if o := m.Auth.OAuth2; o != nil {
+		if o.Client != "" {
+			out = append(out, "auth.oauth2.client")
+		}
+		if len(o.PlatformClientFields) > 0 {
+			out = append(out, "auth.oauth2.platform_client_fields")
+		}
+	}
+	for i, h := range m.Auth.HostModes {
+		if h.Client != "" {
+			out = append(out, fmt.Sprintf("auth.modes[%d].client", i))
+		}
+	}
+	return out
+}
+
 // ServerPlaceholder starts an OAuth URL resolved from the connector's base
 // URL at runtime.
 const ServerPlaceholder = "${server}"
@@ -233,8 +259,39 @@ type AuthField struct {
 	// Generate names a value Taskiem can make for the person instead of
 	// asking them to: rsa_key_pair makes an RSA key pair in their browser,
 	// keeps the private key as the value and shows the public key to paste
-	// into the provider's dashboard.
+	// into the provider's dashboard. webhook_token is made by the server
+	// when the connection is saved (NewWebhookToken), never typed or
+	// chosen by anyone, and shown once inside the webhook URL to paste
+	// into the provider's dashboard (a query_secret or path_secret
+	// trigger's secret_field).
 	Generate string `json:"generate,omitempty"`
+}
+
+// GenerateWebhookToken is the generate value of a field the server fills
+// with a random token when a connection is saved.
+const GenerateWebhookToken = "webhook_token"
+
+// NewWebhookToken is a fresh random URL token for a webhook_token field:
+// 32 bytes from crypto/rand, hex-encoded, so it cannot be guessed and is
+// safe in a URL as it is.
+func NewWebhookToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// WebhookTokenFields are the keys of the fields the server makes
+// (generate: webhook_token).
+func (m *Manifest) WebhookTokenFields() []string {
+	var out []string
+	for _, f := range m.Auth.Fields {
+		if f.Generate == GenerateWebhookToken {
+			out = append(out, f.Key)
+		}
+	}
+	return out
 }
 
 // KeyPrefix is a start a right value has, for one mode.
@@ -397,17 +454,17 @@ type ActionSpec struct {
 	Compensate  *string       `json:"compensate"`
 	// ResendIfLost says a duplicate of this unsafe write is a duplicate
 	// chat message and nothing worse, so a step may ask for it to be sent
-	// once more when its answer is lost (decision 0062 D11). Never for an
+	// once more when its answer is lost (decision 0074 D11). Never for an
 	// action that moves money or costs per message.
 	ResendIfLost bool `json:"resend_if_lost,omitempty"`
 	// CallTimeout is how long one call to a read action may take, in
 	// seconds, when the worker's usual bound (30 s) is too short: hearing
-	// a five-minute voice note or speaking a long reply (decision 0062).
+	// a five-minute voice note or speaking a long reply (decision 0074).
 	// Reads only: a write's deadline also decides when reconciling may
 	// conclude it was never sent. At most MaxCallTimeout.
 	CallTimeout int `json:"call_timeout,omitempty"`
 	// Turn says the action speaks to (or hears) a customer, for the
-	// conversation's record (decision 0062 V7; rule 24).
+	// conversation's record (decision 0074 V7; rule 24).
 	Turn   *TurnSpec       `json:"turn,omitempty"`
 	Input  json.RawMessage `json:"input"`
 	Output json.RawMessage `json:"output"`
@@ -523,6 +580,11 @@ func (m *Manifest) check() []string {
 			add("%s: delivery app takes no remote registration, route or poll", p)
 		case t.Verify == nil || slices.Contains([]string{"query_secret", "path_secret", "none"}, t.Verify.Scheme):
 			add("%s: delivery app is verified with the app's secret: a signature scheme, not %v", p, t.Verify)
+		}
+	}
+	for i, f := range m.Auth.Fields {
+		if f.Generate == GenerateWebhookToken && (!f.Secret || f.IsRequired()) {
+			add("/auth/fields/%d: %s is made by Taskiem (generate: webhook_token): it must be secret and required: false, since nobody types it", i, f.Key)
 		}
 	}
 	for i, h := range m.Auth.HostModes {

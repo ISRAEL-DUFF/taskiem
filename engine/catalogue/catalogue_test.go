@@ -82,6 +82,10 @@ func TestLintCatchesDishonesty(t *testing.T) {
 		"plain http": {func(m string) string {
 			return strings.Replace(m, "base_url: https://ledger.example.com", "base_url: http://ledger.example.com", 1)
 		}, "https"},
+		"a platform OAuth app": {func(m string) string {
+			return strings.Replace(m, "  type: api_key\n", "  type: oauth2\n  oauth2:\n    client: slack\n    authorize_url: https://ledger.example.com/authorize\n"+
+				"    token_url: https://ledger.example.com/token\n    pkce: true\n    scopes: [x]\n    fields_from_token: { api_key: access_token }\n", 1)
+		}, "Taskiem's own OAuth apps"},
 		"no description": {func(m string) string {
 			return strings.Replace(m, "description: A minimal ledger API, to show how a WebAssembly connector is written.\n", "", 1)
 		}, "/description"},

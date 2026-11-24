@@ -10,7 +10,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/assistant"
 )
 
-// The conversation's record from a run (decision 0062 V7): a step that
+// The conversation's record from a run (decision 0074 V7): a step that
 // sent something to the run's customer (an action declaring turn, rule 24),
 // heard their voice note (turn.transcript), or a reply the check held back
 // (assistant@1 check_reply answering ok false) is recorded with the

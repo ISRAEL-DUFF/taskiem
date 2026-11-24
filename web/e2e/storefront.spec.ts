@@ -5,7 +5,7 @@ import { axe, describe } from "./a11y";
 test.use({ bypassCSP: true });
 
 test("an owner drafts a storefront", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -40,7 +40,7 @@ test("an owner drafts a storefront", async ({ page }) => {
 });
 
 test("an owner picks the look of their public pages", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -70,7 +70,7 @@ test("an owner picks the look of their public pages", async ({ page }) => {
 });
 
 test("an owner sets up the question form and finds the orders", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -118,7 +118,7 @@ test("a second workflow on a form offers to replace the first", async ({ page })
   // One workflow per form (docs/spec/fronts.md F0): the question form's
   // workflow, set up above, is copied as another workflow, whose publish is
   // refused with Replace it with this one.
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -152,7 +152,7 @@ test("a second workflow on a form can have a new form of its own", async ({ page
   // Make a new action for this workflow (docs/spec/fronts.md F2): another
   // copy of the question form's workflow gets its own question form, off,
   // and the first keeps the form it has.
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -191,7 +191,7 @@ test("an owner adds a front of questions with its own form", async ({ page }) =>
   // with its form, off; its form is set up with a workflow of its own and
   // the front turned on. (A Food front makes its menu table, which needs
   // the data tables this test server has not: TestFronts covers it.)
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -223,7 +223,10 @@ test("an owner adds a front of questions with its own form", async ({ page }) =>
 });
 
 test("an owner sets booking hours and the booking form", async ({ page }) => {
-  await page.goto("/login");
+  // About 50 steps and an axe run: on a busy runner (a click taking 2 to 6
+  // seconds) more than the default 60 seconds.
+  test.setTimeout(120_000);
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

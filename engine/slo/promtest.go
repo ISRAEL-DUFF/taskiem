@@ -77,6 +77,16 @@ func expect(alert string, labels map[string]string) promAlert {
 	return promAlert{ExpLabels: labels, ExpAnnotations: annotations(alert, labels)}
 }
 
+// allBurns is every burn-rate window of an SLO's alert firing, in the
+// rules' order.
+func allBurns(alert, name string) []promAlert {
+	out := make([]promAlert, 0, len(Burns))
+	for _, b := range Burns {
+		out = append(out, expect(alert, map[string]string{"severity": b.Severity, "slo": name, "window": b.Long}))
+	}
+	return out
+}
+
 // RulesTestYAML is deploy/prometheus/taskiem-rules.test.yaml.
 func RulesTestYAML() ([]byte, error) {
 	const api = `taskiem_http_requests_total{route="/v1/workflows",method="GET",code="%s"}`
@@ -178,6 +188,115 @@ func RulesTestYAML() ([]byte, error) {
 				}}},
 			},
 			{
+				Name:     "2% of webhook deliveries are answered with a 5xx: every burn-rate window fires",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					{Series: `taskiem_ingest_deliveries_total{kind="webhook",result="200"}`, Values: "0+98x80"},
+					{Series: `taskiem_ingest_deliveries_total{kind="connector",result="502"}`, Values: "0+2x80"},
+					// Schedules are not deliveries from outside, and do not count.
+					{Series: `taskiem_ingest_deliveries_total{kind="schedule",result="500"}`, Values: "0+1000x80"},
+				},
+				AlertRuleTests: []promAlertTest{{EvalTime: "70m", Alertname: "TaskiemWebhookIngestBudgetBurn", ExpAlerts: allBurns("TaskiemWebhookIngestBudgetBurn", "webhook_ingest")}},
+			},
+			{
+				// A 4xx is the sender's problem (a bad signature, a limit).
+				Name:     "refused webhook deliveries do not burn the ingest budget",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					{Series: `taskiem_ingest_deliveries_total{kind="webhook",result="200"}`, Values: "0+50x80"},
+					{Series: `taskiem_ingest_deliveries_total{kind="webhook",result="401"}`, Values: "0+50x80"},
+					{Series: `taskiem_ingest_deliveries_total{kind="webhook",result="500"}`, Values: "0x80"},
+				},
+				AlertRuleTests: []promAlertTest{{EvalTime: "70m", Alertname: "TaskiemWebhookIngestBudgetBurn", ExpAlerts: []promAlert{}}},
+			},
+			{
+				Name:     "half of API requests take over a second: the latency budget burns",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					{Series: `taskiem_http_request_duration_seconds_bucket{route="/v1/workflows",method="GET",le="1"}`, Values: "0+50x80"},
+					{Series: `taskiem_http_request_duration_seconds_count{route="/v1/workflows",method="GET"}`, Values: "0+100x80"},
+					// A run's stream stays open by design, and does not count.
+					{Series: `taskiem_http_request_duration_seconds_bucket{route="/v1/runs/{run}/stream",method="GET",le="1"}`, Values: "0x80"},
+					{Series: `taskiem_http_request_duration_seconds_count{route="/v1/runs/{run}/stream",method="GET"}`, Values: "0+1000x80"},
+				},
+				AlertRuleTests: []promAlertTest{{EvalTime: "70m", Alertname: "TaskiemAPILatencyBudgetBurn", ExpAlerts: allBurns("TaskiemAPILatencyBudgetBurn", "api_latency")}},
+			},
+			{
+				Name:     "most runs wait over 5 seconds for their first step: the run-start budget burns",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					{Series: `taskiem_run_start_seconds_bucket{le="5"}`, Values: "0+20x80"},
+					{Series: `taskiem_run_start_seconds_count`, Values: "0+100x80"},
+				},
+				AlertRuleTests: []promAlertTest{{EvalTime: "70m", Alertname: "TaskiemRunStartBudgetBurn", ExpAlerts: allBurns("TaskiemRunStartBudgetBurn", "run_start")}},
+			},
+			{
+				Name:     "most timers fire over 5 seconds late: the scheduler budget burns",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					{Series: `taskiem_scheduler_lateness_seconds_bucket{le="5"}`, Values: "0+20x80"},
+					{Series: `taskiem_scheduler_lateness_seconds_count`, Values: "0+100x80"},
+				},
+				AlertRuleTests: []promAlertTest{{EvalTime: "70m", Alertname: "TaskiemSchedulerTimelinessBudgetBurn", ExpAlerts: allBurns("TaskiemSchedulerTimelinessBudgetBurn", "scheduler_timeliness")}},
+			},
+			{
+				Name:     "timers on time do not alert",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					{Series: `taskiem_scheduler_lateness_seconds_bucket{le="5"}`, Values: "0+100x80"},
+					{Series: `taskiem_scheduler_lateness_seconds_count`, Values: "0+100x80"},
+				},
+				AlertRuleTests: []promAlertTest{{EvalTime: "70m", Alertname: "TaskiemSchedulerTimelinessBudgetBurn", ExpAlerts: []promAlert{}}},
+			},
+			{
+				// One a minute: 15 in 15 minutes, over the 10 allowed, and it
+				// must last 15 minutes before anyone is told.
+				Name:     "leases keep expiring",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					{Series: `taskiem_lease_expiries_total{kind="task"}`, Values: "0+1x50"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "8m", Alertname: "TaskiemLeaseExpiries", ExpAlerts: []promAlert{}},
+					{EvalTime: "45m", Alertname: "TaskiemLeaseExpiries", ExpAlerts: []promAlert{expect("TaskiemLeaseExpiries", map[string]string{"severity": "ticket"})}},
+				},
+			},
+			{
+				Name:     "a few leases expiring in a deploy do not alert",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					{Series: `taskiem_lease_expiries_total{kind="task"}`, Values: "0+1x5 5x45"},
+				},
+				AlertRuleTests: []promAlertTest{{EvalTime: "45m", Alertname: "TaskiemLeaseExpiries", ExpAlerts: []promAlert{}}},
+			},
+			{
+				Name:     "the canary stops probing",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					{Series: `taskiem_canary_probes_total{result="ok"}`, Values: "0+1x10 10x50"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "20m", Alertname: "TaskiemCanaryStopped", ExpAlerts: []promAlert{}},
+					{EvalTime: "50m", Alertname: "TaskiemCanaryStopped", ExpAlerts: []promAlert{expect("TaskiemCanaryStopped", map[string]string{"severity": "ticket"})}},
+				},
+			},
+			{
+				Name:     "a Taskiem pod cannot be scraped",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					{Series: `up{job="taskiem-api",instance="a"}`, Values: "1x5 0x30"},
+					{Series: `up{job="taskiem-api",instance="b"}`, Values: "1x35"},
+					// Someone else's target is not Taskiem's alert.
+					{Series: `up{job="postgres",instance="c"}`, Values: "0x35"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "10m", Alertname: "TaskiemTargetDown", ExpAlerts: []promAlert{}},
+					{EvalTime: "25m", Alertname: "TaskiemTargetDown", ExpAlerts: []promAlert{
+						expect("TaskiemTargetDown", map[string]string{"severity": "ticket", "job": "taskiem-api", "instance": "a"}),
+					}},
+				},
+			},
+			{
 				Name:     "the retention purge falls behind on one scheduler",
 				Interval: "1m",
 				InputSeries: []promSeries{
@@ -189,6 +308,65 @@ func RulesTestYAML() ([]byte, error) {
 				AlertRuleTests: []promAlertTest{
 					{EvalTime: "20m", Alertname: "TaskiemRetentionPurgeBehind", ExpAlerts: []promAlert{}},
 					{EvalTime: "50m", Alertname: "TaskiemRetentionPurgeBehind", ExpAlerts: []promAlert{expect("TaskiemRetentionPurgeBehind", map[string]string{"severity": "ticket"})}},
+				},
+			},
+			{
+				Name: "people chats' storage grows past its line",
+				// A sample every 5 minutes: Prometheus counts a sample as current
+				// for 5 minutes only, so hourly samples would leave the rule
+				// without a value for most of each hour and its "for: 1h" would
+				// never be met.
+				Interval: "5m",
+				InputSeries: []promSeries{
+					// 60 GiB for a day, then growing 100 MiB every 5 minutes
+					// (about 28 GiB a day); with 1 GiB of messages, still under
+					// 150 GiB at 40h, so only the growth sets it off.
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "64424509440x288 64424509440+104857600x288"},
+					{Series: `taskiem_people_storage_bytes{table="people_messages",instance="a"}`, Values: "1073741824x600"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "20h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "40h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{expect("TaskiemPeopleStorageLarge", map[string]string{"severity": "ticket"})}},
+				},
+			},
+			{
+				Name: "groups' storage counts with people chats'",
+				// Every 5 minutes, as above, so "for: 1h" holds.
+				Interval: "5m",
+				InputSeries: []promSeries{
+					// People chats steady at 100 GiB, groups' files steady at
+					// 40 GiB: 140 GiB, under the line and not growing. From 30h
+					// groups' files grow 50 MiB every 5 minutes (about 14 GiB
+					// a day): past 150 GiB within the day, and over 8 GiB more.
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "107374182400x600"},
+					{Series: `taskiem_people_storage_bytes{table="group_files",instance="a"}`, Values: "42949672960x360 42949672960+52428800x240"},
+					{Series: `taskiem_people_storage_bytes{table="group_messages",instance="a"}`, Values: "1073741824x600"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "29h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "49h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{expect("TaskiemPeopleStorageLarge", map[string]string{"severity": "ticket"})}},
+				},
+			},
+			{
+				Name: "two pods report the same tables, counted once",
+				// Every 5 minutes, as above, so "for: 1h" holds.
+				Interval: "5m",
+				InputSeries: []promSeries{
+					// Each of two pods reports people chats' files at 80 GiB for
+					// 40h, then 151 GiB; groups' files at 1 GiB growing 25 MiB
+					// every 5 minutes (about 7 GiB a day). Added up across pods
+					// that would be 160 GiB and 14 GiB a day, past both lines
+					// from the start; counted once a table it is under both
+					// until the files pass 150 GiB at 40h.
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "85899345920x480 162134446080x120"},
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="b"}`, Values: "85899345920x480 162134446080x120"},
+					{Series: `taskiem_people_storage_bytes{table="group_files",instance="a"}`, Values: "1073741824+26214400x600"},
+					{Series: `taskiem_people_storage_bytes{table="group_files",instance="b"}`, Values: "1073741824+26214400x600"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "10h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "39h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "49h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{expect("TaskiemPeopleStorageLarge", map[string]string{"severity": "ticket"})}},
 				},
 			},
 		},

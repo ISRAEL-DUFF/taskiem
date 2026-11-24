@@ -17,7 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/voice"
 )
 
-// SpeechConfig is speech in workflows (docs/speech.md, decision 0062 D5):
+// SpeechConfig is speech in workflows (docs/speech.md, decision 0074 D5):
 // TASKIEM_SPEECH_* for speaking replies; hearing uses the transcription
 // service already set for voice notes (TASKIEM_TRANSCRIBE_*), with its own
 // length cap for customers' voice notes (TASKIEM_SPEECH_HEAR_SECONDS).

@@ -94,7 +94,7 @@ func TestWhatsAppBookings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*bookings*") {
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*bookings*") {
 		t.Errorf("help: %q", r)
 	}
 	if r := w.say(t, vn, "bookings"); !strings.Contains(r, "storefront.manage") {

@@ -84,12 +84,28 @@ export function ValuePicker({ sources, value, onChange, label }: { sources: Sour
   return (
     <select aria-label={label} value={sourceOf(sources, value)?.expr ?? ""} onChange={(e) => onChange(e.target.value)}>
       <option value="">Choose…</option>
-      {sources.map((s) => (
-        <option key={s.expr} value={s.expr}>
-          {s.label}
-        </option>
-      ))}
+      <SourceOptions sources={sources} />
     </select>
+  );
+}
+
+/** A picker's options: what came before, then each group (the business's saved things) under its name. */
+export function SourceOptions({ sources }: { sources: Source[] }) {
+  const option = (s: Source) => (
+    <option key={s.expr} value={s.expr}>
+      {s.label}
+    </option>
+  );
+  const groups = [...new Set(sources.flatMap((s) => (s.group ? [s.group] : [])))];
+  return (
+    <>
+      {sources.filter((s) => !s.group).map(option)}
+      {groups.map((g) => (
+        <optgroup key={g} label={g}>
+          {sources.filter((s) => s.group === g).map(option)}
+        </optgroup>
+      ))}
+    </>
   );
 }
 

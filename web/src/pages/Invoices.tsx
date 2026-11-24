@@ -10,6 +10,8 @@ import {
 import { ApiError, del, get, postOnce, put, post, whenOff } from "../api";
 import { useAuth } from "../auth";
 import { DocThread } from "./Conversation";
+import { SavedFill } from "./SavedFill";
+import { personFill } from "../lib/saved";
 import {
   EmptyState,
   ErrorBox,
@@ -330,7 +332,7 @@ function WaitingCard({
       data-testid="waiting-payment"
     >
       <h2 id={title}>
-        <span className="sf-price">{amountWords(p.amount_kobo)}</span>{" "}
+        <span className="sf-price">{amountWords(p.amount_kobo, p.currency)}</span>{" "}
         <span className="hint">{kindWords(p.kind)}</span>
       </h2>
       <dl className="kv">
@@ -1233,7 +1235,16 @@ function InvoiceEditor({
         save(false);
       }}
     >
-      <h2>Customer</h2>
+      <div className="saved-fill-head">
+        <h2>Customer</h2>
+        {!form.linked && (
+          <SavedFill
+            kind="person"
+            label="the customer"
+            onPick={(x) => set({ linked: undefined, ...personFill(x) })}
+          />
+        )}
+      </div>
       {buyers.length > 0 && (
         <Field
           label="Who is it for?"

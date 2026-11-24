@@ -23,10 +23,11 @@ import (
 	"github.com/israel-duff/taskiem/engine/webauthn"
 )
 
-// Passkeys (spec 13.2): sign-in and step-up with WebAuthn. Admins are held
-// to passkeys when RequireAdminPasskeys is set: a password session of a
-// member with administrative permissions can only enrol a passkey, and
-// once they have one, their password no longer signs them in.
+// Passkeys (spec 13.2): sign-in and step-up with WebAuthn. Who is held to
+// them is passkey_rule.go: no one, unless the deployment's switch, the
+// business's setting or the person's own says so; then a session that did
+// not sign in with a passkey can only enrol one, and once they have one,
+// their password no longer signs them in there.
 
 // adminPerms are the permissions that make a member an administrator for
 // the passkey rule.
@@ -45,6 +46,8 @@ func isAdmin(perms map[string]bool) bool {
 // may make.
 var enrolOnly = map[string]bool{
 	"GET /v1/me": true, "GET /v1/me/passkeys": true, "POST /v1/me/passkeys/options": true, "POST /v1/me/passkeys": true, "POST /v1/me/step-up/options": true, "POST /v1/auth/logout": true,
+	// An unconfirmed email holds enrolment back (proveFactor).
+	"POST /v1/me/email/verify": true, "POST /v1/me/email/verify/resend": true,
 }
 
 const challengeTTL = 5 * time.Minute
@@ -157,7 +160,7 @@ func (s *Server) passkeyLoginOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Issuing a challenge is cheap but stores a row: its own, looser limit.
-	if !s.limiter("challenge:"+clientIP(r), time.Second, 30).Allow() {
+	if !s.limiter("challenge:"+limitIP(r), time.Second, 30).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many requests")
 		return
 	}
@@ -176,7 +179,7 @@ func (s *Server) passkeyLogin(w http.ResponseWriter, r *http.Request) {
 	if !s.passkeysOn(w) || !jsonOnly(w, r) {
 		return
 	}
-	if !s.loginLimiter("login:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("login:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
 	}
@@ -184,9 +187,14 @@ func (s *Server) passkeyLogin(w http.ResponseWriter, r *http.Request) {
 		Credential credentialJSON `json:"credential"`
 		TenantID   uuid.UUID      `json:"tenant_id,omitempty"`
 		Bearer     bool           `json:"bearer,omitempty"` // the token in the answer, no cookie (S35)
+		Device     *deviceReq     `json:"device,omitempty"` // the phone app's (devices.go)
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	r, ok := askDevice(w, r, req.Device, req.Bearer)
+	if !ok {
 		return
 	}
 	user, err := s.verifyPasskey(r.Context(), req.Credential, "login", nil, "")
@@ -438,6 +446,11 @@ func (s *Server) removePasskey(w http.ResponseWriter, r *http.Request) {
 		if tag.RowsAffected() == 0 {
 			return pgx.ErrNoRows
 		}
+		// The last one gone: "Only sign in with my passkey" off, so no one
+		// is locked out (passkey_rule.go).
+		if err := passkeysGone(r.Context(), tx, p.UserID); err != nil {
+			return err
+		}
 		return auditTx(r, tx, "passkey.remove", p.UserID.String(), map[string]any{"credential": chi.URLParam(r, "id")})
 	})
 	if err != nil {
@@ -485,7 +498,12 @@ func (s *Server) resetPasskeys(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, user); err != nil {
+		if err := passkeysGone(r.Context(), tx, user); err != nil {
+			return err
+		}
+		// Every session, their own side's included (no business scope
+		// reaches it).
+		if _, err := tx.Exec(r.Context(), `SELECT taskiem_auth_revoke_sessions($1, NULL)`, user); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "passkey.reset", user.String(), map[string]any{"removed": tag.RowsAffected()})
@@ -512,8 +530,9 @@ func (s *Server) resetPasskeys(w http.ResponseWriter, r *http.Request) {
 var stepUpOps = map[string]bool{
 	"approval.decide": true, "account.reauth": true,
 	keyOpRotate: true, keyOpEnable: true, keyOpCredentials: true, keyOpDisable: true,
-	riderOpBank: true,
-	"pii.erase": true,
+	riderOpBank:  true,
+	"pii.erase":  true,
+	payOpConfirm: true, payOpApprove: true, payOpBatch: true, staffOpAccount: true,
 }
 
 // stepUpScope is what a step-up challenge is bound to.
@@ -600,6 +619,9 @@ type factorSet struct {
 	Passkey  bool `json:"passkey"`
 	TOTP     bool `json:"totp"`
 	Password bool `json:"password"`
+	// EmailVerified: the person proved they read their email. Until then
+	// a password may be one someone else chose (POST /v1/members).
+	EmailVerified bool `json:"-"`
 }
 
 // factorsOf is what a member can prove themselves with in a tenant.
@@ -613,7 +635,7 @@ func (s *Server) factorsOf(ctx context.Context, tenant, user uuid.UUID) (factorS
 	}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		f.TOTP = s.totpEnrolled(ctx, tx, user)
-		return tx.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, user).Scan(&hash)
+		return tx.QueryRow(ctx, `SELECT password_hash, email_verified_at IS NOT NULL FROM users WHERE id = $1`, user).Scan(&hash, &f.EmailVerified)
 	})
 	if hash == nil {
 		return f, "", err
@@ -624,13 +646,21 @@ func (s *Server) factorsOf(ctx context.Context, tenant, user uuid.UUID) (factorS
 
 // proveFactor checks the proof and answers the request when it falls
 // short. A member with a passkey or authenticator proves themselves with a
-// fresh assertion or code; one with neither, with their password; one with
-// none of these (signed in by SSO only) has nothing more to give. A
+// fresh assertion or code; one with neither, with their password once
+// their email is confirmed (where email can be sent); one with none of these (signed in by SSO only) has nothing more to give. A
 // passkey assertion must be for a challenge asked for "account.reauth"
 // and action (passkey.add, totp.setup, ...).
+//
+// A session made by a code to the person's phone or chat on a device with
+// no second proof, of someone who could give one, changes no factor at all
+// (401 second_proof_required, refuseUnproved): the code proves only that
+// someone holds the number today (docs/spec/taskiem-for-everyone.md §5.4).
 func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof factorProof, action string) bool {
 	ctx := r.Context()
 	p := principalFrom(ctx)
+	if s.refuseUnproved(w, r) {
+		return false
+	}
 	f, hash, err := s.factorsOf(ctx, p.TenantID, p.UserID)
 	if err != nil {
 		s.fail(w, r, err)
@@ -669,6 +699,13 @@ func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof facto
 		}
 		return need("confirm it is you with your passkey or authenticator code first", methods...)
 	case f.Password:
+		// A password on an email no one has confirmed may have been chosen
+		// by whoever added the person (POST /v1/members), so it proves
+		// nothing yet: the person confirms their email first. Deployments
+		// that cannot send email cannot confirm one (needVerified).
+		if !f.EmailVerified && s.mailOn() {
+			return need("confirm your email first, with the link we sent you (or ask for a new one), then try again", "verify_email")
+		}
 		if !s.loginLimiter("reauth:" + p.UserID.String()).Allow() {
 			writeErr(w, http.StatusTooManyRequests, "too many attempts")
 			return false
@@ -779,9 +816,13 @@ func (s *Server) createSession(r *http.Request, user, want uuid.UUID, method str
 		}
 	}
 	tok := newToken()
+	if d := deviceOf(ctx); d != nil {
+		if err := s.endPhone(ctx, user, d.ID); err != nil {
+			return session{}, err
+		}
+	}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO sessions (token_hash, user_id, tenant_id, expires_at, ip, auth_method) VALUES ($1, $2, $3, now() + $4::interval, $5, $6)`,
-			hashToken(tok), user, tenant, sessionTTL.String(), clientIP(r), method); err != nil {
+		if err := insertSession(ctx, tx, r, tok, user, tenant, method); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'auth.login', $3, jsonb_build_object('ip', $4::text, 'method', $5::text))`,
@@ -821,25 +862,54 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": err.Error(), "sso_required": true})
 		return
 	case errors.Is(err, errNoMembership) && method != "sso":
-		// No membership anywhere, but perhaps invitations to answer.
-		if ok, ierr := s.startInviteeSession(w, r, user, method, bearer); ierr != nil {
-			s.fail(w, r, ierr)
+		// No membership anywhere: the person's own side
+		// (docs/spec/taskiem-for-everyone.md §5.2), where their invitations
+		// wait too.
+		out := map[string]any{}
+		if perr := s.startPersonalSession(w, r, user, method, bearer, out); errors.Is(perr, errPhoneBusy) {
+			writeErr(w, http.StatusConflict, perr.Error())
 			return
-		} else if ok {
+		} else if errors.Is(perr, errAccountOff) {
+			writeErr(w, http.StatusUnauthorized, err.Error())
+			return
+		} else if perr != nil {
+			s.fail(w, r, perr)
 			return
 		}
-		writeErr(w, http.StatusUnauthorized, err.Error())
+		if method == "passkey" {
+			s.provedByPasskey(w, r, user, bearer)
+		}
+		writeJSON(w, http.StatusOK, out)
 		return
 	case errors.Is(err, errNoMembership), errors.Is(err, errNotMember):
 		writeErr(w, http.StatusUnauthorized, err.Error())
+		return
+	case errors.Is(err, errPhoneBusy):
+		writeErr(w, http.StatusConflict, err.Error())
 		return
 	case err != nil:
 		s.fail(w, r, err)
 		return
 	}
-	out := map[string]any{"tenant_id": sess.tenant, "tenants": sess.tenants, "user_id": user}
+	if method == "passkey" {
+		s.provedByPasskey(w, r, user, bearer)
+	}
+	out := map[string]any{"tenant_id": sess.tenant, "tenants": sess.tenants, "user_id": user, "personal": false}
 	s.deliverSession(w, bearer, sess.token, out)
 	writeJSON(w, http.StatusOK, out)
+}
+
+// provedByPasskey records a passkey sign-in as the device's second proof
+// (docs/spec/taskiem-for-everyone.md §5.4). A failure to record it costs the
+// person a proof later, not this sign-in.
+func (s *Server) provedByPasskey(w http.ResponseWriter, r *http.Request, user uuid.UUID, bearer bool) {
+	key := s.signinDeviceKey(w, r, bearer)
+	if key == nil {
+		return
+	}
+	if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_device_prove($1, $2, 'passkey')`, user, key); err != nil {
+		s.Logger.Warn("a passkey sign-in not recorded as a second proof", "err", err)
+	}
 }
 
 // ResetPasskeys removes every passkey of the person with email and ends
@@ -861,7 +931,10 @@ func ResetPasskeys(ctx context.Context, pool *pgxpool.Pool, email, operator stri
 			return err
 		}
 		removed = tag.RowsAffected()
-		if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, user); err != nil {
+		if err := passkeysGone(ctx, tx, user); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `SELECT taskiem_auth_revoke_sessions($1, NULL)`, user); err != nil {
 			return err
 		}
 		for _, t := range tenants {

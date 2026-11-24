@@ -94,19 +94,53 @@ func reprice(sub Submission, live map[string]Item, opts ActionOptions) (PriceCha
 	if len(pc.Basket) > 0 {
 		pc.TotalKobo += sub.DeliveryKobo
 	}
+	// An order with a deposit keeps one at the new prices: without it, the
+	// customer accepting the change would be asked for the whole total.
+	if sub.DepositKobo > 0 && len(pc.Basket) > 0 {
+		pc.DepositKobo = repricedDeposit(sub, pc.TotalKobo, opts)
+	}
 	return pc, changed
+}
+
+// repricedDeposit is an order's deposit at a new total: the action's
+// percentage when it has one, else the share of the total the order's
+// deposit was, rounded up to whole kobo as Deposit rounds.
+func repricedDeposit(sub Submission, total int64, opts ActionOptions) int64 {
+	if opts.DepositPercent > 0 && opts.DepositPercent < 100 {
+		return opts.OrderDeposit(total)
+	}
+	if sub.TotalKobo <= 0 || sub.DepositKobo >= sub.TotalKobo {
+		return 0
+	}
+	if d := (total*sub.DepositKobo + sub.TotalKobo - 1) / sub.TotalKobo; d >= MinDepositKobo && d < total {
+		return d
+	}
+	return 0
+}
+
+// countedFrom reports whether rows read from are the catalogue's, whose
+// products are counted by stock items: the catalogue itself, or a front's
+// list of the catalogue's own table. Another table's rows are no
+// products, whatever their ids.
+func countedFrom(from Source, catalogue *uuid.UUID) bool {
+	if from.Services {
+		return false
+	}
+	return from.Table == nil || catalogue != nil && *from.Table == *catalogue
 }
 
 // Items reads rows of the catalogue or services table through the
 // tenant's data tables connection, mapped as the copy is (without photos).
-func (x *XenibaseStock) Items(ctx context.Context, tenant uuid.UUID, from Source, ids []string) (map[string]Item, error) {
+func (x *XenibaseCatalogue) Items(ctx context.Context, tenant uuid.UUID, from Source, ids []string) (map[string]Item, error) {
 	var table string
 	var m Columns
+	var catalogue bool
 	err := db.InTenantTx(ctx, x.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		sf, err := Get(ctx, tx, tenant)
 		if err != nil {
 			return err
 		}
+		catalogue = countedFrom(from, sf.CatalogueTable)
 		id, cols := sf.CatalogueTable, sf.CatalogueColumns
 		switch {
 		case from.Table != nil:
@@ -143,8 +177,19 @@ func (x *XenibaseStock) Items(ctx context.Context, tenant uuid.UUID, from Source
 			rows = append(rows, row)
 		}
 	}
-	m.Photo = "" // no photos: Items needs no transaction
-	items, err := Items(ctx, nil, tenant, rows, m)
+	m.Photo = "" // no photos: only the catalogue's counts are read
+	var items []Item
+	if catalogue {
+		// The catalogue's, or a front's list of its table: with how many
+		// are left of each product counted.
+		err = db.InTenantTx(ctx, x.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			items, err = CatalogueItems(ctx, tx, tenant, rows, m)
+			return err
+		})
+	} else {
+		items, err = Items(ctx, nil, tenant, rows, m)
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -14,7 +14,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/pii"
 )
 
-// The conversation record (decision 0062 V7, docs/conversations.md): every
+// The conversation record (decision 0074 V7, docs/conversations.md): every
 // message from a customer, as it arrived and what the guard did with it,
 // and every message sent to them, by the assistant's runs or a member by
 // hand, with a voice note's transcript and the replies the check held
@@ -265,7 +265,7 @@ func decode(raw []byte) any {
 	return v
 }
 
-// Gathered is what gather answers a run (decision 0062 V10, L5): a
+// Gathered is what gather answers a run (decision 0074 V10, L5): a
 // customer who sends several short messages in a row gets one answer.
 type Gathered struct {
 	// Latest: no newer message of theirs is waiting for an answer (nor a

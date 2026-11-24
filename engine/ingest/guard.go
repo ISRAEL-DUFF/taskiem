@@ -18,7 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
-// The customer guard at the door (decision 0062 V6, docs/assistant-guard.md):
+// The customer guard at the door (decision 0074 V6, docs/assistant-guard.md):
 // for a workflow whose chat trigger has a guard, each customer's message
 // is checked before a run can start or wait in a queue. Only new messages
 // in private chats start one; Taskiem's switch, the business's beta flag,

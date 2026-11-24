@@ -220,6 +220,10 @@ func (g *github) Propose(ctx context.Context, branch, title, body string, files 
 }
 
 func (g *github) VerifyPush(h http.Header, body []byte, secret string) (*Push, error) {
+	// Anyone can compute an HMAC with an empty key: it verifies nothing.
+	if secret == "" {
+		return nil, ErrSignature
+	}
 	sig := strings.TrimPrefix(h.Get("X-Hub-Signature-256"), "sha256=")
 	want := hmac.New(sha256.New, []byte(secret))
 	want.Write(body)
@@ -234,6 +238,17 @@ func (g *github) VerifyPush(h http.Header, body []byte, secret string) (*Push, e
 		Ref     string `json:"ref"`
 		After   string `json:"after"`
 		Deleted bool   `json:"deleted"`
+		Before  string `json:"before"`
+		Forced  bool   `json:"forced"`
+		Created bool   `json:"created"`
+		Pusher  struct {
+			Name  string `json:"name"`
+			Email string `json:"email"`
+		} `json:"pusher"`
+		Commits []struct {
+			Author    githubUser `json:"author"`
+			Committer githubUser `json:"committer"`
+		} `json:"commits"`
 	}
 	if err := json.Unmarshal(body, &p); err != nil {
 		return nil, err
@@ -241,5 +256,28 @@ func (g *github) VerifyPush(h http.Header, body []byte, secret string) (*Push, e
 	if p.Deleted || !strings.HasPrefix(p.Ref, "refs/heads/") {
 		return nil, nil
 	}
-	return &Push{Branch: strings.TrimPrefix(p.Ref, "refs/heads/"), Commit: p.After}, nil
+	out := &Push{Branch: strings.TrimPrefix(p.Ref, "refs/heads/"), Commit: p.After}
+	if !zeroCommit(p.Before) {
+		out.Before = p.Before
+	}
+	out.People = addPerson(out.People, "pusher", p.Pusher.Email, p.Pusher.Name)
+	for _, c := range p.Commits {
+		out.People = addPerson(out.People, "author", c.Author.Email, c.Author.Username)
+		// A merge made on github.com is committed by GitHub itself; the
+		// person who merged is the pusher.
+		if c.Committer.Username != "web-flow" {
+			out.People = addPerson(out.People, "committer", c.Committer.Email, c.Committer.Username)
+		}
+	}
+	// GitHub lists at most githubMaxCommits commits in a delivery.
+	out.Complete = !p.Forced && !p.Created && len(p.Commits) > 0 && len(p.Commits) < githubMaxCommits
+	return out, nil
+}
+
+// githubMaxCommits is the most commits GitHub lists in one push delivery.
+const githubMaxCommits = 2048
+
+type githubUser struct {
+	Email    string `json:"email"`
+	Username string `json:"username"`
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -28,6 +29,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/remote"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/tunnel"
 )
@@ -209,7 +211,8 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: %q is kept for the account Taskiem holds for you: choose another name", errBadRequest, req.Name))
 		return
 	}
-	id, name, err := s.saveKeyConnection(r.Context(), principalFrom(r.Context()), env, c, req.Name, req.Credentials, req.Mode, req.Check)
+	p := principalFrom(r.Context())
+	id, name, made, err := s.saveKeyConnection(r.Context(), p, env, c, req.Name, req.Credentials, req.Mode, req.Check)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -217,9 +220,18 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	req.Name = name
 	out := map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name}
 	// Saved, but a trigger it cannot receive is said now, not at the
-	// first silent day (decision 0062 C17, review gap 6).
-	if warn := unsignedTriggers(c, req.Credentials); len(warn) > 0 {
+	// first silent day (decision 0074 C17, review gap 6).
+	// Fields Taskiem made (a webhook token) count as given.
+	given := maps.Clone(req.Credentials)
+	if given == nil {
+		given = map[string]string{}
+	}
+	maps.Copy(given, made)
+	if warn := unsignedTriggers(c, given); len(warn) > 0 {
 		out["warnings"] = warn
+	}
+	if hooks := connectionWebhooks(c, s.hooksBase(), p.TenantID, env, name, made); len(hooks) > 0 {
+		out["webhooks"] = hooks // shown this once: they carry the token Taskiem made
 	}
 	writeJSON(w, http.StatusCreated, out)
 }
@@ -228,32 +240,46 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 // chosen, and with check the service itself) and saves it as p, within
 // the plan's limit: the web's form, a connect link and the WhatsApp key
 // form all save this way. An empty name is the first free one (main).
-func (s *Server) saveKeyConnection(ctx context.Context, p *Principal, env string, c *connector.Connector, name string, creds map[string]string, chosen string, check bool) (uuid.UUID, string, error) {
+// made are the values Taskiem made for the connection (generate:
+// webhook_token), by field, for the caller to show once in the webhook
+// addresses that carry them.
+func (s *Server) saveKeyConnection(ctx context.Context, p *Principal, env string, c *connector.Connector, name string, creds map[string]string, chosen string, check bool) (id uuid.UUID, saved string, made map[string]string, err error) {
+	if err := refuseMadeFields(c, creds); err != nil {
+		return uuid.Nil, "", nil, err
+	}
 	if err := checkCredentials(c, creds); err != nil {
-		return uuid.Nil, "", err
+		return uuid.Nil, "", nil, err
 	}
 	if err := checkKeys(c, creds, chosen); err != nil {
-		return uuid.Nil, "", err
+		return uuid.Nil, "", nil, err
 	}
 	mode, err := connectionMode(c, creds, chosen)
 	if err != nil {
-		return uuid.Nil, "", err
+		return uuid.Nil, "", nil, err
 	}
 	if check {
 		if err := s.testCredentials(ctx, p.TenantID, c, withMode(creds, mode)); err != nil {
-			return uuid.Nil, "", err
+			return uuid.Nil, "", nil, err
 		}
+	}
+	if creds, made, err = withMadeFields(c, creds); err != nil {
+		return uuid.Nil, "", nil, err
 	}
 	inTx := func(fn func(pgx.Tx) error) error {
 		return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, fn)
 	}
 	if err := inTx(func(tx pgx.Tx) error { return s.checkCount(ctx, tx, p.TenantID, "max_connections") }); err != nil {
-		return uuid.Nil, "", err
+		return uuid.Nil, "", nil, err
 	}
-	var id uuid.UUID
 	subscribes := false
 	err = inTx(func(tx pgx.Tx) error {
 		var err error
+		// Counted again where it is made: the lock the count takes holds
+		// until this commits, so connections made at once cannot pass the
+		// limit together.
+		if err := s.checkCount(ctx, tx, p.TenantID, "max_connections"); err != nil {
+			return err
+		}
 		if name == "" {
 			if name, err = freeConnectionName(ctx, tx, env, c.Manifest.ID); err != nil {
 				return err
@@ -275,7 +301,7 @@ func (s *Server) saveKeyConnection(ctx context.Context, p *Principal, env string
 		if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
 			err = fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, name, env)
 		}
-		return uuid.Nil, "", err
+		return uuid.Nil, "", nil, err
 	}
 	// Remote subscriptions that waited for a connection in this
 	// environment are tried again now (decision 0021).
@@ -291,7 +317,7 @@ func (s *Server) saveKeyConnection(ctx context.Context, p *Principal, env string
 			s.Logger.Warn("remote subscriptions: applying a connection's", "err", err)
 		}
 	}
-	return id, name, nil
+	return id, name, made, nil
 }
 
 // --- secrets (names only; values are write-only) ---
@@ -343,17 +369,21 @@ func (s *Server) putSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	// A new secret is counted and written in one transaction, under the
+	// count's lock, so secrets made at once cannot pass the limit together.
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var exists bool
-		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM secrets WHERE environment = $1 AND name = $2)`, env, name).Scan(&exists); err != nil || exists {
+		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM secrets WHERE environment = $1 AND name = $2)`, env, name).Scan(&exists); err != nil {
 			return err
 		}
-		return s.checkCount(r.Context(), tx, p.TenantID, "max_secrets")
+		if !exists {
+			if err := s.checkCount(r.Context(), tx, p.TenantID, "max_secrets"); err != nil {
+				return err
+			}
+		}
+		_, err := s.Vault.PutTx(r.Context(), tx, p.TenantID, env, name, []byte(req.Value), p.Actor())
+		return err
 	}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err := s.Vault.Put(r.Context(), p.TenantID, env, name, []byte(req.Value), p.Actor()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -560,7 +590,37 @@ type eraseReq struct {
 	Subject  string `json:"subject,omitempty"`
 	Category string `json:"category,omitempty"`
 	Value    any    `json:"value,omitempty"`
+	// CancelRuns cancels the runs in flight that hold the subject, then
+	// erases; without it such runs refuse the erasure (spec 9.4).
+	CancelRuns bool `json:"cancel_runs,omitempty"`
 	stepUpProof
+}
+
+// runsHolding lists up to 50 of the tenant's runs in flight whose history
+// holds an envelope of one of the subjects (subject ids are long and
+// distinct, so finding the id in an event's payload is finding the
+// envelope). An event kept out of line (payload_ref, a content hash in
+// object storage, spec 4.9) cannot be searched here, so a run with one
+// counts as holding the subject: erasing waits for it or cancels it.
+func (s *Server) runsHolding(r *http.Request, subjects []string) ([]uuid.UUID, error) {
+	quoted := make([]string, len(subjects))
+	for i, x := range subjects {
+		quoted[i] = `"` + x + `"`
+	}
+	var ids []uuid.UUID
+	err := s.tx(r, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `SELECT r.id FROM runs r
+			WHERE r.tenant_id = $1 AND r.status NOT IN ('completed', 'failed', 'cancelled')
+			  AND EXISTS (SELECT 1 FROM run_events e WHERE e.run_id = r.id
+			    AND (e.payload_ref IS NOT NULL OR EXISTS (SELECT 1 FROM unnest($2::text[]) q WHERE strpos(e.payload::text, q) > 0)))
+			ORDER BY r.started_at LIMIT 50`, principalFrom(r.Context()).TenantID, quoted)
+		if err != nil {
+			return err
+		}
+		ids, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		return err
+	})
+	return ids, err
 }
 
 // erase destroys a data subject's key (NDPA erasure, spec 9.4), named
@@ -582,7 +642,25 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	subject := req.Subject
-	var candidates []string
+	subjects := []string{subject}
+	// Free text ("other") is no one's: it is sealed under one subject for
+	// the whole organisation (pii.Unattributed), and under the people it
+	// names. Erasing that subject would erase every such text.
+	if req.Category == "other" {
+		s.fail(w, r, fmt.Errorf("%w: free text is not a person: erase the people it names", errBadRequest))
+		return
+	}
+	if subject != "" {
+		shared, err := s.Vault.SubjectFor(r.Context(), p.TenantID, "other", "")
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if subject == shared {
+			s.fail(w, r, fmt.Errorf("%w: this subject holds the organisation's free text, not a person: erase the people it names", errBadRequest))
+			return
+		}
+	}
 	if subject == "" {
 		if req.Category == "" || req.Value == nil {
 			s.fail(w, r, fmt.Errorf("%w: give subject, or category and value", errBadRequest))
@@ -592,37 +670,64 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, fmt.Errorf("%w: category is lower-case letters and underscores (phone, email, bvn, other...)", errBadRequest))
 			return
 		}
+		// The person as they are sealed now, and under the ways the value
+		// was written before subject ids were canonical.
 		var err error
-		if subject, err = s.Vault.SubjectFor(r.Context(), p.TenantID, req.Category, req.Value); err != nil {
+		if subjects, err = s.Vault.SubjectsFor(r.Context(), p.TenantID, req.Category, req.Value); err != nil {
 			s.fail(w, r, err)
 			return
 		}
-		for _, cat := range []string{req.Category, "other"} {
-			for _, v := range eraseForms(req.Category, req.Value) {
-				id, err := s.Vault.SubjectFor(r.Context(), p.TenantID, cat, v)
-				if err != nil {
-					s.fail(w, r, err)
-					return
-				}
-				if !slices.Contains(candidates, id) {
-					candidates = append(candidates, id)
-				}
-			}
-		}
+		subject = subjects[0]
+	}
+	// Never under a running workflow (spec 9.4): runs in flight holding the
+	// subject finish first, or are cancelled with the erasure.
+	active, err := s.runsHolding(r, subjects)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if len(active) > 0 && !req.CancelRuns {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "runs in flight hold this person's data: let them finish, or erase with cancel_runs to cancel them",
+			"code": "runs_in_flight", "runs": active})
+		return
 	}
 	// Erasure cannot be undone: a person confirms it, for this subject, with
 	// a passkey or authenticator code (Atlas part D findings).
 	if _, ok := s.personStepUp(w, r, req.stepUpProof, "pii.erase", subject, "erasures", "erasing personal data"); !ok {
 		return
 	}
-	// A generation named (<subject>~2) is the person: every step below
-	// works on the base, which reaches all its generations.
-	subject = pii.BaseSubject(subject)
-	if len(candidates) == 0 {
-		candidates = []string{subject}
+	for _, id := range active {
+		ref := runtime.RunRef{ID: id, TenantID: p.TenantID}
+		// Ended now, not reversed: a reversal would keep the run going
+		// on the data being erased.
+		if err := s.Store.CancelRun(r.Context(), ref, p.Actor(), false); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			return auditTx(r, tx, "run.cancel", "run:"+id.String(), map[string]any{"reverse": false, "for": "pii.erase"})
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
+	if len(active) > 0 {
+		// One started since, or more than were listed: not yet.
+		if still, err := s.runsHolding(r, subjects); err != nil || len(still) > 0 {
+			if err == nil {
+				writeJSON(w, http.StatusConflict, map[string]any{"error": "more runs in flight hold this person's data: try again",
+					"code": "runs_in_flight", "runs": still})
+				return
+			}
+			s.fail(w, r, err)
+			return
+		}
+	}
+	// A generation named (<subject>~1) is the person: what is kept by
+	// subject below works on the base, which reaches all its generations.
+	subject = pii.BaseSubject(subject)
 	// What they said to the business's assistant goes too, where they are
-	// named by their number or chat id (decision 0062 V5): a subject id
+	// named by their number or chat id (decision 0074 V5): a subject id
 	// alone cannot be matched to rows. Their rows go even when nothing of
 	// theirs was ever sealed (no key to erase).
 	rowsOut := map[string]any{}
@@ -635,35 +740,62 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		}
 		rowsOut["conversation_rows_deleted"], rowsGone = n, n
 	}
-	var erasedSubjects []string
-	for _, id := range candidates {
-		err := s.Vault.Erase(r.Context(), p.TenantID, id, p.Actor())
+	erased := []string{}
+	for _, x := range subjects {
+		err := s.Vault.Erase(r.Context(), p.TenantID, x, p.Actor())
 		if errors.Is(err, secrets.ErrNotFound) {
-			continue
+			continue // that form of the value was never sealed, or is erased already
 		}
 		if err != nil {
 			s.fail(w, r, err)
 			return
 		}
-		erasedSubjects = append(erasedSubjects, id)
+		erased = append(erased, x)
 	}
-	if len(erasedSubjects) == 0 && rowsGone == 0 {
+	// The business's saved things holding the phone or email (saved
+	// objects: a person, a place, a field of its own kind), which are kept
+	// plain, not sealed under the subject: let go with what they held.
+	scrubbed, err := s.eraseSavedContacts(r, req.Category, req.Value)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// A customer's answers waiting to go back to their WhatsApp number
+	// (made tools T5) hold the number plain: they go too.
+	watched, err := s.eraseCustomerToolWatches(r, req.Category, req.Value)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	scrubbed += watched
+	if len(erased) == 0 && scrubbed == 0 && rowsGone == 0 {
 		s.fail(w, r, fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound))
 		return
 	}
-	out := map[string]any{"subject": subject, "erased": len(erasedSubjects) > 0}
+	// The business's copies of the files they sent or were sent in the
+	// app, which are not sealed but kept in its storage, go with them.
+	if err := s.eraseChatFiles(r.Context(), p.TenantID, erased); err != nil {
+		s.Logger.Warn("erasure: the customer's chat files", "tenant", p.TenantID, "err", err)
+	}
+	// A customer's app and WhatsApp lines are parted: each keeps its own
+	// erasure, and nothing more crosses between them (§11).
+	if err := s.partErasedLines(r.Context(), p.TenantID, erased); err != nil {
+		s.Logger.Warn("erasure: the customer's lines", "tenant", p.TenantID, "err", err)
+	}
+
+	out := map[string]any{"subject": subject, "erased": len(erased) > 0, "subjects": erased, "saved": scrubbed}
 	for k, v := range rowsOut {
 		out[k] = v
 	}
 	// The subjects whatever else is kept about the person is found by:
-	// the one named, and each other form that had a key.
+	// the base of the one named, and of each that had a key.
 	reach := []string{subject}
-	for _, id := range erasedSubjects {
-		if !slices.Contains(reach, id) {
-			reach = append(reach, id)
+	for _, id := range erased {
+		if b := pii.BaseSubject(id); !slices.Contains(reach, b) {
+			reach = append(reach, b)
 		}
 	}
-	// Files a person sent go with them (decision 0062): their key is gone,
+	// Files a person sent go with them (decision 0074): their key is gone,
 	// and the files themselves are deleted now, not at their expiry.
 	if s.EraseFiles != nil {
 		total, pending := 0, false
@@ -684,7 +816,7 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	// goes, and the messages from them buffered for runs not waiting yet
 	// (a chat message's correlation is its sender); what they said in the
 	// runs their messages started was sealed under them, and is erased
-	// with their key (decision 0062 P2).
+	// with their key (decision 0074 P2).
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		contacts, runs, turns := 0, 0, 0
 		for _, id := range reach {
@@ -735,7 +867,7 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-var eraseCategoryRe = regexp.MustCompile(`^[a-z_]+$`)
+var eraseCategoryRe = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 // eraseForms are the ways a value naming a person may have been sealed:
 // as given; a phone number in each way it is written (senderForms:
@@ -802,6 +934,15 @@ func (s *Server) listAnchors(w http.ResponseWriter, r *http.Request) {
 	if s.AnchorKey != nil {
 		resp["public_key"] = base64.StdEncoding.EncodeToString(s.AnchorKey)
 		resp["key_id"] = audit.KeyID(s.AnchorKey)
+	}
+	// Every key an anchor may be signed with: the current one first, then
+	// the retired ones.
+	if keys := s.anchorKeys(); len(keys) > 0 {
+		all := make([]string, len(keys))
+		for i, k := range keys {
+			all[i] = base64.StdEncoding.EncodeToString(k)
+		}
+		resp["public_keys"] = all
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -894,7 +1035,7 @@ func (s *Server) testCredentials(ctx context.Context, tenant uuid.UUID, c *conne
 // unsignedTriggers says, in plain words, which of a connector's triggers
 // this connection cannot receive: a trigger verified with a connection
 // field the connection does not have refuses every delivery, so a workflow
-// on it would stay silent (decision 0062 C17). Triggers Taskiem registers
+// on it would stay silent (decision 0074 C17). Triggers Taskiem registers
 // itself keep their own secret and are not listed.
 func unsignedTriggers(c *connector.Connector, creds map[string]string) []string {
 	var out []string
@@ -1124,4 +1265,14 @@ func (s *Server) listConnectionNames(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"connections": nonNil(out)})
+}
+
+// anchorKeys are the keys an anchor may be signed with: the current one,
+// then the retired ones.
+func (s *Server) anchorKeys() []ed25519.PublicKey {
+	var keys []ed25519.PublicKey
+	if s.AnchorKey != nil {
+		keys = append(keys, s.AnchorKey)
+	}
+	return append(keys, s.RetiredAnchorKeys...)
 }

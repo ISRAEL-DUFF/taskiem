@@ -1,6 +1,6 @@
 # What your assistant knows
 
-A business's assistant answers customers from the business's own facts: its hours, where it delivers, what it sells and for how much, how returns work ([decision 0062](decisions/0062-customer-assistant.md) D12, [plan V5b](spec/voice-assistant.md#v5b-knowledge-sources-d12)).
+A business's assistant answers customers from the business's own facts: its hours, where it delivers, what it sells and for how much, how returns work ([decision 0074](decisions/0074-customer-assistant.md) D12, [plan V5b](spec/voice-assistant.md#v5b-knowledge-sources-d12)).
 
 The facts come from **knowledge sources**, inside Taskiem and outside it. Each source is read as text, split into short passages, and searched per question, so a reply sends the model only the passages that answer it. The owner manages them on **What your assistant knows** (`/knowledge`, people with `secret.manage`).
 
@@ -62,7 +62,7 @@ A read that fails keeps the last text in use (or none, if it was never read) and
 ## For operators
 
 - **Refreshing.** The `api` role refreshes, every 5 minutes, the sources due: those read over a day ago (or that failed over a day ago), and those a workflow or the owner asked to read again. It finds them across businesses through `taskiem_knowledge_due`, which shows ids only, and reads four at a time, each within 5 minutes. A source is read by one caller at a time across replicas (a Postgres advisory lock), and one read since the list was made is skipped. Each source is read within its business's scope, with its own connections (recorded in the secret reads as `knowledge.read`, by the owner who pressed a button or by `system`) and through the egress guard. A read while the owner waits has 90 seconds.
-- **Storage.** Sources and passages are in `knowledge_sources` and `knowledge_passages` (migration 00319), under forced row-level security, with a GIN index on the passages' words.
+- **Storage.** Sources and passages are in `knowledge_sources` and `knowledge_passages` (migration 00597), under forced row-level security, with a GIN index on the passages' words.
 - **Audit.** Adding, changing, approving, reading again, pausing, resuming and deleting a source are audited (`knowledge.source.create`, `.update`, `.approve`, `.refresh`, `.pause`, `.resume`, `.delete`) in the same transaction as the change, with its kind and title (and what changed, and which reading was approved), never its text.
 
 ## Not yet

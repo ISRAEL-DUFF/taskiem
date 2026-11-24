@@ -98,7 +98,7 @@ func TestConnectorInputChecks(t *testing.T) {
 }
 
 // Only an action that allows it is sent again when its answer is lost
-// (decision 0062 D11).
+// (decision 0074 D11).
 func TestResendIfLostOnlyWhereAllowed(t *testing.T) {
 	reg := registry(t)
 	step := func(conn, action string) []byte {
@@ -132,5 +132,23 @@ func TestResendIfLostOnlyWhereAllowed(t *testing.T) {
 	capStep := doc(`{"type":"manual"}`, `[{"id":"s","type":"capability","uses":"pay_bank","effect":{"resend_if_lost":true},"input":{"account_name":"Ada","account_number":"0123456789","amount_kobo":100,"bank_code":"058","narration":"x"}}]`)
 	if probs := wdcheck.Check(capStep, reg); !has(probs) {
 		t.Errorf("a payment: %v", probs)
+	}
+}
+
+// An http step has no reconcile action to ask the partner with, so it may
+// not declare reconcilable_write (the worker would have nothing to run).
+func TestHTTPStepClass(t *testing.T) {
+	reg := registry(t)
+	step := func(class string) []byte {
+		return doc(`{"type":"manual"}`, `[{"id":"post","type":"http","config":{"method":"POST","url":"https://partner.example/x","class":"`+class+`"}}]`)
+	}
+	for _, class := range []string{"idempotent_write", "unsafe_write"} {
+		if probs := wdcheck.Check(step(class), reg); len(probs) > 0 {
+			t.Errorf("%s: %v", class, probs)
+		}
+	}
+	probs := wdcheck.Check(step("reconcilable_write"), reg)
+	if len(probs) != 1 || probs[0].Path != "/steps/post/config/class" || !strings.Contains(probs[0].Message, "no reconcile action") {
+		t.Errorf("reconcilable_write: %v", probs)
 	}
 }

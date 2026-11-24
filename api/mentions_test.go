@@ -60,11 +60,32 @@ func TestMentionsOrderFromTwo(t *testing.T) {
 	sCement := share(dangote, "Cement", "bag", 950000)
 	share(cherry, "Blocks", "piece", 45000)
 
-	// Two businesses in one message: two orders, one yes.
+	// Two businesses in one message: two orders, one yes. Each line the
+	// buyer has not said how to treat is asked first, in turn (U2b), here
+	// typed: the stock item, then the label.
 	r := w.say(t, buyerOn, "Buy 400 bags of cement from @Dangote Stores and 20 pieces of blocks from @Cherry Blocks")
-	if !strings.Contains(r, "2 orders, one per business") || !strings.Contains(r, "*Dangote Stores*") || !strings.Contains(r, "₦3,800,000") ||
+	if !strings.Contains(r, "*Cement* (400 bags) from *Dangote Stores*: how should we treat it?") {
+		t.Fatalf("asked: %q", r)
+	}
+	if r := w.say(t, buyerOn, "add to stock, cement"); !strings.Contains(r, "Label for *Cement*?") {
+		t.Fatalf("the label: %q", r)
+	}
+	if r = w.say(t, buyerOn, "1"); !strings.Contains(r, "*Cement*: Add to stock (Cement) · Stock bought.") ||
+		!strings.Contains(r, "*Blocks* (20 pieces) from *Cherry Blocks*: how should we treat it?") {
+		t.Fatalf("the next: %q", r)
+	}
+	r = w.say(t, buyerOn, "add to stock, blocks, stock bought")
+	if !strings.Contains(r, "*Blocks*: Add to stock (Blocks) · Stock bought.") || !strings.Contains(r, "2 orders, one per business") || !strings.Contains(r, "*Dangote Stores*") || !strings.Contains(r, "₦3,800,000") ||
 		!strings.Contains(r, "*Cherry Blocks*") || !strings.Contains(r, "₦9,000") {
 		t.Fatalf("read back: %q", r)
+	}
+	// A message straight to a business meanwhile, after a lone "..."
+	// (direct-messages.md): the drafts still wait for their yes.
+	if r := w.say(t, buyerOn, "..."); !strings.Contains(r, "Now send the message") {
+		t.Fatalf("a lone marker: %q", r)
+	}
+	if r := w.say(t, buyerOn, "@Dangote is the cement price still right?"); !strings.Contains(r, "✓ Sent to *Dangote Stores*") {
+		t.Fatalf("straight to Dangote: %q", r)
 	}
 	if r := w.say(t, buyerOn, "yes"); !strings.Contains(r, "Sent:") || !strings.Contains(r, "Dangote Stores") || !strings.Contains(r, "Cherry Blocks") {
 		t.Fatalf("sent: %q", r)
@@ -87,6 +108,19 @@ func TestMentionsOrderFromTwo(t *testing.T) {
 	// Nothing to order.
 	if r := w.say(t, buyerOn, "hello @Dangote Stores"); !strings.Contains(r, "Say how many") {
 		t.Fatalf("nothing asked: %q", r)
+	}
+
+	// "…, deliver to @warehouse": a saved place, where the order goes; a
+	// saved name in the middle is said how.
+	buyer.must(201, "POST", "/v1/saved", map[string]any{"name": "warehouse", "title": "Warehouse", "kind": "place",
+		"details": map[string]any{"line": "4 Creek Road", "area": "Apapa", "phone": "0803 112 0077"}})
+	if r := w.say(t, buyerOn, "Buy 10 bags of cement from @Dangote Stores, deliver to @warehouse"); !strings.Contains(r, "₦95,000") ||
+		!strings.Contains(r, "Delivered to @warehouse: 4 Creek Road, Apapa.") {
+		t.Fatalf("delivered to a saved place: %q", r)
+	}
+	w.say(t, buyerOn, "no")
+	if r := w.say(t, buyerOn, "Buy 10 bags of cement for @warehouse from @Dangote Stores"); !strings.Contains(r, "end the order with \"deliver to @warehouse\"") {
+		t.Errorf("in the middle: %q", r)
 	}
 
 	// On the web: the same words, the same answer.
@@ -119,6 +153,12 @@ func TestMentionsOrderFromTwo(t *testing.T) {
 	theirs := got[len(got)-1].(map[string]any)["mentions"].([]any)
 	if len(theirs) != 2 || theirs[1].(map[string]any)["link"] != nil || theirs[1].(map[string]any)["name"] != "Cherry Blocks" {
 		t.Fatalf("their copy: %v", theirs)
+	}
+	// The chat tools picker writes an item "@Cement": the same mention.
+	at := buyer.must(201, "POST", "/v1/link-chats/"+dl+"/messages", map[string]any{"text": "@Cement is almost out here",
+		"mentions": []any{map[string]any{"kind": "item", "item_id": sCement}}})["message"].(map[string]any)
+	if ms, _ := at["mentions"].([]any); len(ms) != 1 || ms[0].(map[string]any)["kind"] != "item" {
+		t.Fatalf("an item written with @: %v", at)
 	}
 	buyer.must(400, "POST", "/v1/link-chats/"+dl+"/messages", map[string]any{"text": "#Sand", "mentions": []any{map[string]any{"kind": "item", "item_id": "nope"}}})
 	buyer.must(400, "POST", "/v1/link-chats/"+dl+"/messages", map[string]any{"text": "@x", "mentions": []any{map[string]any{"kind": "business", "link": "00000000-0000-0000-0000-000000000001"}}})

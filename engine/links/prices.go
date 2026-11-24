@@ -11,14 +11,21 @@ package links
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/variants"
 )
 
 // MaxListItems caps a price list.
@@ -37,15 +44,179 @@ type PriceList struct {
 // PriceItem is an item on a price list, as the seller sets it and the
 // buyer sees it.
 type PriceItem struct {
-	ItemID      string `json:"item_id"`
-	Name        string `json:"name"`
-	Unit        string `json:"unit,omitempty"`
+	ItemID string `json:"item_id"`
+	Name   string `json:"name"`
+	Unit   string `json:"unit,omitempty"`
+	// Category is the seller's ("Sneakers"), as it was when the item was
+	// put on the list or last changed.
+	Category string `json:"category,omitempty"`
+	// Description is the seller's words for it (its storefront
+	// description), for search: "nike" finds a shoe that says Nike.
+	Description string `json:"description,omitempty"`
 	PriceKobo   int64  `json:"price_kobo"`
 	MinQuantity int    `json:"min_quantity"`
 	Available   bool   `json:"available"`
 	// Overridden: this link's own price, not the list's (the seller's
 	// view of one link).
 	Overridden bool `json:"overridden,omitempty"`
+	// Breaks are lower prices from a quantity up (chat tools phase 7):
+	// "from 10 bags ₦39,500", lowest quantity first.
+	Breaks []Break `json:"breaks,omitempty"`
+	// Sizes and colours (chat categories phase 4): a product listed once,
+	// its choices and its sizes on sale; each is ordered on its own row,
+	// at the product's price unless it has its own. Its breaks and its
+	// minimum count the product's sizes together.
+	Choices []variants.Choice `json:"choices,omitempty"`
+	Sizes   []PriceSize       `json:"sizes,omitempty"`
+	// VariantOf and Variant are, on one size as an order line prices it
+	// (Flat), its product's item and its values.
+	VariantOf string            `json:"variant_of,omitempty"`
+	Variant   map[string]string `json:"variant,omitempty"`
+	// Photo is, on a seller's storefront offered to a linked business
+	// (business-chat-tools.md §2), its photo (the storefront's urls by
+	// width). Left is how many are left where the seller counts it, read
+	// when the buyer reads the list (taskiem_product_left), never copied.
+	Photo map[string]string `json:"photo,omitempty"`
+	Left  *int64            `json:"left,omitempty"`
+}
+
+// PriceSize is one of a listed product's sizes and colours.
+type PriceSize struct {
+	ItemID  string            `json:"item_id"`
+	Name    string            `json:"name"`
+	Variant map[string]string `json:"variant"`
+	// PriceKobo is its own price on the list; 0 is the product's.
+	PriceKobo int64 `json:"price_kobo,omitempty"`
+	Available bool  `json:"available"`
+	// Left is how many of this size are left, where the seller counts it.
+	Left *int64 `json:"left,omitempty"`
+}
+
+// MaxListSizes is how many sizes and colours one listed product carries.
+const MaxListSizes = variants.MaxVariants
+
+// Flat is a list's items by the item an order line names: a product sold
+// in sizes and colours as each of its sizes (its own row, at its own price
+// or the product's; the product's breaks unless it has its own price; a
+// link's own price for the product is each size's), every other item as
+// it is. The product itself is not orderable.
+func Flat(items []PriceItem) map[string]PriceItem {
+	out := make(map[string]PriceItem, len(items))
+	for _, it := range items {
+		if len(it.Sizes) == 0 {
+			// A product sold in sizes with none on sale now: nothing to
+			// order (it keeps no stock of its own).
+			if len(it.Choices) == 0 {
+				out[it.ItemID] = it
+			}
+			continue
+		}
+		for _, z := range it.Sizes {
+			x := PriceItem{ItemID: z.ItemID, Name: z.Name, Unit: it.Unit, Category: it.Category, Description: it.Description, PriceKobo: it.PriceKobo,
+				MinQuantity: 1, Available: it.Available && z.Available, Overridden: it.Overridden, Breaks: it.Breaks, VariantOf: it.ItemID, Variant: z.Variant}
+			if z.PriceKobo > 0 && !it.Overridden {
+				x.PriceKobo, x.Breaks = z.PriceKobo, nil
+			}
+			out[z.ItemID] = x
+		}
+	}
+	return out
+}
+
+// ProductOf is the item whose breaks and minimum a line counts toward: a
+// size's product, else the item itself.
+func ProductOf(it PriceItem) string {
+	if it.VariantOf != "" {
+		return it.VariantOf
+	}
+	return it.ItemID
+}
+
+// Break is a price from a quantity up.
+type Break struct {
+	MinQuantity int   `json:"min_quantity"`
+	PriceKobo   int64 `json:"price_kobo"`
+}
+
+// MaxBreaks is how many quantity breaks an item may have.
+const MaxBreaks = 5
+
+type listSizes struct {
+	Choices []variants.Choice `json:"choices"`
+	Sizes   []PriceSize       `json:"sizes"`
+}
+
+// sizesJSON is a listed product's sizes as their column holds them; nil
+// for an item without.
+func sizesJSON(it PriceItem) any {
+	if len(it.Sizes) == 0 && len(it.Choices) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(listSizes{Choices: it.Choices, Sizes: it.Sizes})
+	return b
+}
+
+func scanSizes(raw []byte, it *PriceItem) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	var x listSizes
+	if err := json.Unmarshal(raw, &x); err != nil {
+		return err
+	}
+	it.Choices, it.Sizes = x.Choices, x.Sizes
+	return nil
+}
+
+// PriceAt is an item's price for a quantity: its last break reached, else
+// its price; a link's own price (Overridden) stands whatever the quantity.
+func PriceAt(it PriceItem, quantity int64) int64 {
+	if it.Overridden {
+		return it.PriceKobo
+	}
+	p := it.PriceKobo
+	for _, b := range it.Breaks {
+		if quantity >= int64(b.MinQuantity) {
+			p = b.PriceKobo
+		}
+	}
+	return p
+}
+
+// checkBreaks: each from a quantity above the item's minimum and the one
+// before it, each price below the item's and the one before it.
+func checkBreaks(it PriceItem) error {
+	if len(it.Breaks) > MaxBreaks {
+		return fmt.Errorf("%w: %s has up to %d quantity prices", ErrInvalid, it.Name, MaxBreaks)
+	}
+	q, p := it.MinQuantity, it.PriceKobo
+	for _, b := range it.Breaks {
+		if b.MinQuantity <= q || b.MinQuantity > 1000000 {
+			return fmt.Errorf("%w: %s's quantity prices go up in quantity, above its minimum", ErrInvalid, it.Name)
+		}
+		if b.PriceKobo <= 0 || b.PriceKobo >= p {
+			return fmt.Errorf("%w: %s's quantity prices go down as the quantity goes up", ErrInvalid, it.Name)
+		}
+		q, p = b.MinQuantity, b.PriceKobo
+	}
+	return nil
+}
+
+// breaksJSON is the column's value: NULL for none.
+func breaksJSON(b []Break) []byte {
+	if len(b) == 0 {
+		return nil
+	}
+	raw, _ := json.Marshal(b)
+	return raw
+}
+
+// scanBreaks reads the column into an item.
+func scanBreaks(raw []byte, it *PriceItem) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	return json.Unmarshal(raw, &it.Breaks)
 }
 
 // ListsTx is the business in scope's price lists, by name.
@@ -80,18 +251,45 @@ func ListsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]PriceList, err
 }
 
 func listItemsTx(ctx context.Context, tx pgx.Tx, list uuid.UUID) ([]PriceItem, error) {
-	rows, err := tx.Query(ctx, `SELECT item_id, name, unit, price_kobo, min_quantity, available FROM price_list_items WHERE list_id = $1 ORDER BY position, lower(name)`, list)
+	rows, err := tx.Query(ctx, `SELECT item_id, name, unit, category, description, price_kobo, min_quantity, available, breaks, sizes FROM price_list_items WHERE list_id = $1 ORDER BY position, lower(name)`, list)
 	if err != nil {
 		return nil, err
 	}
-	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (PriceItem, error) {
-		var it PriceItem
-		return it, r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.PriceKobo, &it.MinQuantity, &it.Available)
-	})
+	out, err := pgx.CollectRows(rows, scanPriceItem)
 	if out == nil {
 		out = []PriceItem{}
 	}
 	return out, err
+}
+
+// scanPriceItem reads a price list item (or the buyer's copy of one).
+func scanPriceItem(r pgx.CollectableRow) (PriceItem, error) {
+	var it PriceItem
+	var raw, sizes []byte
+	if err := r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.Category, &it.Description, &it.PriceKobo, &it.MinQuantity, &it.Available, &raw, &sizes); err != nil {
+		return it, err
+	}
+	if err := scanBreaks(raw, &it); err != nil {
+		return it, err
+	}
+	return it, scanSizes(sizes, &it)
+}
+
+// scanSupplierPrice reads the buyer's copy of a seller's item, with the
+// storefront's photo where it came from one.
+func scanSupplierPrice(r pgx.CollectableRow) (PriceItem, error) {
+	var it PriceItem
+	var raw, sizes, photo []byte
+	if err := r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.Category, &it.Description, &it.PriceKobo, &it.MinQuantity, &it.Available, &raw, &sizes, &photo); err != nil {
+		return it, err
+	}
+	if len(photo) > 0 {
+		_ = json.Unmarshal(photo, &it.Photo)
+	}
+	if err := scanBreaks(raw, &it); err != nil {
+		return it, err
+	}
+	return it, scanSizes(sizes, &it)
 }
 
 // CreateListTx makes an empty price list.
@@ -128,13 +326,26 @@ func SetListItemsTx(ctx context.Context, tx pgx.Tx, tenant, list uuid.UUID, item
 		if it.PriceKobo <= 0 || it.MinQuantity < 1 {
 			return nil, fmt.Errorf("%w: %s needs a price and a minimum of at least 1", ErrInvalid, it.Name)
 		}
+		if err := checkBreaks(it); err != nil {
+			return nil, err
+		}
+		if len(it.Sizes) > MaxListSizes {
+			return nil, fmt.Errorf("%w: %s has more than %d sizes and colours", ErrInvalid, it.Name, MaxListSizes)
+		}
+		for _, z := range it.Sizes {
+			if z.ItemID == "" || seen[z.ItemID] || z.PriceKobo < 0 {
+				return nil, fmt.Errorf("%w: each size or colour once, at a price of 0 or more", ErrInvalid)
+			}
+			seen[z.ItemID] = true
+		}
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM price_list_items WHERE list_id = $1`, list); err != nil {
 		return nil, err
 	}
 	for i, it := range items {
-		if _, err := tx.Exec(ctx, `INSERT INTO price_list_items (tenant_id, list_id, item_id, name, unit, price_kobo, min_quantity, available, position)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, tenant, list, it.ItemID, cutRunes(it.Name, 120), cutRunes(it.Unit, 40), it.PriceKobo, it.MinQuantity, it.Available, i); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO price_list_items (tenant_id, list_id, item_id, name, unit, price_kobo, min_quantity, available, position, breaks, category, description, sizes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`, tenant, list, it.ItemID, cutRunes(it.Name, 120), cutRunes(it.Unit, 40), it.PriceKobo, it.MinQuantity, it.Available, i,
+			breaksJSON(it.Breaks), cutRunes(it.Category, 60), cutRunes(it.Description, 500), sizesJSON(it)); err != nil {
 			return nil, err
 		}
 	}
@@ -220,7 +431,8 @@ func ShareListTx(ctx context.Context, tx pgx.Tx, tenant, list uuid.UUID, to []uu
 
 // OverridesTx is a link's own prices, by the seller's item.
 func OverridesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) (map[string]int64, error) {
-	rows, err := tx.Query(ctx, `SELECT item_id, price_kobo FROM price_list_overrides WHERE tenant_id = $1 AND link_id = $2`, tenant, link)
+	// A price kept for a while (Keep this price for them) ends by itself.
+	rows, err := tx.Query(ctx, `SELECT item_id, price_kobo FROM price_list_overrides WHERE tenant_id = $1 AND link_id = $2 AND (until IS NULL OR until > now())`, tenant, link)
 	if err != nil {
 		return nil, err
 	}
@@ -290,9 +502,165 @@ func LinkPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) (name 
 	return name, items, true, nil
 }
 
+// StorefrontListName is what a buyer's view of a seller's storefront
+// prices is called: what a linked business sees, and orders from, when
+// the seller shares no price list with it (business-chat-tools.md §2).
+const StorefrontListName = "Storefront prices"
+
+// storefrontItemsTx is the seller's storefront products as price list
+// items, at the storefront's prices: every product marked to show on the
+// storefront, whether or not the storefront is published. Services and
+// items with no price are left out; a product in sizes and colours keeps
+// the sizes on sale, each at its own price where it has one.
+func storefrontItemsTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID) ([]PriceItem, error) {
+	cat, err := storefront.Catalogue(ctx, tx, seller)
+	if err != nil {
+		return nil, err
+	}
+	out := []PriceItem{}
+	for _, it := range cat {
+		// Hidden from the storefront (Show on your storefront off): not
+		// shown here either. How many are left is not part of the offer:
+		// the buyer reads it with the list (leftTx), so a sale writes no
+		// copy. A dish
+		// with options to pick, or an event with a date, is bought on the
+		// storefront itself: a trade order has no room for either.
+		if !it.Available || it.PriceKobo == nil || *it.PriceKobo <= 0 || it.DurationMinutes > 0 || it.VariantOf != "" ||
+			len(it.Options) > 0 || it.Starts != nil {
+			continue
+		}
+		pi := PriceItem{ItemID: it.ID, Name: cutRunes(it.Name, 120), Unit: cutRunes(it.Unit, 40), Category: cutRunes(it.Category, 60),
+			Description: cutRunes(it.Description, 500), PriceKobo: *it.PriceKobo, MinQuantity: 1, Available: true}
+		if len(it.Photo) > 0 {
+			pi.Photo = map[string]string(it.Photo)
+		}
+		if len(it.Sizes) > 0 {
+			pi.Choices = it.Choices
+			for _, z := range it.Sizes {
+				ps := PriceSize{ItemID: z.ID, Name: variants.Name(it.Name, z.Variant, it.Choices), Variant: z.Variant,
+					Available: true}
+				if z.PriceKobo != nil && *z.PriceKobo != *it.PriceKobo {
+					ps.PriceKobo = *z.PriceKobo
+				}
+				pi.Sizes = append(pi.Sizes, ps)
+				if len(pi.Sizes) == MaxListSizes {
+					break
+				}
+			}
+		}
+		out = append(out, pi)
+		if len(out) == MaxListItems {
+			break
+		}
+	}
+	return out, nil
+}
+
+// shopHash is what a storefront offers, in short: a link whose copy was
+// written from the same is not written again (StorefrontChangedTx).
+func shopHash(items []PriceItem) string {
+	b, _ := json.Marshal(items)
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:])
+}
+
+// ShopPricesTx is what a link is offered by the seller in scope: the list it
+// shares with the link (at the link's own prices), or else its storefront
+// at the storefront's prices. A link's own price stands only on a shared
+// list: an order with none is priced at the catalogue (linkPrices), so the
+// storefront's price is what the buyer is shown and pays. storefront
+// reports the second; ok is false when there is neither.
+func ShopPricesTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) (name string, items []PriceItem, storefrontPrices, ok bool, err error) {
+	name, items, ok, err = LinkPricesTx(ctx, tx, seller, link)
+	if err != nil || ok {
+		return name, items, false, ok, err
+	}
+	if items, err = storefrontItemsTx(ctx, tx, seller); err != nil || len(items) == 0 {
+		return "", nil, false, false, err
+	}
+	return StorefrontListName, items, true, true, nil
+}
+
+// StorefrontChangedTx puts on the list to mirror every active link of the
+// business in scope that it shares no price list with and whose copy of
+// its storefront differs from the storefront now: those links see its
+// storefront. A sale that changes nothing they see (a count the
+// storefront does not show, the same prices) writes nothing. The copies
+// are written a little later, so a run of changes is written once.
+func StorefrontChangedTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
+	list, _, err := ListTx(ctx, tx)
+	if err != nil {
+		return err
+	}
+	rows, err := tx.Query(ctx, `SELECT link_id FROM price_list_shares WHERE tenant_id = $1`, tenant)
+	if err != nil {
+		return err
+	}
+	shared, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return err
+	}
+	items, err := storefrontItemsTx(ctx, tx, tenant)
+	if err != nil {
+		return err
+	}
+	now := shopHash(items)
+	rows, err = tx.Query(ctx, `SELECT link_id, hash FROM link_shop_offers WHERE tenant_id = $1`, tenant)
+	if err != nil {
+		return err
+	}
+	written := map[uuid.UUID]string{}
+	for rows.Next() {
+		var l uuid.UUID
+		var h string
+		if err := rows.Scan(&l, &h); err != nil {
+			rows.Close()
+			return err
+		}
+		written[l] = h
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, l := range list {
+		if l.State != Active || slices.Contains(shared, l.ID) {
+			continue
+		}
+		// Nothing to offer, and nothing written before: nothing to do.
+		if h, ok := written[l.ID]; (ok && h == now) || (!ok && len(items) == 0) {
+			continue
+		}
+		if err := dueSoonTx(ctx, tx, tenant, l.ID, StorefrontSettle); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// dueSoonTx puts a link's prices on the list to mirror after a while,
+// keeping an earlier time already there: changes coming faster than the
+// wait never push the copy back for ever.
+func dueSoonTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, after time.Duration) error {
+	_, err := tx.Exec(ctx, `INSERT INTO link_orders_due (tenant_id, kind, object_id, due_at) VALUES ($1, 'prices', $2, now() + $3 * interval '1 second')
+		ON CONFLICT (tenant_id, kind, object_id) DO UPDATE SET due_at = LEAST(link_orders_due.due_at, EXCLUDED.due_at), tries = 0`, tenant, link, int64(after/time.Second))
+	return err
+}
+
+// StorefrontSettle is how long after a storefront change its copies are
+// written: changes within it are written together.
+var StorefrontSettle = 30 * time.Second
+
+// PricesDueTx puts one link on the business in scope's list to mirror
+// (a link just made active: each side's offer reaches the other).
+func PricesDueTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) error {
+	return dueTx(ctx, tx, tenant, "prices", link, 0)
+}
+
 // MirrorPricesTx rewrites the buyer's view of a link's prices from the
 // seller's (the business in scope): its list, at the link's prices, or
-// nothing when none is shared. Through the door, so the seller's reads
+// its storefront at the storefront's prices when no list is shared
+// (ShopPricesTx), or nothing when it has neither. Through the door, so the seller's reads
 // come first; one link per transaction.
 func MirrorPricesTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) error {
 	if err := Undue(ctx, tx, seller, "prices", link); err != nil {
@@ -302,16 +670,38 @@ func MirrorPricesTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) erro
 	if err != nil || !ok {
 		return err
 	}
-	name, items, shared, err := LinkPricesTx(ctx, tx, seller, link)
+	name, items, fromStorefront, shared, err := ShopPricesTx(ctx, tx, seller, link)
 	if err != nil {
 		return err
+	}
+	// What this link's copy is written from, in the seller's scope: its
+	// storefront (so an unchanged one is not written again), or not.
+	if fromStorefront {
+		_, err = tx.Exec(ctx, `INSERT INTO link_shop_offers (tenant_id, link_id, hash) VALUES ($1, $2, $3)
+			ON CONFLICT (tenant_id, link_id) DO UPDATE SET hash = EXCLUDED.hash, updated_at = now()`, seller, link, shopHash(items))
+	} else {
+		_, err = tx.Exec(ctx, `DELETE FROM link_shop_offers WHERE tenant_id = $1 AND link_id = $2`, seller, link)
+	}
+	if err != nil {
+		return err
+	}
+	// A price kept for a while ends by itself: the buyer's view is
+	// written again then (before the door, in the seller's own scope).
+	var ends *time.Time
+	if err := tx.QueryRow(ctx, `SELECT min(until) FROM price_list_overrides WHERE tenant_id = $1 AND link_id = $2 AND until > now()`, seller, link).Scan(&ends); err != nil {
+		return err
+	}
+	if ends != nil {
+		if err := dueTx(ctx, tx, seller, "prices", link, time.Until(*ends)+time.Minute); err != nil {
+			return err
+		}
 	}
 	// The terms the seller gives this buyer go with its prices (L5).
 	terms, err := TradeTx(ctx, tx, seller, link)
 	if err != nil {
 		return err
 	}
-	detail, _ := json.Marshal(map[string]any{"shared": shared, "items": len(items)})
+	detail, _ := json.Marshal(map[string]any{"shared": shared, "storefront": fromStorefront, "items": len(items)})
 	buyer, err := EnterTx(ctx, tx, link, "link.prices", detail, Actor{Type: "system", ID: "link-prices"})
 	if err != nil {
 		return err
@@ -338,8 +728,24 @@ func MirrorPricesTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) erro
 		return err
 	}
 	for i, it := range items {
-		if _, err := tx.Exec(ctx, `INSERT INTO supplier_prices (tenant_id, link_id, item_id, name, unit, price_kobo, min_quantity, available, position)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, buyer, link, it.ItemID, it.Name, it.Unit, it.PriceKobo, it.MinQuantity, it.Available, i); err != nil {
+		// A link's own price stands whatever the quantity: no breaks.
+		breaks := it.Breaks
+		if it.Overridden {
+			breaks = nil
+		}
+		// A link's own price is each size's too: none keeps its own.
+		if it.Overridden {
+			for j := range it.Sizes {
+				it.Sizes[j].PriceKobo = 0
+			}
+		}
+		var photo any
+		if len(it.Photo) > 0 {
+			photo, _ = json.Marshal(it.Photo)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO supplier_prices (tenant_id, link_id, item_id, name, unit, price_kobo, min_quantity, available, position, breaks, category, description, sizes, photo)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`, buyer, link, it.ItemID, it.Name, it.Unit, it.PriceKobo, it.MinQuantity, it.Available, i, breaksJSON(breaks),
+			cutRunes(it.Category, 60), cutRunes(it.Description, 500), sizesJSON(it), photo); err != nil {
 			return err
 		}
 	}
@@ -356,7 +762,8 @@ type SupplierPrices struct {
 }
 
 // SupplierPricesTx is the prices linked suppliers share with the business
-// in scope, one per link (link uuid.Nil: all).
+// in scope, one per link (link uuid.Nil: all), each item with how many are
+// left where the supplier counts it (leftTx).
 func SupplierPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([]SupplierPrices, error) {
 	rows, err := tx.Query(ctx, `SELECT link_id, name, updated_at FROM supplier_price_lists WHERE tenant_id = $1 AND ($2 = '00000000-0000-0000-0000-000000000000'::uuid OR link_id = $2)`,
 		tenant, link)
@@ -375,9 +782,10 @@ func SupplierPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([
 		return nil, err
 	}
 	names := map[uuid.UUID]string{}
+	business := map[uuid.UUID]uuid.UUID{}
 	for _, l := range list {
 		if l.State == Active {
-			names[l.ID] = l.Name
+			names[l.ID], business[l.ID] = l.Name, l.Business
 		}
 	}
 	keep := out[:0]
@@ -387,15 +795,15 @@ func SupplierPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([
 			continue // a link no longer active: its prices are not offered
 		}
 		p.Business = n
-		rows, err := tx.Query(ctx, `SELECT item_id, name, unit, price_kobo, min_quantity, available FROM supplier_prices WHERE tenant_id = $1 AND link_id = $2
-			ORDER BY position, lower(name)`, tenant, p.LinkID)
+		rows, err := tx.Query(ctx, `SELECT item_id, name, unit, category, description, price_kobo, min_quantity, available, breaks, sizes, photo
+			FROM supplier_prices WHERE tenant_id = $1 AND link_id = $2 ORDER BY position, lower(name)`, tenant, p.LinkID)
 		if err != nil {
 			return nil, err
 		}
-		if p.Items, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (PriceItem, error) {
-			var it PriceItem
-			return it, r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.PriceKobo, &it.MinQuantity, &it.Available)
-		}); err != nil {
+		if p.Items, err = pgx.CollectRows(rows, scanSupplierPrice); err != nil {
+			return nil, err
+		}
+		if err := leftTx(ctx, tx, business[p.LinkID], p.Items); err != nil {
 			return nil, err
 		}
 		if p.Items == nil {
@@ -406,67 +814,67 @@ func SupplierPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([
 	return keep, nil
 }
 
-// ItemLink is which of the buyer's own items a linked seller's item is.
-type ItemLink struct {
-	LinkID       uuid.UUID `json:"link"`
-	ItemID       string    `json:"item_id"`
-	SellerItemID string    `json:"seller_item_id"`
-	SellerItem   string    `json:"seller_item"`
-}
-
-// ItemLinksTx is the business in scope's item links with a link.
-func ItemLinksTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([]ItemLink, error) {
-	rows, err := tx.Query(ctx, `SELECT link_id, item_id, seller_item_id, seller_item FROM item_links WHERE tenant_id = $1 AND link_id = $2 ORDER BY lower(seller_item)`, tenant, link)
+// leftTx puts on a linked supplier's items how many are left of each,
+// where the supplier counts it (taskiem_product_left, which answers a
+// business linked to the one in scope and nothing else about its stock):
+// sold out when its stock item cannot cover one sale. A product in sizes
+// has each size's, and theirs together when every size is counted.
+func leftTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID, items []PriceItem) error {
+	var ids []string
+	for _, it := range items {
+		ids = append(ids, it.ItemID)
+		for _, z := range it.Sizes {
+			ids = append(ids, z.ItemID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT product_id, sales_left FROM taskiem_product_left($1, $2)`, seller, ids)
 	if err != nil {
-		return nil, err
-	}
-	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ItemLink, error) {
-		var l ItemLink
-		return l, r.Scan(&l.LinkID, &l.ItemID, &l.SellerItemID, &l.SellerItem)
-	})
-	if out == nil {
-		out = []ItemLink{}
-	}
-	return out, err
-}
-
-// SetItemLinkTx says which of the buyer's own items a seller's item is:
-// one each way (a link made again replaces the old one, either way).
-func SetItemLinkTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, item, sellerItem, sellerName, by string) error {
-	if item == "" || sellerItem == "" || strings.TrimSpace(sellerName) == "" {
-		return fmt.Errorf("%w: your item and theirs", ErrInvalid)
-	}
-	if _, err := GetTx(ctx, tx, link); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM item_links WHERE tenant_id = $1 AND link_id = $2 AND (item_id = $3 OR seller_item_id = $4)`, tenant, link, item, sellerItem); err != nil {
+	left := map[string]int64{}
+	for rows.Next() {
+		var id string
+		var n int64
+		if err := rows.Scan(&id, &n); err != nil {
+			rows.Close()
+			return err
+		}
+		left[id] = n
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO item_links (tenant_id, link_id, item_id, seller_item_id, seller_item, updated_by) VALUES ($1, $2, $3, $4, $5, $6)`,
-		tenant, link, item, sellerItem, cutRunes(strings.TrimSpace(sellerName), 120), by)
-	return err
-}
-
-// UnlinkItemTx removes one of the buyer's item links.
-func UnlinkItemTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, item string) error {
-	tag, err := tx.Exec(ctx, `DELETE FROM item_links WHERE tenant_id = $1 AND link_id = $2 AND item_id = $3`, tenant, link, item)
-	if err == nil && tag.RowsAffected() == 0 {
-		return ErrNotFound
+	for i := range items {
+		it := &items[i]
+		it.Left = nil
+		if len(it.Sizes) == 0 {
+			if n, ok := left[it.ItemID]; ok {
+				it.Left, it.Available = &n, it.Available && n > 0
+			}
+			continue
+		}
+		var sum int64
+		all := true
+		for j := range it.Sizes {
+			z := &it.Sizes[j]
+			z.Left = nil
+			n, ok := left[z.ItemID]
+			if !ok {
+				all = false
+				continue
+			}
+			z.Left, z.Available = &n, z.Available && n > 0
+			sum += n
+		}
+		if all {
+			it.Left, it.Available = &sum, it.Available && sum > 0
+		}
 	}
-	return err
-}
-
-// sellerItemsOf is the buyer's item links with a link, by its own item.
-func sellerItemsOf(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) (map[string]string, error) {
-	got, err := ItemLinksTx(ctx, tx, tenant, link)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]string{}
-	for _, l := range got {
-		out[l.ItemID] = l.SellerItemID
-	}
-	return out, nil
+	return nil
 }
 
 func ownList(ctx context.Context, tx pgx.Tx, tenant, list uuid.UUID) error {
@@ -509,4 +917,152 @@ func union(a, b []uuid.UUID) []uuid.UUID {
 		}
 	}
 	return out
+}
+
+// KeepPricesTx keeps prices for one link until a time (Keep this price
+// for them, chat tools phase 7): each item's price for that link, over
+// the list's, ending by itself; the link's other prices stay.
+func KeepPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, prices map[string]int64, until time.Time, by string) error {
+	for id, p := range prices {
+		if id == "" || p <= 0 {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO price_list_overrides (tenant_id, link_id, item_id, price_kobo, updated_by, until) VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (tenant_id, link_id, item_id) DO UPDATE SET price_kobo = EXCLUDED.price_kobo, updated_by = EXCLUDED.updated_by, until = EXCLUDED.until, updated_at = now()`,
+			tenant, link, id, p, by, until); err != nil {
+			return err
+		}
+	}
+	// The buyer sees it now; the mirror comes back when it ends.
+	return dueTx(ctx, tx, tenant, "prices", link, 0)
+}
+
+// SetListSizesTx gives a product the sizes and colours it now sells on the
+// price lists that hold it (sizes set up, renamed, added or taken off sale,
+// or none: a product again): a size kept keeps its own price there. It
+// puts the links those lists are shared with on the list to mirror, and
+// answers them.
+func SetListSizesTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, product string, choices []variants.Choice, sizes []PriceSize) ([]uuid.UUID, error) {
+	rows, err := tx.Query(ctx, `SELECT list_id, sizes FROM price_list_items WHERE tenant_id = $1 AND item_id = $2`, tenant, product)
+	if err != nil {
+		return nil, err
+	}
+	type held struct {
+		list uuid.UUID
+		raw  []byte
+	}
+	got, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (held, error) {
+		var h held
+		return h, r.Scan(&h.list, &h.raw)
+	})
+	if err != nil {
+		return nil, err
+	}
+	var out []uuid.UUID
+	for _, h := range got {
+		var was PriceItem
+		if err := scanSizes(h.raw, &was); err != nil {
+			return nil, err
+		}
+		// What the list said of each size stays: its own price, and its
+		// being off this list.
+		kept := map[string]PriceSize{}
+		for _, z := range was.Sizes {
+			kept[z.ItemID] = z
+		}
+		it := PriceItem{Choices: choices, Sizes: make([]PriceSize, len(sizes))}
+		for i, z := range sizes {
+			if k, ok := kept[z.ItemID]; ok {
+				z.PriceKobo = k.PriceKobo
+				z.Available = z.Available && k.Available
+			}
+			it.Sizes[i] = z
+		}
+		if sameSizes(h.raw, it) {
+			continue // nothing new: the buyers are not told again
+		}
+		if _, err := tx.Exec(ctx, `UPDATE price_list_items SET sizes = $3 WHERE list_id = $1 AND item_id = $2`, h.list, product, sizesJSON(it)); err != nil {
+			return nil, err
+		}
+		ls, err := sharedDueTx(ctx, tx, tenant, h.list)
+		if err != nil {
+			return nil, err
+		}
+		out = union(out, ls)
+	}
+	return out, nil
+}
+
+// sameSizes: the list's sizes as stored are those of it.
+func sameSizes(raw []byte, it PriceItem) bool {
+	var was, now PriceItem
+	if err := scanSizes(raw, &was); err != nil {
+		return false
+	}
+	b, _ := sizesJSON(it).([]byte)
+	if err := scanSizes(b, &now); err != nil {
+		return false
+	}
+	return reflect.DeepEqual(was.Choices, now.Choices) && reflect.DeepEqual(was.Sizes, now.Sizes)
+}
+
+// ListedSizedTx is the products the business's price lists hold with
+// sizes and colours.
+func ListedSizedTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]string, error) {
+	rows, err := tx.Query(ctx, `SELECT DISTINCT item_id FROM price_list_items WHERE tenant_id = $1 AND sizes IS NOT NULL`, tenant)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// SizeParentsTx is, for each size and colour on the business's price
+// lists, its product: a floor set on the product is each size's.
+func SizeParentsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (map[string]string, error) {
+	rows, err := tx.Query(ctx, `SELECT item_id, sizes FROM price_list_items WHERE tenant_id = $1 AND sizes IS NOT NULL`, tenant)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for rows.Next() {
+		var id string
+		var raw []byte
+		if err := rows.Scan(&id, &raw); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		var it PriceItem
+		if err := scanSizes(raw, &it); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		for _, z := range it.Sizes {
+			out[z.ItemID] = id
+		}
+	}
+	return out, rows.Err()
+}
+
+// SetItemCategoryTx writes an item's new category on the price lists that
+// hold it and puts the links those lists are shared with on the list to
+// mirror, so buyers group it the new way. It answers those links.
+func SetItemCategoryTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, item, category string) ([]uuid.UUID, error) {
+	rows, err := tx.Query(ctx, `UPDATE price_list_items SET category = $3 WHERE tenant_id = $1 AND item_id = $2 AND category <> $3 RETURNING list_id`,
+		tenant, item, cutRunes(category, 60))
+	if err != nil {
+		return nil, err
+	}
+	lists, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, err
+	}
+	var out []uuid.UUID
+	for _, l := range lists {
+		ls, err := sharedDueTx(ctx, tx, tenant, l)
+		if err != nil {
+			return nil, err
+		}
+		out = union(out, ls)
+	}
+	return out, nil
 }

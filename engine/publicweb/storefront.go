@@ -19,7 +19,8 @@ import (
 )
 
 // StorefrontPage is what the public host renders for a storefront: its
-// newest snapshot and catalogue copy.
+// newest snapshot and catalogue copy, with how many are left of each
+// counted product (taskiem_product_left).
 type StorefrontPage struct {
 	Status        string // published, closed or suspended
 	Model         storefront.Model
@@ -35,14 +36,15 @@ type StorefrontPage struct {
 	Lists map[string][]storefront.Item
 }
 
-// Storefronts reads a storefront's page; ok is false when it is not
-// served (a draft, an inactive tenant).
-type Storefronts func(ctx context.Context, id uuid.UUID) (page StorefrontPage, ok bool, err error)
+// Storefronts reads a business's storefront's page; ok is false when it
+// is not served (a draft, an inactive tenant).
+type Storefronts func(ctx context.Context, tenant, id uuid.UUID) (page StorefrontPage, ok bool, err error)
 
 // DBStorefronts reads pages with taskiem_public_storefront and
-// taskiem_public_storefront_catalogue.
+// taskiem_public_storefront_catalogue, and how many are left with
+// taskiem_product_left: the copy holds no count.
 func DBStorefronts(pool *pgxpool.Pool) Storefronts {
-	return func(ctx context.Context, id uuid.UUID) (StorefrontPage, bool, error) {
+	return func(ctx context.Context, tenant, id uuid.UUID) (StorefrontPage, bool, error) {
 		var p StorefrontPage
 		var version int
 		var model []byte
@@ -72,6 +74,9 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 		if err := json.Unmarshal(items, &p.Items); err != nil {
 			return StorefrontPage{}, false, err
 		}
+		if err := productLeft(ctx, pool, tenant, p.Items); err != nil {
+			return StorefrontPage{}, false, err
+		}
 		// Each other front's list, its table read once.
 		for _, f := range p.Model.Fronts {
 			if f.Slug == "" {
@@ -95,8 +100,64 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 				p.Lists[t] = list
 			}
 		}
+		// A front listing the catalogue's own table shows its products
+		// sold out as the home page does; another table's rows are no
+		// products, whatever their ids.
+		if cat := catalogueTable(p.Model); cat != "" {
+			if list, ok := p.Lists[cat]; ok {
+				if err := productLeft(ctx, pool, tenant, list); err != nil {
+					return StorefrontPage{}, false, err
+				}
+			}
+		}
 		return p, true, nil
 	}
+}
+
+// catalogueTable is the name of the table the home page's catalogue lists
+// ("" for none): the table whose rows products are counted by.
+func catalogueTable(m storefront.Model) string {
+	for _, f := range m.Fronts {
+		if f.Slug != "" {
+			continue
+		}
+		for _, b := range f.Blocks {
+			var lc storefront.ListConfig
+			if b.Kind == "list" && json.Unmarshal(b.Config, &lc) == nil && lc.Role == "catalogue" {
+				return lc.TableName
+			}
+		}
+	}
+	return ""
+}
+
+// productLeft puts on a page's items how many are left of each counted
+// product, from taskiem_product_left: all the public role may read of the
+// business's stock.
+func productLeft(ctx context.Context, pool *pgxpool.Pool, tenant uuid.UUID, items []storefront.Item) error {
+	if len(items) == 0 {
+		return nil
+	}
+	rows, err := pool.Query(ctx, `SELECT product_id, sales_left FROM taskiem_product_left($1, $2)`, tenant, storefront.LeftIDs(items))
+	if err != nil {
+		return err
+	}
+	left := map[string]int64{}
+	for rows.Next() {
+		var id string
+		var n int64
+		if err := rows.Scan(&id, &n); err != nil {
+			rows.Close()
+			return err
+		}
+		left[id] = n
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	storefront.WithLeft(items, left)
+	return nil
 }
 
 type pageEntry struct {
@@ -106,7 +167,8 @@ type pageEntry struct {
 
 // storefrontPage reads a page through a cache as short as the host
 // cache's: an edit or a publish shows within 30 seconds on every replica.
-func (s *Server) storefrontPage(ctx context.Context, id uuid.UUID) (StorefrontPage, bool, error) {
+func (s *Server) storefrontPage(ctx context.Context, site Site) (StorefrontPage, bool, error) {
+	id := site.ID
 	if s.Storefronts == nil {
 		return StorefrontPage{}, false, nil
 	}
@@ -116,7 +178,7 @@ func (s *Server) storefrontPage(ctx context.Context, id uuid.UUID) (StorefrontPa
 	if e, ok := s.pages.Get(id); ok {
 		return e.page, e.ok, nil
 	}
-	p, ok, err := s.Storefronts(ctx, id)
+	p, ok, err := s.Storefronts(ctx, site.Tenant, id)
 	if err != nil {
 		return StorefrontPage{}, false, err
 	}
@@ -154,6 +216,43 @@ type storefrontData struct {
 	// Services are what can be booked, each with a Book link, when the
 	// booking form is one of Forms.
 	Services []serviceView
+	// Search is what the visitor looked for (?q=), Found how many items
+	// matched: the catalogue is narrowed to them.
+	Search string
+	Found  int
+}
+
+// searchTerm is the visitor's search from ?q=, trimmed and kept short.
+func searchTerm(r *http.Request) string {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if rs := []rune(q); len(rs) > 40 {
+		q = string(rs[:40])
+	}
+	return q
+}
+
+// search narrows the page's sections to the items whose name, words or
+// category hold q, ignoring case; an empty q leaves them all.
+func (d *storefrontData) search(q string) {
+	if q == "" {
+		return
+	}
+	d.Search = q
+	needle := strings.ToLower(q)
+	var out []section
+	for _, sec := range d.Sections {
+		var keep []item
+		for _, it := range sec.Items {
+			if strings.Contains(strings.ToLower(it.Name+" "+it.Description+" "+it.Category), needle) {
+				keep = append(keep, it)
+			}
+		}
+		if len(keep) > 0 {
+			out = append(out, section{Title: sec.Title, Items: keep})
+			d.Found += len(keep)
+		}
+	}
+	d.Sections = out
 }
 
 // frontCard is another front as the home page lists it.
@@ -172,25 +271,38 @@ type item struct {
 	Small     string
 	Large     string
 	Orderable bool
+	// Pics are the item's photos after the first, each a thumbnail and
+	// the full picture; Few is true when only a handful are left.
+	Pics []pic
+	Few  bool
+	// Max is the most one order may take (the stock left, or the cap), for
+	// a card's own quantity.
+	Max int
 }
 
-// sheetData is what an item's own view is given: the item, and what a
-// customer can do from it (add it to an order, or why not).
-type sheetData struct {
-	It       item
-	Open     bool // the page takes orders: an Add link
-	Base     string
-	Business string
-	Whats    string
-	Phone    string
-	// Closed is true when the page has items but no form at all: orders
-	// are not open yet, and the customer is told rather than left with
-	// an item that does nothing.
-	Closed bool
-}
+// pic is one photo of an item's gallery.
+type pic struct{ Small, Large string }
 
-func sheetFor(it item, d storefrontData) sheetData {
-	return sheetData{It: it, Open: d.Ordering, Base: d.Base, Business: d.M.Card.Name, Whats: d.M.WhatsLink, Phone: d.Phone, Closed: len(d.Forms) == 0}
+// fewLeft is the stock at or under which an item says how few are left.
+const fewLeft = 5
+
+// decorate fills what an item shows beyond its photo and price.
+func (x *item) decorate() {
+	for _, g := range x.Gallery {
+		l := g["800"]
+		if l == "" {
+			l = g["2000"]
+		}
+		sm := g["320"]
+		if sm == "" {
+			sm = l
+		}
+		if l != "" {
+			x.Pics = append(x.Pics, pic{Small: sm, Large: l})
+		}
+	}
+	x.Few = x.Available && x.Stock != nil && *x.Stock > 0 && *x.Stock <= fewLeft
+	x.Max = most(x.Item)
 }
 
 type hoursRow struct {
@@ -202,7 +314,7 @@ type hoursRow struct {
 var weekdays = [7]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
 
 func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Site) {
-	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	p, ok, err := s.storefrontPage(r.Context(), site)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: storefront", "storefront", site.ID, "err", err)
@@ -220,6 +332,8 @@ func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Si
 		d.Image = d.Look.LogoLarge
 	}
 	d.URL = s.address(r, site, p)
+	q := searchTerm(r)
+	d.search(q)
 	if !s.formsOpen() {
 		d.Forms, d.Ordering = nil, false
 	}
@@ -232,6 +346,10 @@ func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Si
 				d.Fronts = append(d.Fronts, frontCard{Name: f.Name, Tagline: f.Tagline, Href: "/" + f.Slug})
 			}
 		}
+	}
+	if q != "" {
+		s.renderPrivate(w, r, http.StatusOK, "storefront.html", d)
+		return
 	}
 	s.render(w, r, http.StatusOK, "storefront.html", d)
 }
@@ -250,7 +368,7 @@ func frontOf(p StorefrontPage, slug string) (storefront.PublicFront, bool) {
 // serveFront answers /<slug>: a front's page (fronts F3, §7.3), the
 // business's card above the front's own header, list and buttons.
 func (s *Server) serveFront(w http.ResponseWriter, r *http.Request, site Site, slug string) {
-	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	p, ok, err := s.storefrontPage(r.Context(), site)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: storefront", "storefront", site.ID, "err", err)
@@ -278,11 +396,17 @@ func (s *Server) serveFront(w http.ResponseWriter, r *http.Request, site Site, s
 	}
 	d.Look = s.lookFor(r.Context(), site.Tenant, p.Model.Card.Name)
 	d.URL = s.address(r, site, p) + "/" + f.Slug
+	q := searchTerm(r)
+	d.search(q)
 	if f.Tagline != "" {
 		d.Description = f.Tagline
 	}
 	if !s.formsOpen() {
 		d.Forms, d.Ordering = nil, false
+	}
+	if q != "" {
+		s.renderPrivate(w, r, http.StatusOK, "storefront.html", d)
+		return
 	}
 	s.render(w, r, http.StatusOK, "storefront.html", d)
 }
@@ -291,7 +415,7 @@ func (s *Server) serveFront(w http.ResponseWriter, r *http.Request, site Site, s
 // same one the web app prints (storefront.QRPNG), for the owner to share
 // from chat. It holds nothing but the address.
 func (s *Server) serveQR(w http.ResponseWriter, r *http.Request, site Site) {
-	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	p, ok, err := s.storefrontPage(r.Context(), site)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: storefront QR", "storefront", site.ID, "err", err)
@@ -383,10 +507,11 @@ func storefrontView(p StorefrontPage, now time.Time) storefrontData {
 	}
 	byTitle := map[string]int{}
 	for _, it := range p.Items {
-		x := item{Item: it, Small: it.Photo["320"], Large: it.Photo["800"], Orderable: orderable(it)}
+		x := item{Item: it, Small: it.Photo["320"], Large: it.Photo["800"], Orderable: orderable(it) || pickable(it)}
 		if x.Large == "" {
 			x.Large = it.Photo["2000"]
 		}
+		x.decorate()
 		if it.PriceKobo != nil {
 			x.Price = storefront.FormatNaira(*it.PriceKobo)
 		}

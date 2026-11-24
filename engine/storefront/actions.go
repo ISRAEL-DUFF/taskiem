@@ -160,6 +160,24 @@ func (o ActionOptions) Deposit(price int64) int64 {
 	return (price*int64(o.DepositPercent) + 99) / 100
 }
 
+// MinDepositKobo is the smallest deposit an order takes online: less is
+// not worth a payment (one under it is charged nothing, see Order's
+// payment), so the order is paid in full instead.
+const MinDepositKobo = 100
+
+// OrderDeposit is what an order of total pays online now when the action
+// takes a deposit: 0 for none (no deposit, the full price, or one under
+// MinDepositKobo).
+func (o ActionOptions) OrderDeposit(total int64) int64 {
+	if o.DepositPercent <= 0 || o.DepositPercent >= 100 {
+		return 0
+	}
+	if d := o.Deposit(total); d >= MinDepositKobo && d < total {
+		return d
+	}
+	return 0
+}
+
 // PublicAction is what a published page shows of a form.
 type PublicAction struct {
 	// ID and Slug name the action (fronts F1); a snapshot's top-level
@@ -319,7 +337,14 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 	}
 	switch a.Kind {
 	case "order":
-		a.Options.DepositPercent = 0
+		// An order may take a deposit online and the rest when it is
+		// ready, as a booking does; 100 is the full price, as none.
+		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
+			return Action{}, fmt.Errorf("%w: a deposit is 0 (none) to 100 (the full price) per cent of the price", ErrInvalid)
+		}
+		if a.Options.DepositPercent == 100 || a.Payment == "none" {
+			a.Options.DepositPercent = 0
+		}
 		zones, err := CleanZones(a.Options.Zones)
 		if err != nil {
 			return Action{}, err
@@ -330,7 +355,7 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		}
 	case "booking":
 		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
-			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
+			return Action{}, fmt.Errorf("%w: a deposit is 0 (none) to 100 (the full price) per cent of the price", ErrInvalid)
 		}
 		if c := a.Options.CancelRefund; c != "" && c != "full" && c != "keep_deposit" {
 			return Action{}, fmt.Errorf("%w: cancel_refund is full or keep_deposit", ErrInvalid)
@@ -338,7 +363,7 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent, CancelRefund: a.Options.CancelRefund}
 	case "hire":
 		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
-			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
+			return Action{}, fmt.Errorf("%w: a deposit is 0 (none) to 100 (the full price) per cent of the price", ErrInvalid)
 		}
 		if a.Options.LateFeeKobo < 0 {
 			return Action{}, fmt.Errorf("%w: a late fee is 0 or more", ErrInvalid)
@@ -352,14 +377,14 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 			Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote}
 	case "space":
 		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
-			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
+			return Action{}, fmt.Errorf("%w: a deposit is 0 (none) to 100 (the full price) per cent of the price", ErrInvalid)
 		}
 		// A space takes its deposit once accepted, and the rest later.
 		a.Payment = "after_accept"
 		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent}
 	case "quote":
 		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
-			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
+			return Action{}, fmt.Errorf("%w: a deposit is 0 (none) to 100 (the full price) per cent of the price", ErrInvalid)
 		}
 		if a.Options.QuoteDays == 0 {
 			a.Options.QuoteDays = 7

@@ -32,12 +32,19 @@ import (
 // ChatCase is one line of the chat suite.
 type ChatCase struct {
 	ID       string   `json:"id"`
-	Kind     string   `json:"kind"` // route | spec
+	Kind     string   `json:"kind"` // route | spec | tool
 	Language lang.Tag `json:"language"`
 	Message  string   `json:"message"`
 	// Tables names the fixture's table set a spec case is asked over.
 	Tables string `json:"tables,omitempty"`
+	// Tools names the tool set in tools.json a tool case is read with.
+	Tools  string `json:"tools,omitempty"`
 	Expect struct {
+		// Tool is the business's tool a tool case must reach, or
+		// "taskiem": none (one of Taskiem's own commands reads it); Values
+		// words each of its values must contain.
+		Tool   string            `json:"tool,omitempty"`
+		Values map[string]string `json:"values,omitempty"`
 		// Intent is the intent a route case must give; Arg words its
 		// argument must contain (case-insensitive), when given.
 		Intent string `json:"intent,omitempty"`
@@ -51,7 +58,7 @@ type ChatCase struct {
 	Source string   `json:"source,omitempty"`
 }
 
-func loadChat(path string) ([]ChatCase, map[string][]datatables.Table, error) {
+func loadChat(path string) ([]ChatCase, map[string][]datatables.Table, toolFixtures, error) {
 	dir := path
 	if filepath.Ext(path) == ".jsonl" {
 		dir = filepath.Dir(path)
@@ -59,10 +66,14 @@ func loadChat(path string) ([]ChatCase, map[string][]datatables.Table, error) {
 	fixtures := map[string][]datatables.Table{}
 	raw, err := os.ReadFile(filepath.Join(dir, "tables.json")) //nolint:gosec // the fixture beside the suite
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, toolFixtures{}, err
 	}
 	if err := json.Unmarshal(raw, &fixtures); err != nil {
-		return nil, nil, fmt.Errorf("tables.json: %w", err)
+		return nil, nil, toolFixtures{}, fmt.Errorf("tables.json: %w", err)
+	}
+	tools, err := loadToolFixtures(dir)
+	if err != nil {
+		return nil, nil, tools, err
 	}
 	var out []ChatCase
 	seen := map[string]bool{}
@@ -96,8 +107,12 @@ func loadChat(path string) ([]ChatCase, map[string][]datatables.Table, error) {
 					return fmt.Errorf("%s: the expected spec fails its own checks: %w", c.ID, err)
 				}
 			}
+		case "tool":
+			if err := checkToolCase(c, tools); err != nil {
+				return err
+			}
 		default:
-			return fmt.Errorf("%s: kind is route or spec", c.ID)
+			return fmt.Errorf("%s: kind is route, spec or tool", c.ID)
 		}
 		if c.Source == "" {
 			c.Source = "synthetic"
@@ -105,7 +120,7 @@ func loadChat(path string) ([]ChatCase, map[string][]datatables.Table, error) {
 		out = append(out, c)
 		return nil
 	})
-	return out, fixtures, err
+	return out, fixtures, tools, err
 }
 
 // ChatResult is one chat case's outcome.
@@ -133,6 +148,7 @@ type ChatSummary struct {
 	RouteAccuracy   float64  `json:"route_accuracy"`
 	SpecAccuracy    float64  `json:"spec_accuracy"`
 	RefusalAccuracy float64  `json:"refusal_accuracy"`
+	ToolAccuracy    float64  `json:"tool_accuracy"`
 	Usage           ai.Usage `json:"usage"`
 	CostUSD         *float64 `json:"cost_usd"`
 }
@@ -149,7 +165,7 @@ type ChatReport struct {
 }
 
 func runChatSuite(o options, prices map[string]Price, stdout io.Writer) error {
-	cases, fixtures, err := loadChat(o.suite)
+	cases, fixtures, tools, err := loadChat(o.suite)
 	if err != nil {
 		return err
 	}
@@ -163,7 +179,7 @@ func runChatSuite(o options, prices map[string]Price, stdout io.Writer) error {
 	}
 	results := make([]ChatResult, 0, len(cases))
 	for _, c := range cases {
-		results = append(results, runChat(context.Background(), prov, c, fixtures[c.Tables], prices))
+		results = append(results, runChat(context.Background(), prov, c, fixtures[c.Tables], tools, prices))
 	}
 	rep := ChatReport{Kind: "chat", Suite: o.suite, Provider: prov.Name(), Model: prov.Model(), Summary: summariseChat(results), ByLanguage: map[string]ChatSummary{}, Results: results}
 	by := map[string][]ChatResult{}
@@ -174,8 +190,8 @@ func runChatSuite(o options, prices map[string]Price, stdout io.Writer) error {
 		rep.ByLanguage[k] = summariseChat(rs)
 	}
 	s := rep.Summary
-	fmt.Fprintf(stdout, "chat %s %s, %d cases: routing %s, specs %s, refusals %s; %d errors; %d tokens, cost %s\n", rep.Provider, rep.Model, s.Cases,
-		pct(s.RouteAccuracy), pct(s.SpecAccuracy), pct(s.RefusalAccuracy), s.Errors, s.Usage.Total(), money(s.CostUSD))
+	fmt.Fprintf(stdout, "chat %s %s, %d cases: routing %s, specs %s, refusals %s, tools %s; %d errors; %d tokens, cost %s\n", rep.Provider, rep.Model, s.Cases,
+		pct(s.RouteAccuracy), pct(s.SpecAccuracy), pct(s.RefusalAccuracy), pct(s.ToolAccuracy), s.Errors, s.Usage.Total(), money(s.CostUSD))
 	if o.verbose {
 		for _, r := range results {
 			fmt.Fprintf(stdout, "  %-40s %-5s %s want %s got %s\n", r.ID, r.Status, yes(r.Correct), r.Expected, r.Got)
@@ -201,7 +217,7 @@ func runChatSuite(o options, prices map[string]Price, stdout io.Writer) error {
 	return nil
 }
 
-func runChat(ctx context.Context, prov ai.Provider, c ChatCase, tables []datatables.Table, prices map[string]Price) ChatResult {
+func runChat(ctx context.Context, prov ai.Provider, c ChatCase, tables []datatables.Table, tools toolFixtures, prices map[string]Price) ChatResult {
 	r := ChatResult{ID: c.ID, Kind: c.Kind, Language: c.Language, Tags: c.Tags, Status: statusOK}
 	info, _ := lang.Lookup(c.Language)
 	var resp *ai.Response
@@ -220,6 +236,11 @@ func runChat(ctx context.Context, prov ai.Provider, c ChatCase, tables []datatab
 		}
 		r.Got = got + " " + res.Arg
 		r.Correct = got == c.Expect.Intent && strings.Contains(strings.ToLower(res.Arg), strings.ToLower(c.Expect.Arg))
+	case "tool":
+		resp = runToolCase(ctx, prov, c, tools, info, &r)
+		if r.Status != statusOK {
+			return r
+		}
 	case "spec":
 		r.Refusal = c.Expect.Refused
 		described := make([]tablequery.Table, 0, len(tables))
@@ -313,7 +334,7 @@ func specKey(g gradedSpec) string {
 
 func summariseChat(results []ChatResult) ChatSummary {
 	s := ChatSummary{Cases: len(results)}
-	var route, routeOK, spec, specOK, ref, refOK int
+	var route, routeOK, spec, specOK, ref, refOK, tool, toolOK int
 	total, known := 0.0, true
 	for _, r := range results {
 		s.Usage = s.Usage.Add(r.Usage)
@@ -332,6 +353,11 @@ func summariseChat(results []ChatResult) ChatSummary {
 			if r.Correct {
 				routeOK++
 			}
+		case r.Kind == "tool":
+			tool++
+			if r.Correct {
+				toolOK++
+			}
 		case r.Refusal:
 			ref++
 			if r.Correct {
@@ -344,7 +370,7 @@ func summariseChat(results []ChatResult) ChatSummary {
 			}
 		}
 	}
-	s.RouteAccuracy, s.SpecAccuracy, s.RefusalAccuracy = rate(routeOK, route), rate(specOK, spec), rate(refOK, ref)
+	s.RouteAccuracy, s.SpecAccuracy, s.RefusalAccuracy, s.ToolAccuracy = rate(routeOK, route), rate(specOK, spec), rate(refOK, ref), rate(toolOK, tool)
 	if known && s.Usage.Total() > 0 {
 		c := math.Round(total*1e4) / 1e4
 		s.CostUSD = &c
@@ -382,6 +408,7 @@ func compareChat(base, cur ChatReport, tol float64) []Regression {
 	check("route_accuracy", b.RouteAccuracy, c.RouteAccuracy)
 	check("spec_accuracy", b.SpecAccuracy, c.SpecAccuracy)
 	check("refusal_accuracy", b.RefusalAccuracy, c.RefusalAccuracy)
+	check("tool_accuracy", b.ToolAccuracy, c.ToolAccuracy)
 	if c.Errors > b.Errors {
 		regs = append(regs, Regression{"errors", float64(b.Errors), float64(c.Errors)})
 	}
@@ -392,12 +419,12 @@ func chatMarkdown(rep ChatReport) string {
 	var b strings.Builder
 	s := rep.Summary
 	fmt.Fprintf(&b, "# Chat evaluation\n\n`%s` on `%s`, %d cases, suite `%s`.\n\n| Measure | Value |\n| --- | --- |\n", rep.Model, rep.Provider, s.Cases, rep.Suite)
-	fmt.Fprintf(&b, "| Routing | **%s** |\n| Specs | **%s** |\n| Refusals | **%s** |\n| Errors | %d |\n| Tokens | %d |\n| Cost | %s |\n",
-		pct(s.RouteAccuracy), pct(s.SpecAccuracy), pct(s.RefusalAccuracy), s.Errors, s.Usage.Total(), money(s.CostUSD))
-	b.WriteString("\n## By language\n\n| Language | Cases | Routing | Specs | Refusals |\n| --- | --- | --- | --- | --- |\n")
+	fmt.Fprintf(&b, "| Routing | **%s** |\n| Specs | **%s** |\n| Refusals | **%s** |\n| Tools | **%s** |\n| Errors | %d |\n| Tokens | %d |\n| Cost | %s |\n",
+		pct(s.RouteAccuracy), pct(s.SpecAccuracy), pct(s.RefusalAccuracy), pct(s.ToolAccuracy), s.Errors, s.Usage.Total(), money(s.CostUSD))
+	b.WriteString("\n## By language\n\n| Language | Cases | Routing | Specs | Refusals | Tools |\n| --- | --- | --- | --- | --- | --- |\n")
 	for _, k := range sortedKeys(rep.ByLanguage) {
 		g := rep.ByLanguage[k]
-		fmt.Fprintf(&b, "| %s | %d | %s | %s | %s |\n", k, g.Cases, pct(g.RouteAccuracy), pct(g.SpecAccuracy), pct(g.RefusalAccuracy))
+		fmt.Fprintf(&b, "| %s | %d | %s | %s | %s | %s |\n", k, g.Cases, pct(g.RouteAccuracy), pct(g.SpecAccuracy), pct(g.RefusalAccuracy), pct(g.ToolAccuracy))
 	}
 	b.WriteString("\n## Cases\n\n| Case | Kind | Expected | Got | Correct |\n| --- | --- | --- | --- | --- |\n")
 	for _, r := range rep.Results {
@@ -431,6 +458,9 @@ func chatHeuristic(req ai.Request) (*ai.Response, error) {
 		return answer(heuristicSpec(q, tables))
 	}
 	msg, _ := between(prompt, "<message>\n", "\n</message>")
+	if tools, ok := heuristicToolsIn(prompt); ok {
+		return answer(heuristicTool(msg, tools))
+	}
 	i, arg := heuristicRoute(msg)
 	return answer(map[string]string{"intent": i, "argument": arg})
 }

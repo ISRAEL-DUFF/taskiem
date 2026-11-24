@@ -79,15 +79,13 @@ type Span struct {
 // Columns map a data table's columns to the catalogue: Name is required;
 // Price is a number in PriceUnit (naira, or kobo); Photo holds a
 // storefront_media id; Available is a boolean (absent: available);
-// Stock is an integer count (absent: not tracked), lowered when an order
-// is accepted; Sort orders items (absent: the table's order). A services
-// table also maps Duration (minutes, required), Capacity (customers at
-// once, default 1) and Buffer (minutes kept free after, default 0).
+// Sort orders items (absent: the table's order). A services table also
+// maps Duration (minutes, required), Capacity (customers at once, default
+// 1) and Buffer (minutes kept free after, default 0).
 //
-// Stock by chat (docs/spec/stock.md §4) maps more of a catalogue that
-// tracks stock: Unit (text: bag, carton), CostPrice (the last price paid,
-// in PriceUnit), ReorderLevel and TargetLevel (integers) and Supplier
-// (text). None is shown on the public page.
+// The catalogue holds no stock: a product is counted by a stock item
+// (docs/spec/what-a-business-buys.md §4, engine/productstock), never by a
+// column of the table.
 type Columns struct {
 	Name        string `json:"name"`
 	Price       string `json:"price,omitempty"`
@@ -96,17 +94,17 @@ type Columns struct {
 	Photo       string `json:"photo,omitempty"`
 	Available   string `json:"available,omitempty"`
 	Category    string `json:"category,omitempty"`
-	Stock       string `json:"stock,omitempty"`
 	Sort        string `json:"sort,omitempty"`
 	Duration    string `json:"duration,omitempty"`
 	Capacity    string `json:"capacity,omitempty"`
 	Buffer      string `json:"buffer,omitempty"`
-	// Stock by chat's columns, all optional.
-	Unit         string `json:"unit,omitempty"`
-	CostPrice    string `json:"cost_price,omitempty"`
-	ReorderLevel string `json:"reorder_level,omitempty"`
-	TargetLevel  string `json:"target_level,omitempty"`
-	Supplier     string `json:"supplier,omitempty"`
+	// Sizes and colours (docs/spec/chat-categories-and-variants.md, Part
+	// B), all text: on a variant, VariantOf holds its product's row id and
+	// Variant its choices as JSON ({"Size":"42","Colour":"Black"}); on a
+	// product, Choices holds its choices and their order as JSON.
+	VariantOf string `json:"variant_of,omitempty"`
+	Variant   string `json:"variant,omitempty"`
+	Choices   string `json:"choices,omitempty"`
 	// A Food menu's (fronts F3): a dish's options (sizes, extras, each
 	// with its price) and the minutes it takes.
 	Options string `json:"options,omitempty"`
@@ -201,10 +199,10 @@ func (m *Columns) Check(known func(string) (typ string, ok bool)) error {
 	}
 	want := map[string][]string{
 		m.Name: {"text"}, m.Description: {"text"}, m.Category: {"text"}, m.Photo: {"text"},
-		m.Price: {"integer", "number"}, m.Sort: {"integer", "number"}, m.Available: {"boolean"}, m.Stock: {"integer"},
+		m.Price: {"integer", "number"}, m.Sort: {"integer", "number"}, m.Available: {"boolean"},
 		m.Duration: {"integer", "number"}, m.Capacity: {"integer", "number"}, m.Buffer: {"integer", "number"},
 		m.Starts: {"datetime", "date"}, m.Venue: {"text"},
-		m.Unit: {"text"}, m.CostPrice: {"integer", "number"}, m.ReorderLevel: {"integer"}, m.TargetLevel: {"integer"}, m.Supplier: {"text"},
+		m.VariantOf: {"text"}, m.Variant: {"text"}, m.Choices: {"text"},
 	}
 	for col, types := range want {
 		if col == "" {

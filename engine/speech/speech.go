@@ -1,4 +1,4 @@
-// Package speech is speech in workflows (decision 0062 D5, D7; plan V3;
+// Package speech is speech in workflows (decision 0074 D5, D7; plan V3;
 // docs/speech.md): it hears a customer's voice note and speaks a reply
 // for speech@1, behind the owner's "Voice in workflows" switch and the
 // plan's monthly allowance of seconds, and counts what each organisation
@@ -468,7 +468,7 @@ func (s *Service) outcome(kind string, err error) {
 }
 
 // allowanceAlert tells the owners at 80 % and 100 % of this month's voice
-// seconds (decision 0062 L10), from what is really used, after it is
+// seconds (decision 0074 L10), from what is really used, after it is
 // counted and in a transaction of its own: a failed alert never loses the
 // count. The allowance is read before the transaction, never inside it.
 func (s *Service) allowanceAlert(ctx context.Context, tenant uuid.UUID) {

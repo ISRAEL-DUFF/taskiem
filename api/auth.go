@@ -55,8 +55,23 @@ const (
 	// Storefronts and hosted forms (decisions 0036, 0037): the public
 	// pages and the websites allowed to embed them.
 	PermStorefrontManage = access.StorefrontManage
+	// PermOrderHandle is working the orders without the storefront's
+	// settings; PermOrders is either (Can reads "a|b" as either).
+	PermOrderHandle = access.OrderHandle
+	PermOrders      = access.StorefrontManage + "|" + access.OrderHandle
+	// PermSavedManage is changing the business's saved things.
+	PermSavedManage = access.SavedManage
+	PermMoneyPay    = access.MoneyPay
+	// PermPayrollRead is seeing the payroll Payrolla keeps.
+	PermPayrollRead = access.PayrollRead
+	// PermTaskGive is giving staff tasks and seeing everyone's: those who
+	// run the business (staff_tasks.go).
+	PermTaskGive = access.MemberManage + "|" + access.InvoiceManage
 	// PermFormLinks mints one-time links to a link form (forms 8.4).
 	PermFormLinks = access.FormLinks
+	// PermPageEdit and PermPagePublish are the business's pages (pages.go).
+	PermPageEdit    = access.PageEdit
+	PermPagePublish = access.PagePublish
 )
 
 // allPermissions are every permission, in the role editor's order.
@@ -79,21 +94,40 @@ type Principal struct {
 	// KeyOwner is the person an API key belongs to: it acts within their
 	// current permissions, and counts as them for four-eyes.
 	KeyOwner uuid.UUID
-	// AuthMethod is how the session signed in: password, passkey or sso.
+	// KeyOwnerRoles are the key owner's roles now: only who may start a
+	// workflow (decision 0073, mayStart) reads them; a key gains nothing
+	// else from them.
+	KeyOwnerRoles []string
+	// AuthMethod is how the session signed in: password, passkey, sso or
+	// chat (a code or link sent to a bound chat, chat_signin.go).
 	AuthMethod string
-	// SignedInAt is when the session signed in (sessions only).
+	// SignedInAt is when the session signed in (sessions only); renewing a
+	// phone's session does not change it.
 	SignedInAt time.Time
+	// Device marks a phone app's session, which stays signed in (devices.go).
+	Device bool
 	// EnrolOnly marks a password session of an administrator held to
 	// passkeys: it may only enrol one.
 	EnrolOnly bool
+	// PasskeyRequired marks a password or chat session of someone held to
+	// passkeys who has one: refused, to sign in with it (passkey_rule.go).
+	PasskeyRequired bool
+	// PasskeyReason is why the person is held to passkeys: personal,
+	// deployment or business.
+	PasskeyReason string
 	// EndUser is set for an embed app's end user (embed.go): a lightweight
 	// principal in a sub-tenant, with neither UserID nor KeyID.
 	EndUser *EndUser
 	// Run is a workflow run acting through link@1 (link_connector.go):
 	// it acts as the system, "workflow:<run>".
 	Run uuid.UUID
+	// Personal is a person's own session, in no business (personal.go,
+	// docs/spec/taskiem-for-everyone.md §5.2): UserID only, no tenant, no
+	// roles; it reaches the person's own routes only.
+	Personal bool
 	// Invitee is a person with no membership signed in to answer their
 	// invitations (invitations.go): UserID only, no tenant, no permissions.
+	// New sign-ins make personal sessions instead; these are still read.
 	Invitee                   bool
 	inviteeEmail, inviteeName string
 	viaCookie                 bool
@@ -103,7 +137,13 @@ type Principal struct {
 	Agent *AgentAccess
 }
 
-func (p *Principal) Can(perm string) bool { return p.Permissions[perm] }
+// Can reports whether the principal holds perm; "a|b" is either of them.
+func (p *Principal) Can(perm string) bool {
+	if a, b, either := strings.Cut(perm, "|"); either {
+		return p.Permissions[a] || p.Can(b)
+	}
+	return p.Permissions[perm]
+}
 
 // businessRoles are the principal's roles that are not built in (a
 // "credit_officer"): each lets its holder decide approvals naming it.
@@ -129,7 +169,8 @@ func (p *Principal) mayDecide(role *string) bool {
 
 // mayDecideAny reports whether the principal may decide some approvals.
 func (p *Principal) mayDecideAny() bool {
-	return p.Can(PermApprovalDecide) || len(p.businessRoles()) > 0
+	// Working the orders decides the shop's own order steps (orderVoteRoles).
+	return p.Can(PermApprovalDecide) || len(p.businessRoles()) > 0 || p.Can(PermOrders)
 }
 
 // currentApprovalRole is an approval's current role.
@@ -269,6 +310,10 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			writeJSON(w, http.StatusForbidden, map[string]any{"error": "you belong to no organisation yet: accept an invitation first", "invitations_only": true})
 			return
 		}
+		if p.Personal && !personalAllowed(r.Method, r.URL.Path) {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "this is your own side: switch to a business for this", "personal_only": true})
+			return
+		}
 		if p.Agent != nil && !agentAllowed(r.Method, r.URL.Path) {
 			writeErr(w, http.StatusForbidden, "in a business, a field agent works on its page and the tables behind it only")
 			return
@@ -276,6 +321,10 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		if p.Agent == nil && access.GateOnly(p.Permissions) && !gateAllowed(r.Method, r.URL.Path) {
 			// The gate role: one screen, every other route refused (schools.go).
 			writeJSON(w, http.StatusForbidden, map[string]any{"error": "the gate role sees the gate screen only", "gate_only": true})
+			return
+		}
+		if p.PasskeyRequired && r.URL.Path != "/v1/auth/logout" {
+			passkeyRequiredOut(w)
 			return
 		}
 		if p.Agent == nil && p.EnrolOnly && !enrolOnly[r.Method+" "+r.URL.Path] {
@@ -331,6 +380,7 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		if len(held.Roles) == 0 || !s.userActive(ctx, p.TenantID, p.KeyOwner) {
 			return nil, errors.New("api key owner is no longer a member")
 		}
+		p.KeyOwnerRoles = held.Roles
 		p.Permissions = map[string]bool{}
 		for _, x := range perms {
 			if held.Permissions[x] {
@@ -347,29 +397,49 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		return &p, nil
 	}
 	p := Principal{viaCookie: viaCookie, Permissions: map[string]bool{}}
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method, signed_in_at FROM taskiem_auth_session($1)`, hashToken(tok)).Scan(&p.UserID, &p.TenantID, &p.AuthMethod, &p.SignedInAt); err != nil {
+	var lastUsed *time.Time
+	var tenant *uuid.UUID
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method, signed_in_at, device, last_used_at FROM taskiem_auth_session($1)`, hashToken(tok)).
+		Scan(&p.UserID, &tenant, &p.AuthMethod, &p.SignedInAt, &p.Device, &lastUsed); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Perhaps someone with no membership answering invitations.
 			return s.resolveInvitee(r, tok, viaCookie)
 		}
 		return nil, err
 	}
+	if tenant == nil {
+		// The person's own session, in no business (personal.go).
+		p.Personal = true
+		if p.Device {
+			s.touchDevice(ctx, tok, lastUsed)
+		}
+		return &p, nil
+	}
+	p.TenantID = *tenant
 	if err := s.loadRoles(ctx, &p); err != nil {
 		return nil, err
 	}
 	if len(p.Roles) == 0 {
 		return nil, errors.New("no membership")
 	}
-	p.EnrolOnly = s.RequireAdminPasskeys && p.AuthMethod == "password" && isAdmin(p.Permissions)
-	if s.RequireAdminPasskeys && p.AuthMethod == "sso" && isAdmin(p.Permissions) {
-		// Held to passkeys after SSO too (decision 0026): an administrator
-		// who signed in through their identity provider and has no passkey
-		// enrols one before anything else.
-		var has bool
-		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, p.UserID).Scan(&has); err != nil {
+	if p.Device {
+		// A phone's session is renewed by use (devices.go): a member's use,
+		// not a request refused for having none.
+		s.touchDevice(ctx, tok, lastUsed)
+	}
+	// Held to passkeys (passkey_rule.go): without one, a session that did
+	// not sign in with a passkey can only add one; with one, a password or
+	// chat session is refused, to sign in with it.
+	if p.AuthMethod != "passkey" {
+		h, err := s.passkeyHoldOf(ctx, p.UserID, p.TenantID, p.Permissions)
+		if err != nil {
 			return nil, err
 		}
-		p.EnrolOnly = !has
+		if h.held {
+			p.PasskeyReason = h.reason
+			p.EnrolOnly = !h.has
+			p.PasskeyRequired = h.has && p.AuthMethod != "sso"
+		}
 	}
 	if h := r.Header.Get(agentSessionHeader); h != "" {
 		// A field agent acting in a business (agents.go).
@@ -405,7 +475,10 @@ func (s *Server) loadRoles(ctx context.Context, p *Principal) error {
 			}
 			p.Roles = append(p.Roles, role)
 			perms, builtin := rolePermissions[role]
-			if !builtin {
+			// A business's own role wins over a built-in one of the same
+			// name made after it (cashier, shift_manager came in chat tools
+			// phase 5): nobody's permissions change underneath them.
+			if !builtin || custom != nil {
 				perms = custom // a custom role, or none for a business role
 			}
 			for _, perm := range perms {
@@ -438,6 +511,9 @@ type loginReq struct {
 	// clients; without it the session is a cookie the page cannot read
 	// (S35).
 	Bearer bool `json:"bearer,omitempty"`
+	// Device names the phone the app is on: a session that stays signed in
+	// (devices.go).
+	Device *deviceReq `json:"device,omitempty"`
 }
 
 // jsonOnly refuses a body that is not JSON. A cross-site page can POST a
@@ -456,13 +532,17 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if !jsonOnly(w, r) {
 		return
 	}
-	if !s.loginLimiter("login:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("login:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
 	}
 	var req loginReq
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	r, asked := askDevice(w, r, req.Device, req.Bearer)
+	if !asked {
 		return
 	}
 	// Per account too, so guesses spread over many addresses still meet a
@@ -485,45 +565,32 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "invalid email or password")
 		return
 	}
-	if s.RequireAdminPasskeys {
-		// An administrator with a passkey signs in with it, whichever tenant
-		// they ask for: the person and their passkeys are the same in all.
-		var has bool
-		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, userID).Scan(&has); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if has {
-			var tenants []uuid.UUID
-			if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, userID).Scan(&tenants); err != nil {
-				s.fail(w, r, err)
-				return
-			}
-			for _, t := range tenants {
-				p := Principal{TenantID: t, UserID: userID, Permissions: map[string]bool{}}
-				if err := s.loadRoles(ctx, &p); err != nil {
-					s.fail(w, r, err)
-					return
-				}
-				if isAdmin(p.Permissions) {
-					writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "administrators sign in with their passkey", "passkey_required": true})
-					return
-				}
-			}
-		}
+	// Someone held to passkeys who has one signs in with it
+	// (passkey_rule.go): the business asked for, or the first they are
+	// not held in.
+	tenant, err := s.passwordSigninTenant(ctx, userID, req.TenantID)
+	if errors.Is(err, errPasskeyRequired) {
+		passkeyRequiredOut(w)
+		return
 	}
-	s.startSession(w, r, userID, req.TenantID, "password", req.Bearer)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.startSession(w, r, userID, tenant, "password", req.Bearer)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if c, err := r.Cookie(sessionCookie); err == nil {
-		tok = c.Value
-	}
+	// The session that authenticated this request, chosen as resolve
+	// chooses it: a bearer token before a cookie.
+	tok := sessionToken(r)
 	var err error
-	if principalFrom(r.Context()).Invitee {
+	switch p := principalFrom(r.Context()); {
+	case p.Invitee:
 		_, err = s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_invitee_end($1)`, hashToken(tok))
-	} else {
+	case p.Personal:
+		_, err = s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_session_end($1)`, hashToken(tok))
+	default:
 		err = s.tx(r, func(tx pgx.Tx) error {
 			_, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE token_hash = $1`, hashToken(tok))
 			return err
@@ -539,6 +606,10 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
+	if p.Personal {
+		s.personalMe(w, r, p)
+		return
+	}
 	if p.Invitee {
 		writeJSON(w, http.StatusOK, map[string]any{"tenant_id": nil, "roles": []string{}, "permissions": []string{}, "auth_method": p.AuthMethod,
 			"invitations_only": true, "user": map[string]any{"id": p.UserID, "email": p.inviteeEmail, "name": p.inviteeName}})
@@ -549,16 +620,19 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		perms = append(perms, k)
 	}
 	slices.Sort(perms)
-	out := map[string]any{"tenant_id": p.TenantID, "roles": p.Roles, "permissions": perms, "auth_method": p.AuthMethod, "enrol_passkey": p.EnrolOnly}
+	out := map[string]any{"tenant_id": p.TenantID, "roles": p.Roles, "permissions": perms, "auth_method": p.AuthMethod, "enrol_passkey": p.EnrolOnly,
+		"passkey_reason": p.PasskeyReason}
 	if p.UserID != uuid.Nil {
 		var email, name string
+		chatSignin, passkeyOnly := true, false
 		var verified bool
 		_ = s.tx(r, func(tx pgx.Tx) error {
-			return tx.QueryRow(r.Context(), `SELECT email, name, email_verified_at IS NOT NULL FROM users WHERE id = $1`, p.UserID).Scan(&email, &name, &verified)
+			return tx.QueryRow(r.Context(), `SELECT email, name, email_verified_at IS NOT NULL, chat_signin, passkey_only FROM users WHERE id = $1`, p.UserID).Scan(&email, &name, &verified, &chatSignin, &passkeyOnly)
 		})
 		// A sign-in name that receives no mail (an account made in chat):
 		// the web app offers Add your email (chat_doors.go).
-		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified, "email_placeholder": emailPlaceholder(email)}
+		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified, "email_placeholder": emailPlaceholder(email),
+			"chat_signin": chatSignin, "passkey_only": passkeyOnly}
 		_ = s.tx(r, func(tx pgx.Tx) error {
 			out["totp"] = s.totpEnrolled(r.Context(), tx, p.UserID)
 			return nil
@@ -580,9 +654,10 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		var business string
-		if err := tx.QueryRow(r.Context(), `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&business); err == nil {
+		var business, kind string
+		if err := tx.QueryRow(r.Context(), `SELECT name, kind FROM tenants WHERE id = $1`, p.TenantID).Scan(&business, &kind); err == nil {
 			out["tenant_name"] = business
+			out["tenant_kind"] = kind // a business or workflows (taskiem-for-everyone §18.2)
 		}
 		// The Schools area, when the business turned it on (schools.go).
 		out["schools"] = s.schoolsOn(r.Context(), tx, p.TenantID)
@@ -592,9 +667,28 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		out["areas"] = st
+		// A business that delivers for others (a rider): its chat has the
+		// Availability tool (docs/spec/chat-riders.md).
+		var delivers bool
+		if err := tx.QueryRow(r.Context(), `SELECT delivers FROM business_profile WHERE tenant_id = $1`, p.TenantID).Scan(&delivers); err == nil && delivers {
+			out["delivers"] = true
+		}
 		out["gate_only"] = access.GateOnly(p.Permissions)
 		return nil
 	})
+	// The switcher: the person's businesses and their own side
+	// (docs/spec/taskiem-for-everyone.md §6).
+	out["personal"] = false
+	if p.UserID != uuid.Nil && p.Agent == nil && p.KeyID == uuid.Nil {
+		proof, err := s.proofStateOf(r, p)
+		if err == nil {
+			if bs, err := s.businessesWithLocks(r, p, proof); err == nil {
+				out["businesses"] = bs
+			}
+			out["user"].(map[string]any)["phone"] = s.phoneOf(r.Context(), p.UserID)
+			out["user"].(map[string]any)["photo"] = photoOut(s.photoOf(r.Context(), p.UserID))["photo"]
+		}
+	}
 	// A field agent signed in as themselves lands on the agent app (N6).
 	if p.UserID != uuid.Nil && p.Agent == nil && p.KeyID == uuid.Nil {
 		var active bool
@@ -606,14 +700,22 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateTenant creates a tenant with its owner, a default workspace, and
-// the dev and prod environments (signup, and `taskiem bootstrap`).
+// the dev and prod environments, for operators' tools (`taskiem bootstrap`,
+// the demo school). The operator names the owner's email, so it is taken as
+// confirmed, as CreateMember does: an unconfirmed email may not enrol a
+// passkey or authenticator (F9), and no one else could have chosen it.
+// Signup goes through createTenant and confirms the email by link.
 func CreateTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName, password string) (tenant, user uuid.UUID, err error) {
-	return createTenant(ctx, pool, name, email, userName, password, nil)
+	return createTenant(ctx, pool, name, areas.TenantBusiness, email, userName, password, func(tx pgx.Tx, _, user uuid.UUID) error {
+		_, err := tx.Exec(ctx, `UPDATE users SET email_verified_at = now() WHERE id = $1`, user)
+		return err
+	})
 }
 
-// createTenant is CreateTenant; then, when given, runs in the same
-// transaction (signup records its onboarding and verification link).
-func createTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName, password string, then func(tx pgx.Tx, tenant, user uuid.UUID) error) (tenant, user uuid.UUID, err error) {
+// createTenant is CreateTenant, of a kind (areas.TenantBusiness or
+// TenantWorkflows); then, when given, runs in the same transaction
+// (signup records its onboarding and verification link).
+func createTenant(ctx context.Context, pool *pgxpool.Pool, name, kind, email, userName, password string, then func(tx pgx.Tx, tenant, user uuid.UUID) error) (tenant, user uuid.UUID, err error) {
 	if name == "" || !strings.Contains(email, "@") || len(password) < 12 {
 		return uuid.Nil, uuid.Nil, fmt.Errorf("%w: tenant, a valid email, and a password of at least 12 characters are required", errBadRequest)
 	}
@@ -626,20 +728,11 @@ func createTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName
 		if exists {
 			return fmt.Errorf("%w: email already registered", errConflict)
 		}
-		stmts := []struct {
-			q    string
-			args []any
-		}{
-			{`INSERT INTO tenants (id, name, plan_id) VALUES ($1, $2, $3)`, []any{tenant, name, uuid.Nil}},
-			{`INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, []any{user, email, userName, hashPassword(password)}},
-			{`INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, 'owner')`, []any{tenant, user}},
-			{`INSERT INTO workspaces (id, tenant_id, name) VALUES ($1, $2, 'Default')`, []any{uuid.Must(uuid.NewV7()), tenant}},
-			{`INSERT INTO environments (tenant_id, name) VALUES ($1, 'dev'), ($1, 'prod')`, []any{tenant}},
+		if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, user, email, userName, hashPassword(password)); err != nil {
+			return err
 		}
-		for _, st := range stmts {
-			if _, err := tx.Exec(ctx, st.q, st.args...); err != nil {
-				return err
-			}
+		if _, err := insertTenantTx(ctx, tx, tenant, user, name, kind); err != nil {
+			return err
 		}
 		if _, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'tenant.create', $3, '{}')`, tenant, user.String(), tenant.String()); err != nil {
 			return err
@@ -878,7 +971,7 @@ func (s *Server) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if source == "scim" {
-			ch, err := s.scimSync(ctx, tx, tenant, p.UserID)
+			ch, err := s.scimSync(ctx, tx, tenant, p.UserID, nil)
 			if err != nil {
 				return err
 			}
@@ -893,6 +986,21 @@ func (s *Server) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := map[string]any{"tenant_id": tenant, "roles": nonNil(roles)}
+	if p.Personal {
+		// Now a member: the person's own session moves into the business,
+		// under its rules (personal.go), a second proof included: a session
+		// that needs one stays personal and is answered {sign_in:
+		// second_proof_required, ways}; the person proves, then switches
+		// (docs/spec/taskiem-for-everyone.md §5.4).
+		more, err := s.enterJoined(w, r, p, tenant)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		for k, v := range more {
+			out[k] = v
+		}
+	}
 	if p.Invitee {
 		// Now a member: the invitee session becomes one in this tenant.
 		more, err := s.upgradeInvitee(w, r, p, tenant)

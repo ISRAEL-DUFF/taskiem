@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestConfigBooleans: on/off and yes/no are understood, in any case, and
@@ -29,7 +30,7 @@ func TestConfigBooleans(t *testing.T) {
 	}
 	t.Setenv("TASKIEM_SECURE_COOKIES", "true")
 	t.Setenv("TASKIEM_REQUIRE_ADMIN_PASSKEYS", "true")
-	for _, name := range []string{"TASKIEM_SECURE_COOKIES", "TASKIEM_REQUIRE_ADMIN_PASSKEYS", "TASKIEM_ALLOW_SIGNUP", "TASKIEM_TRUST_PROXY", "TASKIEM_STATUS_PAGE", "TASKIEM_MAIL_ENABLED", "TASKIEM_PPROF"} {
+	for _, name := range []string{"TASKIEM_SECURE_COOKIES", "TASKIEM_REQUIRE_ADMIN_PASSKEYS", "TASKIEM_ALLOW_SIGNUP", "TASKIEM_TRUST_PROXY", "TASKIEM_STATUS_PAGE", "TASKIEM_MAIL_ENABLED", "TASKIEM_PPROF", "TASKIEM_WAKE_IN_TX"} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv(name, "enabled")
 			if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), name) {
@@ -107,5 +108,27 @@ func TestChatSignupChannels(t *testing.T) {
 	t.Setenv("TASKIEM_CHAT_SIGNUP", "whatsapp,sms")
 	if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), "TASKIEM_CHAT_SIGNUP") {
 		t.Errorf("sms: %v", err)
+	}
+}
+
+// TestWakeConfig: wake-ups are sent after the commit, every 10ms at most
+// for a queue, unless the settings say otherwise; a value that does not
+// parse stops the process (docs/spec/task-wake-ups.md).
+func TestWakeConfig(t *testing.T) {
+	t.Setenv("TASKIEM_DATABASE_URL", "postgres://localhost/taskiem")
+	cfg, err := loadConfig()
+	if err != nil || cfg.Wake.Interval != 10*time.Millisecond || cfg.Wake.InTx {
+		t.Fatalf("defaults: %+v %v", cfg.Wake, err)
+	}
+	t.Setenv("TASKIEM_WAKE_INTERVAL", "25ms")
+	t.Setenv("TASKIEM_WAKE_IN_TX", "true")
+	if cfg, err = loadConfig(); err != nil || cfg.Wake.Interval != 25*time.Millisecond || !cfg.Wake.InTx {
+		t.Fatalf("set: %+v %v", cfg.Wake, err)
+	}
+	for _, bad := range []string{"fast", "0", "100us", "2s"} {
+		t.Setenv("TASKIEM_WAKE_INTERVAL", bad)
+		if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), "TASKIEM_WAKE_INTERVAL") {
+			t.Errorf("interval %q: %v", bad, err)
+		}
 	}
 }

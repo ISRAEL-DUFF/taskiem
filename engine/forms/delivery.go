@@ -20,10 +20,15 @@ import (
 // addressed to them: its link opens in the app.
 const AlertFormRequest = "form.request"
 
+// AlertFormGuarded is the alert a business's owners get when one of its
+// forms goes over its own submission limit and asks for a phone code
+// first for the next hour (forms 7.3): once per guard.
+const AlertFormGuarded = "form.guarded"
+
 // Tick sends what is due: form steps' links and reminders, verification
 // codes, and expires requests past their time. The api role runs it.
 func (s *Service) Tick(ctx context.Context) error {
-	errs := []error{s.SendCodes(ctx)}
+	errs := []error{s.SendCodes(ctx), s.alertGuarded(ctx)}
 	rows, err := s.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_form_request_tenants()`)
 	if err != nil {
 		return errors.Join(append(errs, err)...)
@@ -35,6 +40,50 @@ func (s *Service) Tick(ctx context.Context) error {
 	for _, t := range tenants {
 		if err := s.sendRequests(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: %w", t, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// alertGuarded tells the owners of each form guarded now (it went over
+// its submission limit, taskiem_public_form_tripped) that it is under
+// attack, once per guard (the alert's dedup key holds when it began).
+func (s *Service) alertGuarded(ctx context.Context) error {
+	rows, err := s.Pool.Query(ctx, `SELECT tenant_id, endpoint_id, guarded_since FROM taskiem_form_guards()`)
+	if err != nil {
+		return err
+	}
+	type guard struct {
+		tenant, endpoint uuid.UUID
+		since            time.Time
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (guard, error) {
+		var g guard
+		return g, r.Scan(&g.tenant, &g.endpoint, &g.since)
+	})
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, g := range list {
+		err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{g.tenant}, func(tx pgx.Tx) error {
+			var name, env string
+			if err := tx.QueryRow(ctx, `SELECT w.name, e.environment FROM form_endpoints e JOIN workflows w ON w.id = e.workflow_id WHERE e.id = $1`, g.endpoint).Scan(&name, &env); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return nil
+				}
+				return err
+			}
+			_, err := alerts.TellOwners(ctx, tx, g.tenant, alerts.Alert{Kind: AlertFormGuarded, Dedup: g.endpoint.String() + ":" + g.since.UTC().Format(time.RFC3339Nano),
+				Title: "Your form " + name + " is getting too many answers",
+				Body: "More than 500 answers an hour reached " + name + " (" + env + "), more than a busy day brings: it may be under attack. " +
+					"For the next hour each person is asked for a code sent to their phone before the form opens, and answers over the limit are turned away. " +
+					"If you expected this many, nothing else is needed; if not, you can close the form for now.",
+				Detail: map[string]any{"endpoint": g.endpoint.String(), "environment": env, "since": g.since.UTC().Format(time.RFC3339)}})
+			return err
+		})
+		if err != nil {
+			errs = append(errs, fmt.Errorf("form %s: %w", g.endpoint, err))
 		}
 	}
 	return errors.Join(errs...)
@@ -52,6 +101,7 @@ type pending struct {
 	reminders int
 	expires   time.Time
 	business  string
+	schema    map[string]any
 }
 
 // RequestLink is a form step's link on the form host.
@@ -60,21 +110,33 @@ func (s *Service) RequestLink(id uuid.UUID) string {
 }
 
 func (s *Service) sendRequests(ctx context.Context, tenant uuid.UUID) error {
-	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	var asks []ChatAsk
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		asks = nil
 		if _, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'expired' WHERE status = 'pending' AND expires_at <= now()`); err != nil {
 			return err
 		}
+		// What a chat sent towards a question no longer waiting goes.
+		if _, err := tx.Exec(ctx, `DELETE FROM form_chat_answers c USING form_requests r WHERE r.id = c.request_id AND r.status <> 'pending'`); err != nil {
+			return err
+		}
+		// Only what is due now takes a place in the batch, unsent requests
+		// first: older requests whose next reminder is hours away must not
+		// fill it and hold back a newer request's first link. The app clock
+		// ($1) decides a reminder, as sendRequest does.
 		rows, err := tx.Query(ctx, `SELECT r.id, r.title, r.recipient, r.prefill, r.via, r.verify,
-			ARRAY(SELECT extract(epoch FROM x)::bigint FROM unnest(r.remind) x), r.sent_at, r.reminders_sent, r.expires_at, t.name
+			ARRAY(SELECT extract(epoch FROM x)::bigint FROM unnest(r.remind) x), r.sent_at, r.reminders_sent, r.expires_at, t.name, r.schema
 			FROM form_requests r JOIN tenants t ON t.id = r.tenant_id
-			WHERE r.status = 'pending' AND (r.sent_at IS NULL OR r.reminders_sent < cardinality(r.remind)) ORDER BY r.created_at LIMIT 50 FOR UPDATE OF r SKIP LOCKED`)
+			WHERE r.status = 'pending' AND (r.sent_at IS NULL
+			   OR (r.reminders_sent < cardinality(r.remind) AND r.sent_at + r.remind[r.reminders_sent + 1] <= $1))
+			ORDER BY r.sent_at IS NOT NULL, r.created_at LIMIT 50 FOR UPDATE OF r SKIP LOCKED`, s.now())
 		if err != nil {
 			return err
 		}
 		list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (pending, error) {
 			var p pending
 			var secs []int64
-			err := r.Scan(&p.id, &p.title, &p.recipient, &p.prefill, &p.via, &p.verify, &secs, &p.sent, &p.reminders, &p.expires, &p.business)
+			err := r.Scan(&p.id, &p.title, &p.recipient, &p.prefill, &p.via, &p.verify, &secs, &p.sent, &p.reminders, &p.expires, &p.business, &p.schema)
 			for _, x := range secs {
 				p.remind = append(p.remind, time.Duration(x)*time.Second)
 			}
@@ -84,39 +146,122 @@ func (s *Service) sendRequests(ctx context.Context, tenant uuid.UUID) error {
 			return err
 		}
 		for _, p := range list {
-			if err := s.sendRequest(ctx, tx, tenant, p); err != nil {
+			ask, err := s.sendRequest(ctx, tx, tenant, p)
+			if err != nil {
 				return err
+			}
+			if ask != nil {
+				asks = append(asks, *ask)
 			}
 		}
 		return nil
 	})
-}
-
-func (s *Service) sendRequest(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p pending) error {
-	now := s.now()
-	first := p.sent == nil
-	if !first && (p.reminders >= len(p.remind) || now.Before(p.sent.Add(p.remind[p.reminders]))) {
-		return nil
-	}
-	to, err := s.open(ctx, tx, tenant, p.recipient)
 	if err != nil {
 		return err
 	}
-	link := s.RequestLink(p.id)
-	if role, _ := to["role"].(string); role != "" {
-		// Members by role: their link opens in the app.
+	// Recorded as sent: now the chat apps (device fields §2).
+	if s.Ask != nil {
+		for _, a := range asks {
+			s.Ask(ctx, a)
+		}
+	}
+	return nil
+}
+
+func (s *Service) sendRequest(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p pending) (*ChatAsk, error) {
+	now := s.now()
+	first := p.sent == nil
+	if !first && (p.reminders >= len(p.remind) || now.Before(p.sent.Add(p.remind[p.reminders]))) {
+		return nil, nil
+	}
+	to, err := s.open(ctx, tx, tenant, p.recipient)
+	if err != nil {
+		return nil, err
+	}
+	role, _ := to["role"].(string)
+	member, _ := to["member"].(string)
+	if starter, _ := to["starter"].(bool); starter && member == "" {
+		// Nobody started the run by hand (a schedule, an event, a
+		// workflow): nobody to ask; the step waits for its timeout.
+		if !first {
+			return nil, nil
+		}
+		_, err = tx.Exec(ctx, `UPDATE form_requests SET sent_at = now(), note = $2 WHERE id = $1`, p.id, "No way to ask: nobody started this run by hand")
+		return nil, err
+	}
+	if member != "" {
+		if _, err := uuid.Parse(member); err != nil {
+			// Not a member's id: nobody can answer it (and one bad request
+			// must not hold up the business's others).
+			if !first {
+				return nil, nil
+			}
+			_, err = tx.Exec(ctx, `UPDATE form_requests SET sent_at = now(), note = $2 WHERE id = $1`, p.id, "No way to ask: the member named is not a member of this business")
+			return nil, err
+		}
+	}
+	if l, _ := to["link"].(string); l != "" || role != "" || member != "" {
 		if !first {
 			_, err = tx.Exec(ctx, `UPDATE form_requests SET reminders_sent = reminders_sent + 1 WHERE id = $1`, p.id)
-			return err
+			return nil, err
 		}
-		app := strings.TrimRight(s.AppURL, "/") + "/forms/requests/" + p.id.String()
-		if _, err := alerts.Notify(ctx, tx, tenant, alerts.Alert{Kind: AlertFormRequest, Dedup: p.id.String(), Title: "To fill in: " + p.title,
-			Body: "For members with the role " + role + ".", Link: app, Detail: map[string]any{"role": role, "request": p.id.String()}}); err != nil {
-			return err
+		if l != "" {
+			// The person working a business link: through the door.
+			return s.sendToLink(ctx, tx, tenant, p, l)
 		}
-		_, err = tx.Exec(ctx, `UPDATE form_requests SET sent_at = now() WHERE id = $1`, p.id)
-		return err
+		ask, err := s.sendToMembers(ctx, tx, tenant, p, role, member)
+		if ask != nil {
+			// The run's starter: asked in the chat they started it from.
+			ask.Starter, _ = to["starter"].(bool)
+			ask.Channel, _ = to["channel"].(string)
+		}
+		return ask, err
 	}
+	return nil, s.sendLink(ctx, tx, tenant, p, to, first)
+}
+
+// sendToMembers asks members by role, or one member: their request opens
+// in the app and the web, under To fill in, with an alert; then in their
+// chat apps (the ChatAsk returned).
+func (s *Service) sendToMembers(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p pending, role, member string) (*ChatAsk, error) {
+	{
+		app := strings.TrimRight(s.AppURL, "/") + "/forms/requests/" + p.id.String()
+		al := alerts.Alert{Kind: AlertFormRequest, Dedup: p.id.String(), Title: "To fill in: " + p.title,
+			Body: "For members with the role " + role + ".", Link: app, Detail: map[string]any{"role": role, "request": p.id.String()}}
+		if member != "" {
+			var name string
+			if err := tx.QueryRow(ctx, `SELECT COALESCE(NULLIF(u.name, ''), 'a member') FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.tenant_id = $2 AND m.user_id = $1 LIMIT 1`, member, tenant).Scan(&name); err != nil {
+				if !errors.Is(err, pgx.ErrNoRows) {
+					return nil, err
+				}
+				// Not a member of this business: nobody can answer it.
+				s.log().Warn("forms: a form step's member is not a member", "request", p.id)
+				_, err = tx.Exec(ctx, `UPDATE form_requests SET sent_at = now(), note = $2 WHERE id = $1`, p.id, "No way to ask: the member named is not a member of this business")
+				return nil, err
+			}
+			al.Body, al.Detail = "For "+name+".", map[string]any{"member": member, "request": p.id.String()}
+		}
+		if _, err := alerts.Notify(ctx, tx, tenant, al); err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE form_requests SET sent_at = now() WHERE id = $1`, p.id); err != nil {
+			return nil, err
+		}
+		ask := &ChatAsk{Tenant: tenant, Role: role, From: p.business, Request: p.id, Title: p.title, Schema: p.schema}
+		if member != "" {
+			u, err := uuid.Parse(member)
+			if err != nil {
+				return nil, nil //nolint:nilerr // not a member's id: asked in the app alone
+			}
+			ask.Users = []uuid.UUID{u}
+		}
+		return ask, nil
+	}
+}
+
+// sendLink sends a phone's or an email's one-time link, by SMS or email.
+func (s *Service) sendLink(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p pending, to map[string]any, first bool) error {
+	link := s.RequestLink(p.id)
 	phone, _ := to["phone"].(string)
 	email, _ := to["email"].(string)
 	text := p.title + ". Please fill it in here: " + link
@@ -153,7 +298,7 @@ func (s *Service) sendRequest(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 		break // the first channel that takes it
 	}
 	if !first {
-		_, err = tx.Exec(ctx, `UPDATE form_requests SET reminders_sent = reminders_sent + 1 WHERE id = $1`, p.id)
+		_, err := tx.Exec(ctx, `UPDATE form_requests SET reminders_sent = reminders_sent + 1 WHERE id = $1`, p.id)
 		return err
 	}
 	if !sent {
@@ -164,7 +309,7 @@ func (s *Service) sendRequest(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 			note = "The link could not be sent: " + lastErr.Error()
 		}
 		s.log().Warn("forms: a form step's link was not sent", "request", p.id, "why", note)
-		_, err = tx.Exec(ctx, `UPDATE form_requests SET sent_at = now(), note = $2 WHERE id = $1`, p.id, note)
+		_, err := tx.Exec(ctx, `UPDATE form_requests SET sent_at = now(), note = $2 WHERE id = $1`, p.id, note)
 		return err
 	}
 	prefill, err := s.openAny(ctx, tx, tenant, p.prefill)

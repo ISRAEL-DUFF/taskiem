@@ -4,6 +4,7 @@ import { get, getBlob, post } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, Items, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { naira } from "../lib/invoices";
+import { saveFile } from "../lib/saveFile";
 import { dateLabel, plainMessage, type SchoolClass, type SchoolSession, type SchoolTerm } from "../lib/schools";
 import {
   GATE_MIN_LETTERS,
@@ -137,12 +138,7 @@ export function SchoolClearancePage() {
   const download = () =>
     act.run(async () => {
       const blob = await getBlob(clearancePath(filter, "csv", reveal));
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `clearance-${list.data?.today ?? "today"}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      saveFile(blob, `clearance-${list.data?.today ?? "today"}.csv`);
     }, false);
   return (
     <>

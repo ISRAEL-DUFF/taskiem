@@ -375,10 +375,10 @@ func TestReportsAndGate(t *testing.T) {
 	if err := json.Unmarshal(raw, &rep); err != nil {
 		t.Fatal(err)
 	}
-	if rep.Summary.Cases != 4 || rep.Summary.Attempts != 8 || rep.Provider != "fake" || rep.ByTag["dogfood"].Cases != 4 || len(rep.ByDiff) == 0 {
+	if rep.Summary.Cases != 3 || rep.Summary.Attempts != 6 || rep.Provider != "fake" || rep.ByTag["dogfood"].Cases != 3 || len(rep.ByDiff) == 0 {
 		t.Fatalf("report: %+v", rep.Summary)
 	}
-	if rep.Summary.NoiseFloor != math.Round(1e4/math.Sqrt(8))/1e4 {
+	if rep.Summary.NoiseFloor != math.Round(1e4/math.Sqrt(6))/1e4 {
 		t.Errorf("noise floor %v", rep.Summary.NoiseFloor)
 	}
 	mdText, _ := os.ReadFile(md) //nolint:gosec // test output
@@ -405,7 +405,7 @@ func TestJudge(t *testing.T) {
 	if err := json.Unmarshal(raw, &rep); err != nil {
 		t.Fatal(err)
 	}
-	if rep.JudgeModel != "fake-judge" || rep.Summary.JudgeScored != 4 || rep.Results[0].Judge == nil {
+	if rep.JudgeModel != "fake-judge" || rep.Summary.JudgeScored != 3 || rep.Results[0].Judge == nil {
 		t.Fatalf("judge: %+v", rep.Summary)
 	}
 	// Nothing to judge fails without a call.

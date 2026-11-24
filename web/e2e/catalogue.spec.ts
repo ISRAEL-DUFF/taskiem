@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 // serve.sh publishes p_e2e_ledger 1.0.0 in the catalogue (seed-catalogue.sh).
 test("browse the connector catalogue and install a connector with consent", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

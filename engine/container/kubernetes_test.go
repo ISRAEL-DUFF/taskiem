@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -89,7 +90,11 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("container") != "main" || r.URL.Query().Get("limitBytes") == "" {
 			f.t.Errorf("log query %s", r.URL.RawQuery)
 		}
-		_, _ = w.Write([]byte(f.log))
+		log := f.log
+		if n, err := strconv.Atoi(r.URL.Query().Get("limitBytes")); err == nil && n < len(log) {
+			log = log[:n] // as the kubelet does
+		}
+		_, _ = w.Write([]byte(log))
 	case r.Method == http.MethodGet && strings.HasPrefix(p, ns+"pods/"):
 		f.gets++
 		st := map[string]any{"phase": "Pending"}
@@ -302,5 +307,90 @@ func TestKubernetesRefusesImagesAndCancels(t *testing.T) {
 	f.policies = map[string]bool{}
 	if err := k.Check(context.Background()); err == nil {
 		t.Fatal("Check passed without a NetworkPolicy")
+	}
+}
+
+// TestKubernetesRunningTimeIsReported: a step that ends without a
+// result after its program started (cancelled, the Pod gone, the
+// deadline with no terminated state) still reports the time it ran, so
+// the container minutes it used are counted.
+func TestKubernetesRunningTimeIsReported(t *testing.T) {
+	running := func() map[string]any {
+		return map[string]any{"phase": "Running", "containerStatuses": []any{map[string]any{"name": "main", "state": map[string]any{"running": map[string]any{
+			"startedAt": time.Now().UTC().Format(time.RFC3339Nano)}}}}}
+	}
+	cases := map[string]struct {
+		status func(int) map[string]any
+		cancel time.Duration
+		msg    string
+	}{
+		"cancelled": {func(int) map[string]any { return running() }, 300 * time.Millisecond, "cancelled while running"},
+		"deadline without terminated": {func(n int) map[string]any {
+			if n < 40 {
+				return running()
+			}
+			return map[string]any{"phase": "Failed", "reason": "DeadlineExceeded"}
+		}, 0, "timed out"},
+		"ended without a result": {func(n int) map[string]any {
+			if n < 40 {
+				return running()
+			}
+			return map[string]any{"phase": "Failed", "reason": "Evicted"}
+		}, 0, "without a result"},
+	}
+	for name, c := range cases {
+		f, k := newFakeAPI(t)
+		f.status = c.status
+		ctx, cancel := context.WithCancel(context.Background())
+		if c.cancel > 0 {
+			time.AfterFunc(c.cancel, cancel)
+		}
+		start := time.Now()
+		res, err := k.Run(ctx, kubeSpec())
+		took := time.Since(start)
+		cancel()
+		if !errors.Is(err, effects.ErrUnknownOutcome) || !strings.Contains(err.Error(), c.msg) {
+			t.Errorf("%s: %v", name, err)
+		}
+		if res.Elapsed < 100*time.Millisecond || res.Elapsed > took {
+			t.Errorf("%s: reported %s of %s", name, res.Elapsed, took)
+		}
+	}
+	// A kubelet clock far behind ours cannot report more than the wait.
+	f, k := newFakeAPI(t)
+	f.status = func(int) map[string]any {
+		return map[string]any{"phase": "Running", "containerStatuses": []any{map[string]any{"name": "main", "state": map[string]any{"running": map[string]any{"startedAt": "2020-01-01T00:00:00Z"}}}}}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	res, _ := k.Run(ctx, kubeSpec())
+	if took := time.Since(start); res.Elapsed <= 0 || res.Elapsed > took {
+		t.Errorf("skewed clock: reported %s of %s", res.Elapsed, took)
+	}
+}
+
+// TestHTMLOutputFitsTheResultLine: an output within the step's limit is
+// read back whole however it encodes. HTML (escaped by encoding/json by
+// default), line separators and control characters in the logs all grow
+// when encoded, and the runner reads only so many bytes of the log.
+func TestHTMLOutputFitsTheResultLine(t *testing.T) {
+	s := kubeSpec()
+	s.OutputBytes = 262144
+	fill := func(unit string, n int) string { return strings.Repeat(unit, n/len(unit)) }
+	outputs := map[string]string{
+		"html":            `"` + fill("<td>&amp;</td>", s.OutputBytes-2) + `"`,
+		"line separators": `"` + fill(" ", s.OutputBytes-2) + `"`,
+	}
+	for name, out := range outputs {
+		o := Outcome{Output: json.RawMessage(out), Logs: fill("\x01", LogBytes), Error: "", Elapsed: time.Second}
+		line := o.Encode() + "\n"
+		f, k := newFakeAPI(t)
+		f.status = func(int) map[string]any { return terminated(0, "Completed") }
+		f.log = line
+		res, err := k.Run(context.Background(), s)
+		if err != nil || len(res.Output) != len(out) {
+			t.Errorf("%s: output of %d bytes, result line %d: got %d bytes, %v", name, len(out), len(line), len(res.Output), err)
+		}
 	}
 }

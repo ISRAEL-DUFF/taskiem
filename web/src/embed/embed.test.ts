@@ -129,6 +129,42 @@ describe("EmbedClient", () => {
     expect(header(calls[1], "Last-Event-ID")).toBe("2");
   });
 
+  it("counts retries afresh once an event arrives, so a long run outlives many dropped connections", async () => {
+    const enc = new TextEncoder();
+    let seq = 0;
+    // Each connection delivers one event, then the proxy drops it.
+    const dropping = () => {
+      let sent = false;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          pull(ctl) {
+            if (sent) return ctl.error(new TypeError("network error"));
+            sent = true;
+            seq++;
+            ctl.enqueue(enc.encode(`id: ${seq}\nevent: run_event\ndata: ${JSON.stringify({ seq, type: "StepCompleted", recorded_at: "t", origin: "engine" })}\n\n`));
+          },
+        }),
+        { status: 200 },
+      );
+    };
+    const { f, calls } = fakeFetch(dropping, dropping, dropping, dropping, dropping, dropping, () => stream(["event: end\ndata: {}\n\n"]));
+    const c = new EmbedClient({ base: "", app: "a", token: "t", fetch: f, retryDelay: 1 });
+    const got: RunEvent[] = [];
+    await c.streamRun("r", (e) => got.push(e), undefined, 2);
+    expect(got).toHaveLength(6);
+    expect(calls).toHaveLength(7);
+  });
+
+  it("gives up after the retries when no event arrives in between", async () => {
+    const down = () => {
+      throw new TypeError("Failed to fetch");
+    };
+    const { f, calls } = fakeFetch(down, down, down, down, down);
+    const c = new EmbedClient({ base: "", app: "a", token: "t", fetch: f, retryDelay: 1 });
+    await expect(c.streamRun("r", () => undefined, undefined, 2)).rejects.toBeInstanceOf(TypeError);
+    expect(calls).toHaveLength(3);
+  });
+
   it("does not retry a refused stream", async () => {
     const { f, calls } = fakeFetch(json({ error: "forbidden" }, 403));
     const c = new EmbedClient({ base: "", app: "a", token: "t", fetch: f, retryDelay: 1 });

@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { enablePush } from "../lib/push";
+import { setAppBadge } from "../lib/badge";
 import { get } from "../api";
 import { isAfter } from "../lib/stamp";
 import { useAuth } from "../auth";
@@ -352,9 +354,12 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
     setAsking(false);
     const prefs = readPrefs();
     if (!yes) return writePrefs({ ...prefs, asked: true });
-    void Notification.requestPermission().then((p) =>
-      writePrefs({ ...readPrefs(), browser: p === "granted", asked: true }),
-    );
+    void Notification.requestPermission().then((p) => {
+      writePrefs({ ...readPrefs(), browser: p === "granted", asked: true });
+      // Where the server has the keys, the same yes also turns on a
+      // notification for when Taskiem is closed (it says nothing if it cannot).
+      if (p === "granted") void enablePush(true);
+    });
   }, []);
   // The prefs changing elsewhere (the settings page) closes the question.
   useEffect(() => onPrefs(() => readPrefs().asked && setAsking(false)), []);
@@ -413,6 +418,8 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
 
 /** "(3) Taskiem" in the tab's title, and a dot on its icon, while there is something unread. */
 function useTabBadge(n: number) {
+  // The same count on the app's icon, where the device has one.
+  useEffect(() => setAppBadge(n), [n]);
   useEffect(() => {
     const apply = () => {
       const next = withBadge(document.title, n);

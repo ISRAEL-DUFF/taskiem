@@ -67,7 +67,30 @@ func init() {
 		alwaysOn[r] = "the Schools area, which the schools package refuses itself when off"
 	}
 	alwaysOn["POST /v1/forms/{id}/links"] = "links to a form, not business links"
+	alwaysOn["GET /v1/chat-links/{code}"] = "a business's public card for its chat link, read by anyone; whether it takes chats is its own setting"
+	alwaysOn["GET /v1/me/storefront-orders"] = "a person's own orders across businesses, found by their phone, not a business's storefront"
+	alwaysOn["POST /v1/me/storefront-orders/confirm"] = "a person's own orders across businesses, found by their phone, not a business's storefront"
 	alwaysOn["POST /v1/me/chat-link"] = "links a person's own chat account"
+	for _, m := range []string{"GET", "POST"} {
+		alwaysOn[m+" /v1/me/chats/{id}/invoices/{invoice}/transfer"] = "a person's own invoice from a business, through the customer door, which checks the business's parts itself (customer.pay)"
+	}
+	alwaysOn["POST /v1/me/chat-link/preview"] = "links a person's own chat account"
+	alwaysOn["POST /v1/me/chat-link/refuse"] = "links a person's own chat account"
+	alwaysOn["POST /v1/auth/chat/link"] = "a sign-in link sent in chat (chat_signin.go), not business links"
+	alwaysOn["POST /v1/auth/chat/link/peek"] = "a sign-in link sent in chat (chat_signin.go), not business links"
+	for _, r := range []string{
+		"GET /v1/me/link", "POST /v1/me/link", "GET /v1/me/link/qr", "GET /v1/people/links/{code}",
+		"GET /v1/person-links/{code}", "GET /v1/person-links/{code}/photo",
+	} {
+		alwaysOn[r] = "a person's own link (people.go, people-chatting §5.2), not a business's links"
+	}
+	for _, r := range []string{
+		"GET /v1/me/groups/{id}/link", "POST /v1/me/groups/{id}/link", "DELETE /v1/me/groups/{id}/link", "GET /v1/me/groups/{id}/link/qr",
+		"GET /v1/group-links/{code}", "GET /v1/group-links/{code}/photo", "POST /v1/me/group-links/{code}/join",
+		"DELETE /v1/me/group-links/{code}/join",
+	} {
+		alwaysOn[r] = "a people group's invite link (people_groups.go, people-chatting 5b A4), not a business's links"
+	}
 }
 
 // TestAreaRoutesAreMapped walks the router: a route whose path names a

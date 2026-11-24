@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>02 · End card</title>
+<link rel="stylesheet" href="../../../kit/kit.css">
+<script src="../../../kit/kit.js"></script>
+<script>window.scene = { duration: 7000 };</script>
+<style>
+/* The end card (script.md): the relay mark draws itself (its own paths,
+   web/public/brand/relay/mark.svg, unchanged), the wordmark and the line
+   follow, and the one thing to do. */
+@keyframes pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+@keyframes draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes dot { 0% { transform: scale(0); } 70% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes in-up { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
+@keyframes glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(200,241,105,.0); } 50% { box-shadow: 0 0 0 14px rgba(200,241,105,.35); } }
+
+.stage { background: radial-gradient(50% 55% at 50% 52%, rgba(200,241,105,.26), transparent 70%), radial-gradient(rgba(14,26,20,.05) 1.6px, transparent 2.2px) 0 0 / 36px 36px, radial-gradient(rgba(14,26,20,.05) 1.6px, transparent 2.2px) 18px 18px / 36px 36px, var(--paper) !important; }
+.end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.mark { width: 200px; height: 200px; animation: pop .7s var(--spring) both; animation-delay: .2s; filter: drop-shadow(0 30px 40px rgba(13,59,46,.35)); }
+.mark path { stroke-dasharray: 100; animation: draw .8s var(--ease) both; }
+.mark .p2 { animation-delay: .75s; }
+.mark .p1 { animation-delay: .55s; }
+.mark circle { transform-origin: 78px 74px; animation: dot .5s var(--spring) both; animation-delay: 1.35s; }
+.word { height: 64px; margin-top: 44px; animation: in-up .7s var(--ease) both; animation-delay: 1.6s; }
+.line { margin: 40px 0 0; font-size: 76px; line-height: 1.05; font-weight: 800; letter-spacing: -.035em; animation: in-up .7s var(--ease) both; animation-delay: 2.0s; }
+.line em { font-style: normal; color: var(--pine); }
+.cta { margin-top: 48px; display: inline-flex; align-items: center; gap: 16px; padding: 22px 38px; border-radius: 999px; background: var(--pine); color: #fff; font-size: 30px; font-weight: 700; animation: in-up .7s var(--ease) both, glow 1.6s 3.4s 1 both; animation-delay: 2.5s, 3.4s; }
+.cta i { width: 14px; height: 14px; border-radius: 50%; background: var(--lime); }
+.portrait .line { font-size: 72px; padding: 0 80px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="end">
+    <svg class="mark" viewBox="0 0 100 100" role="img" aria-label="Taskiem"><rect width="100" height="100" rx="26" fill="#0d3b2e"/><path class="p1" pathLength="100" d="M27 40H61" stroke="#c8f169" stroke-width="11" stroke-linecap="round"/><path class="p2" pathLength="100" d="M42 22V58Q42 74 58 74H64" stroke="#c8f169" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="78" cy="74" r="7" fill="#ffffff"/></svg>
+    <img class="word" src="../../../../web/public/brand/relay/wordmark.svg" alt="Taskiem">
+    <p class="line">The promise, <em>in one line</em>.</p>
+    <span class="cta"><i></i>The one thing to do</span>
+  </div>
+</div>
+</body>
+</html>

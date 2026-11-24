@@ -15,7 +15,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 )
 
-// The assistant's recipe (decision 0062 V8): instantiating the WhatsApp
+// The assistant's recipe (decision 0074 V8): instantiating the WhatsApp
 // assistant makes its draft, with the guard on its chat trigger, and the
 // two tables it keeps: the conversations (kept as long as conversations
 // are) and the allowed customers.

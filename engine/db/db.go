@@ -4,9 +4,14 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
+	"database/sql"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
+	"log/slog"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -40,27 +45,100 @@ func MigrateWith(ctx context.Context, dsn string, lockTimeout time.Duration) ([]
 }
 
 func migrate(ctx context.Context, dsn string, lockTimeout time.Duration, fsys fs.FS) ([]*goose.MigrationResult, error) {
-	cfg, err := pgx.ParseConfig(dsn)
+	fsys, builds, err := concurrentMigrations(fsys)
 	if err != nil {
 		return nil, err
+	}
+	p, sqlDB, err := provider(dsn, lockTimeout, fsys)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = sqlDB.Close() }()
+	// Concurrent index migrations (concurrent.go) run without the lock
+	// timeout, on connections of their own: pending migrations are applied
+	// in runs of one kind or the other, in order.
+	var concurrent *goose.Provider
+	var all []*goose.MigrationResult
+	for idle := 0; ; {
+		st, err := p.Status(ctx)
+		if err != nil {
+			return all, err
+		}
+		var pending []*goose.Source
+		for _, s := range st {
+			if s.State == goose.StatePending {
+				pending = append(pending, s.Source)
+			}
+		}
+		if len(pending) == 0 {
+			return all, nil
+		}
+		kind := func(s *goose.Source) bool { _, ok := builds[s.Path]; return ok }
+		run, last := kind(pending[0]), pending[0].Version
+		for _, s := range pending[1:] {
+			if kind(s) != run {
+				break
+			}
+			last = s.Version
+		}
+		by := p
+		if run {
+			for _, s := range pending {
+				if s.Version > last {
+					break
+				}
+				if err := checkIndexNames(ctx, sqlDB, s.Path, builds[s.Path]); err != nil {
+					return all, err
+				}
+			}
+			if concurrent == nil {
+				var cdb *sql.DB
+				if concurrent, cdb, err = provider(dsn, 0, fsys); err != nil {
+					return all, err
+				}
+				defer func() { _ = cdb.Close() }()
+			}
+			by = concurrent
+		}
+		res, err := by.UpTo(ctx, last)
+		all = append(all, res...)
+		if err != nil {
+			return all, err
+		}
+		// Nothing applied: another run did it while this one waited for
+		// the lock. Twice in a row would be a loop.
+		if len(res) > 0 {
+			idle = 0
+		} else if idle++; idle > 1 {
+			return all, fmt.Errorf("migration %d stays pending", pending[0].Version)
+		}
+	}
+}
+
+// provider is a goose provider whose connections have lockTimeout.
+func provider(dsn string, lockTimeout time.Duration, fsys fs.FS) (*goose.Provider, *sql.DB, error) {
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, nil, err
 	}
 	if cfg.RuntimeParams == nil {
 		cfg.RuntimeParams = map[string]string{}
 	}
 	cfg.RuntimeParams["lock_timeout"] = strconv.FormatInt(lockTimeout.Milliseconds(), 10)
 	sqlDB := stdlib.OpenDB(*cfg)
-	defer func() { _ = sqlDB.Close() }()
 	// Another run holding the lock is waited for, checking every second,
 	// for up to 5 minutes.
 	locker, err := lock.NewPostgresSessionLocker(lock.WithLockTimeout(1, 300))
 	if err != nil {
-		return nil, err
+		_ = sqlDB.Close()
+		return nil, nil, err
 	}
 	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, fsys, goose.WithSessionLocker(locker))
 	if err != nil {
-		return nil, err
+		_ = sqlDB.Close()
+		return nil, nil, err
 	}
-	return p.Up(ctx)
+	return p, sqlDB, nil
 }
 
 // Scope renders tenant ids as the value of app.tenant_scope.
@@ -78,10 +156,88 @@ func InTenantTx(ctx context.Context, pool *pgxpool.Pool, tenants []uuid.UUID, fn
 	if len(tenants) == 0 {
 		return fmt.Errorf("db: empty tenant scope")
 	}
-	return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+	var h *hookTx
+	if err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT set_config('app.tenant_scope', $1, true)", Scope(tenants...)); err != nil {
+			return err
+		}
+		h = &hookTx{Tx: tx}
+		return fn(h)
+	}); err != nil {
+		return err
+	}
+	for _, then := range h.after {
+		runAfterCommit(then)
+	}
+	return nil
+}
+
+// InPersonTx runs fn in a transaction scoped to one person and no tenant
+// (taskiem_person_scope, migration 00448): what a personal session reaches,
+// their own users row, and nothing of any business.
+func InPersonTx(ctx context.Context, pool *pgxpool.Pool, person uuid.UUID, fn func(pgx.Tx) error) error {
+	if person == uuid.Nil {
+		return fmt.Errorf("db: empty person scope")
+	}
+	return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT set_config('app.person_scope', $1, true)", person.String()); err != nil {
 			return err
 		}
 		return fn(tx)
 	})
+}
+
+// hookTx is the transaction InTenantTx hands out: a transaction that also
+// holds what to do once its commit has succeeded.
+type hookTx struct {
+	pgx.Tx
+	after []func()
+}
+
+// AfterCommit asks for fn to run once tx has committed, and says whether tx
+// can hold it. A transaction from InTenantTx can; a savepoint opened inside
+// one, or a transaction begun any other way, cannot, and the caller does
+// what it did before. The functions run in the order they were added,
+// after a successful commit only, on the goroutine that committed: they
+// must not block. One that panics is recovered and logged, since the
+// commit has happened and the caller must hear that it did.
+func AfterCommit(tx pgx.Tx, fn func()) bool {
+	h, ok := tx.(*hookTx)
+	if !ok {
+		return false
+	}
+	h.after = append(h.after, fn)
+	return true
+}
+
+func runAfterCommit(fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("db: a function run after commit panicked", "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+	fn()
+}
+
+// MigrationsDigest is a hash of every migration's name and text: a
+// database migrated from them is the same as any other so migrated (the
+// test databases' template is keyed by it, dbtest).
+func MigrationsDigest() string {
+	h := sha256.New()
+	sub := mustSub(migrations, "migrations")
+	_ = fs.WalkDir(sub, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := fs.ReadFile(sub, path)
+		if err != nil {
+			return err
+		}
+		h.Write([]byte(path))
+		h.Write([]byte{0})
+		h.Write(b)
+		h.Write([]byte{0})
+		return nil
+	})
+	return hex.EncodeToString(h.Sum(nil))
 }

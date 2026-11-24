@@ -329,7 +329,7 @@ func TestSlackFileGoesToTheWeb(t *testing.T) {
 }
 
 // A PDF or Word document sent in chat is for what the assistant knows
-// (decision 0062 V10, K7): read into a new source that waits for Use this,
+// (decision 0074 V10, K7): read into a new source that waits for Use this,
 // by someone who manages the settings; others are told who can.
 func TestChatAddsAKnowledgeDocument(t *testing.T) {
 	w := newWATablesWorld(t)

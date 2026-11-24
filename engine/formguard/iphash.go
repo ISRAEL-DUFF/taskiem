@@ -28,6 +28,11 @@ func HashIP(key []byte, ip string, day time.Time) [16]byte {
 	return out
 }
 
+// ClientKey is a client's address as limits and identities must see it,
+// as HashIP does: IPv4 as it is, IPv6 cut to its /64. It is for keys
+// kept in memory or hashed again by the caller, never stored as is.
+func ClientKey(ip string) string { return string(normaliseIP(ip)) }
+
 // normaliseIP returns the bytes to hash for ip: 4 for IPv4 (including an
 // IPv4-mapped IPv6 address), 16 for an IPv6 /64, or a marked string.
 func normaliseIP(ip string) []byte {

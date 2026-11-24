@@ -75,7 +75,7 @@ actions:
     # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
     turn: { to: to, text: body, kind: text }
     # A duplicate is a duplicate chat message: a step may ask for a lost
-    # send to be sent once more (decision 0062 D11).
+    # send to be sent once more (decision 0074 D11).
     resend_if_lost: true
     compensate: null
     input:
@@ -140,7 +140,7 @@ actions:
     # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
     turn: { to: to, text: caption, file: file, kind_field: media_type }
     # A duplicate is a duplicate chat message: a step may ask for a lost
-    # send to be sent once more (decision 0062 D11).
+    # send to be sent once more (decision 0074 D11).
     resend_if_lost: true
     compensate: null
     input:
@@ -176,7 +176,7 @@ actions:
     # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
     turn: { to: to, text: interactive.body.text, kind: button }
     # A duplicate is a duplicate chat message: a step may ask for a lost
-    # send to be sent once more (decision 0062 D11).
+    # send to be sent once more (decision 0074 D11).
     resend_if_lost: true
     compensate: null
     input:
@@ -300,9 +300,9 @@ triggers:
     # output message_id), so a run can wait for delivered, read or failed.
     correlation: '=item.kind == "message" ? item.message.from : item.kind == "status" ? item.status.id : ""'
     # What a customer wrote and who they are is personal data (decision
-    # 0062, P1): sealed in run history, readable by the run's steps.
+    # 0074, P1): sealed in run history, readable by the run's steps.
     # A customer's new message, for a workflow's customer guard (decision
-    # 0062 V6, connector/v1 rule 23). The Cloud API has no groups: every
+    # 0074 V6, connector/v1 rule 23). The Cloud API has no groups: every
     # chat is one to one. A voice note or audio is fetched before the run
     # can wait in a queue (Meta's media links last minutes).
     conversation:

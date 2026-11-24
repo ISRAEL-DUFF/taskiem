@@ -37,6 +37,9 @@ type PublicForm struct {
 	// Reach are the fields holding phones the workflow messages
 	// (ingest.ReachFields): the thank-you page offers updates for them.
 	Reach []string
+	// Guarded: the form tripped its submission limit within the hour, so
+	// a public form asks for a phone code first (forms 7.3).
+	Guarded bool
 }
 
 // FormLink is a one-time link to a link form.
@@ -83,6 +86,8 @@ type FormState struct {
 	Status  string // received, started, answered or refused
 	Message string
 	Created time.Time
+	// Endpoint is the form it was sent to; nil for a request's answer.
+	Endpoint uuid.UUID
 }
 
 // Why a submission was not written.
@@ -107,9 +112,16 @@ type FormStore interface {
 	// false when the form or request takes nothing now.
 	Submit(ctx context.Context, w FormWrite) (ok bool, err error)
 	// Code records a verification code to send; false when limited.
-	Code(ctx context.Context, scope uuid.UUID, addressHash, codeHash, payload []byte) (bool, error)
+	// Code asks for a verification code. asker is who asks (a keyed hash
+	// of the client address) and numberHash the number or email across
+	// every form; either may be nil. The answer is one of the Code*
+	// outcomes.
+	Code(ctx context.Context, scope uuid.UUID, addressHash, codeHash, payload, asker, numberHash []byte) (string, error)
 	CheckCode(ctx context.Context, scope uuid.UUID, addressHash, codeHash []byte) (bool, error)
 	Status(ctx context.Context, reference string, statusHash []byte) (FormState, bool, error)
+	// Tripped records that a form went over its submission limit: it is
+	// guarded for an hour and its owners are alerted (forms 7.3).
+	Tripped(ctx context.Context, endpoint uuid.UUID) error
 }
 
 // DBForms is the FormStore on a pool connected as taskiem_public.
@@ -130,11 +142,12 @@ func ParsePublicForm(publicID string, raw []byte) (PublicForm, error) {
 		Inputs        json.RawMessage `json:"inputs"`
 		Types         json.RawMessage `json:"types"`
 		Reach         []string        `json:"reach"`
+		Guarded       bool            `json:"guarded"`
 	}
 	if err := json.Unmarshal(raw, &x); err != nil {
 		return PublicForm{}, err
 	}
-	f := PublicForm{Endpoint: x.Endpoint, Tenant: x.Tenant, PublicID: publicID, Status: x.Status, Open: x.Open, Business: x.Business, Reach: x.Reach}
+	f := PublicForm{Endpoint: x.Endpoint, Tenant: x.Tenant, PublicID: publicID, Status: x.Status, Open: x.Open, Business: x.Business, Reach: x.Reach, Guarded: x.Guarded}
 	if x.ClosedMessage != nil {
 		f.ClosedMessage = *x.ClosedMessage
 	}
@@ -173,6 +186,11 @@ func (d dbForms) Form(ctx context.Context, publicID string) (PublicForm, bool, e
 	}
 	f, err := ParsePublicForm(publicID, raw)
 	return f, err == nil, err
+}
+
+func (d dbForms) Tripped(ctx context.Context, endpoint uuid.UUID) error {
+	_, err := d.pool.Exec(ctx, `SELECT taskiem_public_form_tripped($1)`, endpoint)
+	return err
 }
 
 func (d dbForms) Link(ctx context.Context, tokenHash []byte) (FormLink, bool, error) {
@@ -214,6 +232,10 @@ func (d dbForms) Request(ctx context.Context, tokenHash []byte) (FormRequest, bo
 	}
 	if v, err := expr.DecodeJSON(x.Schema); err == nil {
 		r.Schema, _ = v.(map[string]any)
+		// The page does not ask a device yet (device fields D1): its
+		// device fields are not shown, and the answer has them
+		// unavailable (engine/forms).
+		r.Schema = wd.WithoutDeviceFields(r.Schema)
 	}
 	if r.Schema == nil {
 		r.Schema = map[string]any{}
@@ -276,10 +298,22 @@ func submitError(err error) error {
 	return err
 }
 
-func (d dbForms) Code(ctx context.Context, scope uuid.UUID, addressHash, codeHash, payload []byte) (bool, error) {
-	var ok bool
-	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_code($1, $2, $3, $4)`, scope, addressHash, codeHash, payload).Scan(&ok)
-	return ok, err
+// What asking for a code answers (taskiem_public_form_code_ask,
+// migration 00444).
+const (
+	CodeSent    = "ok"
+	CodePressed = "pressed" // sent, and the form is over its ceiling of codes not yet confirmed
+	CodeGone    = "gone"
+	CodeAddress = "address" // too many to this address on this form
+	CodeNumber  = "number"  // too many to this number or email across every form
+	CodeAsker   = "asker"   // too many asked for from this client address
+	CodeBusy    = "busy"    // the form is over its ceiling and this asker must wait
+)
+
+func (d dbForms) Code(ctx context.Context, scope uuid.UUID, addressHash, codeHash, payload, asker, numberHash []byte) (string, error) {
+	var out string
+	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_code_ask($1, $2, $3, $4, $5, $6)`, scope, addressHash, codeHash, payload, asker, numberHash).Scan(&out)
+	return out, err
 }
 
 func (d dbForms) CheckCode(ctx context.Context, scope uuid.UUID, addressHash, codeHash []byte) (bool, error) {
@@ -291,8 +325,9 @@ func (d dbForms) CheckCode(ctx context.Context, scope uuid.UUID, addressHash, co
 func (d dbForms) Status(ctx context.Context, reference string, statusHash []byte) (FormState, bool, error) {
 	var st FormState
 	var msg *string
-	err := d.pool.QueryRow(ctx, `SELECT status, message, created_at FROM taskiem_public_form_status($1, $2) LIMIT 1`, reference, statusHash).
-		Scan(&st.Status, &msg, &st.Created)
+	var endpoint *uuid.UUID
+	err := d.pool.QueryRow(ctx, `SELECT status, message, created_at, endpoint_id FROM taskiem_public_form_status($1, $2) LIMIT 1`, reference, statusHash).
+		Scan(&st.Status, &msg, &st.Created, &endpoint)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return FormState{}, false, nil
 	}
@@ -301,6 +336,9 @@ func (d dbForms) Status(ctx context.Context, reference string, statusHash []byte
 	}
 	if msg != nil {
 		st.Message = *msg
+	}
+	if endpoint != nil {
+		st.Endpoint = *endpoint
 	}
 	return st, true, nil
 }

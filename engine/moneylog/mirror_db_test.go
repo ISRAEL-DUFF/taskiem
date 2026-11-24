@@ -19,6 +19,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/moneylog"
+	"github.com/israel-duff/taskiem/engine/pii"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 	"github.com/israel-duff/taskiem/engine/sender"
 )
@@ -171,6 +172,63 @@ func TestMirrorCopiesEachEntryOnce(t *testing.T) {
 	}
 }
 
+// Erasing a payer reaches money_log: the kept row's payer is replaced,
+// though an entry is otherwise never changed.
+func TestMirrorErasesPayer(t *testing.T) {
+	e := rt.New(t)
+	x := xenibasetest.New(t)
+	now := time.Now()
+	x.Now = func() time.Time { return now }
+	x.AddToken(xenibasetest.Token{Secret: "xb_platform", ID: "tok", Name: "platform", Scopes: []string{"read", "write", "admin"}, ExpiresAt: now.Add(10 * 365 * 24 * time.Hour)})
+	if err := e.Registry.Register(xenibase.New(xenibase.Options{BaseURL: x.URL})); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO environments (tenant_id, name) VALUES ($1, 'prod')`, e.Tenant)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	tables := &datatables.Service{Pool: e.DB.App, Vault: e.Vault, Egress: e.Egress,
+		Platform: datatables.Platform{URL: x.URL, Token: "xb_platform", Org: x.OrgID, Region: "lagos"}, PollInterval: time.Millisecond}
+	log := &moneylog.Log{Pool: e.DB.App, PII: e.Vault}
+	rows := &moneylog.XenibaseRows{Registry: e.Registry, Vault: e.Vault, Guard: e.Egress}
+	m := &moneylog.Mirror{Log: log, Tables: tables, Rows: rows, Logger: slog.New(slog.DiscardHandler)}
+	for _, ref := range []string{"VA-1", "VA-2"} {
+		if _, err := log.RecordEvent(ctx, e.Tenant, "prod", "paystack", "main", "virtual_account.credited",
+			map[string]any{"reference": ref, "credit_id": "C-" + ref, "amount_kobo": int64(90000), "payer_name": "ADA OBI " + ref}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := m.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var subj string
+	if err := e.DB.Admin.QueryRow(ctx, `SELECT payer->>'subject' FROM money_entries WHERE reference = 'VA-1'`).Scan(&subj); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Vault.Erase(ctx, e.Tenant, subj, "user:ada"); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := m.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := rows.Call(ctx, e.Tenant, "read_rows", map[string]any{"table": moneylog.Table, "limit": 10}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, _ := got["rows"].([]any)
+	payers := map[any]any{}
+	for _, r := range list {
+		payers[r.(map[string]any)["reference"]] = r.(map[string]any)["payer"]
+	}
+	if len(list) != 2 || payers["VA-1"] != pii.Erased || payers["VA-2"] != "ADA OBI VA-2" {
+		t.Fatalf("money_log after erasure: %v", list)
+	}
+}
+
 func projectOf(t *testing.T, s *datatables.Service, tenant uuid.UUID) string {
 	t.Helper()
 	st, err := s.Status(ctx, tenant)
@@ -223,6 +281,17 @@ func TestStatementsAndEntries(t *testing.T) {
 	}
 	if b, again, err := log.Enter(ctx, e.Tenant, "user:ada", in); err != nil || again || b != a {
 		t.Errorf("retry: %v %v", err, again)
+	}
+	// An amount no business enters by hand is refused in plain words
+	// (two of these would overflow every sum), at the ceiling it is taken.
+	for _, huge := range []int64{9_000_000_000_000_000_000, moneylog.MaxEnteredKobo + 1} {
+		_, _, err := log.Enter(ctx, e.Tenant, "user:ada", moneylog.Entered{Kind: "cash", Direction: "in", AmountKobo: huge, Description: "Till"})
+		if !errors.Is(err, moneylog.ErrInvalid) || !strings.Contains(err.Error(), "₦1,000,000,000") {
+			t.Errorf("an amount of %d kobo entered by hand: %v", huge, err)
+		}
+	}
+	if _, _, err := log.Enter(ctx, e.Tenant, "user:ada", moneylog.Entered{Kind: "cash", Direction: "in", AmountKobo: moneylog.MaxEnteredKobo, Description: "Till", Key: "max"}); err != nil {
+		t.Errorf("the ceiling itself: %v", err)
 	}
 	for _, bad := range []moneylog.Entered{{Kind: "gift", AmountKobo: 1, Description: "x"}, {Kind: "cash", Direction: "sideways", AmountKobo: 1, Description: "x"},
 		{Kind: "expense", AmountKobo: 0, Description: "x"}, {Kind: "expense", AmountKobo: 1}} {

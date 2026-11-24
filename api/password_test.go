@@ -9,8 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/oidc/oidctest"
+	"github.com/israel-duff/taskiem/engine/webauthn/webauthntest"
 )
 
 const newPassword = "a much better passphrase"
@@ -296,6 +298,88 @@ func TestPasswordResetKeepsAdministratorsOnPasskeys(t *testing.T) {
 	adm.must(403, "POST", "/v1/me/password", map[string]any{"current_password": newPassword, "new_password": "another passphrase!"})
 }
 
+// TestSquattedAccountGetsNoFactor: a member added with a password, by an
+// owner of some other business, has an email no one has confirmed. That
+// password does not prove the person, so it enrols no passkey or
+// authenticator; and a reset link, which does prove the mailbox, clears
+// what was enrolled on the account before (finding F9).
+func TestSquattedAccountGetsNoFactor(t *testing.T) {
+	w := passkeyWorld(t)
+	mail := mailWorld(t, w)
+	attacker := w.tenant(t, "EvilCo", "eve@evil.test")
+	attacker = w.passkeyLogin(t, addPasskey(t, attacker, "eve"), 200)
+	ownerB := w.tenant(t, "Corp", "boss@corp.test")
+	ownerB = w.passkeyLogin(t, addPasskey(t, ownerB, "boss"), 200)
+	tenantB := ownerB.must(200, "GET", "/v1/me", nil)["tenant_id"].(string)
+
+	attacker.must(201, "POST", "/v1/members", map[string]any{"email": "victim@corp.test", "name": "Victim", "password": testPassword, "roles": []string{"viewer"}})
+	asVictim := w.login(t, "victim@corp.test", testPassword)
+	if st, body := asVictim.do("POST", "/v1/me/passkeys/options", map[string]any{"password": testPassword}); st != 403 || toJSON(body["reauth"]) != `["verify_email"]` {
+		t.Fatalf("passkey enrolment on an unconfirmed email: %d %v", st, body)
+	}
+	if st, body := asVictim.do("POST", "/v1/me/totp", map[string]any{"password": testPassword}); st != 403 || toJSON(body["reauth"]) != `["verify_email"]` {
+		t.Fatalf("authenticator enrolment on an unconfirmed email: %d %v", st, body)
+	}
+
+	// An account squatted before this rule: its passkey was enrolled.
+	ctx := context.Background()
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE users SET email_verified_at = now() WHERE email = 'victim@corp.test'`); err != nil {
+		t.Fatal(err)
+	}
+	evil := addPasskey(t, asVictim, "evil")
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO api_keys (id, tenant_id, name, key_hash, prefix, permissions, created_by, owner_id, expires_at)
+		SELECT gen_random_uuid(), m.tenant_id, 'evil', sha256('evil key'::bytea), 'tk_evil', '{workflow.read}', 'user:' || u.id, u.id, now() + interval '1 day'
+		  FROM users u JOIN memberships m ON m.user_id = u.id WHERE u.email = 'victim@corp.test'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE users SET email_verified_at = NULL WHERE email = 'victim@corp.test'`); err != nil {
+		t.Fatal(err)
+	}
+
+	// The person the email belongs to takes the account with a reset link.
+	w.srv.WaitBackground()
+	if st, out := reset(t, w, w.tokenFor(t, mail, "victim@corp.test"), newPassword); st != 200 {
+		t.Fatalf("reset: %d %v", st, out)
+	}
+	ownerB.must(201, "POST", "/v1/members", map[string]any{"email": "victim@corp.test", "roles": []string{"viewer"}})
+	victim := w.login(t, "victim@corp.test", newPassword)
+	victim.must(200, "POST", "/v1/me/invitations/"+tenantB+"/accept", nil)
+	if n := len(victim.must(200, "GET", "/v1/me/passkeys", nil)["passkeys"].([]any)); n != 0 {
+		t.Fatalf("%d passkeys left on the account after its owner reset it", n)
+	}
+	if me := victim.must(200, "GET", "/v1/me", nil); me["user"].(map[string]any)["email_verified"] != true {
+		t.Errorf("the reset link confirmed the email: %v", me["user"])
+	}
+	var live int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM api_keys k JOIN users u ON u.id = k.owner_id WHERE u.email = 'victim@corp.test' AND k.revoked_at IS NULL`).Scan(&live); err != nil || live != 0 {
+		t.Errorf("%d api keys left (%v)", live, err)
+	}
+	anon := &client{t: t, base: w.base}
+	ch := challengeFrom(t, anon.must(200, "POST", "/v1/auth/passkey/options", nil))
+	if st, out := anon.do("POST", "/v1/auth/passkey", map[string]any{"credential": evil.Assert(ch).JSON(), "tenant_id": tenantB, "bearer": true}); st == 200 {
+		t.Fatalf("the squatter's passkey still signs in: %v", out)
+	}
+	if got := auditActions(t, attacker, "auth.factors.clear"); len(got) != 1 {
+		t.Errorf("factor clearing audited %d times in the squatter's tenant", len(got))
+	}
+	// Now the person proves themselves with their own password, and a
+	// reset of the confirmed account leaves their passkey as it is.
+	a := webauthntest.New(rpID, origin)
+	opts := victim.must(200, "POST", "/v1/me/passkeys/options", map[string]any{"password": newPassword})
+	a.UserHandle, _ = base64.RawURLEncoding.DecodeString(opts["publicKey"].(map[string]any)["user"].(map[string]any)["id"].(string))
+	victim.must(201, "POST", "/v1/me/passkeys", map[string]any{"name": "mine", "credential": a.Register(challengeFrom(t, opts)).JSON()})
+	w.srv.WaitBackground()
+	if st, out := reset(t, w, w.tokenFor(t, mail, "victim@corp.test"), "yet another passphrase"); st != 200 {
+		t.Fatalf("reset: %d %v", st, out)
+	}
+	if n := len(w.passkeyLogin(t, a, 200).must(200, "GET", "/v1/me/passkeys", nil)["passkeys"].([]any)); n != 1 {
+		t.Errorf("%d passkeys after resetting a confirmed account", n)
+	}
+	if got := auditActions(t, attacker, "auth.factors.clear"); len(got) != 1 {
+		t.Errorf("factor clearing audited %d times after the second reset", len(got))
+	}
+}
+
 func TestPasswordResetUnderSSOEnforcement(t *testing.T) {
 	w := ssoWorld(t)
 	mail := mailWorld(t, w)
@@ -372,4 +456,20 @@ func TestChangePassword(t *testing.T) {
 	// API keys have no password.
 	key := owner.must(201, "POST", "/v1/api-keys", map[string]any{"name": "ci", "permissions": []string{"run.read"}})["key"].(string)
 	(&client{t: t, base: w.base, token: key}).must(403, "POST", "/v1/me/password", map[string]any{"current_password": testPassword, "new_password": newPassword})
+}
+
+// An owner an operator's tool creates (`taskiem bootstrap`, the demo
+// school) has the email the operator named, so it counts as confirmed and
+// may enrol a passkey or authenticator at once (F9 holds only emails no one
+// has confirmed).
+func TestOperatorCreatedOwnerEmailIsConfirmed(t *testing.T) {
+	w := newWorld(t)
+	_, user, err := api.CreateTenant(context.Background(), w.env.DB.Admin, "Booted", "first@booted.test", "First", testPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var confirmed bool
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT email_verified_at IS NOT NULL FROM users WHERE id = $1`, user).Scan(&confirmed); err != nil || !confirmed {
+		t.Fatalf("the operator-created owner's email is not confirmed (%v)", err)
+	}
 }

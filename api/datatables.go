@@ -384,7 +384,7 @@ type tableReq struct {
 	Title       string      `json:"title"`
 	Description string      `json:"description"`
 	Columns     []columnReq `json:"columns"`
-	// How long rows are kept (decision 0062 V5): days, or as long as the
+	// How long rows are kept (decision 0074 V5): days, or as long as the
 	// business keeps its conversations; neither keeps them until deleted.
 	KeepDays              *int `json:"keep_days,omitempty"`
 	KeepWithConversations bool `json:"keep_with_conversations,omitempty"`

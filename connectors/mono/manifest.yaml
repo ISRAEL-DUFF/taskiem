@@ -780,7 +780,7 @@ triggers:
       : body.?event.orValue("").startsWith("mono.events.") ? (body.?data.?account.hasValue() ? (type(body.data.account) == string ? body.data.account : body.data.account.?_id.orValue(body.data.account.?id.orValue(""))) : body.?data.?id.orValue(""))
       : body.?data.?data.?reference.orValue("")
 # A customer's own bank account, linked to the business through Mono
-# Connect (decision 0062 V9): its balance and its recent transactions, by
+# Connect (decision 0074 V9): its balance and its recent transactions, by
 # its Mono account id (connector/v1 rule 16).
 capabilities:
   customer_balance:

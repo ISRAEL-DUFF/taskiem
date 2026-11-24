@@ -1,0 +1,119 @@
+name: taskiem
+description: "Taskiem's chat as a phone app (docs/spec/mobile-app.md)."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The brand's own SVG files (assets/brand), never redrawn. MIT.
+  flutter_svg: 2.3.0
+  # HTTPS to Taskiem (lib/api/transport.dart). BSD-3-Clause.
+  http: 1.6.0
+  # A file's type in a multipart form (lib/api/transport.dart). BSD-3-Clause.
+  http_parser: 4.1.2
+  # The session token in the phone's Keychain or Keystore (lib/app/session.dart). BSD-3-Clause.
+  flutter_secure_storage: 11.2.0
+  # The phone's name for Your phones (lib/app/session.dart). BSD-3-Clause.
+  device_info_plus: 13.3.0
+  # The app lock: the phone's own fingerprint, face or PIN (lib/app/lock.dart). BSD-3-Clause.
+  local_auth: 3.0.2
+  # Photos from the camera or the gallery, to send in a chat (lib/chat/attach.dart). BSD-3-Clause.
+  image_picker: 1.2.4
+  # A PDF from the phone's files, to send in a chat (lib/chat/attach.dart). BSD-3-Clause.
+  file_selector: 1.1.0
+  # Recording a voice note (lib/chat/voice.dart). BSD-3-Clause.
+  record: 7.1.2
+  # Playing a voice note (lib/chat/voice.dart). MIT.
+  just_audio: 0.10.6
+  # Where a voice note is recorded before it is sent (lib/chat/voice.dart). BSD-3-Clause.
+  path_provider: 2.1.6
+  # A link opened in the phone's browser tab: a link someone sent, connecting a service (docs/spec/mobile-app.md §3.5). BSD-3-Clause.
+  url_launcher: 6.3.3
+  # A PDF someone sent, to the phone's share sheet (open it in a viewer, keep it), as the web downloads it. BSD-3-Clause.
+  share_plus: 13.3.1
+  # The chats, messages and pages kept on the phone, encrypted (lib/app/store.dart;
+  # docs/spec/mobile-app-explore-and-offline.md §3). MIT; SQLite3MultipleCiphers, MIT.
+  sqlite3: 3.9.1
+  # Notifications on this phone (lib/app/notify.dart; docs/spec/mobile-app-m4.md N4):
+  # Firebase started from the server's values, so the build has no Firebase file. BSD-3-Clause.
+  firebase_core: 5.1.0
+  firebase_messaging: 17.0.1
+  # Links to this server opening the app (lib/app/applinks.dart; docs/spec/mobile-app-m4.md N5). Apache-2.0.
+  app_links: 7.2.2
+  # Passkeys in the app: signing in, adding one, approving (lib/app/passkey.dart; N6). BSD-3-Clause.
+  passkeys: 2.24.1
+  # A customer picked from the phone's contacts, in its own picker, so the app reads no other contact (lib/chat/invoices_page.dart). BSD-3-Clause.
+  flutter_native_contact_picker: 0.0.13
+  # Finding friends from the phone's contacts, only after the person agrees (lib/chat/people_contacts.dart;
+  # docs/spec/people-chatting.md §5.3): the numbers are read, hashed and sent, never kept. MIT.
+  flutter_contacts: 2.6.0
+  # SHA-256 of a contact's number with the week's key (lib/chat/people_contacts.dart). BSD-3-Clause.
+  crypto: 3.0.8
+  # Sending a place in a chat with a person, asked for only when the person taps
+  # Location (lib/chat/people_place.dart; docs/spec/people-chatting.md §7). MIT.
+  geolocator: 14.1.2
+  # Scanning a person's QR code in the app, the camera asked for only on tap
+  # (lib/chat/people_scan.dart; people-chatting §5.2). BSD-3-Clause.
+  mobile_scanner: 7.5.0
+  # Reading an account number or a list in a photo on the phone itself, the
+  # photo never sent for reading (lib/chat/photo_text.dart). MIT. Needs iOS 15.5.
+  google_mlkit_text_recognition: 0.17.1
+  # Scan a code and the person's tools on the app's icon (lib/app/shortcuts.dart;
+  # device fields D2). BSD-3-Clause.
+  quick_actions: 1.1.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+hooks:
+  user_defines:
+    sqlite3:
+      # SQLite3MultipleCiphers: SQLite with encryption (PRAGMA key).
+      source: sqlite3mc
+
+flutter:
+  uses-material-design: false
+  assets:
+    - assets/brand/
+    # The chat's wallpaper (tools/chatwallpaper).
+    - assets/chat/
+  # The web's Inter, unpacked from its own files (tool/fonts.py): one family
+  # per alphabet, the rest as fallbacks, as the browser picks by unicode-range.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-latin.ttf
+    - family: InterLatinExt
+      fonts:
+        - asset: assets/fonts/Inter-latin-ext.ttf
+    - family: InterVietnamese
+      fonts:
+        - asset: assets/fonts/Inter-vietnamese.ttf
+    - family: InterGreek
+      fonts:
+        - asset: assets/fonts/Inter-greek.ttf
+    - family: InterGreekExt
+      fonts:
+        - asset: assets/fonts/Inter-greek-ext.ttf
+    - family: InterCyrillic
+      fonts:
+        - asset: assets/fonts/Inter-cyrillic.ttf
+    - family: InterCyrillicExt
+      fonts:
+        - asset: assets/fonts/Inter-cyrillic-ext.ttf
+    # Inter Tight for the headings and figures of the pages away from the
+    # chat (docs/spec/mobile-app-look.md, Direction B): Google Fonts' files,
+    # by hand, not the web's (licence: assets/fonts/LICENSE-OFL-InterTight.txt).
+    - family: InterTight
+      fonts:
+        - asset: assets/fonts/InterTight-500.ttf
+          weight: 500
+        - asset: assets/fonts/InterTight-600.ttf
+          weight: 600
+        - asset: assets/fonts/InterTight-700.ttf
+          weight: 700

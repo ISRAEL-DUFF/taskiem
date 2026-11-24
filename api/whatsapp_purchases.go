@@ -339,6 +339,9 @@ type purchaseChat struct {
 	Amount   int64       `json:"amount,omitempty"`
 	How      string      `json:"how,omitempty"`
 	Drafted  []uuid.UUID `json:"drafted,omitempty"`
+	// Treat is the question on the lines of orders drafted in chat, asked
+	// before they are shown for Yes (chat_purchase_treat.go).
+	Treat *treatAsk `json:"treat,omitempty"`
 }
 
 var (
@@ -436,6 +439,28 @@ func (s *Server) waAddSupplier(ctx context.Context, c *chat, m []string) error {
 					continue
 				}
 				match := matchStock(items, part)
+				// A product sold in sizes and colours: it and its sizes
+				// (those its values name, when said), one supplier for all.
+				if product, one := sizesOfOne(items, match); one {
+					if _, have, found := findSized(items, part); !found || len(have) == 0 {
+						pc.Items = append(pc.Items, product.ID)
+						for _, z := range variantsOf(items, product.ID) {
+							pc.Items = append(pc.Items, z.ID)
+						}
+						names = append(names, product.Name)
+						continue
+					}
+					for _, z := range match {
+						pc.Items = append(pc.Items, z.ID)
+						names = append(names, z.Name)
+					}
+					continue
+				}
+				if len(match) == 0 {
+					if done, err := s.sizeNotSold(ctx, c, items, part); done || err != nil {
+						return err
+					}
+				}
 				if len(match) != 1 {
 					return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(part)))
 				}
@@ -490,10 +515,7 @@ func (s *Server) waOrderFrom(ctx context.Context, c *chat, name string) error {
 	if len(drafted) == 0 {
 		return c.say(ctx, s, c.t("wa.order.none", "name", whatsapp.SafeText(sup.Name)))
 	}
-	x := drafted[0]
-	return s.shopAsk(ctx, c, &chatShop{Action: "stock_order", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID}}},
-		c.t("wa.order.confirm", "reference", x.Reference, "items", whatsapp.SafeText(x.Words()), "supplier", whatsapp.SafeText(x.Supplier),
-			"total", storefront.FormatNaira(x.TotalKobo)))
+	return s.orderAsk(ctx, c, []uuid.UUID{drafted[0].ID})
 }
 
 // waReceived answers "received 50 cartons of Indomie": against the open
@@ -511,8 +533,20 @@ func (s *Server) waReceived(ctx context.Context, c *chat, rest string) (bool, er
 		return true, err
 	}
 	match := matchStock(items, a.Name)
-	if len(match) == 1 && match[0].Supplier != "" {
-		it := match[0]
+	if len(match) == 1 {
+		if done, err := s.receivedItem(ctx, c, a, match[0]); done || err != nil {
+			return true, err
+		}
+	}
+	// Several sizes of one product: the size asked, then received the
+	// same way (receivedItem), against its supplier's open order.
+	return true, s.waStockAddFrom(ctx, c, a, true)
+}
+
+// receivedItem receives goods of one item against the open order from its
+// supplier; false when there is none (a plain receipt, as add does).
+func (s *Server) receivedItem(ctx context.Context, c *chat, a stock.Added, it stock.Item) (bool, error) {
+	if it.Supplier != "" {
 		var x stock.Purchase
 		err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 			var err error
@@ -539,7 +573,7 @@ func (s *Server) waReceived(ctx context.Context, c *chat, rest string) (bool, er
 			return true, err
 		}
 	}
-	return true, s.waStockAdd(ctx, c, a)
+	return false, nil
 }
 
 // waPaidSupplier answers "paid Dangote 425,000 transfer": the oldest
@@ -576,8 +610,12 @@ func (s *Server) waPaidSupplier(ctx context.Context, c *chat, m []string) (bool,
 	if len(orders) == 0 {
 		return true, c.say(ctx, s, c.t("wa.paid.none", "name", whatsapp.SafeText(sup.Name)))
 	}
-	x := orders[0]
-	return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_pay", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID, Amount: amount, How: how}}},
+	return true, s.askPaySupplier(ctx, c, sup, orders[0], amount, how)
+}
+
+// askPaySupplier asks Yes to a payment of amount on order x (stock_pay).
+func (s *Server) askPaySupplier(ctx context.Context, c *chat, sup stock.Supplier, x stock.Purchase, amount int64, how string) error {
+	return s.shopAsk(ctx, c, &chatShop{Action: "stock_pay", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID, Amount: amount, How: how}}},
 		c.t("wa.paid.confirm", "supplier", whatsapp.SafeText(sup.Name), "amount", storefront.FormatNaira(amount), "how", c.t("sales.how_"+how),
 			"reference", x.Reference))
 }

@@ -69,7 +69,7 @@ export interface Proof {
 /** Builds the proof the server asks for: an existing passkey, else the
  * authenticator code or password the member typed. A passkey is asked for
  * this change only (action: passkey.add, passkey.remove/<id>, totp.setup,
- * password.change, whatsapp.link, whatsapp.pin). */
+ * password.change, whatsapp.link, whatsapp.pin, chat.link). */
 export async function proof(factors: Me["factors"], typed: string, action: string): Promise<Proof> {
   if (factors?.passkey) return { passkey: await stepUpAssert("account.reauth", action) };
   if (factors?.totp) return { totp: typed };
@@ -132,4 +132,11 @@ export const stepUpAssert = (operation: string, target: string) => assert("/v1/m
 /** Signs in with a passkey. */
 export async function passkeyLogin() {
   await post("/v1/auth/passkey", { credential: await assert("/v1/auth/passkey/options") });
+}
+
+/** Proves this device is the person's with a passkey: a second proof
+ * (taskiem-for-everyone §5.4). The session stays as it is, on You or in a
+ * business; it is not a new sign-in. */
+export async function passkeyProof() {
+  await post("/v1/auth/second-proof/passkey", { credential: await assert("/v1/auth/second-proof/passkey/options") });
 }

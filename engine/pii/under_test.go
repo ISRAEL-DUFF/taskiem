@@ -174,11 +174,10 @@ func TestUnderAfterErasure(t *testing.T) {
 		t.Fatalf("sealing in an erased customer's run: %v", err)
 	}
 	m := sealed.(map[string]any)
-	for _, k := range []string{"from", "text"} {
-		env, ok := m[k].(map[string]any)
-		if !ok || !pii.IsTombstone(env) || env["subject"] != customer {
-			t.Fatalf("%s: %v", k, m[k])
-		}
+	// The number is a tombstone under the customer; the text is sealed
+	// under its own subject around one (either opens as erased, below).
+	if env, ok := m["from"].(map[string]any); !ok || !pii.IsTombstone(env) || env["subject"] != customer {
+		t.Fatalf("from: %v", m["from"])
 	}
 	if out, _ := open(t, c, sealed); fmt.Sprint(out) != "map[amount:5 from:[erased] text:[erased]]" {
 		t.Fatalf("opened: %v", out)

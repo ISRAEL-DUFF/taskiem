@@ -137,13 +137,8 @@ func TestKnownTables(t *testing.T) {
 	for _, kt := range templates.KnownTables() {
 		names = append(names, kt.Name)
 	}
-	if !reflect.DeepEqual(names, []string{"assistant_allowed", "classes", "conversations", "customer_accounts", "customers", "events", "hire_items", "menu", "products", "spaces", "staff", "subscribers"}) {
+	if !reflect.DeepEqual(names, []string{"assistant_allowed", "classes", "conversations", "customer_accounts", "customers", "events", "hire_items", "menu", "products", "spaces", "subscribers"}) {
 		t.Errorf("known tables: %v", names)
-	}
-	staff, _ := templates.KnownTable("staff")
-	payroll, _ := templates.Default().Get("run-payroll")
-	if got := payroll.Tables[0]; got.Name != "{{staff_table}}" || got.Title != staff.Title || !reflect.DeepEqual(got.Columns, staff.Columns) || got.Known != "" {
-		t.Errorf("run-payroll's staff table is the known one, resolved: %+v", got)
 	}
 	welcome, _ := templates.Default().Get("customer-welcome-table")
 	cust, _ := templates.KnownTable("customers")
@@ -155,7 +150,7 @@ func TestKnownTables(t *testing.T) {
 		t.Error("a customer's name is personal")
 	}
 	// The conversations table keeps its rows as long as the business keeps
-	// conversations, and its words are personal (decision 0062 V5).
+	// conversations, and its words are personal (decision 0074 V5).
 	conv, _ := templates.KnownTable("conversations")
 	if !conv.KeepWithConversations || conv.KeepDays != nil {
 		t.Errorf("conversations keeps rows with conversations: %+v", conv)

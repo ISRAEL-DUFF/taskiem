@@ -152,8 +152,8 @@ func TestChatAllTheWay(t *testing.T) {
 		t.Fatalf("reopened: %s %v", st, closed)
 	}
 
-	// Into the web app with no password: a one-time link.
-	if r := w.say(t, on, "sign in"); !strings.Contains(r, waPublicURL+"/reset-password#token=") {
+	// Into the web app with no password: a one-time link that signs in.
+	if r := w.say(t, on, "sign in"); !strings.Contains(r, waPublicURL+"/signin#token=") {
 		t.Errorf("sign in: %q", r)
 	}
 }

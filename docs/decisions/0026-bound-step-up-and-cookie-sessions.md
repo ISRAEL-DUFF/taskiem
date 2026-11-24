@@ -29,5 +29,5 @@ The security self-review left three findings on sessions and step-up open (S35, 
 
 - A script that signed in with a password must send `"bearer": true`. The CLI (`taskiem dev`) and the test suites do.
 - The web app asks for a step-up challenge per operation; the Approvals, Handoff, Account and Encryption keys pages do.
-- A TOTP code is not bound to an operation; passkeys are. Owners are held to passkeys by default.
+- A TOTP code is not bound to an operation; passkeys are. Owners are held to passkeys by default. **Amended (November 2026, [optional passkeys](../spec/optional-passkeys.md)):** no longer by default. A person may hold themselves to their passkey, a business may hold its administrators to passkeys, and the deployment switch still holds everyone when set; approvals and key changes keep their step-ups.
 - During a customer key outage, authenticator codes cannot be checked (their secrets are in the tenant's vault), so key changes then need a passkey. Restoring access and **Check now** need neither.

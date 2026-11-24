@@ -1,0 +1,111 @@
+/* Grocery: a skin on Clean, for fresh food and household shopping. A pale
+   ground, a clean geometric sans, tight rounded cards, a filled add button
+   and a heavy total. The business's colour is the accent. Loaded after
+   Clean's stylesheet. */
+@font-face { font-family: "Outfit"; font-weight: 400; font-style: normal; font-display: swap; src: url(outfit-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Outfit"; font-weight: 700; font-style: normal; font-display: swap; src: url(outfit-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Outfit"; font-weight: 800; font-style: normal; font-display: swap; src: url(outfit-latin-800-normal.woff2) format("woff2"); }
+:root { --bg: #fafaf4; --card: #fff; --fg: #16241b; --muted: #586a5d; --line: #e3e6d8; --input: #c9d1bd; --r: 22px; }
+body { font-family: "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 16px; }
+h1, h2, .bar-name { font-weight: 800; letter-spacing: -.02em; }
+h1 { font-size: 1.875rem; line-height: 1.05; }
+h2 { font-size: 1.375rem; }
+h3 { font-size: 1rem; font-weight: 700; }
+.price { font-weight: 800; font-size: 1.05rem; }
+.btn { border-radius: 999px; border-color: transparent; background: var(--brand-tint); color: var(--brand-text); font-weight: 700; }
+.btn-primary { background: var(--brand); color: var(--on-brand); }
+.cover { height: 130px; }
+.card { border-radius: 0 0 28px 28px; }
+.item { padding: .75rem; border: 1px solid var(--line); border-radius: var(--r); }
+.thumb { border-radius: 16px; }
+.add { width: 44px; height: 44px; border: 0; background: var(--brand); color: var(--on-brand); }
+.badge { background: var(--brand-tint); color: var(--brand-text); }
+.chip { border-color: transparent; background: var(--brand-tint); color: var(--brand-text); font-weight: 700; }
+.panel, .notice { border: 1px solid var(--line); border-radius: var(--r); }
+.sticky { border-radius: 24px; }
+.pdp-img { border-radius: 24px; }
+.pdp-main h1 { font-size: 2.25rem; }
+.pdp-price { font-weight: 800; font-size: 1.5rem; }
+.pdp-choice { border-radius: 14px; }
+.pdp-choice:has(input:checked) { background: var(--brand-tint); }
+.bag-line, .bag-row { border-top-color: var(--line); }
+.total { font-weight: 800; font-size: 1.5rem; }
+.field input:not([type=checkbox]):not([type=radio]), .field textarea, .field select { border-radius: 14px; }
+
+/* The page: a bar with the bag, a strip, aisles as round chips, a promo
+   banner, then a grid of small product cards. */
+.gx-top { display: flex; align-items: center; justify-content: space-between; max-width: 70rem; margin: 0 auto; padding: 1rem 1.25rem; }
+.gx-name { display: inline-flex; align-items: center; gap: .5rem; font-weight: 800; font-size: 1.25rem; color: var(--brand-text); text-decoration: none; }
+.gx-name img { border-radius: 50%; }
+.gx-mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--brand); color: var(--on-brand); font-size: .8125rem; }
+.gx-bag { display: inline-flex; gap: .5rem; align-items: center; min-height: 44px; padding: 0 1.1rem; border-radius: 999px; background: var(--brand); color: var(--on-brand); font-weight: 700; text-decoration: none; }
+.gx-strip { margin: 0; padding: .65rem 1rem; background: var(--brand); color: var(--on-brand); text-align: center; font-size: .9375rem; }
+.gx-main { max-width: 70rem; margin: 0 auto; padding: 1rem 1.25rem 2rem; }
+.gx-cats { display: flex; gap: 1rem; overflow-x: auto; padding: .25rem 0 1rem; }
+.gx-cats a { font-weight: 700; display: grid; justify-items: center; gap: .35rem; min-width: 4.5rem; color: var(--fg); font-size: .8125rem; text-decoration: none; }
+.gx-dot { display: grid; place-items: center; overflow: hidden; width: 64px; height: 64px; border-radius: 50%; background: var(--brand-tint); color: var(--brand-text); font-weight: 800; font-size: 1.5rem; }
+.gx-dot.c1 { background: #fde3d8; } .gx-dot.c2 { background: #fbf0c4; } .gx-dot.c3 { background: #dce8fb; } .gx-dot.c4 { background: #e8e0f6; }
+.gx-promo { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin: .5rem 0 1.5rem; padding: 1.5rem; border-radius: 28px; background: var(--brand); color: var(--on-brand); overflow: hidden; }
+.gx-tag { display: inline-block; margin: 0 0 .75rem; padding: .25rem .7rem; border-radius: 999px; background: #fff; color: var(--brand-text); font-size: .75rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.gx-promo h1 { margin: 0 0 .5rem; font-size: clamp(2rem, 7vw, 3.25rem); line-height: 1; }
+.gx-promo p { margin: 0 0 1rem; }
+.gx-cta { display: flex; flex-wrap: wrap; gap: .5rem; }
+.gx-promo .btn-light { background: #fff; color: var(--brand-text); }
+.gx-promo .btn-ghost { background: transparent; color: inherit; border: 1.5px solid currentColor; }
+.gx-promo-img { display: none; width: 14rem; height: 11rem; object-fit: cover; border-radius: 20px; }
+.gx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr)); gap: .75rem; margin: 0 0 1.5rem; padding: 0; list-style: none; }
+.gx-card { display: flex; flex-direction: column; padding: .6rem; border: 1px solid var(--line); border-radius: 20px; background: var(--card); }
+.gx-img { display: grid; place-items: center; aspect-ratio: 1; max-height: 15rem; width: 100%; border-radius: 14px; background: var(--brand-tint); overflow: hidden; color: var(--brand-text); }
+.gx-img img { width: 100%; height: 100%; object-fit: cover; }
+.gx-card h3 { margin: .6rem 0 0; font-size: .9375rem; }
+.gx-card h3 a { color: inherit; text-decoration: none; }
+.gx-card .item-sub { margin: .1rem 0 .6rem; }
+.gx-add { display: grid; place-items: center; min-height: 44px; margin-top: auto; border-radius: 999px; background: var(--brand); color: var(--on-brand); font-weight: 700; text-decoration: none; }
+.gx-card .badge { margin-top: auto; align-self: flex-start; }
+.gx-card.is-unavailable { opacity: .55; }
+.sf-foot { margin-top: 2rem; padding: 2rem 1.25rem; background: var(--brand); color: var(--on-brand); }
+.gx .sf-foot > * { max-width: 70rem; margin-left: auto; margin-right: auto; }
+.sf-foot a { color: inherit; }
+.sf-foot .btn { border-color: currentColor; background: transparent; color: inherit; }
+.sf-foot-name { font-weight: 800; font-size: 1.5rem; margin-top: 0; margin-bottom: 0; }
+.sf-foot-line { margin: .25rem auto 1rem; opacity: .85; }
+.sf-foot-contact { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+.sf-foot-meta, .sf-foot .safety { font-size: .8125rem; opacity: .8; }
+@media (min-width: 900px) {
+  .gx-promo-img { display: block; }
+}
+.sf-foot { max-width: none; margin-left: 0; margin-right: 0; text-align: left; } .sf-foot > * { text-align: left; }
+.gx-dot img { width: 100%; height: 100%; object-fit: cover; }
+
+.pdp-crumb { margin: 0 0 1rem; }
+.pdp-crumb a { display: inline-flex; align-items: center; gap: .25rem; color: var(--muted); font-size: .9375rem; }
+@media (min-width: 900px) {
+  .pdp { display: grid; grid-template-columns: 1.1fr .9fr; gap: 3rem; align-items: start; }
+  .bag-box { position: sticky; top: 1rem; }
+}
+.kx-narrow, .sl-narrow, .gx-narrow, .fx-narrow { max-width: 70rem; margin: 0 auto; padding: 0 1.25rem 2rem; }
+.kx-page, .sl-page, .gx-page, .fx-page { background: var(--bg); }
+@media (min-width: 900px) { .bag { max-width: none; } .pdp { max-width: none; } .kx-page h1:first-of-type, .sl-page h1:first-of-type, .gx-page h1:first-of-type { margin-bottom: 1rem; } }
+.hero-tag, .hero-initials, .hero-logo { display: none; }
+.sf-foot { padding-left: max(1.25rem, calc((100% - 70rem) / 2 + 1.25rem)); padding-right: max(1.25rem, calc((100% - 70rem) / 2 + 1.25rem)); } .sf-foot > * { max-width: none; margin-left: 0; margin-right: 0; }
+
+.gx-search { position: relative; max-width: 70rem; margin: 0 auto; padding: 0 1.25rem .75rem; }
+.gx-search .i { position: absolute; left: 2.1rem; top: .85rem; color: var(--muted); }
+.gx-search input { width: 100%; min-height: 48px; padding: 0 1rem 0 2.75rem; border: 1.5px solid var(--line); border-radius: 999px; background: var(--card); font: inherit; color: var(--fg); }
+.gx-bag .bag-n { background: #fff; color: var(--brand-text); }
+.gx-card { position: relative; }
+.gx-card .badge-few { position: absolute; left: .9rem; top: .9rem; z-index: 1; background: var(--brand); color: var(--on-brand); }
+.gx-buy { display: grid; gap: .5rem; margin-top: auto; }
+.gx-qty { display: flex; align-items: center; justify-content: space-between; padding: .25rem; border-radius: 999px; background: var(--brand-tint); }
+.gx-qty .qty { width: 2.5rem; border: 0; background: transparent; text-align: center; font: inherit; font-weight: 700; -moz-appearance: textfield; }
+.gx-qty .qty::-webkit-outer-spin-button, .gx-qty .qty::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.gx-qty .step { width: 36px; height: 36px; border: 0; border-radius: 50%; background: #fff; color: var(--brand-text); font-size: 1.125rem; font-weight: 700; cursor: pointer; }
+.gx-buy .gx-add { border: 0; font: inherit; font-weight: 700; cursor: pointer; }
+.gx .sticky { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--brand); color: var(--on-brand); border-radius: 22px; }
+.gx .sticky .sticky-go { display: grid; place-items: center; padding: .6rem 1.1rem; border-radius: 999px; background: #e8731b; color: #fff; font-weight: 700; }
+
+.bag-box { display: flex; flex-direction: column; gap: .5rem; margin-top: 1rem; padding: 1.25rem; border: 1px solid var(--line, var(--rule)); background: var(--card, var(--bg)); }
+.bag-box-h { margin: 0; font-size: 1.5rem; }
+.bag-count { margin: 0; color: var(--muted); }
+.bag-box .total { margin: .5rem 0; }
+.bag-box { border-radius: 22px; }

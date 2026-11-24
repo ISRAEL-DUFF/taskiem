@@ -431,7 +431,7 @@ func (s *Service) overageLines(ctx context.Context, tx pgx.Tx, sub *Subscription
 		}
 		for m := from; m.Before(thisMonth); m = m.AddDate(0, 1, 0) {
 			// Building, repair and chat routing against ai_monthly_tokens;
-			// AI steps against their own allowance (decision 0062 D7).
+			// AI steps against their own allowance (decision 0074 D7).
 			var building, steps int64
 			if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(total_tokens) FILTER (WHERE kind NOT IN (`+runtime.AIStepKinds+`)), 0)::bigint,
 				COALESCE(sum(total_tokens) FILTER (WHERE kind IN (`+runtime.AIStepKinds+`)), 0)::bigint
@@ -638,8 +638,17 @@ func (s *Service) chargeSaved(ctx context.Context, tenant uuid.UUID, ref string)
 	}
 	t, err := prov.ChargeSaved(ctx, Charge{Reference: ref, AmountKobo: pay.AmountKobo, Email: email, Authorization: sub.AuthorizationCode})
 	if err != nil {
+		// The answer may be lost after the card was charged (a timeout, a
+		// gateway's 5xx): the provider is asked. When it cannot say, the
+		// charge stays pending, so dunning does not charge the card again,
+		// and reconciliation settles it (abandoned after a day).
 		s.log().Warn("billing: card charge failed", "tenant", tenant, "reference", ref, "err", err)
-		t = Transaction{Reference: ref, Status: TxFailed, Message: err.Error()}
+		v, verr := prov.Verify(ctx, ref)
+		if verr != nil || v.Status == TxPending {
+			s.log().Warn("billing: card charge left pending", "tenant", tenant, "reference", ref, "err", verr)
+			return nil
+		}
+		t = v
 	}
 	var recovered bool
 	err = s.tx(ctx, tenant, func(tx pgx.Tx) error {

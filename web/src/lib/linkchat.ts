@@ -4,9 +4,11 @@
 
 import { naira } from "./invoices";
 import { cmpTime } from "./stamp";
+import { whenWords } from "./time";
+import type { DealCard } from "./deals";
 import type { Mention } from "./mentions";
 
-export type DocKind = "order" | "purchase" | "invoice" | "bill";
+export type DocKind = "order" | "purchase" | "invoice" | "bill" | "delivery" | "dispatch";
 
 /** A document event in the conversation, naming our own document. */
 export interface DocCard {
@@ -15,6 +17,10 @@ export interface DocCard {
   reference: string;
   id?: string;
   amount_kobo?: number;
+  /** A deal: what it comes to at the seller's own prices. */
+  was_kobo?: number;
+  /** A deal as it stood when the card was posted: steps, newest last. */
+  deal?: DealCard;
   note?: string;
 }
 
@@ -71,7 +77,7 @@ export function reactionWords(r: Reaction): string {
 export interface Quote {
   pair_id: string;
   mine: boolean;
-  kind: "text" | "card";
+  kind: "text" | "card" | "diary" | "taskiem";
   body?: string;
   card?: DocCard;
   attachment?: Attachment;
@@ -98,8 +104,13 @@ export interface LinkMessage {
   id: string;
   link: string;
   mine: boolean;
-  kind: "text" | "card";
+  /** diary: a change we made with a chat tool, on our side only.
+   * taskiem: what Taskiem answered a "@Taskiem" typed here, on our side
+   * only (asked, and the answer as body). */
+  kind: "text" | "card" | "diary" | "taskiem";
   body?: string;
+  /** On a taskiem note, the words asked of Taskiem. */
+  asked?: string;
   sender_name?: string;
   card?: DocCard;
   attachment?: Attachment;
@@ -125,6 +136,8 @@ export interface Conversation {
   link: string;
   business: string;
   name: string;
+  /** The business has a logo (see `logoSrc`). */
+  logo?: boolean;
   state: "active" | "ended";
   last?: LinkMessage;
   unread: number;
@@ -136,6 +149,8 @@ export interface Conversation {
 
 const VERB: Record<string, string> = {
   ordered: "sent order",
+  offered: "made an offer on order",
+  countered: "countered on order",
   auto_accepted: "sent order (accepted by itself)",
   auto_changed: "sent order (changed to our prices by itself)",
   proposed: "drafted order",
@@ -144,16 +159,16 @@ const VERB: Record<string, string> = {
   decline: "declined order",
   change: "asked to change order",
   change_accepted: "accepted the change to order",
-  ready: "has ready order",
-  dispatched: "sent on its way order",
+  ready: "prepared order",
+  dispatched: "sent out order",
   delivered: "delivered order",
   cancel: "cancelled order",
-  cancel_agreed: "cancelled, as asked, order",
+  cancel_agreed: "agreed to cancel order",
   cancelled_by_buyer: "cancelled order",
   cancel_asked: "asked to cancel order",
   keep: "kept order",
   received: "received all of order",
-  short: "said not all came of order",
+  short: "said some is missing from order",
   agree: "agreed the count for order",
   bill: "sent invoice",
   declared: "said it paid invoice",
@@ -162,9 +177,99 @@ const VERB: Record<string, string> = {
   reminder: "sent a reminder about invoice",
 };
 
+/** A delivery's events, from either side (docs/spec/chat-riders.md). */
+const DELIVERY_VERB: Record<string, string> = {
+  offered: "offered delivery",
+  accepted: "took delivery",
+  cant: "passed on delivery",
+  picked_up: "picked up",
+  arrived: "arrived with",
+  delivered: "delivered",
+  passed: "let the offer run out on delivery",
+  withdrawn: "withdrew the offer of delivery",
+  released: "took back delivery",
+};
+
+export function isDelivery(card: Pick<DocCard, "doc">): boolean {
+  return card.doc === "delivery" || card.doc === "dispatch";
+}
+
+/** The events of paying a bill by transfer (the payments flow, part 1):
+ * a number given, and the money landing in full or in part. */
+export const TRANSFER_EVENTS = ["transfer", "transfer_paid", "transfer_part"];
+
+/** Whether a card is about a bill's money landing by transfer. */
+export const isTransferPaid = (card: Pick<DocCard, "event">) =>
+  card.event === "transfer_paid" || card.event === "transfer_part";
+
+/** When a transfer card's number stops taking money: its note is the
+ * number's expiry (older cards carry none). */
+export function transferUntil(card: Pick<DocCard, "event" | "note">): number | null {
+  if (card.event !== "transfer" || !card.note) return null;
+  const t = Date.parse(card.note);
+  return Number.isNaN(t) ? null : t;
+}
+
+/** A transfer card's number has run out (nothing landed in time). */
+export function transferExpired(
+  card: Pick<DocCard, "event" | "note">,
+  now: number = Date.now(),
+): boolean {
+  const t = transferUntil(card);
+  return t !== null && t <= now;
+}
+
+/** What a card's line knows beyond the card: the clock, and the later
+ * card that says the number was paid into. */
+export interface CardContext {
+  now?: number;
+  /** A later transfer_paid or transfer_part card for the same bill. */
+  settled?: Pick<DocCard, "event">;
+}
+
+/** Paying by transfer in words: the buyer's side (a bill) and the
+ * seller's (an invoice). */
+function transferLine(card: DocCard, mine: boolean, other: string, ctx: CardContext): string {
+  const buyer = card.doc === "bill";
+  const amount = card.amount_kobo !== undefined ? naira(card.amount_kobo) : "";
+  switch (card.event) {
+    case "transfer_paid":
+      return `${buyer ? "Paid" : `${other} paid`}${amount ? ` ${amount}` : ""} by transfer`;
+    case "transfer_part":
+      return buyer
+        ? `Part paid by transfer${amount ? `: ${amount} so far` : ""}`
+        : `${other} paid part by transfer`;
+  }
+  // A number given: paying, until money lands or the number runs out.
+  if (ctx.settled)
+    return ctx.settled.event === "transfer_paid"
+      ? buyer
+        ? "You paid by transfer"
+        : `${other} paid by transfer`
+      : buyer
+        ? "You paid part by transfer"
+        : `${other} paid part by transfer`;
+  if (transferExpired(card, ctx.now))
+    return buyer
+      ? "Your account number expired"
+      : `${other}'s account number expired`;
+  return mine ? "You are paying by transfer" : `${other} is paying by transfer`;
+}
+
 /** A card in words: "You sent order P-7QX4KD", "Dangote Stores sent invoice INV-0042". */
-export function cardLine(card: DocCard, mine: boolean, other: string): string {
+export function cardLine(
+  card: DocCard,
+  mine: boolean,
+  other: string,
+  ctx: CardContext = {},
+): string {
   const who = mine ? "You" : other;
+  if (isDelivery(card)) {
+    const verb = DELIVERY_VERB[card.event] ?? card.event.replaceAll("_", " ");
+    return `${who} ${verb} ${card.reference}`;
+  }
+  if (TRANSFER_EVENTS.includes(card.event) && (card.doc === "invoice" || card.doc === "bill"))
+    return transferLine(card, mine, other, ctx);
   const verb =
     VERB[card.event] ??
     `${card.event.replaceAll("_", " ")} ${card.doc === "invoice" || card.doc === "bill" ? "invoice" : "order"}`;
@@ -176,7 +281,10 @@ export function cardHref(card: DocCard): string {
   const id = encodeURIComponent(card.id ?? card.reference);
   switch (card.doc) {
     case "order":
+    case "delivery":
       return `/trade-orders/${id}`;
+    case "dispatch":
+      return `/storefront/orders/${encodeURIComponent(card.reference)}`;
     case "purchase":
       return `/purchases/${id}`;
     case "invoice":
@@ -187,9 +295,23 @@ export function cardHref(card: DocCard): string {
 }
 
 /** A card's second line: the amount, and a word. */
-export function cardSub(card: DocCard): string {
+export function cardSub(card: DocCard, now: number = Date.now()): string {
+  // Paid by transfer: the line says the amount already.
+  if (isTransferPaid(card)) return "";
+  // A number given: its note is when it runs out, not words to quote.
+  const until = transferUntil(card);
+  if (until !== null)
+    return [
+      card.amount_kobo !== undefined ? naira(card.amount_kobo) : "",
+      until <= now ? "Number expired" : `Good until ${whenWords(new Date(until), new Date(now))}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   return [
     card.amount_kobo !== undefined ? naira(card.amount_kobo) : "",
+    card.was_kobo !== undefined && card.was_kobo > (card.amount_kobo ?? 0)
+      ? `was ${naira(card.was_kobo)}`
+      : "",
     card.note ? `“${card.note}”` : "",
   ]
     .filter(Boolean)
@@ -220,6 +342,8 @@ export function previewLine(
   other: string,
 ): string {
   if (m.kind === "card" && m.card) return cardLine(m.card, m.mine, other);
+  if (m.kind === "diary") return `✓ ${m.body ?? ""}`;
+  if (m.kind === "taskiem") return `Taskiem: ${m.body ?? ""}`;
   const words = m.attachment
     ? [attachmentLabel(m.attachment), m.body].filter(Boolean).join(": ")
     : (m.body ?? "");
@@ -294,3 +418,6 @@ export function merge(a: LinkMessage[], b: LinkMessage[]): LinkMessage[] {
       cmpTime(x.created_at, y.created_at) || x.id.localeCompare(y.id),
   );
 }
+
+/** A linked business's logo through the API (the app's content policy allows images from its own origin only). */
+export const logoSrc = (business: string) => `/v1/links/${business}/logo`;

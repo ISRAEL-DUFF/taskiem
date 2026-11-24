@@ -27,6 +27,7 @@ describe("areaOfPage", () => {
     expect(areaOfPage("/money/leaks")).toBe("money");
     expect(areaOfPage("/bills/9")).toBe("money");
     expect(areaOfPage("/settings/links")).toBe("links");
+    expect(areaOfPage("/settings/links/profile")).toBe("links");
     expect(areaOfPage("/links/1/statement")).toBe("links");
   });
   it("leaves the always-on pages alone", () => {

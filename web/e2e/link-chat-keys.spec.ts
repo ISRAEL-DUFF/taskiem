@@ -178,11 +178,16 @@ test("the keys of the list: / searches, j and k move between chats, ? lists them
   await expect(sheet).toHaveCount(0);
   expect(withParam(buyer)).toBe(second);
 
-  // n goes to the list and the search box, ready for a new link request.
+  // n opens Explore (finding a business), its search box ready, over the
+  // page as it is; Esc closes it and the chat that was open is still open.
   await buyer.locator("h2", { hasText: "Chat" }).first().click();
+  const open = withParam(buyer);
   await buyer.keyboard.press("n");
-  await expect(search).toBeFocused();
-  expect(withParam(buyer)).toBeNull();
+  await expect(buyer.getByTestId("explore")).toBeVisible();
+  await expect(buyer.getByTestId("explore-search")).toBeFocused();
+  await buyer.keyboard.press("Escape");
+  await expect(buyer.getByTestId("explore")).toHaveCount(0);
+  expect(withParam(buyer)).toBe(open);
 });
 
 test("arrows go down the list and back to the search box, Enter opens a chat", async ({
@@ -252,7 +257,7 @@ test("a right click on a bubble opens its menu; Esc closes it and the chat stays
   await b.click({ button: "right" });
   const menu = b.getByTestId("chat-more");
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole("button").first()).toBeFocused();
+  await expect(menu.locator(".pop-card button").first()).toBeFocused(); // the first row, as WhatsApp's
   await buyer.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   expect(withParam(buyer)).toBe(link);
@@ -301,6 +306,10 @@ const ringOf = (p: Page) =>
     const shadow = cs.boxShadow !== "none" && cs.boxShadow !== "";
     const outline =
       cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0;
+    // The message box shows its ring on the pill around it.
+    const pill = el.closest(".composer-pill");
+    const pillRing =
+      !!pill && /0px 0px 0px [2-4]px/.test(getComputedStyle(pill).boxShadow);
     const r = el.getBoundingClientRect();
     const name =
       el.getAttribute("aria-label") ??
@@ -308,7 +317,7 @@ const ringOf = (p: Page) =>
       el.tagName;
     return {
       name: `${el.tagName} ${name}`,
-      ring: shadow || outline,
+      ring: shadow || outline || pillRing,
       visible: r.width > 0 && r.height > 0,
     };
   });
