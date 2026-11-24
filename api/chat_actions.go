@@ -17,9 +17,11 @@ import (
 	"maps"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -528,34 +530,35 @@ func chatTopicByID(id string) (chatTopic, bool) {
 var hintWordRe = regexp.MustCompile(`[\p{L}']+`)
 
 // topicByWords is the one topic a message's words point to, among those
-// the person can use (§8.3): the topics' words in each language's word
-// lists (engine/lang/intents, "topics"), the person's language first,
-// then English. In the first language with any of its words in the
-// message, the topic with the most, and no tie. Words are matched as the
-// chat's other words are, without case, accents or tone marks: as the
-// start of a word ("rider" finds "riders"), or, with a space in them,
-// anywhere in the message.
+// the person can use (§8.3); see topicFromWords.
 func (s *Server) topicByWords(ctx context.Context, c *chat, text string) (chatTopic, bool) {
+	return topicFromWords(text, c.lang.Match(), s.topicsFor(ctx, c))
+}
+
+// topicFromWords is the one topic of topics a message's words point to:
+// the topics' words in each language's word lists (engine/lang/intents,
+// "topics"). Each language's best topic is scored by how many of its words
+// the message has; the language with the highest wins, the person's
+// language (first in tags) on a tie, so a weak match in it never beats a
+// stronger one in English; in that language the best topic, and no tie.
+// Words are matched as the chat's other words are, without case, accents
+// or tone marks: a short word (four letters or fewer) as a whole word, or
+// with an ending (s, es, ed, ing, er, ers; "obi" is not "obinrin"); a
+// longer one as the start of a word ("rider" finds "riders"); one with a
+// space anywhere in the message, from a word's start.
+func topicFromWords(text string, tags []lang.Tag, topics []chatTopic) (chatTopic, bool) {
 	folded := lang.Fold(text)
 	words := hintWordRe.FindAllString(folded, -1)
-	topics := s.topicsFor(ctx, c)
-	for _, tag := range c.lang.Match() {
+	var pick chatTopic
+	top, unique := 0, false
+	for _, tag := range tags {
 		hints := lang.TopicWords(tag)
 		best, score, tie := chatTopic{}, 0, false
 		for _, t := range topics {
 			n := 0
 			for _, h := range hints[t.ID] {
-				if strings.Contains(h, " ") {
-					if strings.Contains(" "+folded+" ", " "+h) {
-						n++
-					}
-					continue
-				}
-				for _, w := range words {
-					if strings.HasPrefix(w, h) {
-						n++
-						break
-					}
+				if hintIn(h, folded, words) {
+					n++
 				}
 			}
 			switch {
@@ -565,11 +568,30 @@ func (s *Server) topicByWords(ctx context.Context, c *chat, text string) (chatTo
 				tie = true
 			}
 		}
-		if score > 0 {
-			return best, !tie
+		if score > top {
+			pick, top, unique = best, score, !tie
 		}
 	}
-	return chatTopic{}, false
+	return pick, top > 0 && unique
+}
+
+// shortHintEndings are the endings a short topic word may take.
+var shortHintEndings = []string{"", "s", "es", "ed", "ing", "er", "ers"}
+
+// hintIn reports whether a topic's word (folded) is in a message (folded,
+// and as its words).
+func hintIn(h, folded string, words []string) bool {
+	if strings.Contains(h, " ") {
+		return strings.Contains(" "+folded+" ", " "+h)
+	}
+	short := utf8.RuneCountInString(h) <= 4
+	for _, w := range words {
+		rest, ok := strings.CutPrefix(w, h)
+		if ok && (!short || slices.Contains(shortHintEndings, rest)) {
+			return true
+		}
+	}
+	return false
 }
 
 // chatTopicNamed finds a topic by one of its words ("riders", "help stock").
