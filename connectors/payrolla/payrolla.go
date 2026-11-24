@@ -104,6 +104,8 @@ type Error struct {
 	Status  int
 	Code    string
 	Message string
+	// Details is what Payrolla gave with the refusal, if anything.
+	Details json.RawMessage
 }
 
 func (e *Error) Error() string {
@@ -185,12 +187,13 @@ func (c *client) explain(err error) error {
 	if errors.As(err, &he) {
 		var e struct {
 			Error struct {
-				Code    string `json:"code"`
-				Message string `json:"message"`
+				Code    string          `json:"code"`
+				Message string          `json:"message"`
+				Details json.RawMessage `json:"details"`
 			} `json:"error"`
 		}
 		_ = json.Unmarshal(he.Body, &e)
-		pe := &Error{Status: he.Status, Code: e.Error.Code, Message: e.Error.Message}
+		pe := &Error{Status: he.Status, Code: e.Error.Code, Message: e.Error.Message, Details: e.Error.Details}
 		if pe.Message == "" {
 			pe.Message = http.StatusText(he.Status)
 		}

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PayrollRunCard } from "./PayrollRun";
+import { parsePayrollCard } from "../lib/payrollrun";
 import { useSavedPicks } from "./SavedPicks";
 import { Link, useSearchParams } from "react-router-dom";
 import { TOOLS, type ToolKey } from "../lib/tools";
@@ -594,6 +596,16 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
                     onReply={(reply, text) => say({ reply, text })}
                     openTool={(k, from, start) => c.openTool(k, from, start)}
                   />
+                </div>
+              );
+          }
+          // This month's payroll (P4b-3): its card, drawn from Payrolla now.
+          if (m.kind === "payroll_run") {
+            const card = parsePayrollCard(m.text);
+            if (card)
+              return (
+                <div className="tk-chart-row" data-msg={m.id}>
+                  <PayrollRunCard id={card.run_id} period={card.period} />
                 </div>
               );
           }

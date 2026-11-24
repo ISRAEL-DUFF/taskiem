@@ -31,6 +31,9 @@ export interface PayrollList {
   company?: { name: string; pay_frequency: string };
   runs: PayrollRun[];
   next_cursor?: string;
+  /** This month's payroll, and whether this person may prepare it (P4b-3). */
+  this_month?: { period: string; label: string; month: string; run?: PayrollRun };
+  may_prepare?: boolean;
 }
 
 export type LineState = "paid" | "waiting" | "failed" | "returned";

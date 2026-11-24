@@ -2100,6 +2100,72 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/money/spending', query: {'from': ?from, 'to': ?to, 'month': ?month});
     return MoneySpending.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Prepare a month's payroll (`POST /v1/payroll/runs`)
+  Future<PreparePayrollRunResponse> preparePayrollRun({required PreparePayrollRunRequest body}) async {
+    final j = await _t.send('POST', '/v1/payroll/runs', body: body.toJson());
+    return PreparePayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Add a bonus or a deduction (`POST /v1/payroll/runs/{run}/adjustments`)
+  Future<AdjustPayrollRunResponse> adjustPayrollRun({required AdjustPayrollRunRequest body, required String run}) async {
+    final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/adjustments', body: body.toJson());
+    return AdjustPayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove a bonus or a deduction (`DELETE /v1/payroll/runs/{run}/adjustments/{id}`)
+  Future<UnadjustPayrollRunResponse> unadjustPayrollRun({required String run, required String id, String? key}) async {
+    final j = await _t.send('DELETE', '/v1/payroll/runs/${Uri.encodeComponent(run)}/adjustments/${Uri.encodeComponent(id)}', query: {'key': ?key});
+    return UnadjustPayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Leave someone out this month (`POST /v1/payroll/runs/{run}/exclusions`)
+  Future<ExcludePayrollRunResponse> excludePayrollRun({required ExcludePayrollRunRequest body, required String run}) async {
+    final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/exclusions', body: body.toJson());
+    return ExcludePayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Put someone back (`DELETE /v1/payroll/runs/{run}/exclusions/{id}`)
+  Future<PutBackPayrollRunResponse> putBackPayrollRun({required String run, required String id, String? key}) async {
+    final j = await _t.send('DELETE', '/v1/payroll/runs/${Uri.encodeComponent(run)}/exclusions/${Uri.encodeComponent(id)}', query: {'key': ?key});
+    return PutBackPayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Recalculate (`POST /v1/payroll/runs/{run}/compute`)
+  Future<ComputePayrollRunResponse> computePayrollRun({required ComputePayrollRunRequest body, required String run}) async {
+    final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/compute', body: body.toJson());
+    return ComputePayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Cancel this payroll (`POST /v1/payroll/runs/{run}/cancel`)
+  Future<CancelPayrollRunResponse> cancelPayrollRun({required CancelPayrollRunRequest body, required String run}) async {
+    final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/cancel', body: body.toJson());
+    return CancelPayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Ask Payrolla for a code to approve or lock (`POST /v1/payroll/runs/{run}/confirmations`)
+  Future<StartPayrollRunCodeResponse> startPayrollRunCode({required StartPayrollRunCodeRequest body, required String run}) async {
+    final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/confirmations', body: body.toJson());
+    return StartPayrollRunCodeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Approve, with the code (`POST /v1/payroll/runs/{run}/approve`)
+  Future<ApprovePayrollRunResponse> approvePayrollRun({required ApprovePayrollRunRequest body, required String run}) async {
+    final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/approve', body: body.toJson());
+    return ApprovePayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Lock and pay, with the code (`POST /v1/payroll/runs/{run}/lock`)
+  Future<LockPayrollRunResponse> lockPayrollRun({required LockPayrollRunRequest body, required String run}) async {
+    final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/lock', body: body.toJson());
+    return LockPayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Reject, with a note (`POST /v1/payroll/runs/{run}/reject`)
+  Future<RejectPayrollRunResponse> rejectPayrollRun({required RejectPayrollRunRequest body, required String run}) async {
+    final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/reject', body: body.toJson());
+    return RejectPayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -15674,7 +15740,7 @@ class PatchPayCollectionRequest {
 }
 
 class GetPayrollResponse {
-  const GetPayrollResponse({this.auth, this.company, required this.connected, this.connection, this.ended, this.isOwner, this.nextCursor, required this.runs, this.test});
+  const GetPayrollResponse({this.auth, this.company, required this.connected, this.connection, this.ended, this.isOwner, this.mayPrepare, this.nextCursor, required this.runs, this.test, this.thisMonth});
 
   /// Connected in one step, or with a pasted key (whose owner sees Reconnect
   /// Payrolla)
@@ -15685,9 +15751,14 @@ class GetPayrollResponse {
   /// The Payrolla connection ended (P4b-1): owners see Reconnect Payrolla
   final bool? ended;
   final bool? isOwner;
+  /// payroll.prepare: Prepare this month's payroll (P4b-3)
+  final bool? mayPrepare;
   final String? nextCursor;
   final List<PayrollRun> runs;
   final bool? test;
+  /// This month, for the Payroll page's This month panel: its period (2026-11),
+  /// in words, and its run when there is one
+  final GetPayrollResponseThisMonth? thisMonth;
 
   factory GetPayrollResponse.fromJson(Map<String, dynamic> j) => GetPayrollResponse(
         auth: j['auth'] == null ? null : j['auth'] as String,
@@ -15696,9 +15767,11 @@ class GetPayrollResponse {
         connection: j['connection'] == null ? null : j['connection'] as String,
         ended: j['ended'] == null ? null : j['ended'] as bool,
         isOwner: j['is_owner'] == null ? null : j['is_owner'] as bool,
+        mayPrepare: j['may_prepare'] == null ? null : j['may_prepare'] as bool,
         nextCursor: j['next_cursor'] == null ? null : j['next_cursor'] as String,
         runs: (j['runs'] as List).map((e) => PayrollRun.fromJson(e as Map<String, dynamic>)).toList(),
         test: j['test'] == null ? null : j['test'] as bool,
+        thisMonth: j['this_month'] == null ? null : GetPayrollResponseThisMonth.fromJson(j['this_month'] as Map<String, dynamic>),
       );
 
   Map<String, dynamic> toJson() => {
@@ -15708,9 +15781,11 @@ class GetPayrollResponse {
         'connection': ?connection,
         'ended': ?ended,
         'is_owner': ?isOwner,
+        'may_prepare': ?mayPrepare,
         'next_cursor': ?nextCursor,
         'runs': runs.map((e) => e.toJson()).toList(),
         'test': ?test,
+        'this_month': ?thisMonth?.toJson(),
       };
 }
 
@@ -15775,29 +15850,149 @@ class PayrollRun {
       };
 }
 
-class GetPayrollRunResponse {
-  const GetPayrollRunResponse({this.approvalUrl, required this.connection, required this.counts, required this.lines, required this.run});
+/// This month, for the Payroll page's This month panel: its period (2026-11),
+/// in words, and its run when there is one
+class GetPayrollResponseThisMonth {
+  const GetPayrollResponseThisMonth({required this.label, required this.month, required this.period, this.run});
 
+  final String label;
+  final String month;
+  final String period;
+  final PayrollRun? run;
+
+  factory GetPayrollResponseThisMonth.fromJson(Map<String, dynamic> j) => GetPayrollResponseThisMonth(
+        label: j['label'] as String,
+        month: j['month'] as String,
+        period: j['period'] as String,
+        run: j['run'] == null ? null : PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'month': month,
+        'period': period,
+        'run': ?run?.toJson(),
+      };
+}
+
+class GetPayrollRunResponse {
+  const GetPayrollRunResponse({this.adjustments, this.approvalUrl, this.changes, required this.connection, required this.counts, this.exclusions, this.funding, required this.lines, this.may, this.notWorkedOut, this.paysOn, required this.run});
+
+  final List<GetPayrollRunResponseAdjustmentsItem>? adjustments;
   final String? approvalUrl;
+  final GetPayrollRunResponseChanges? changes;
   final String connection;
   final GetPayrollRunResponseCounts counts;
+  final List<GetPayrollRunResponseExclusionsItem>? exclusions;
+  final GetPayrollRunResponseFunding? funding;
   final List<GetPayrollRunResponseLinesItem> lines;
+  final GetPayrollRunResponseMay? may;
+  /// A DRAFT run: Payrolla couldn't work it out, in words, with Recalculate
+  final String? notWorkedOut;
+  final String? paysOn;
   final GetPayrollRunResponseRun run;
 
   factory GetPayrollRunResponse.fromJson(Map<String, dynamic> j) => GetPayrollRunResponse(
+        adjustments: j['adjustments'] == null ? null : (j['adjustments'] as List).map((e) => GetPayrollRunResponseAdjustmentsItem.fromJson(e as Map<String, dynamic>)).toList(),
         approvalUrl: j['approval_url'] == null ? null : j['approval_url'] as String,
+        changes: j['changes'] == null ? null : GetPayrollRunResponseChanges.fromJson(j['changes'] as Map<String, dynamic>),
         connection: j['connection'] as String,
         counts: GetPayrollRunResponseCounts.fromJson(j['counts'] as Map<String, dynamic>),
+        exclusions: j['exclusions'] == null ? null : (j['exclusions'] as List).map((e) => GetPayrollRunResponseExclusionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        funding: j['funding'] == null ? null : GetPayrollRunResponseFunding.fromJson(j['funding'] as Map<String, dynamic>),
         lines: (j['lines'] as List).map((e) => GetPayrollRunResponseLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        may: j['may'] == null ? null : GetPayrollRunResponseMay.fromJson(j['may'] as Map<String, dynamic>),
+        notWorkedOut: j['not_worked_out'] == null ? null : j['not_worked_out'] as String,
+        paysOn: j['pays_on'] == null ? null : j['pays_on'] as String,
         run: GetPayrollRunResponseRun.fromJson(j['run'] as Map<String, dynamic>),
       );
 
   Map<String, dynamic> toJson() => {
+        'adjustments': ?adjustments?.map((e) => e.toJson()).toList(),
         'approval_url': ?approvalUrl,
+        'changes': ?changes?.toJson(),
         'connection': connection,
         'counts': counts.toJson(),
+        'exclusions': ?exclusions?.map((e) => e.toJson()).toList(),
+        'funding': ?funding?.toJson(),
         'lines': lines.map((e) => e.toJson()).toList(),
+        'may': ?may?.toJson(),
+        'not_worked_out': ?notWorkedOut,
+        'pays_on': ?paysOn,
         'run': run.toJson(),
+      };
+}
+
+class GetPayrollRunResponseAdjustmentsItem {
+  const GetPayrollRunResponseAdjustmentsItem({required this.amountKobo, required this.employeeId, required this.id, required this.name, required this.reason, required this.type});
+
+  final int amountKobo;
+  final String employeeId;
+  final String id;
+  final String name;
+  final String reason;
+  final String type;
+
+  factory GetPayrollRunResponseAdjustmentsItem.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseAdjustmentsItem(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        employeeId: j['employee_id'] as String,
+        id: j['id'] as String,
+        name: j['name'] as String,
+        reason: j['reason'] as String,
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'employee_id': employeeId,
+        'id': id,
+        'name': name,
+        'reason': reason,
+        'type': type,
+      };
+}
+
+class GetPayrollRunResponseChanges {
+  const GetPayrollRunResponseChanges({required this.left, required this.new_, required this.payChanged, this.since});
+
+  final List<String> left;
+  final List<String> new_;
+  final List<GetPayrollRunResponseChangesPayChangedItem> payChanged;
+  /// The last payroll compared with
+  final String? since;
+
+  factory GetPayrollRunResponseChanges.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseChanges(
+        left: (j['left'] as List).map((e) => e as String).toList(),
+        new_: (j['new'] as List).map((e) => e as String).toList(),
+        payChanged: (j['pay_changed'] as List).map((e) => GetPayrollRunResponseChangesPayChangedItem.fromJson(e as Map<String, dynamic>)).toList(),
+        since: j['since'] == null ? null : j['since'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'left': left.map((e) => e).toList(),
+        'new': new_.map((e) => e).toList(),
+        'pay_changed': payChanged.map((e) => e.toJson()).toList(),
+        'since': ?since,
+      };
+}
+
+class GetPayrollRunResponseChangesPayChangedItem {
+  const GetPayrollRunResponseChangesPayChangedItem({required this.fromKobo, required this.name, required this.toKobo});
+
+  final int fromKobo;
+  final String name;
+  final int toKobo;
+
+  factory GetPayrollRunResponseChangesPayChangedItem.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseChangesPayChangedItem(
+        fromKobo: (j['from_kobo'] as num).toInt(),
+        name: j['name'] as String,
+        toKobo: (j['to_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'from_kobo': fromKobo,
+        'name': name,
+        'to_kobo': toKobo,
       };
 }
 
@@ -15824,10 +16019,63 @@ class GetPayrollRunResponseCounts {
       };
 }
 
-class GetPayrollRunResponseLinesItem {
-  const GetPayrollRunResponseLinesItem({required this.employeeId, required this.name, required this.netKobo, required this.payslipId, this.reason, this.reference, this.staff, required this.state, required this.status});
+class GetPayrollRunResponseExclusionsItem {
+  const GetPayrollRunResponseExclusionsItem({required this.employeeId, required this.id, required this.name, required this.reason});
 
   final String employeeId;
+  final String id;
+  final String name;
+  final String reason;
+
+  factory GetPayrollRunResponseExclusionsItem.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseExclusionsItem(
+        employeeId: j['employee_id'] as String,
+        id: j['id'] as String,
+        name: j['name'] as String,
+        reason: j['reason'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'employee_id': employeeId,
+        'id': id,
+        'name': name,
+        'reason': reason,
+      };
+}
+
+class GetPayrollRunResponseFunding {
+  const GetPayrollRunResponseFunding({required this.availableKobo, required this.hasWallet, required this.neededKobo, required this.shortByKobo, this.words});
+
+  final int availableKobo;
+  final bool hasWallet;
+  final int neededKobo;
+  final int shortByKobo;
+  /// "Your Payrolla wallet has … short by ₦120,000. Add money before 28
+  /// Nov."
+  final String? words;
+
+  factory GetPayrollRunResponseFunding.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseFunding(
+        availableKobo: (j['available_kobo'] as num).toInt(),
+        hasWallet: j['has_wallet'] as bool,
+        neededKobo: (j['needed_kobo'] as num).toInt(),
+        shortByKobo: (j['short_by_kobo'] as num).toInt(),
+        words: j['words'] == null ? null : j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available_kobo': availableKobo,
+        'has_wallet': hasWallet,
+        'needed_kobo': neededKobo,
+        'short_by_kobo': shortByKobo,
+        'words': ?words,
+      };
+}
+
+class GetPayrollRunResponseLinesItem {
+  const GetPayrollRunResponseLinesItem({required this.employeeId, this.grossKobo, this.items, required this.name, required this.netKobo, required this.payslipId, this.reason, this.reference, this.staff, required this.state, required this.status, this.totalDeductionsKobo, this.totalEarningsKobo});
+
+  final String employeeId;
+  final int? grossKobo;
+  final List<GetPayrollRunResponseLinesItemItemsItem>? items;
   final String name;
   final int netKobo;
   final String payslipId;
@@ -15836,9 +16084,13 @@ class GetPayrollRunResponseLinesItem {
   final Object? staff;
   final String state;
   final String status;
+  final int? totalDeductionsKobo;
+  final int? totalEarningsKobo;
 
   factory GetPayrollRunResponseLinesItem.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseLinesItem(
         employeeId: j['employee_id'] as String,
+        grossKobo: j['gross_kobo'] == null ? null : (j['gross_kobo'] as num).toInt(),
+        items: j['items'] == null ? null : (j['items'] as List).map((e) => GetPayrollRunResponseLinesItemItemsItem.fromJson(e as Map<String, dynamic>)).toList(),
         name: j['name'] as String,
         netKobo: (j['net_kobo'] as num).toInt(),
         payslipId: j['payslip_id'] as String,
@@ -15847,10 +16099,14 @@ class GetPayrollRunResponseLinesItem {
         staff: j['staff'],
         state: j['state'] as String,
         status: j['status'] as String,
+        totalDeductionsKobo: j['total_deductions_kobo'] == null ? null : (j['total_deductions_kobo'] as num).toInt(),
+        totalEarningsKobo: j['total_earnings_kobo'] == null ? null : (j['total_earnings_kobo'] as num).toInt(),
       );
 
   Map<String, dynamic> toJson() => {
         'employee_id': employeeId,
+        'gross_kobo': ?grossKobo,
+        'items': ?items?.map((e) => e.toJson()).toList(),
         'name': name,
         'net_kobo': netKobo,
         'payslip_id': payslipId,
@@ -15859,6 +16115,58 @@ class GetPayrollRunResponseLinesItem {
         'staff': ?staff,
         'state': state,
         'status': status,
+        'total_deductions_kobo': ?totalDeductionsKobo,
+        'total_earnings_kobo': ?totalEarningsKobo,
+      };
+}
+
+class GetPayrollRunResponseLinesItemItemsItem {
+  const GetPayrollRunResponseLinesItemItemsItem({required this.amountKobo, required this.code, required this.kind, required this.label});
+
+  final int amountKobo;
+  final String code;
+  final String kind;
+  /// In plain words: Basic, Housing, Tax (PAYE), Pension (yours), Pension
+  /// (employer's), NHF
+  final String label;
+
+  factory GetPayrollRunResponseLinesItemItemsItem.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseLinesItemItemsItem(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        code: j['code'] as String,
+        kind: j['kind'] as String,
+        label: j['label'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'code': code,
+        'kind': kind,
+        'label': label,
+      };
+}
+
+class GetPayrollRunResponseMay {
+  const GetPayrollRunResponseMay({required this.approve, required this.linked, required this.prepare, required this.reconnect});
+
+  final bool approve;
+  /// Linked to a Payrolla user who may approve
+  final bool linked;
+  final bool prepare;
+  /// The connection can't do it here; an owner reconnects
+  final bool reconnect;
+
+  factory GetPayrollRunResponseMay.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseMay(
+        approve: j['approve'] as bool,
+        linked: j['linked'] as bool,
+        prepare: j['prepare'] as bool,
+        reconnect: j['reconnect'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approve': approve,
+        'linked': linked,
+        'prepare': prepare,
+        'reconnect': reconnect,
       };
 }
 
@@ -18798,5 +19106,473 @@ class MoneySpendingProfit {
         'fees_kobo': feesKobo,
         'in_kobo': inKobo,
         'profit_kobo': profitKobo,
+      };
+}
+
+class PreparePayrollRunRequest {
+  const PreparePayrollRunRequest({required this.key, this.payDate, this.period, this.periodEnd, this.periodStart});
+
+  final String key;
+  final String? payDate;
+  final String? period;
+  final String? periodEnd;
+  final String? periodStart;
+
+  factory PreparePayrollRunRequest.fromJson(Map<String, dynamic> j) => PreparePayrollRunRequest(
+        key: j['key'] as String,
+        payDate: j['pay_date'] == null ? null : j['pay_date'] as String,
+        period: j['period'] == null ? null : j['period'] as String,
+        periodEnd: j['period_end'] == null ? null : j['period_end'] as String,
+        periodStart: j['period_start'] == null ? null : j['period_start'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'pay_date': ?payDate,
+        'period': ?period,
+        'period_end': ?periodEnd,
+        'period_start': ?periodStart,
+      };
+}
+
+class PreparePayrollRunResponse {
+  const PreparePayrollRunResponse({this.computeError, required this.run});
+
+  /// Payrolla couldn't work it out: why, in words, with Recalculate
+  final String? computeError;
+  final PayrollRun run;
+
+  factory PreparePayrollRunResponse.fromJson(Map<String, dynamic> j) => PreparePayrollRunResponse(
+        computeError: j['compute_error'] == null ? null : j['compute_error'] as String,
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'compute_error': ?computeError,
+        'run': run.toJson(),
+      };
+}
+
+class AdjustPayrollRunRequest {
+  const AdjustPayrollRunRequest({required this.amountKobo, required this.employeeId, required this.key, required this.reason, required this.type});
+
+  final int amountKobo;
+  final String employeeId;
+  final String key;
+  final String reason;
+  final String type;
+
+  factory AdjustPayrollRunRequest.fromJson(Map<String, dynamic> j) => AdjustPayrollRunRequest(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        employeeId: j['employee_id'] as String,
+        key: j['key'] as String,
+        reason: j['reason'] as String,
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'employee_id': employeeId,
+        'key': key,
+        'reason': reason,
+        'type': type,
+      };
+}
+
+class AdjustPayrollRunResponse {
+  const AdjustPayrollRunResponse({this.computeError, required this.run});
+
+  /// Payrolla couldn't work it out: why, in words, with Recalculate
+  final String? computeError;
+  final PayrollRun run;
+
+  factory AdjustPayrollRunResponse.fromJson(Map<String, dynamic> j) => AdjustPayrollRunResponse(
+        computeError: j['compute_error'] == null ? null : j['compute_error'] as String,
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'compute_error': ?computeError,
+        'run': run.toJson(),
+      };
+}
+
+class UnadjustPayrollRunResponse {
+  const UnadjustPayrollRunResponse({this.computeError, required this.run});
+
+  /// Payrolla couldn't work it out: why, in words, with Recalculate
+  final String? computeError;
+  final PayrollRun run;
+
+  factory UnadjustPayrollRunResponse.fromJson(Map<String, dynamic> j) => UnadjustPayrollRunResponse(
+        computeError: j['compute_error'] == null ? null : j['compute_error'] as String,
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'compute_error': ?computeError,
+        'run': run.toJson(),
+      };
+}
+
+class ExcludePayrollRunRequest {
+  const ExcludePayrollRunRequest({required this.employeeId, required this.key, required this.reason});
+
+  final String employeeId;
+  final String key;
+  final String reason;
+
+  factory ExcludePayrollRunRequest.fromJson(Map<String, dynamic> j) => ExcludePayrollRunRequest(
+        employeeId: j['employee_id'] as String,
+        key: j['key'] as String,
+        reason: j['reason'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'employee_id': employeeId,
+        'key': key,
+        'reason': reason,
+      };
+}
+
+class ExcludePayrollRunResponse {
+  const ExcludePayrollRunResponse({this.computeError, required this.run});
+
+  /// Payrolla couldn't work it out: why, in words, with Recalculate
+  final String? computeError;
+  final PayrollRun run;
+
+  factory ExcludePayrollRunResponse.fromJson(Map<String, dynamic> j) => ExcludePayrollRunResponse(
+        computeError: j['compute_error'] == null ? null : j['compute_error'] as String,
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'compute_error': ?computeError,
+        'run': run.toJson(),
+      };
+}
+
+class PutBackPayrollRunResponse {
+  const PutBackPayrollRunResponse({this.computeError, required this.run});
+
+  /// Payrolla couldn't work it out: why, in words, with Recalculate
+  final String? computeError;
+  final PayrollRun run;
+
+  factory PutBackPayrollRunResponse.fromJson(Map<String, dynamic> j) => PutBackPayrollRunResponse(
+        computeError: j['compute_error'] == null ? null : j['compute_error'] as String,
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'compute_error': ?computeError,
+        'run': run.toJson(),
+      };
+}
+
+class ComputePayrollRunRequest {
+  const ComputePayrollRunRequest({required this.key});
+
+  final String key;
+
+  factory ComputePayrollRunRequest.fromJson(Map<String, dynamic> j) => ComputePayrollRunRequest(
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+      };
+}
+
+class ComputePayrollRunResponse {
+  const ComputePayrollRunResponse({this.computeError, required this.run});
+
+  /// Payrolla couldn't work it out: why, in words, with Recalculate
+  final String? computeError;
+  final PayrollRun run;
+
+  factory ComputePayrollRunResponse.fromJson(Map<String, dynamic> j) => ComputePayrollRunResponse(
+        computeError: j['compute_error'] == null ? null : j['compute_error'] as String,
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'compute_error': ?computeError,
+        'run': run.toJson(),
+      };
+}
+
+class CancelPayrollRunRequest {
+  const CancelPayrollRunRequest({required this.key});
+
+  final String key;
+
+  factory CancelPayrollRunRequest.fromJson(Map<String, dynamic> j) => CancelPayrollRunRequest(
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+      };
+}
+
+class CancelPayrollRunResponse {
+  const CancelPayrollRunResponse({this.computeError, required this.run});
+
+  /// Payrolla couldn't work it out: why, in words, with Recalculate
+  final String? computeError;
+  final PayrollRun run;
+
+  factory CancelPayrollRunResponse.fromJson(Map<String, dynamic> j) => CancelPayrollRunResponse(
+        computeError: j['compute_error'] == null ? null : j['compute_error'] as String,
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'compute_error': ?computeError,
+        'run': run.toJson(),
+      };
+}
+
+class StartPayrollRunCodeRequest {
+  const StartPayrollRunCodeRequest({required this.action, required this.key});
+
+  final String action;
+  final String key;
+
+  factory StartPayrollRunCodeRequest.fromJson(Map<String, dynamic> j) => StartPayrollRunCodeRequest(
+        action: j['action'] as String,
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'action': action,
+        'key': key,
+      };
+}
+
+class StartPayrollRunCodeResponse {
+  const StartPayrollRunCodeResponse({required this.challenge, required this.safer, required this.sentTo});
+
+  final StartPayrollRunCodeResponseChallenge challenge;
+  final bool safer;
+  final String sentTo;
+
+  factory StartPayrollRunCodeResponse.fromJson(Map<String, dynamic> j) => StartPayrollRunCodeResponse(
+        challenge: StartPayrollRunCodeResponseChallenge.fromJson(j['challenge'] as Map<String, dynamic>),
+        safer: j['safer'] as bool,
+        sentTo: j['sent_to'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge': challenge.toJson(),
+        'safer': safer,
+        'sent_to': sentTo,
+      };
+}
+
+class StartPayrollRunCodeResponseChallenge {
+  const StartPayrollRunCodeResponseChallenge({required this.challengeId, required this.channel, this.destinationHint, required this.expiresAt});
+
+  final String challengeId;
+  final String channel;
+  final String? destinationHint;
+  final String expiresAt;
+
+  factory StartPayrollRunCodeResponseChallenge.fromJson(Map<String, dynamic> j) => StartPayrollRunCodeResponseChallenge(
+        challengeId: j['challenge_id'] as String,
+        channel: j['channel'] as String,
+        destinationHint: j['destination_hint'] == null ? null : j['destination_hint'] as String,
+        expiresAt: j['expires_at'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'channel': channel,
+        'destination_hint': ?destinationHint,
+        'expires_at': expiresAt,
+      };
+}
+
+class ApprovePayrollRunRequest {
+  const ApprovePayrollRunRequest({required this.challengeId, required this.code, required this.key});
+
+  final String challengeId;
+  final String code;
+  final String key;
+
+  factory ApprovePayrollRunRequest.fromJson(Map<String, dynamic> j) => ApprovePayrollRunRequest(
+        challengeId: j['challenge_id'] as String,
+        code: j['code'] as String,
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'code': code,
+        'key': key,
+      };
+}
+
+class ApprovePayrollRunResponse {
+  const ApprovePayrollRunResponse({required this.payment, required this.run, required this.words});
+
+  final ApprovePayrollRunResponsePayment payment;
+  final PayrollRun run;
+  /// "Approved. Lock and pay?", or "Locked. Payrolla pays 48 people
+  /// ₦9,200,000 on 28 Nov."
+  final String words;
+
+  factory ApprovePayrollRunResponse.fromJson(Map<String, dynamic> j) => ApprovePayrollRunResponse(
+        payment: ApprovePayrollRunResponsePayment.fromJson(j['payment'] as Map<String, dynamic>),
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payment': payment.toJson(),
+        'run': run.toJson(),
+        'words': words,
+      };
+}
+
+class ApprovePayrollRunResponsePayment {
+  const ApprovePayrollRunResponsePayment({required this.failed, required this.paid, required this.pending, required this.returned, this.scheduledFor, required this.status, required this.totalKobo});
+
+  final int failed;
+  final int paid;
+  final int pending;
+  final int returned;
+  final String? scheduledFor;
+  final String status;
+  final int totalKobo;
+
+  factory ApprovePayrollRunResponsePayment.fromJson(Map<String, dynamic> j) => ApprovePayrollRunResponsePayment(
+        failed: (j['failed'] as num).toInt(),
+        paid: (j['paid'] as num).toInt(),
+        pending: (j['pending'] as num).toInt(),
+        returned: (j['returned'] as num).toInt(),
+        scheduledFor: j['scheduled_for'] == null ? null : j['scheduled_for'] as String,
+        status: j['status'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'failed': failed,
+        'paid': paid,
+        'pending': pending,
+        'returned': returned,
+        'scheduled_for': ?scheduledFor,
+        'status': status,
+        'total_kobo': totalKobo,
+      };
+}
+
+class LockPayrollRunRequest {
+  const LockPayrollRunRequest({required this.challengeId, required this.code, required this.key});
+
+  final String challengeId;
+  final String code;
+  final String key;
+
+  factory LockPayrollRunRequest.fromJson(Map<String, dynamic> j) => LockPayrollRunRequest(
+        challengeId: j['challenge_id'] as String,
+        code: j['code'] as String,
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'code': code,
+        'key': key,
+      };
+}
+
+class LockPayrollRunResponse {
+  const LockPayrollRunResponse({required this.payment, required this.run, required this.words});
+
+  final LockPayrollRunResponsePayment payment;
+  final PayrollRun run;
+  /// "Approved. Lock and pay?", or "Locked. Payrolla pays 48 people
+  /// ₦9,200,000 on 28 Nov."
+  final String words;
+
+  factory LockPayrollRunResponse.fromJson(Map<String, dynamic> j) => LockPayrollRunResponse(
+        payment: LockPayrollRunResponsePayment.fromJson(j['payment'] as Map<String, dynamic>),
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payment': payment.toJson(),
+        'run': run.toJson(),
+        'words': words,
+      };
+}
+
+class LockPayrollRunResponsePayment {
+  const LockPayrollRunResponsePayment({required this.failed, required this.paid, required this.pending, required this.returned, this.scheduledFor, required this.status, required this.totalKobo});
+
+  final int failed;
+  final int paid;
+  final int pending;
+  final int returned;
+  final String? scheduledFor;
+  final String status;
+  final int totalKobo;
+
+  factory LockPayrollRunResponsePayment.fromJson(Map<String, dynamic> j) => LockPayrollRunResponsePayment(
+        failed: (j['failed'] as num).toInt(),
+        paid: (j['paid'] as num).toInt(),
+        pending: (j['pending'] as num).toInt(),
+        returned: (j['returned'] as num).toInt(),
+        scheduledFor: j['scheduled_for'] == null ? null : j['scheduled_for'] as String,
+        status: j['status'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'failed': failed,
+        'paid': paid,
+        'pending': pending,
+        'returned': returned,
+        'scheduled_for': ?scheduledFor,
+        'status': status,
+        'total_kobo': totalKobo,
+      };
+}
+
+class RejectPayrollRunRequest {
+  const RejectPayrollRunRequest({required this.key, required this.note});
+
+  final String key;
+  final String note;
+
+  factory RejectPayrollRunRequest.fromJson(Map<String, dynamic> j) => RejectPayrollRunRequest(
+        key: j['key'] as String,
+        note: j['note'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'note': note,
+      };
+}
+
+class RejectPayrollRunResponse {
+  const RejectPayrollRunResponse({required this.run, required this.words});
+
+  final PayrollRun run;
+  final String words;
+
+  factory RejectPayrollRunResponse.fromJson(Map<String, dynamic> j) => RejectPayrollRunResponse(
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'run': run.toJson(),
+        'words': words,
       };
 }

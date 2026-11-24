@@ -613,6 +613,10 @@ func PayrollaHeard(pool *pgxpool.Pool, vault *secrets.Vault, log *slog.Logger) f
 		if e.Connector != payrollaID {
 			return
 		}
+		// A run's event tells people of it (payroll_runs_chat.go).
+		if payrollaRunHeard(ctx, pool, log, e) {
+			return
+		}
 		keyID, reason, ok := payrolla.Disconnected(e.Body)
 		if !ok {
 			return

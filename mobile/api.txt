@@ -450,3 +450,18 @@ getThing
 addThing
 patchThing
 getMoneySpending
+
+# This month's payroll (P4b-3): prepare it, a bonus or a deduction, leave
+# someone out and put them back, recalculate, cancel; approve, reject and
+# lock and pay with Payrolla's code (docs/spec/chat-pay-people.md)
+preparePayrollRun
+adjustPayrollRun
+unadjustPayrollRun
+excludePayrollRun
+putBackPayrollRun
+computePayrollRun
+cancelPayrollRun
+startPayrollRunCode
+approvePayrollRun
+lockPayrollRun
+rejectPayrollRun

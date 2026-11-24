@@ -931,8 +931,22 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/pay-account", s.putStaffAccount)
 			// Payroll is Payrolla's (payroll.go): its runs in Taskiem's screens,
 			// and staff linked to its employees.
-			r.With(s.need(PermPayrollRead)).Get("/payroll", s.getPayroll)
-			r.With(s.need(PermPayrollRead)).Get("/payroll/runs/{run}", s.getPayrollRun)
+			r.With(s.need(PermPayrollSee)).Get("/payroll", s.getPayroll)
+			r.With(s.need(PermPayrollSee)).Get("/payroll/runs/{run}", s.getPayrollRun)
+			// This month's run (payroll_runs.go; P4b-3): prepared and changed
+			// with payroll.prepare, decided with payroll.approve and
+			// Payrolla's code.
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs", s.preparePayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/adjustments", s.adjustPayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Delete("/payroll/runs/{run}/adjustments/{id}", s.unadjustPayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/exclusions", s.excludePayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Delete("/payroll/runs/{run}/exclusions/{id}", s.putBackPayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/compute", s.computePayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/cancel", s.cancelPayrollRun)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/confirmations", s.startPayrollRunCode)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/approve", s.decidePayrollRun("approve"))
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/lock", s.decidePayrollRun("lock"))
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/reject", s.rejectPayrollRun)
 			r.With(s.need(PermPayrollRead)).Get("/payroll/staff", s.getPayrollStaff)
 			r.With(s.need(PermPayrollRead), s.tenantWide).Put("/staff/{user}/payrolla", s.putStaffPayrolla)
 			// Connecting Payrolla in one step, reconnecting, and linking
