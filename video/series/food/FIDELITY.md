@@ -61,15 +61,16 @@ item is set as "remembered", so the "How should we treat it?" question does not 
 state is the card disappearing, not a confirmation screen.
 
 ## Episode 8
+**food-price-list**: the last shot of the render sat on a "Saving…" button (the stand-in server never completes that save), so the footage is **trimmed to 22.2 s**, about 1.7 s after the Save tap. The typed prices show without thousands separators (the app's own field); the ₦48,000 storefront price is in the data but not on screen.
 **food-price-list / food-a-deal**: all on Ada's side of the app; Rivers Foods' own screens are not
-filmed; the thread is cut between set-ups; the "Needs your OK" card's title ("{who} would agree
+filmed; the thread is cut between set-ups; the card on Tunde's phone does not change after "Send counter" (the film jumps to a second render with Rivers' ₦820,000 counter in place); the ₦830,000 lowest price is not enforced by the stand-in (the "under your lowest price" wording is the alert text); "kept for 7 days" is not shown (the card says "Lapses in 47 hours"); Ada's card sits under the app's "NEEDS YOU" heading, not "Needs your OK"; the "Needs your OK" card's title ("{who} would agree
 {amount} with {business}") is the app's real string, the rest of its line is the story's; after
 Agree the card simply goes.
 
 ## Episode 9
 **food-know-your-numbers**: the briefing card and Today use the stand-in data of the story
 (₦486,500 up 12%, owed ₦212,000, 3 low, 4 deliveries); the week's answer is not invented in a
-caption.
+caption. The Today scene at the end shows stand-in figures for 08:00 (₦38,000 in, ₦13,000 ahead of a usual Thursday, 0 orders), not story numbers. "How we did this week" is not filmed (the app has no recorded answer to show).
 
 ## Episode 10
 **food-approve-a-payment**: the Needs-your-OK card is filmed in Taskiem's own conversation (not on

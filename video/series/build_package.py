@@ -85,19 +85,30 @@ FILM_OPTS = {}
 
 
 def with_overrides(film, sdir, work_root):
-    """A film whose captions are replaced by video/series/<series>/captions/<film>.json, if there is one."""
+    """A film whose captions are replaced by video/series/<series>/captions/<film>.json, and/or
+    whose end is trimmed (films.json "end", in seconds), if the series says so."""
     ov = sdir / "captions" / f"{film.name}.json"
-    if not ov.exists():
+    end = FILM_OPTS.get(film.name, {}).get("end")
+    if not ov.exists() and end is None:
         return film
     work = Path(work_root) / "_work" / f"ov-{film.name}"
     work.mkdir(parents=True, exist_ok=True)
-    for i in range(film.meta["frames"]):
+    frames = film.meta["frames"] if end is None else min(film.meta["frames"], int(end * film.fps))
+    for i in range(frames):
         link = work / f"f{i:05d}.png"
         if not link.is_symlink() and not link.exists():
             os.symlink(film.dir / f"f{i:05d}.png", link)
+    for extra in work.glob("f*.png"):
+        if int(extra.stem[1:]) >= frames:
+            extra.unlink()
     meta = dict(film.meta)
-    meta["cues"] = [c for c in film.meta["cues"] if c["kind"] != "say"] + [{"kind": "say", **c} for c in json.loads(ov.read_text())]
-    meta["cues"].sort(key=lambda c: c["t"])
+    meta["frames"] = frames
+    cues = [c for c in film.meta["cues"] if c["kind"] != "say" and c["t"] < frames / film.fps]
+    if ov.exists():
+        cues += [{"kind": "say", **c} for c in json.loads(ov.read_text())]
+    else:
+        cues += [c for c in film.meta["cues"] if c["kind"] == "say" and c["t"] < frames / film.fps]
+    meta["cues"] = sorted(cues, key=lambda c: c["t"])
     (work / "cues.json").write_text(json.dumps(meta, indent=1))
     nf = Film(work.parent, work.name)
     nf.name = film.name

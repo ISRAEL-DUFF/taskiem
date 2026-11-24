@@ -20,5 +20,9 @@
  },
  "food-know-your-numbers": {
   "time": "08:00"
+ },
+ "food-price-list": {
+  "time": "13:00",
+  "end": 22.2
  }
 }
