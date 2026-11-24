@@ -45,5 +45,46 @@
       "camera": "wide-to-medium slow pull-back"
     }
   ],
-  "narration": {}
+  "narration": {
+    "approve-a-payment": {
+      "en": [
+        "Dami asks to pay Alhaja Sade.",
+        "Zainab sees who asks, what for, and how much.",
+        "She taps Approve. First payment to this account: check the details.",
+        "",
+        "She adds a comment. It is recorded with her decision.",
+        "Approve again, and the card clears."
+      ],
+      "pcm": [
+        "Dami ask make she pay Alhaja Sade.",
+        "Zainab see who ask, wetin for, and how much.",
+        "She tap Approve. Na first payment to this account: check the details.",
+        "",
+        "She add comment. E go dey record with her decision.",
+        "Approve again, and the card go clear."
+      ]
+    },
+    "app-lock": {
+      "en": [
+        "Zainab turns on the app lock.",
+        "In Settings, she taps App lock.",
+        "The phone checks her fingerprint.",
+        "App lock is on.",
+        "She can choose when it asks: at once, or after a while.",
+        "Later, Taskiem is locked until she proves it is her.",
+        "",
+        "Fingerprint matched, and she carries on."
+      ],
+      "pcm": [
+        "Zainab turn on the app lock.",
+        "For Settings, she tap App lock.",
+        "The phone dey check her fingerprint.",
+        "App lock don on.",
+        "She fit choose when e go ask: at once, or after small time.",
+        "Later, Taskiem go lock until she prove say na her.",
+        "",
+        "Fingerprint match, and she continue."
+      ]
+    }
+  }
 }

@@ -35,6 +35,28 @@
         "How customers dey pay? Cash and bank transfer.",
         "E don do: Zuri Atelier don dey Taskiem."
       ]
+    },
+    "be-found": {
+      "en": [
+        "Zainab wants buyers to find her.",
+        "She turns on Be found in Explore.",
+        "She types her area, so buyers near her find her.",
+        "Fashion is what she sells.",
+        "Then Save.",
+        "Her card shows her line and her area.",
+        "A buyer taps Find a business.",
+        "And Zuri Atelier is listed, with Fashion beside it."
+      ],
+      "pcm": [
+        "Zainab want make buyers find her.",
+        "She turn on Be found for Explore.",
+        "She type her area, so buyers wey near fit find her.",
+        "Na Fashion she dey sell.",
+        "Then Save.",
+        "Her card show her line and her area.",
+        "Buyer go tap Find a business.",
+        "And Zuri Atelier dey the list, with Fashion beside am."
+      ]
     }
   },
   "bridge": {
