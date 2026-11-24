@@ -304,7 +304,11 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 		}
 		// Fields the schema marks personal, and anything else that looks
 		// personal (an email, a phone number, a BVN), as runs seal them.
-		sealedAnswers, err := pii.Seal(ctx, s.Vault, tx, in.Tenant, plainAnswers, pii.SchemaPaths(tg.schema, tg.types), pii.Taint{})
+		// A location is sealed under the person who answered it, so
+		// erasing them erases where they were, here and in every copy the
+		// run makes of it (device fields §5).
+		paths := pii.LocationsOwnedBy(pii.SchemaPaths(tg.schema, tg.types), RespondentOwner(r))
+		sealedAnswers, err := pii.Seal(ctx, s.Vault, tx, in.Tenant, plainAnswers, paths, pii.Taint{})
 		if err != nil {
 			return err
 		}
@@ -786,6 +790,22 @@ func (s *Service) discard(ctx context.Context, tenant uuid.UUID, stored []stored
 		_, err := tx.Exec(ctx, `SELECT taskiem_form_files_discard($1, $2)`, tenant, keys)
 		return err
 	})
+}
+
+// RespondentOwner is the person who answered, as what their answers are
+// sealed under: their phone, else their email, else the member (or a
+// linked business's person) by their user id. Nil for an anonymous
+// answer, whose location is sealed as its own.
+func RespondentOwner(r Respondent) *pii.Owner {
+	switch {
+	case r.Phone != "":
+		return &pii.Owner{Category: "phone", Value: r.Phone}
+	case r.Email != "":
+		return &pii.Owner{Category: "email", Value: r.Email}
+	case r.MemberID != "":
+		return &pii.Owner{Category: "member", Value: r.MemberID}
+	}
+	return nil
 }
 
 func respondentMap(r Respondent) map[string]any {
