@@ -24,6 +24,12 @@ import {
   liveQueue,
   type PageChanged,
   rowsWord,
+  EMPTY,
+  isRecords,
+  newPageDoc,
+  recordTables,
+  withUses,
+  type RecordView,
   linkFilters,
   runStatusLine,
   toneClass,
@@ -151,39 +157,60 @@ function FromFile() {
   );
 }
 
-/** Picks the table a new page shows, and makes it (Show as a page). */
+/** Picks what a new page shows and makes it: one of the business's tables
+ * (Show as a page), Taskiem's own records, or nothing yet, to add every
+ * part in the editor (H5: a page made from the editor alone). */
 function NewPage({ onClose }: { onClose: () => void }) {
   const tables = useLoad(() => get<{ tables: Table[] }>("/v1/tables?counts=no"), []);
+  const records = useLoad(() => get<{ records: RecordView[] }>("/v1/page-records").catch(() => ({ records: [] as RecordView[] })), []);
+  const pages = useLoad(() => get<PageList>("/v1/pages"), []);
   const [table, setTable] = useState("");
+  const [title, setTitle] = useState("");
   const act = useAction();
   const navigate = useNavigate();
   const list = (tables.data?.tables ?? []).filter((t) => !t.kept_by);
+  const views = recordTables(records.data?.records ?? []);
+  const picked = table || list[0]?.id || views[0]?.id || EMPTY;
+  const own = picked === EMPTY || isRecords(picked);
   return (
     <Modal title="New page" onClose={onClose}>
       {!!tables.error && <ErrorBox error={tables.error} />}
-      {tables.data && list.length === 0 ? (
-        <p>
-          A page shows one of your tables. <Link to="/tables">Make a table</Link> first.
-        </p>
-      ) : (
+      {
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => {
-              const pg = await post<PageDetail>("/v1/pages", { from_table: table || list[0]?.id });
+              if (!own) {
+                const pg = await post<PageDetail>("/v1/pages", { from_table: picked });
+                navigate(`/pages/${pg.name}/edit`);
+                return;
+              }
+              const doc = newPageDoc(title, (pages.data?.pages ?? []).map((p) => p.name), views.find((v) => v.id === picked));
+              const pg = await post<PageDetail>("/v1/pages", { document: withUses(doc, views) });
               navigate(`/pages/${pg.name}/edit`);
             }, false);
           }}
         >
-          <Field label="What should it show?" hint="Taskiem starts it with how many there are and the rows as a list. You change it after.">
-            <select value={table || list[0]?.id || ""} onChange={(e) => setTable(e.target.value)}>
+          <Field label="What should it show?" hint="Taskiem starts it with how many there are and the rows as a list, or with nothing. You change it after.">
+            <select value={picked} onChange={(e) => setTable(e.target.value)}>
               {list.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.title || t.name}
                 </option>
               ))}
+              {views.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+              <option value={EMPTY}>Nothing yet: I will add each part</option>
             </select>
           </Field>
+          {own && (
+            <Field label="Its name">
+              <input value={title} maxLength={60} required onChange={(e) => setTitle(e.target.value)} />
+            </Field>
+          )}
           <ErrorBox error={act.error} />
           <div className="toolbar">
             <button className="primary" disabled={act.busy || !tables.data}>
@@ -194,7 +221,7 @@ function NewPage({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </form>
-      )}
+      }
     </Modal>
   );
 }

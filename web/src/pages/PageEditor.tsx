@@ -27,6 +27,10 @@ import {
   editorDoc,
   recordTables,
   runsWords,
+  NO_TABLE_KINDS,
+  feedingTools,
+  isRecords,
+  type PageChoices,
   type RecordView,
   type DrawnPage,
   type PageDetail,
@@ -38,9 +42,11 @@ import {
 } from "../lib/pages";
 import type { Table } from "../lib/tables";
 import { DrawnPageView } from "./Pages";
+import { ActionsForm, PlaceForm, RowStatusForm, StatusForm, TitlePick, ToolSourceForm } from "./PageEditorParts";
 
 // The page editor (pages §10, 5): no technical words on the way. An owner
-// adds parts (a count, a total, a list, a table, a heading), picks the
+// adds parts (a count, a total, a list, a table, a heading; and, pages H5,
+// a figure or a list a tool works out, buttons, where a run is), picks the
 // table each shows and what its rows show, moves them up and down, picks
 // who may open the page, and sees it drawn at phone width beside them.
 // Changes are a draft until published.
@@ -59,6 +65,8 @@ export function PageEditor() {
   const tables = useLoad(() => get<{ tables: Table[] }>("/v1/tables?counts=no"), []);
   // Taskiem's own orders and invoices, offered next to the tables.
   const records = useLoad(() => get<{ records: RecordView[] }>("/v1/page-records").catch(() => ({ records: [] as RecordView[] })), []);
+  // The business's tools and workflows a part or a button may use (H5).
+  const choices = useLoad(() => get<PageChoices>("/v1/page-choices").catch(() => ({ tools: [], workflows: [] }) as PageChoices), []);
   const roles = useLoad(() => get<{ roles: ApproverRole[] }>("/v1/approver-roles?for=start").catch(() => ({ roles: [] as ApproverRole[] })), []);
   const list = useLoad(() => get<{ can_publish: boolean; pages: { name: string; pinned: boolean }[] }>("/v1/pages"), []);
   const [doc, setDoc] = useState<PageDoc | null>(null);
@@ -88,7 +96,8 @@ export function PageEditor() {
     };
   }, [name, hasDraft, previewKey, detail.data]);
   if (detail.error) return <ErrorBox error={detail.error} />;
-  if (!detail.data || !doc || !tables.data || !records.data) return <Skeleton rows={4} label="Opening the page…" />;
+  if (!detail.data || !doc || !tables.data || !records.data || !choices.data) return <Skeleton rows={4} label="Opening the page…" />;
+  const ch = choices.data;
   const d = detail.data;
   const all = [...tables.data.tables.filter((t) => !t.kept_by), ...recordTables(records.data.records)];
   const change = (next: PageDoc) => {
@@ -169,6 +178,7 @@ export function PageEditor() {
                 <span>Pin to the menu (up to five pages)</span>
               </label>
             )}
+            <PlaceForm doc={doc} onChange={change} />
             {(() => {
               const runs = runsWords(d.runs);
               return (
@@ -222,7 +232,7 @@ export function PageEditor() {
                         Remove<span className="sr-only"> {partName(b)}</span>
                       </button>
                     </div>
-                    {editing === i && <PartForm part={b} tables={all} onChange={(p) => setPart(i, p)} />}
+                    {editing === i && <PartForm part={b} tables={all} choices={ch} filters={doc.filters ?? []} onChange={(p) => setPart(i, p)} />}
                   </li>
                 );
               })}
@@ -314,6 +324,7 @@ export function PageEditor() {
       {adding && (
         <AddPart
           tables={all}
+          choices={ch}
           onClose={() => setAdding(false)}
           onAdd={(p) => {
             change({ ...doc, blocks: [...doc.blocks, p] });
@@ -403,29 +414,38 @@ function WhoMayOpen({ roles, known, onChange }: { roles: string[]; known: Approv
   );
 }
 
-function AddPart({ tables, parts, onClose, onAdd }: { tables: Table[]; parts: Part[]; onClose: () => void; onAdd: (p: Part) => void }) {
+function AddPart({ tables, parts, choices, onClose, onAdd }: { tables: Table[]; parts: Part[]; choices: PageChoices; onClose: () => void; onAdd: (p: Part) => void }) {
   const [kind, setKind] = useState("count");
   const [table, setTable] = useState(tables[0]?.name ?? "");
+  // What a kind needs that the business may not have yet, in words.
+  const lacks = (k: string): string => {
+    if (k === "tool-figure" && feedingTools(choices, "figure").length === 0) return "None of your tools only looks up a figure yet";
+    if (k === "tool-list" && feedingTools(choices, "list").length === 0) return "None of your tools only looks up rows yet";
+    if (k === "status" && choices.workflows.length === 0) return "No workflow is in use yet";
+    if (k === "buttons" && choices.tools.length === 0 && !choices.workflows.some((w) => w.signals.length || w.approvals.length)) return "No tool or workflow to press yet";
+    if (k === "status" || k === "buttons" || k.startsWith("tool-")) return "";
+    return k !== "heading" && tables.length === 0 ? "No table yet" : "";
+  };
   return (
     <Modal title="Add a part" onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onAdd(newPart(kind, tables.find((t) => t.name === table), parts));
+          onAdd(newPart(kind, NO_TABLE_KINDS.includes(kind) ? undefined : tables.find((t) => t.name === table), parts, choices));
         }}
       >
         <fieldset className="sf-choices">
           <legend>What kind?</legend>
           {PART_KINDS.map((k) => (
             <label key={k.kind} className="row">
-              <input type="radio" name="kind" checked={kind === k.kind} onChange={() => setKind(k.kind)} />
+              <input type="radio" name="kind" checked={kind === k.kind} disabled={!!lacks(k.kind)} onChange={() => setKind(k.kind)} />
               <span>
-                {k.words} <span className="hint">· {k.hint}</span>
+                {k.words} <span className="hint">· {lacks(k.kind) || k.hint}</span>
               </span>
             </label>
           ))}
         </fieldset>
-        {kind !== "heading" && (
+        {!NO_TABLE_KINDS.includes(kind) && (
           <Field label="From which table, or Taskiem's orders or invoices?">
             <select value={table} onChange={(e) => setTable(e.target.value)}>
               {tables.map((t) => (
@@ -464,9 +484,74 @@ function ColumnPick({ label, value, cols, onChange, none }: { label: string; val
 }
 
 /** One part's choices, in plain words. */
-function PartForm({ part, tables, onChange }: { part: Part; tables: Table[]; onChange: (p: Part) => void }) {
+function PartForm({ part, tables, choices, filters, onChange }: { part: Part; tables: Table[]; choices: PageChoices; filters: PageFilterDef[]; onChange: (p: Part) => void }) {
   const t = tables.find((x) => x.name === part.source?.table);
   const set = (p: Partial<Part>) => onChange({ ...part, ...p });
+  if (part.type === "buttons") {
+    return (
+      <div className="pg-part-form">
+        <Field label="Title (optional)">
+          <input value={part.title ?? ""} maxLength={60} onChange={(e) => set({ title: e.target.value || undefined })} />
+        </Field>
+        <ActionsForm actions={part.actions ?? []} row={undefined} filters={filters} choices={choices} onChange={(actions) => set({ actions })} />
+      </div>
+    );
+  }
+  if (part.type === "status") return <StatusForm part={part} choices={choices} onChange={onChange} />;
+  if (part.source?.tool !== undefined && part.type === "figure") {
+    return (
+      <div className="pg-part-form">
+        <Field label="Label">
+          <input value={part.label ?? ""} maxLength={40} onChange={(e) => set({ label: e.target.value })} />
+        </Field>
+        <ToolSourceForm part={part} choices={choices} filters={filters} onChange={onChange} />
+        <label className="switch-line">
+          <input type="checkbox" checked={!!part.naira} onChange={(e) => set({ naira: e.target.checked || undefined })} /> <span>It is money (shown in naira)</span>
+        </label>
+        <Field label="Colour">
+          <select value={part.tone ?? "plain"} onChange={(e) => set({ tone: e.target.value === "plain" ? undefined : (e.target.value as Tone) })}>
+            {TONES.map((x) => (
+              <option key={x.tone} value={x.tone}>
+                {x.words}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <label className="switch-line">
+          <input type="checkbox" checked={!!part.lead} onChange={(e) => set({ lead: e.target.checked || undefined })} /> <span>The page's main figure, drawn large</span>
+        </label>
+      </div>
+    );
+  }
+  if (part.source?.tool !== undefined && part.type === "list") {
+    const item = part.item ?? { title: "" };
+    const field = (v: string | undefined) => /^=item\.([a-zA-Z_][a-zA-Z0-9_]*)$/.exec(v ?? "")?.[1];
+    return (
+      <div className="pg-part-form">
+        <Field label="Title">
+          <input value={part.title ?? ""} maxLength={60} onChange={(e) => set({ title: e.target.value || undefined })} />
+        </Field>
+        <ToolSourceForm part={part} choices={choices} filters={filters} onChange={onChange} />
+        {field(item.title) !== undefined || !item.title ? (
+          <Field label="Each row's title is the answer's" hint="The name it has in the tool's answer, like name">
+            <input value={field(item.title) ?? ""} maxLength={40} onChange={(e) => set({ item: { ...item, title: e.target.value ? `=item.${e.target.value.replace(/[^a-zA-Z0-9_]/g, "")}` : "" } })} />
+          </Field>
+        ) : (
+          <p className="hint">Each row's title is as the tool's own answer says it.</p>
+        )}
+        {field(item.sub) !== undefined || !item.sub ? (
+          <Field label="The line under it is the answer's (optional)">
+            <input value={field(item.sub) ?? ""} maxLength={40} onChange={(e) => set({ item: { ...item, sub: e.target.value ? `=item.${e.target.value.replace(/[^a-zA-Z0-9_]/g, "")}` : undefined } })} />
+          </Field>
+        ) : (
+          <p className="hint">The line under it is as the tool's own answer says it.</p>
+        )}
+        <Field label="When there are none, say">
+          <input value={part.empty ?? ""} maxLength={120} placeholder="Nothing to show" onChange={(e) => set({ empty: e.target.value || undefined })} />
+        </Field>
+      </div>
+    );
+  }
   if (part.type === "heading") {
     return (
       <div className="pg-part-form">
@@ -544,10 +629,22 @@ function PartForm({ part, tables, onChange }: { part: Part; tables: Table[]; onC
         <label className="switch-line">
           <input type="checkbox" checked={!!part.lead} onChange={(e) => set({ lead: e.target.checked || undefined })} /> <span>The page's main figure, drawn large</span>
         </label>
+        {part.value === "count" && (
+          <label className="switch-line">
+            <input type="checkbox" checked={!!part.alert} onChange={(e) => set({ alert: e.target.checked || undefined })} />{" "}
+            <span>An alert while it is above nought: it shows in the chat's alerts, and opens the page</span>
+          </label>
+        )}
         {conditions}
       </div>
     );
   }
+  const rowExtras = (
+    <>
+      <ActionsForm actions={part.actions ?? []} row={t} filters={filters} choices={choices} onChange={(actions) => set({ actions: actions.length ? actions : undefined })} />
+      {choices.workflows.length > 0 && <RowStatusForm part={part} table={t} choices={choices} onChange={onChange} />}
+    </>
+  );
   const detailCols = (part.detail?.lines ?? []).map((l) => columnOf(l.value)).filter(Boolean);
   const detail = (
     <fieldset className="sf-choices">
@@ -578,7 +675,7 @@ function PartForm({ part, tables, onChange }: { part: Part; tables: Table[]; onC
           <input value={part.title ?? ""} maxLength={60} onChange={(e) => set({ title: e.target.value || undefined })} />
         </Field>
         {tablePick}
-        <ColumnPick label="Each row's title" value={columnOf(item.title)} cols={any} onChange={(c) => set({ item: { ...item, title: showColumn(c) }, detail: part.detail ? { ...part.detail, title: showColumn(c) } : undefined })} />
+        <TitlePick part={part} cols={any} onChange={onChange} />
         <ColumnPick label="The line under it" value={columnOf(item.sub)} cols={any} none="Nothing" onChange={(c) => set({ item: { ...item, sub: c ? showColumn(c) : undefined } })} />
         <ColumnPick
           label="Its state, at the end"
@@ -606,6 +703,7 @@ function PartForm({ part, tables, onChange }: { part: Part; tables: Table[]; onC
         </Field>
         {detail}
         {conditions}
+        {rowExtras}
       </div>
     );
   }
@@ -645,8 +743,23 @@ function PartForm({ part, tables, onChange }: { part: Part; tables: Table[]; onC
             <span>{`${columnWords(t, c.column)} is money (shown in naira)`}</span>
           </label>
         ))}
+      {/* A yes/no column of the business's own table may be ticked in place, by those who may change its rows. */}
+      {!isRecords(t?.name) &&
+        (part.columns ?? [])
+          .filter((c) => t?.columns.some((x) => x.name === c.column && x.type === "boolean" && !x.personal))
+          .map((c) => (
+            <label key={`edit-${c.column}`} className="switch-line">
+              <input
+                type="checkbox"
+                checked={!!c.edit}
+                onChange={(e) => set({ columns: (part.columns ?? []).map((x) => (x.column === c.column ? { ...x, edit: e.target.checked || undefined } : x)) })}
+              />{" "}
+              <span>{`${columnWords(t, c.column)} can be ticked here, by those who may change the table's rows`}</span>
+            </label>
+          ))}
       {detail}
       {conditions}
+      {rowExtras}
     </div>
   );
 }

@@ -170,6 +170,18 @@ func TestPagesRunsEstimate(t *testing.T) {
 	owner.must(201, "POST", "/v1/pages", map[string]any{"document": doc})
 	owner.must(200, "POST", "/v1/pages/desk/publish", nil)
 
+	// The editor's choices (g-pages-editor): the tool, which only looks
+	// things up, with its answers by name and type; only for page.edit.
+	ch := toJSON(owner.must(200, "GET", "/v1/page-choices", nil))
+	for _, want := range []string{`"command":"ticket-counts"`, `"answers":true`, `"name":"rows","title":"Rows","type":"list"`} {
+		if !strings.Contains(ch, want) {
+			t.Errorf("choices: want %s in %s", want, ch)
+		}
+	}
+	if s, _ := desk.do("GET", "/v1/page-choices", nil); s != 403 {
+		t.Errorf("a viewer read the editor's choices: %d", s)
+	}
+
 	// Desk opens it three times in a minute (one view), Ops once.
 	for range 3 {
 		viewOf(t, desk, "desk", nil)
@@ -201,5 +213,63 @@ func TestPagesRunsEstimate(t *testing.T) {
 	owner.do("PUT", "/v1/pages/desk/draft", map[string]any{"document": doc})
 	if runs := owner.must(200, "GET", "/v1/pages/desk", nil)["runs"].(map[string]any); runs["tools"] != float64(2) || runs["runs_a_day"] != float64(8) {
 		t.Errorf("the draft's tools: %v", runs)
+	}
+}
+
+// g-pages-editor, done when: the deliveries fixture page as the editor
+// saves it (web/e2e/pages-editor.spec.ts makes it by pressing and picking,
+// and checks the document it saves is this) publishes and works: what is
+// owed to riders, today's deliveries with Confirm shown only while one is
+// delivered and not confirmed, each row's run, the customers and staff.
+func TestPagesEditorFixture(t *testing.T) {
+	w := recordsWorld(t)
+	owner := w.tenant(t, "Acme", "owner@h5editor.test")
+	addOrder(t, w, owner, "AC-12", "dispatched", "Bayo Ade", "+2348012345678", 990000)
+	addDelivery(t, w, owner, "AC-12", "Musa", 150000)
+	publishWF(t, owner, "Confirm deliveries", json.RawMessage(`{"schema":"wd/v1","id":"wf_editorok","version":1,"name":"Confirm deliveries",
+		"trigger":{"type":"manual"},"inputs":{"schema":{"type":"object","properties":{"delivery":{"type":"string"}}}},
+		"steps":[{"id":"wait","type":"signal","config":{"event":"confirm","correlation":"=trigger.body.delivery","pages":true}}]}`))
+	var lines []map[string]any
+	for _, l := range [][2]string{{"Order", "order"}, {"Customer", "customer"}, {"Phone", "phone"}, {"Rider", "rider"}, {"Status", "status"},
+		{"Delivery area", "zone"}, {"Rider's fee", "fee"}, {"Owed to the rider", "owed"}, {"Paid at the door", "paid_how"}, {"Offered", "offered_at"}, {"Delivered", "delivered_at"}} {
+		lines = append(lines, map[string]any{"label": l[0], "value": "=row." + l[1]})
+	}
+	doc := map[string]any{"page": "page/v1", "name": "deliveries-today", "title": "Deliveries today", "icon": "tables",
+		"filters": []map[string]any{{"id": "dates", "type": "dates", "column": "offered_at", "label": "When"}},
+		"blocks": []map[string]any{
+			{"id": "total", "type": "figure", "label": "Owed to riders", "value": "sum", "of": "owed", "source": map[string]any{"records": "deliveries"}, "naira": true},
+			{"id": "list", "type": "list", "title": "Today's deliveries",
+				"source": map[string]any{"order": []map[string]any{{"column": "offered_at", "desc": true}}, "uses": []string{"dates"}, "records": "deliveries"},
+				"item":   map[string]any{"title": "=row.order + ' · ' + row.rider", "sub": "=row.customer", "state": map[string]any{"text": "=row.status"}},
+				"detail": map[string]any{"title": "=row.order + ' · ' + row.rider", "lines": lines},
+				"actions": []map[string]any{{"label": "Confirm", "when": "=row.status == 'delivered' && row.confirmed_at == ''",
+					"signal": map[string]any{"workflow": "Confirm deliveries", "name": "confirm", "to": "=row.id"}}},
+				"status": map[string]any{"workflow": "Confirm deliveries", "to": "=row.id"}},
+			{"id": "table", "type": "table", "title": "Customers (Taskiem's)", "source": map[string]any{"records": "customers"},
+				"columns": []map[string]any{{"column": "customer"}, {"column": "owed", "naira": true}}},
+			{"id": "table_2", "type": "table", "title": "Staff (Taskiem's)", "source": map[string]any{"records": "staff"},
+				"columns": []map[string]any{{"column": "name"}, {"column": "roles"}}},
+		}}
+	owner.must(201, "POST", "/v1/pages", map[string]any{"document": doc})
+	if pub := owner.must(200, "POST", "/v1/pages/deliveries-today/publish", nil); len(pub["problems"].([]any)) != 0 {
+		t.Fatalf("publish: %v", pub["problems"])
+	}
+	v := viewOf(t, owner, "deliveries-today", map[string]any{"dates": "today"})
+	if b := blockOf(t, v, "total"); b["shown"] != "₦1,500" {
+		t.Errorf("owed: %v", b)
+	}
+	rows := blockOf(t, v, "list")["rows"].([]any)
+	if len(rows) != 1 {
+		t.Fatalf("today: %v", blockOf(t, v, "list"))
+	}
+	row := rows[0].(map[string]any)
+	if row["title"] != "AC-12 · Musa" || len(row["actions"].([]any)) != 1 {
+		t.Errorf("a delivery: %v", row)
+	}
+	if st, _ := row["run_status"].(map[string]any); st == nil || st["words"] != "Not started" {
+		t.Errorf("no run waits for it yet: %v", row["run_status"])
+	}
+	if got := toJSON(blockOf(t, v, "table_2")["rows"]); !strings.Contains(got, "owner") {
+		t.Errorf("staff: %s", got)
 	}
 }

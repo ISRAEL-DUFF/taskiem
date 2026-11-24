@@ -57,6 +57,7 @@ func (s *Server) pageRoutes(r chi.Router) {
 	r.Post("/pages/{name}/act", s.actPage)                               // pages_actions.go
 	r.Post("/pages/{name}/refresh", s.refreshPage)                       // pages_actions.go
 	r.With(s.need(PermPageEdit)).Get("/page-records", s.listPageRecords) // pages_records.go
+	r.With(s.need(PermPageEdit)).Get("/page-choices", s.listPageChoices) // the editor's tools and workflows (pages_choices.go)
 	s.pageVersionRoutes(r)                                               // versions, export and import (pages_versions.go)
 }
 

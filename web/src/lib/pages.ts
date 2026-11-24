@@ -54,13 +54,15 @@ export interface Part {
   source?: Source;
   item?: { title: string; sub?: string; state?: { text: string; tone?: Tone; tones?: Record<string, Tone> } };
   group?: { column: string; order?: string[] };
-  columns?: { column: string; label?: string; naira?: boolean }[];
+  columns?: { column: string; label?: string; naira?: boolean; edit?: boolean }[];
   detail?: { title: string; lines?: { label: string; value: string; naira?: boolean }[] };
   empty?: string;
   /** G2: buttons (the page's, or each row's), a counting figure as an alert, a status's workflow. */
   actions?: PageActionDef[];
   alert?: boolean;
   workflow?: string;
+  /** H5: each row shows where a run of workflow is (its number in a column, or what it waits for). */
+  status?: { workflow: string; run?: string; to?: string };
 }
 
 export interface PageFilterDef {
@@ -543,13 +545,201 @@ export const PART_KINDS: { kind: string; words: string; hint: string }[] = [
   { kind: "list", words: "A list", hint: "Rows one under another, in groups if you like" },
   { kind: "table", words: "A table", hint: "Rows in columns you pick" },
   { kind: "heading", words: "A heading", hint: "A title and a line of words" },
+  { kind: "tool-figure", words: "A figure a tool works out", hint: "One of a tool's answers, like this month's spending" },
+  { kind: "tool-list", words: "A list a tool works out", hint: "The rows a tool answers with" },
+  { kind: "buttons", words: "Buttons", hint: "Up to three for the whole page, like New ticket" },
+  { kind: "status", words: "Where a run is", hint: "Waiting, done or stopped, and who it waits for" },
 ];
 
-/** A new part of a kind over a table (or Taskiem's records), filled in with sensible choices. */
-export function newPart(kind: string, t: Table | undefined, parts: { id: string }[]): Part {
+/** The kinds that need no table (a tool, a run, or nothing feeds them). */
+export const NO_TABLE_KINDS = ["heading", "tool-figure", "tool-list", "buttons", "status"];
+
+// --- the tools and workflows a page may use (GET /v1/page-choices) ---
+
+export interface ChoiceTool {
+  command: string;
+  name: string;
+  /** Answers at once (changes nothing): only such a tool feeds a part. */
+  answers: boolean;
+  outputs: { name: string; title: string; type: string }[];
+  inputs: { name: string; title: string; personal: boolean }[];
+  list?: { from: string; title: string; sub?: string };
+}
+
+export interface ChoiceWorkflow {
+  name: string;
+  /** The signals a page may send it. */
+  signals: string[];
+  approvals: { step: string; name: string }[];
+}
+
+export interface PageChoices {
+  tools: ChoiceTool[];
+  workflows: ChoiceWorkflow[];
+}
+
+/** The tools that may feed a part showing one figure, or a list. */
+export function feedingTools(c: PageChoices, kind: "figure" | "list"): ChoiceTool[] {
+  return c.tools.filter((t) => t.answers && t.outputs.some((o) => (kind === "list" ? o.type === "list" : o.type !== "list" && o.type !== "object")));
+}
+
+/** A CEL string literal of words: nothing in it is worked out. */
+export const quoted = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+
+/** Where a button's value comes from, in plain words: a column of the row,
+ * one of the page's filters, words written here, or nothing (asked). */
+export type ValueFrom = { from: "column"; column: string } | { from: "filter"; id: string } | { from: "words"; words: string } | { from: "asked" };
+
+/** A value as the document keeps it. */
+export function valueExpr(v: ValueFrom): string | undefined {
+  switch (v.from) {
+    case "column":
+      return v.column ? `=row.${v.column}` : undefined;
+    case "filter":
+      return v.id ? `=filters.${v.id}` : undefined;
+    case "words":
+      return v.words === "" ? undefined : v.words.startsWith("=") ? `=${quoted(v.words)}` : v.words;
+  }
+  return undefined;
+}
+
+/** A value read back for the editor: null when it was written another way (a file). */
+export function valueFrom(v: unknown): ValueFrom | null {
+  if (v === undefined) return { from: "asked" };
+  if (typeof v !== "string") return { from: "words", words: String(v) };
+  let m = /^=row\.([a-z][a-z0-9_]*)$/.exec(v);
+  if (m) return { from: "column", column: m[1] ?? "" };
+  m = /^=filters\.([a-z][a-z0-9_-]*)$/.exec(v);
+  if (m) return { from: "filter", id: m[1] ?? "" };
+  m = /^='((?:[^'\\]|\\.)*)'$/.exec(v);
+  if (m) return { from: "words", words: (m[1] ?? "").replace(/\\(.)/g, "$1") };
+  if (v.startsWith("=")) return null;
+  return { from: "words", words: v };
+}
+
+/** One "Show it only when" condition, in plain words. */
+export interface WhenCond {
+  column: string;
+  how: "is" | "is not" | "is empty" | "is not empty";
+  value?: string;
+}
+
+/** The conditions as a button's when: every one must hold. */
+export function whenExpr(conds: WhenCond[]): string | undefined {
+  const parts = conds
+    .filter((c) => c.column)
+    .map((c) => {
+      const col = `row.${c.column}`;
+      switch (c.how) {
+        case "is":
+          return `${col} == ${quoted(c.value ?? "")}`;
+        case "is not":
+          return `${col} != ${quoted(c.value ?? "")}`;
+        case "is empty":
+          return `${col} == ''`;
+        case "is not empty":
+          return `${col} != ''`;
+      }
+      return "";
+    });
+  return parts.length ? `=${parts.join(" && ")}` : undefined;
+}
+
+/** A button's when read back as conditions; null when written another way. */
+export function whenConds(when: string | undefined): WhenCond[] | null {
+  if (!when) return [];
+  if (!when.startsWith("=")) return null;
+  const out: WhenCond[] = [];
+  for (const part of when.slice(1).split(" && ")) {
+    const m = /^row\.([a-z][a-z0-9_]*) (==|!=) '((?:[^'\\]|\\.)*)'$/.exec(part.trim());
+    if (!m) return null;
+    const value = (m[3] ?? "").replace(/\\(.)/g, "$1");
+    const eq = m[2] === "==";
+    out.push(value === "" ? { column: m[1] ?? "", how: eq ? "is empty" : "is not empty" } : { column: m[1] ?? "", how: eq ? "is" : "is not", value });
+  }
+  return out;
+}
+
+/** A row's title of one column, or two with a dot between ("AC-12 · Musa"). */
+export function titleExpr(a: string, b?: string): string {
+  if (!a) return "";
+  return b ? `=row.${a} + ' · ' + row.${b}` : `=row.${a}`;
+}
+
+/** A row's title read back as its columns; [] when written another way. */
+export function titleCols(v: string | undefined): string[] {
+  const one = columnOf(v);
+  if (one) return [one];
+  const m = /^=row\.([a-z][a-z0-9_]*) \+ ' · ' \+ row\.([a-z][a-z0-9_]*)$/.exec(v ?? "");
+  return m ? [m[1] ?? "", m[2] ?? ""] : [];
+}
+
+/** New page's "Nothing yet": a page started with a heading only. */
+export const EMPTY = "empty:";
+
+/** A page's short name from its name ("Deliveries today" → deliveries-today),
+ * not one of taken (the next free: -2, -3). */
+export function pageName(title: string, taken: string[]): string {
+  let base = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^[^a-z]+/, "")
+    .slice(0, 24)
+    .replace(/-+$/, "");
+  if (base.length < 2) base = "page";
+  let name = base;
+  for (let i = 2; taken.includes(name); i++) name = `${base.slice(0, 24 - String(i).length - 1).replace(/-+$/, "")}-${i}`;
+  return name;
+}
+
+/** A new page's first draft: over Taskiem's records, how many and their
+ * rows as a list (as Show as a page does for a table); else a heading only. */
+export function newPageDoc(title: string, taken: string[], view: Table | undefined): PageDoc {
+  const t = title.trim() || view?.title || "A page";
+  const blocks: Part[] = view ? [newPart("count", view, []), newPart("list", view, [{ id: "count" }])] : [newPart("heading", undefined, [])];
+  if (!view && blocks[0]) blocks[0].title = t;
+  return { page: "page/v1", name: pageName(t, taken), title: t, icon: "tables", blocks };
+}
+
+/** Taskiem's areas a page may be a tab under, in Settings' words. */
+export const PLACE_AREAS: { area: string; words: string }[] = [
+  { area: "storefront", words: "Online shop" },
+  { area: "orders", words: "Orders" },
+  { area: "stock", words: "Stock" },
+  { area: "money", words: "Money" },
+  { area: "links", words: "Linked businesses" },
+  { area: "schools", words: "Schools" },
+];
+
+/** A new part of a kind over a table (or Taskiem's records), or a tool or
+ * a workflow the business has, filled in with sensible choices. */
+export function newPart(kind: string, t: Table | undefined, parts: { id: string }[], choices?: PageChoices): Part {
   const table = t?.name ?? "";
   const text = columnsFor(t, "text");
   const any = columnsFor(t, "any").filter((c) => c.name !== "created_at");
+  switch (kind) {
+    case "tool-figure": {
+      const tool = feedingTools(choices ?? { tools: [], workflows: [] }, "figure")[0];
+      const out = tool?.outputs.find((o) => o.type !== "list" && o.type !== "object");
+      return { id: freeId(parts, "figure"), type: "figure", label: out?.title || "A figure", value: "output", source: { tool: tool?.command ?? "", output: out?.name ?? "" } };
+    }
+    case "tool-list": {
+      const tool = feedingTools(choices ?? { tools: [], workflows: [] }, "list")[0];
+      const out = tool?.outputs.find((o) => o.type === "list");
+      const own = tool?.list && tool.list.from === out?.name ? tool.list : undefined;
+      return {
+        id: freeId(parts, "list"),
+        type: "list",
+        title: tool?.name || "List",
+        source: { tool: tool?.command ?? "", output: out?.name ?? "" },
+        item: { title: own?.title || "=item.name", ...(own?.sub ? { sub: own.sub } : {}) },
+      };
+    }
+    case "buttons":
+      return { id: freeId(parts, "buttons"), type: "buttons", actions: [] };
+    case "status":
+      return { id: freeId(parts, "status"), type: "status", title: "Where it is", workflow: choices?.workflows[0]?.name ?? "" };
+  }
   switch (kind) {
     case "heading":
       return { id: freeId(parts, "heading"), type: "heading", title: "A heading" };

@@ -41269,6 +41269,111 @@ paths:
                 additionalProperties: false
         default:
           $ref: '#/components/responses/Error'
+  /v1/page-choices:
+    get:
+      operationId: listPageChoices
+      tags:
+      - Pages
+      summary: The tools and workflows a page may use
+      description: >-
+        What the editor's plain-words path offers beside the tables (pages H5): the business's members' tools in use, whether each
+        answers at once (only those feed a part), their outputs and the values they ask (a personal one is never kept on a page
+        as a fixed value); and its workflows in use (one name each), with the signals a page may send them (a signal step with
+        "pages": true) and the approval steps they wait at. Names and types only. For the editor (page.edit); publishing checks
+        every choice again.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tools, workflows]
+                properties:
+                  tools:
+                    type: array
+                    items:
+                      type: object
+                      required: [command, name, answers, outputs, inputs]
+                      properties:
+                        command:
+                          type: string
+                        name:
+                          type: string
+                        answers:
+                          type: boolean
+                          description: Whether it answers at once (changes nothing), so may feed a part.
+                        outputs:
+                          type: array
+                          items:
+                            type: object
+                            required: [name, title, type]
+                            properties:
+                              name:
+                                type: string
+                              title:
+                                type: string
+                              type:
+                                type: string
+                            additionalProperties: false
+                        inputs:
+                          type: array
+                          items:
+                            type: object
+                            required: [name, title, personal]
+                            properties:
+                              name:
+                                type: string
+                              title:
+                                type: string
+                              personal:
+                                type: boolean
+                            additionalProperties: false
+                        list:
+                          type: object
+                          description: How the tool's own list answer reads each row (the output it lists, the row's title and line), for a list part over it.
+                          required: [from, title]
+                          properties:
+                            from:
+                              type: string
+                            title:
+                              type: string
+                            sub:
+                              type: string
+                          additionalProperties: false
+                      additionalProperties: false
+                  workflows:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, signals, approvals]
+                      properties:
+                        name:
+                          type: string
+                        signals:
+                          type: array
+                          items:
+                            type: string
+                        approvals:
+                          type: array
+                          items:
+                            type: object
+                            required: [step, name]
+                            properties:
+                              step:
+                                type: string
+                              name:
+                                type: string
+                            additionalProperties: false
+                      additionalProperties: false
+                additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
   /v1/pages/{name}/blocks/{block}:
     get:
       operationId: getPageBlock
