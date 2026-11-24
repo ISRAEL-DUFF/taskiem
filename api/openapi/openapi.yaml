@@ -1940,6 +1940,38 @@ paths:
                 $ref: '#/components/schemas/CustomerInvoice'
         default:
           $ref: '#/components/responses/Error'
+  /v1/invoices/{id}/pdf:
+    get:
+      operationId: getInvoicePDF
+      tags:
+      - Invoices
+      summary: An invoice's PDF
+      description: 'A5, with an embedded font (build plan H6): the business, the number, its state and dates, who it is to with their address (from a saved person''s or business''s place when it was made with @name), its lines, the total, what was paid and what is due. Made on demand; nothing is kept. The customer''s details are masked unless the caller holds pii.reveal and asks with reveal=true, which is audited.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/invoices/{id}/send:
     post:
       operationId: sendInvoice
@@ -53594,6 +53626,10 @@ components:
           type: string
         email:
           type: string
+        address:
+          type: string
+          maxLength: 300
+          description: Where the customer is, printed on the invoice and its PDF; sealed with the rest of the customer. Filled from a saved person's or business's place when the invoice is made with @name in the chat.
         key:
           type: string
           maxLength: 100

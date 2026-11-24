@@ -14104,7 +14104,7 @@ class SavedUse {
   final String runId;
   /// How the run stands now; left out once the run is no longer kept.
   final String? status;
-  /// The steps that read it, by id; `outputs` for an output.
+  /// The steps that read it, by id.
   final List<String> steps;
   final int version;
   final String workflow;

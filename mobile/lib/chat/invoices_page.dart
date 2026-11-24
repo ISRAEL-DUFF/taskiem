@@ -657,6 +657,16 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
                               overflow: TextOverflow.ellipsis,
                               style: tkText(size: 12.5, color: t.muted),
                             ),
+                          // Where they are, printed on the invoice (a saved
+                          // person's or business's place: build plan H6).
+                          if (_str(c['address']).isNotEmpty)
+                            Text(
+                              _str(c['address']),
+                              key: const Key('invoice-customer-address'),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: tkText(size: 12.5, color: t.muted),
+                            ),
                         ],
                       ),
                     ),
