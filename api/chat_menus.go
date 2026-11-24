@@ -143,11 +143,11 @@ func (s *Server) sayMenu(ctx context.Context, c *chat, m chatMenuMsg) error {
 		rows = append(rows[:9:9], row{topicPrefix + topicsMore, topicsMore, c.t("menu.more"), c.t("menu.more_line")})
 	// Slack: five rows at a time, then More… for the next five (§9).
 	case ch == "slack" && len(rows) > menuPage:
-		next := topicsMore + "@" + strconv.Itoa(m.from+menuPage)
+		next := topicsMore + "@" + strconv.Itoa(m.from+menuPage) + pickSuffix(m)
 		rows = append(rows[:menuPage:menuPage], row{topicPrefix + m.Topic + ":" + next, next, c.t("menu.more"), ""})
 	// Telegram: a topic's five rows, then All N for every one (§9).
 	case ch == "telegram" && m.Topic != "" && !m.all && len(rows) > menuPage:
-		next := topicsMore + "@all"
+		next := topicsMore + "@all" + pickSuffix(m)
 		rows = append(rows[:menuPage:menuPage], row{topicPrefix + m.Topic + ":" + next, next, c.t("menu.all", "n", strconv.Itoa(len(rows))), ""})
 	}
 	st := chatMenuState{Topic: m.Topic, From: m.from}
@@ -202,6 +202,14 @@ const menuPage = 5
 // "more@all".
 func (s *Server) menuMore(ctx context.Context, c *chat, topic, spec string, from int) error {
 	m := chatMenuMsg{Topic: topic}
+	// The row picked first on the page before keeps its place, so the
+	// next page neither skips a row nor shows it again.
+	if rest, pick, ok := strings.Cut(spec, pickSep); ok && topic != "" {
+		if a, found := chatActionByID(pick); found && a.Topic == topic {
+			m.Pick = pick
+		}
+		spec = rest
+	}
 	switch rest, _ := strings.CutPrefix(spec, topicsMore+"@"); {
 	case spec == topicsMore:
 		m.from = from + 9
@@ -220,6 +228,17 @@ func (s *Server) menuMore(ctx context.Context, c *chat, topic, spec string, from
 		return s.sayMenu(ctx, c, chatMenuMsg{})
 	}
 	return s.sayMenu(ctx, c, m)
+}
+
+// pickSep parts a More…'s place from the row picked first ("more@5~riders.add").
+const pickSep = "~"
+
+// pickSuffix is a topic's More… or All N's mark of its picked row.
+func pickSuffix(m chatMenuMsg) string {
+	if m.Topic == "" || m.Pick == "" {
+		return ""
+	}
+	return pickSep + m.Pick
 }
 
 // isMoreItem reports whether a menu's item is its More… or All N.

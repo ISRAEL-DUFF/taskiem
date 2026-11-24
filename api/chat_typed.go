@@ -169,6 +169,12 @@ func (s *Server) typedUse(ctx context.Context, c *chat, text string, m lang.Matc
 		return "", false
 	}
 	c.typedSeen = true
+	// Only a message that arrived with nothing waiting (or only a menu,
+	// which a typed command lets go): in the middle of something, words are
+	// its answer, not a command typed.
+	if c.state != stateIdle && (c.data.Menu == nil || c.state != stateCollecting) {
+		return "", false
+	}
 	id := typedActionID(text, m, matched)
 	a, ok := chatActionByID(id)
 	if !ok || !s.mayAct(c, s.chatAreas(ctx, c), a) {

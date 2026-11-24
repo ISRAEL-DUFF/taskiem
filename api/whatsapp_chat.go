@@ -945,11 +945,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) (err error) {
 	// A reply quoting a linked business's message, into its conversation
 	// (link_chat.go), whatever else the conversation is in the middle of.
 	if done, err := s.waQuotedReply(ctx, c); done || err != nil {
+		c.unread = true // not a command of Taskiem's (chat_typed.go)
 		return err
 	}
 	// "..." first: a message straight to the linked businesses it
 	// mentions (chat_direct.go), read by no command and no model.
 	if done, err := s.waDirect(ctx, c); done || err != nil {
+		c.unread = true // not a command of Taskiem's (chat_typed.go)
 		return err
 	}
 	// A question about a saved thing ("what's @generator's last service
@@ -963,16 +965,19 @@ func (s *Server) waCommand(ctx context.Context, c *chat) (err error) {
 	// With chat tools, a message naming linked businesses is for them,
 	// unless it calls Taskiem (chat_tools.go).
 	if done, err := s.toolsDirect(ctx, c); done || err != nil {
+		c.unread = true // not a command of Taskiem's (chat_typed.go)
 		return err
 	}
 	// A business's own tool by "/command" (tools_chat.go), before the
 	// built-in tools' "/" links.
 	if strings.HasPrefix(strings.TrimSpace(text), "/") {
 		if done, err := s.waMadeTool(ctx, c, text); done || err != nil {
+			c.unread = true // not a command of Taskiem's (chat_typed.go)
 			return err
 		}
 		// A business's page by "/name": its short form (pages_chat.go).
 		if done, err := s.waPage(ctx, c, text); done || err != nil {
+			c.unread = true // not a command of Taskiem's (chat_typed.go)
 			return err
 		}
 	}
@@ -1319,15 +1324,18 @@ func (s *Server) waCommand(ctx context.Context, c *chat) (err error) {
 	// (tools_chat.go).
 	if !matched {
 		if done, err := s.waMadeTool(ctx, c, text); done || err != nil {
+			c.unread = true // not a command of Taskiem's (chat_typed.go)
 			return err
 		}
 		// A business's page by its name ("tickets"): its short form, after
 		// Taskiem's own words and the business's tools (pages_chat.go).
 		if done, err := s.waPage(ctx, c, text); done || err != nil {
+			c.unread = true // not a command of Taskiem's (chat_typed.go)
 			return err
 		}
 	}
 	if c.state == stateStepUp {
+		c.unread = true
 		return c.say(ctx, s, c.t("wa.stepup_waiting", "step", c.data.Step))
 	}
 	// Nothing below reads it as a command typed (chat_typed.go).

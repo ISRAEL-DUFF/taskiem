@@ -13,7 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/paystack"
+	"github.com/israel-duff/taskiem/engine/ai"
+	"github.com/israel-duff/taskiem/engine/lang"
 )
 
 // event posts an Events API delivery as Slack does, signed with secret,
@@ -195,5 +198,55 @@ func TestSlackMenuFiveThenMore(t *testing.T) {
 	w.event(t, dm("Ev13", "U0OWNER", "6"), slackSecret)
 	if again, _ := buttons(); len(again) != 2 || again[0] != rest[0] {
 		t.Fatalf("More… by its number: %v", again)
+	}
+}
+
+// A topic's More… on Slack after the model picked a row (review of H4):
+// the picked row first, then the next page goes on from there, so no row
+// is skipped and none shown twice; the same by its number.
+func TestSlackMenuMoreKeepsThePick(t *testing.T) {
+	w := newSlackWorld(t)
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN}, Model: &ai.Fake{Respond: func(req ai.Request) (*ai.Response, error) {
+		return &ai.Response{Text: `{"kind":"topic","id":"saved","pick":"saved.import","values":[],"command":"","reply":""}`}, nil
+	}}}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(201, "POST", "/v1/connections", map[string]any{"connector": "slack@1", "environment": "prod", "credentials": map[string]string{"bot_token": "xoxb-acme"}})
+	w.fake.users["owner@acme.test"] = "U0OWNER"
+	w.link(t, owner, "U0OWNER")
+	values := func() []string {
+		t.Helper()
+		got := w.fake.to("U0OWNER")
+		blocks, _ := got[len(got)-1]["blocks"].([]any)
+		var out []string
+		for _, b := range blocks {
+			if els, ok := b.(map[string]any)["elements"].([]any); ok {
+				for _, e := range els {
+					out = append(out, fmt.Sprint(e.(map[string]any)["value"]))
+				}
+			}
+		}
+		return out
+	}
+	for i, more := range []func(more string){
+		func(more string) { w.click(t, "U0OWNER", "taskiem.reply.5", more, slackSecret) },
+		func(string) { w.event(t, dm("Ev31", "U0OWNER", "6"), slackSecret) },
+	} {
+		w.event(t, dm(fmt.Sprintf("Ev2%d", i), "U0OWNER", "my saved stuff is a mess"), slackSecret)
+		first := values()
+		if len(first) != 6 || first[0] != "act:saved.import" || first[5] != "topic:saved:more@5~saved.import" {
+			t.Fatalf("the first page: %v", first)
+		}
+		more(first[5])
+		rest := values()
+		seen := map[string]bool{}
+		for _, v := range append(first[:5], rest...) {
+			if seen[v] {
+				t.Fatalf("%s twice: %v then %v", v, first, rest)
+			}
+			seen[v] = true
+		}
+		if len(rest) != 2 || len(seen) != 7 {
+			t.Fatalf("a row skipped: %v then %v", first, rest)
+		}
 	}
 }
