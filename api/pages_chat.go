@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -42,16 +43,17 @@ func (s *Server) waPage(ctx context.Context, c *chat, text string) (bool, error)
 	if pages.ReservedName(name) {
 		return false, nil
 	}
-	short, ok, err := s.pageShortForm(context.WithValue(ctx, ctxKey{}, c.p), name, c.t)
+	short, ok, err := s.pageShortForm(context.WithValue(ctx, ctxKey{}, c.p), name, nil, c.t)
 	if err != nil || !ok {
 		return false, err
 	}
 	return true, c.say(ctx, s, short)
 }
 
-// pageShortForm is a page's short form for the principal in ctx: false
-// when there is no such published page or they may not open it.
-func (s *Server) pageShortForm(ctx context.Context, name string, t func(id string, kv ...string) string) (string, bool, error) {
+// pageShortForm is a page's short form for the principal in ctx, with the
+// filters set (a notification's page button; nil for none): false when
+// there is no such published page or they may not open it.
+func (s *Server) pageShortForm(ctx context.Context, name string, set map[string]string, t func(id string, kv ...string) string) (string, bool, error) {
 	p := principalFrom(ctx)
 	pc := &pageCtx{broken: map[int]string{}, off: map[int]string{}}
 	var viewer pages.Viewer
@@ -108,7 +110,9 @@ func (s *Server) pageShortForm(ctx context.Context, name string, t func(id strin
 	s.countPageView(ctx, p, pc.row.ID) // its tool parts start as on the page (pages_runs.go)
 	viewer.Phone = s.viewerPhone(ctx, p)
 	viewer.Personal = p.Can(PermTableRead)
-	pc.values, _ = pc.page.FilterValues(nil, viewer, time.Now())
+	// Filters set by a notification's button: a value the page refuses
+	// (a choice it no longer offers) is left out, as the page does.
+	pc.values, _ = pc.page.FilterValues(set, viewer, time.Now())
 
 	var figures []string
 	var list []string
@@ -167,7 +171,14 @@ func (s *Server) pageShortForm(ctx context.Context, name string, t func(id strin
 		b.WriteString("\n" + t("wa.page.more", "count", fmt.Sprint(more)))
 	}
 	if s.PublicURL != "" {
-		b.WriteString("\n\n" + t("wa.page.open", "link", strings.TrimRight(s.PublicURL, "/")+"/pages/"+url.PathEscape(pc.page.Name)))
+		link := strings.TrimRight(s.PublicURL, "/") + "/pages/" + url.PathEscape(pc.page.Name)
+		if len(pc.values.Set) > 0 {
+			// The filters a notification's button set, for the app and the
+			// web to open the page with (pages H5, g-pages-notif).
+			f, _ := json.Marshal(pc.values.Set)
+			link += "?" + url.Values{"filters": {string(f)}}.Encode()
+		}
+		b.WriteString("\n\n" + t("wa.page.open", "link", link))
 	}
 	return b.String(), true, nil
 }

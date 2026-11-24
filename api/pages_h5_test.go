@@ -1,11 +1,104 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/israel-duff/taskiem/api"
+	"github.com/israel-duff/taskiem/connectors/notify"
+	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
+
+// g-pages-notif: a Tell me message carries a button that opens a page
+// filtered to today; drawn only for someone the page's roles let open
+// it; pressed, the page's short form with that filter and its link with
+// it; someone else pressing it is told they cannot open it.
+func TestPagesFromANotification(t *testing.T) {
+	defer api.SetPageToolWait(0)()
+	w := newWAWorld(t)
+	if err := w.env.Registry.Register(notify.New(&notify.Notifier{Pool: w.env.Store.Pool, Chat: []string{"whatsapp"},
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}})); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Acme", "owner@h5notif.test")
+	publishWF(t, owner, "Disk alerts", toolDef("wf_disks", "Disk alerts", "disk-alerts", "", `{"day":{"type":"string","title":"Day"}}`,
+		`[{"name":"rows","type":"list","title":"Rows","description":"Rows","value":"=steps.look.output.rows"}]`,
+		`{"type":"text","text":"done"}`,
+		`{"id":"look","type":"transform","config":{"output":{"rows":[{"name":"=\"db-2 full \" + trigger.body.day"}]}}}`))
+	doc := map[string]any{"page": "page/v1", "name": "disks", "title": "Disks", "roles": []string{"operator"},
+		"filters": []map[string]any{{"id": "day", "type": "search", "label": "Day"}},
+		"blocks": []map[string]any{
+			{"id": "list", "type": "list", "title": "Alerts", "source": map[string]any{"tool": "disk-alerts", "output": "rows", "inputs": map[string]any{"day": "=filters.day"}},
+				"item": map[string]any{"title": "=item.name"}},
+		}}
+	owner.must(201, "POST", "/v1/pages", map[string]any{"document": doc})
+	if pub := owner.must(200, "POST", "/v1/pages/disks/publish", nil); len(pub["problems"].([]any)) != 0 {
+		t.Fatalf("publish: %v", pub["problems"])
+	}
+	op := w.member(t, owner, "op@h5notif.test", "operator")
+	bo := w.member(t, owner, "bo@h5notif.test", "builder") // not in the page's roles
+	const on, bn = "+2348010000061", "+2348010000062"
+	w.bind(t, op, on)
+	w.bind(t, bo, bn)
+	// Each has written in the last day: WhatsApp's window is open, so a
+	// message carries its buttons.
+	w.say(t, on, "help")
+	w.say(t, bn, "help")
+
+	// The validator holds a page button's shape.
+	bad := `{"schema":"wd/v1","id":"wf_badtell","version":1,"name":"Bad tell","trigger":{"type":"manual"},
+	  "steps":[{"id":"tell","type":"connector","connector":"notify@1","action":"tell",
+	    "input":{"message":"x","buttons":[{"label":"See","page":"Disks!","once":true}]}}]}`
+	if s, out := owner.do("POST", "/v1/workflows", map[string]any{"name": "Bad tell", "definition": json.RawMessage(bad)}); s == 201 {
+		wf := out["id"].(string)
+		if s, out := owner.do("POST", "/v1/workflows/"+wf+"/versions/1/publish", nil); s == 200 || !strings.Contains(toJSON(out), "short name") {
+			t.Errorf("a bad page button published: %d %v", s, out)
+		}
+	} else if !strings.Contains(toJSON(out), "short name") || !strings.Contains(toJSON(out), "no once") {
+		t.Errorf("a bad page button: %d %v", s, out)
+	}
+
+	tell := `{"schema":"wd/v1","id":"wf_tellpage","version":1,"name":"Disk full","trigger":{"type":"manual"},
+	  "steps":[{"id":"tell","type":"connector","connector":"notify@1","action":"tell",
+	    "input":{"to":"members","members":["op@h5notif.test","bo@h5notif.test"],"message":"db-2 is nearly full",
+	      "buttons":[{"label":"See today's","page":"disks","filters":{"day":"today"}}]}}]}`
+	wf := publishFlow(t, owner, tell)
+	owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{}})
+	w.env.Drain(t)
+	w.tick(t)
+	got := w.graph.Last(t, on)
+	if !strings.Contains(got.Text, "db-2 is nearly full") || len(got.Buttons) != 1 || !strings.HasPrefix(got.Buttons[0].ID, "pg:") || got.Buttons[0].Title != "See today's" {
+		t.Fatalf("the operator's message: %+v", got)
+	}
+	if theirs := w.graph.Last(t, bn); len(theirs.Buttons) != 0 {
+		t.Errorf("a builder was given the page's button: %+v", theirs)
+	}
+
+	// Pressed: the page's short form, filtered to today, and its link with it.
+	pressed := w.send(t, on, whatsapptest.ButtonReply(got.Buttons[0].ID, "See today's"))
+	if len(pressed) != 1 {
+		t.Fatalf("pressed: %+v", pressed)
+	}
+	if pressed[0].Text != "" && !strings.Contains(pressed[0].Text, "*Disks*") {
+		t.Errorf("short form: %q", pressed[0].Text)
+	}
+	w.env.Drain(t)
+	again := w.send(t, on, whatsapptest.ButtonReply(got.Buttons[0].ID, "See today's"))
+	text := again[0].Text
+	link := waPublicURL + "/pages/disks?" + url.Values{"filters": {`{"day":"today"}`}}.Encode()
+	if !strings.Contains(text, "db-2 full today") || !strings.Contains(text, link) {
+		t.Errorf("the page filtered to today: %q (want %s)", text, link)
+	}
+	// Someone the page's roles do not let in cannot open it with it.
+	if r := w.send(t, bn, whatsapptest.ButtonReply(got.Buttons[0].ID, "See today's")); len(r) != 1 || !strings.Contains(r[0].Text, "not one you can open") {
+		t.Errorf("a builder pressed it: %+v", r)
+	}
+}
 
 // Pages H5 (build-plan-gaps §7), g-pages-mine: a page of tickets filtered
 // by Mine on a phone column shows a staff member their own: the number

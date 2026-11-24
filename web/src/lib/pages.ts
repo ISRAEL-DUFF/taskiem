@@ -143,6 +143,27 @@ export function runsWords(r: PageRuns | undefined): { line: string; over: boolea
   return { line, over };
 }
 
+/** A page link's filters (?filters={"day":"today"}, the link a Tell me
+ * message's page button answers with): at most four short words by filter
+ * id; null when there are none or they are not that. */
+export function linkFilters(raw: string | null): Record<string, string> | null {
+  if (!raw || raw.length > 600) return null;
+  try {
+    const m: unknown = JSON.parse(raw);
+    if (!m || typeof m !== "object" || Array.isArray(m)) return null;
+    const entries = Object.entries(m as Record<string, unknown>);
+    if (entries.length === 0 || entries.length > 4) return null;
+    const out: Record<string, string> = {};
+    for (const [k, v] of entries) {
+      if (!/^[a-z][a-z0-9_-]{0,23}$/.test(k) || typeof v !== "string" || v.length > 100) return null;
+      out[k] = v;
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
 export interface RowRunStatus {
   status?: string;
   words: string;

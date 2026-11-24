@@ -35,6 +35,25 @@ void main() {
     }
   });
 
+  // Pages H5 (g-pages-notif): a page's link from a Tell me message's
+  // button opens the page in the app with the filters it set; anything but
+  // a few short words by filter id is dropped.
+  test('a page’s link opens the page with its filters', () {
+    expect(page('https://taskiem.example/pages/disks'), '/pages/disks');
+    final withDay = page('https://taskiem.example/pages/disks?filters=%7B%22day%22%3A%22today%22%7D');
+    expect(withDay, '/pages/disks?filters=%7B%22day%22%3A%22today%22%7D');
+    final r = routeOf(withDay!);
+    expect(r.screen, RouteScreen.pages);
+    final pg = pageRouteOf(r.id, pageFiltersOf);
+    expect(pg.name, 'disks');
+    expect(pg.filters, {'day': 'today'});
+    expect(page('https://taskiem.example/pages/disks?filters=%5B1%5D'), '/pages/disks');
+    expect(page('https://taskiem.example/pages/disks?filters=%7B%22Bad%20id%22%3A%22x%22%7D'), '/pages/disks');
+    expect(page('https://taskiem.example/pages/Disks'), isNull);
+    expect(page('https://taskiem.example/pages/disks/edit'), isNull);
+    expect(pageRouteOf('tickets', pageFiltersOf), (name: 'tickets', filters: null));
+  });
+
   test('You’s pages open the app: the chats, a chat, Orders, an order, Discover, a profile', () {
     expect(page('https://taskiem.example/you'), '/you');
     expect(page('https://taskiem.example/you/chats/c-123'), '/you/chats/c-123');

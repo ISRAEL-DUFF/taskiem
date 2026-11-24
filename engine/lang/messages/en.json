@@ -4929,6 +4929,11 @@
       "reviewed": true,
       "context": "A page's short form in a chat app: the link to open the page"
     },
+    "wa.page.cannot_open": {
+      "text": "This page is not one you can open.",
+      "reviewed": true,
+      "context": "A Tell me message's button that opens a page, pressed by someone the page's roles do not let open it (or the page is gone)"
+    },
     "wa.tool.list_empty": {
       "text": "Nothing to show.",
       "reviewed": true,

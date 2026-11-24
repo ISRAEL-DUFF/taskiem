@@ -215,10 +215,14 @@ class _PagesPageState extends State<PagesPage> {
 // --- a page ---
 
 class PageScreen extends StatefulWidget {
-  const PageScreen({super.key, required this.auth, required this.name, this.backLabel = 'Back'});
+  const PageScreen({super.key, required this.auth, required this.name, this.backLabel = 'Back', this.filters});
   final Auth auth;
   final String name;
   final String backLabel;
+
+  /// The filters it opens with: those a link set (a Tell me message's page
+  /// button, pages H5). The server refuses one the page does not have.
+  final Map<String, String>? filters;
 
   @override
   State<PageScreen> createState() => _PageScreenState();
@@ -263,6 +267,7 @@ class _PageScreenState extends State<PageScreen> {
   @override
   void initState() {
     super.initState();
+    _values.addAll(widget.filters ?? const {});
     _search.addListener(_searched);
     unawaited(_load());
     unawaited(_liveOpen());
@@ -394,6 +399,9 @@ class _PageScreenState extends State<PageScreen> {
           _more.clear();
           _working();
         });
+        // A search a link set shows in the box.
+        final q = _searchId;
+        if (q != null && _search.text.isEmpty && (_values[q] ?? '').isNotEmpty) _search.text = _values[q]!;
       }
     } on Object catch (e) {
       if (mounted) setState(() => _error = e);

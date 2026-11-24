@@ -42,15 +42,17 @@ actions:
         buttons:
           type: array
           maxItems: 3
-          description: "Up to three buttons (decision 0073, made tools §10), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles: never running it by itself. once: the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them"
+          description: "Up to three buttons (decision 0073, made tools §10; pages §9), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles (never running it by itself), or one of the business's pages with its filters set (page, filters), for whoever presses it if the page's roles let them open it: its short form in the chat and its link, which opens in the app and on the web. once (a tool's): the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them"
           items:
             type: object
-            required: [label, tool]
+            required: [label]
             properties:
-              label:  { type: string, minLength: 1, maxLength: 20, description: "What the button says" }
-              tool:   { type: string, description: "The tool's command, such as clean-disk" }
-              inputs: { type: object, description: "Values for the tool's form, each a value or an expression" }
-              once:   { type: boolean, description: "The first run started from it spends it; the next person is told who took it" }
+              label:   { type: string, minLength: 1, maxLength: 20, description: "What the button says" }
+              tool:    { type: string, description: "The tool's command, such as clean-disk (a tool's button)" }
+              inputs:  { type: object, description: "Values for the tool's form, each a value or an expression" }
+              once:    { type: boolean, description: "The first run started from it spends it; the next person is told who took it" }
+              page:    { type: string, description: "A page's short name, such as disk-alerts (a page's button, in place of tool)" }
+              filters: { type: object, description: "With page: the page's filters by id, each a value or an expression (host: db-2, when: today)" }
     output:
       type: object
       properties:

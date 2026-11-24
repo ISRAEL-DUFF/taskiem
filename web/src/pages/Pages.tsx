@@ -24,6 +24,7 @@ import {
   liveQueue,
   type PageChanged,
   rowsWord,
+  linkFilters,
   runStatusLine,
   toneClass,
   viewWithFilters,
@@ -234,8 +235,9 @@ export function PageScreen() {
   const { name = "" } = useParams();
   const [search] = useSearchParams();
   const draft = search.get("draft") === "1";
-  // The page remembers a viewer's last filters on this device (pages §6).
-  const [values, setValues] = useState<Record<string, string>>(() => lastFilters(name));
+  // The page remembers a viewer's last filters on this device (pages §6);
+  // a link's filters (a Tell me message's page button) come first.
+  const [values, setValues] = useState<Record<string, string>>(() => linkFilters(search.get("filters")) ?? lastFilters(name));
   const keep = (next: Record<string, string>) => {
     setValues(next);
     try {

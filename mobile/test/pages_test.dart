@@ -524,7 +524,7 @@ void main() {
           ],
         },
         {'id': 'state', 'type': 'status', 'title': 'Paying riders', 'run': 'r1', 'status': 'waiting', 'words': 'Waiting', 'tone': 'warn',
-          'started_at': '2026-11-22T09:00:00Z', 'waiting_for': [{'kind': 'approval', 'who': 'an owner'}]},
+          'started_at': '2025-11-02T09:00:00Z', 'waiting_for': [{'kind': 'approval', 'who': 'an owner'}]},
       ],
     };
     api.routes['POST /v1/pages/deliveries/act'] = (r) {
@@ -554,6 +554,19 @@ void main() {
     await settle(t);
     expect(acts.last, {'block': 'list', 'row': 'd1', 'action': 1, 'yes': true});
     await t.pump(const Duration(seconds: 4));
+  });
+
+  // g-pages-notif: a page opened from a Tell me message's link reads its
+  // view with the filters the link set, and shows a search in its box.
+  testWidgets('A page opened from a notification keeps the filters its link set', (t) async {
+    phone(t, 700);
+    final api = _Api();
+    api.routes['GET /v1/pages/tickets/view'] = (_) => _view(more: null);
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'tickets', filters: const {'q': 'jam', 'st': 'open'})));
+    await settle(t);
+    final asked = api.calls.firstWhere((c) => c.url.path == '/v1/pages/tickets/view').url.queryParameters['filters'];
+    expect(jsonDecode(asked!), {'q': 'jam', 'st': 'open'});
+    expect(find.text('jam'), findsOneWidget);
   });
 
   // g-pages-rowstatus: each delivery row shows where its run is (the

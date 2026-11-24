@@ -121,7 +121,7 @@ func (s *Server) sendNoticeItem(ctx context.Context, it whatsapp.OutboxItem) err
 // environment, as the chat's reply buttons; one whose tool is not there
 // is left out.
 func (s *Server) noticeButtons(ctx context.Context, it whatsapp.OutboxItem, bs []any) ([]whatsapp.Button, error) {
-	var drawn []answerBtn
+	var drawn []whatsapp.Button
 	err := db0(ctx, s, it.Tenant, func(tx pgx.Tx) error {
 		var env string
 		if err := tx.QueryRow(ctx, `SELECT environment FROM runs WHERE id = $1`, *it.Run).Scan(&env); err != nil {
@@ -130,22 +130,36 @@ func (s *Server) noticeButtons(ctx context.Context, it whatsapp.OutboxItem, bs [
 		for i, raw := range bs {
 			b, _ := raw.(map[string]any)
 			label, _ := b["label"].(string)
+			place := "notice/" + *it.Step + "/" + strconv.Itoa(i)
+			// A page with its filters (pages_notice.go): only for a person
+			// the page's roles let open it.
+			if page, ok := b["page"].(string); ok {
+				filters, _ := b["filters"].(map[string]any)
+				pb, err := noticePageButton(ctx, tx, it, place, label, page, filters)
+				if err != nil {
+					return err
+				}
+				if pb != nil {
+					drawn = append(drawn, *pb)
+				}
+				continue
+			}
 			tool, _ := b["tool"].(string)
 			once, _ := b["once"].(bool)
 			inputs, _ := b["inputs"].(map[string]any)
 			ab := answerBtn{Label: label, Tool: tool, Inputs: inputs, Once: once}
-			id, err := mintButton(ctx, tx, it.Tenant, env, *it.Run, "notice/"+*it.Step+"/"+strconv.Itoa(i), ab)
+			id, err := mintButton(ctx, tx, it.Tenant, env, *it.Run, place, ab)
 			if err != nil {
 				return err
 			}
 			if id != uuid.Nil {
 				ab.Token = id.String()
-				drawn = append(drawn, ab)
+				drawn = append(drawn, chatButtons([]answerBtn{ab})...)
 			}
 		}
 		return nil
 	})
-	return chatButtons(drawn), err
+	return drawn, err
 }
 
 // sealedStepButtons are a Tell me step's buttons from its input as the run

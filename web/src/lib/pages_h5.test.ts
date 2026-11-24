@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runStatusLine, runsWords } from "./pages";
+import { linkFilters, runStatusLine, runsWords } from "./pages";
 
 // Pages H5 (build-plan-gaps §7).
 describe("pages H5", () => {
@@ -15,6 +15,16 @@ describe("pages H5", () => {
     const month = runsWords({ views_a_day: 50, tools: 1, runs_a_day: 50, runs_per_month: 1000 });
     expect(month?.over).toBe(true);
     expect(month?.line).toContain("about 1,500 a month from this page");
+  });
+
+  it("reads a page link's filters (g-pages-notif)", () => {
+    expect(linkFilters(null)).toBeNull();
+    expect(linkFilters('{"day":"today","host":"db-2"}')).toEqual({ day: "today", host: "db-2" });
+    expect(linkFilters("[1]")).toBeNull();
+    expect(linkFilters('{"Bad id":"x"}')).toBeNull();
+    expect(linkFilters('{"n":3}')).toBeNull();
+    expect(linkFilters("{not json")).toBeNull();
+    expect(linkFilters('{"a":"1","b":"2","c":"3","d":"4","e":"5"}')).toBeNull();
   });
 
   it("says a row's run in a line (g-pages-rowstatus)", () => {

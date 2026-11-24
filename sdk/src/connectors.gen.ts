@@ -1668,7 +1668,7 @@ export interface NotifyMessageInput {
   title?: Val<string>;
 }
 export interface NotifyTellInput {
-  /** Up to three buttons (decision 0073, made tools §10), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles: never running it by itself. once: the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them */
+  /** Up to three buttons (decision 0073, made tools §10; pages §9), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles (never running it by itself), or one of the business's pages with its filters set (page, filters), for whoever presses it if the page's roles let them open it: its short form in the chat and its link, which opens in the app and on the web. once (a tool's): the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them */
   buttons?: Value;
   /** With to: members, their sign-in emails */
   members?: Value;

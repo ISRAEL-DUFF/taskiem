@@ -880,6 +880,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) (err error) {
 	if id, ok := strings.CutPrefix(text, buttonReplyPrefix); ok {
 		return s.waToolButton(ctx, c, id)
 	}
+	// A Tell me message's button that opens a page (pages_notice.go).
+	if id, ok := strings.CutPrefix(text, pageButtonPrefix); ok {
+		return s.waPageButton(ctx, c, id)
+	}
 	// A row chosen from a tool's list answer (tools_rows.go).
 	if ref, ok := strings.CutPrefix(text, rowReplyPrefix); ok {
 		return s.waToolRow(ctx, c, ref)
