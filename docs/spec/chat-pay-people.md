@@ -110,7 +110,7 @@ The same sheet with a list: each row is a person, an amount and what it is for. 
 
 ## Payroll in Taskiem, on Payrolla
 
-Rewritten 23 November 2026, after Payrolla shipped its whole Connect API for Taskiem ([decision 0074](../decisions/0074-payroll-run-from-taskiem.md), proposed). First written 22 November 2026.
+Rewritten 23 November 2026, after Payrolla shipped its whole Connect API for Taskiem ([decision 0074](../decisions/0074-payroll-run-from-taskiem.md), accepted 24 November 2026). First written 22 November 2026.
 
 **Payroll is Payrolla**, the same team's payroll product. Payrolla keeps employees, their pay and bank details, works out each run, keeps the approvals, pays every employee once and issues payslips. Taskiem does none of that itself and never pays a salary. It is Payrolla's front: a business runs its payroll in Taskiem's own screens and chat, and Taskiem sends what people do to Payrolla through its API. Payrolla's screens are not embedded.
 
@@ -518,21 +518,18 @@ Taken as they are (decision 0074, point 6), and said where they matter:
 
 Each Taskiem staff member may also be linked to one of the business's saved bank accounts for payments outside payroll (an advance, expenses back), paid with **Pay** on the staff page or as **Staff** in Pay several people. That account is Taskiem's and is not the salary account in Payrolla. Changing one does not change the other.
 
-### For the founder to decide
+### Settled by the founder (24 November 2026)
 
-Points where Payrolla's design meets something already settled here:
+Points where Payrolla's design meets something already settled here. The founder accepted [decision 0074](../decisions/0074-payroll-run-from-taskiem.md) and every proposed answer, as below. Where the text above says otherwise, this holds.
 
-1. **A code by text.** Settled 3 chose a PIN over a code by text for payments, as weaker against a stolen phone number. Payrolla's code may go by SMS (or email, or an authenticator app).
-   - **Proposed:** accept it for payroll, since the factor is Payrolla's and the payer's.
-   - **Proposed:** where an approver's code goes by SMS, show "A code from an authenticator app is safer: set one up in Payrolla."
-2. **A code typed in a chat thread.** A PIN is never typed in a message ("Taskiem will never ask for your PIN in a message"), and money from the chat apps is confirmed by link or WhatsApp's secure form. Payrolla's message itself says "Never share it".
-   - **Proposed:** accept the thread for Payrolla's code. It works once, for one action, in 5 minutes, and it is not kept.
-   - **Proposed:** ask Payrolla to word codes Taskiem asked for as "type it into Taskiem only" ([our answers](../integrations/payrolla-reference/08-taskiem-answers.md)).
-   - **The other way:** take the code only in WhatsApp's secure form and the web's sheet.
-3. **No passkey of Taskiem's own** on approving and locking (decision 0074, point 2). Adding one is the alternative.
-4. **No first-payment warning on payroll approvals** (P1 planned one). Taskiem never sees a salary account, and Payrolla holds every bank change for a second approver instead.
-5. **The only approver approving their own bank change.** Payrolla allows it, with their code, and records it. Taskiem would show it as "approved by the person who asked".
-6. **Taskiem's approval policies and pay limits do not apply to payroll.** Payrolla's one approver and separation of duties are the rules.
+| # | Question | Settled |
+| --- | --- | --- |
+| 1 | **A code by text.** Settled 3 chose a PIN over a code by text for payments, as weaker against a stolen phone number. Payrolla's code may go by SMS (or email, or an authenticator app) | **Accepted for payroll,** since the factor is Payrolla's and the payer's. Where an approver's code goes by SMS, Taskiem shows "A code from an authenticator app is safer: set one up in Payrolla." |
+| 2 | **A code typed in a chat thread.** A PIN is never typed in a message ("Taskiem will never ask for your PIN in a message"), and money from the chat apps is confirmed by link or WhatsApp's secure form. Payrolla's message itself says "Never share it" | **The thread is accepted for Payrolla's code.** It works once, for one action, in 5 minutes, and it is not kept. Payrolla is asked to word codes Taskiem asked for as "type it into Taskiem only" ([our answers](../integrations/payrolla-reference/08-taskiem-answers.md)). Not taken: the code only in WhatsApp's secure form and the web's sheet |
+| 3 | **A passkey of Taskiem's own** on approving and locking (decision 0074, point 2) | **None.** Payrolla's code is the factor |
+| 4 | **The first-payment warning on payroll approvals** (P1 planned one) | **Not built.** Taskiem never sees a salary account, and Payrolla holds every bank change for a second approver instead |
+| 5 | **The only approver approving their own bank change.** Payrolla allows it, with their code, and records it | **Allowed,** as Payrolla does. Taskiem shows it as "approved by the person who asked" |
+| 6 | **Taskiem's approval policies and pay limits** on payroll | **They do not apply to payroll.** Payrolla's one approver and separation of duties are the rules |
 
 ## Safety
 
@@ -570,7 +567,7 @@ A payment is a record first and a workflow run second: the chat creates the reco
 - **Checks** before a payment can be confirmed: name check, payee account changed, first payment, limits, balance, duplicate (same payee and amount in 24 hours asks "Pay again?").
 - **Paying:** one managed workflow per business, from a `pay-person` template like `pay-linked-bill`: `resolve_account`, approval when over a limit or the account changed, `pay_bank` with seed `payment:<id>`, `await_settlement`, then `payments@1 finish`. A batch runs the same steps in a loop (seed per payment, 5 at a time) and fixes `pay-a-list`'s missing name check.
 - **Money log:** each finished payment is recorded with its "what for"; a bill payment closes the bill as today, wages and deliveries post to their accounts.
-- **Approvals:** subjects for supplier payments carry the account number, so the first-payment warning shows on them too. Payroll's approvals are Payrolla's, and Taskiem never sees a salary account ([for the founder](#for-the-founder-to-decide), 4).
+- **Approvals:** subjects for supplier payments carry the account number, so the first-payment warning shows on them too. Payroll's approvals are Payrolla's, and Taskiem never sees a salary account ([for the founder](#settled-by-the-founder-24-november-2026), 4).
 - **Preparing from a workflow:** the action `payments@1 prepare` makes a payment record from a run (a payee, an amount, what for) and stops there, in "prepared": a person who may pay confirms it with a passkey, as any payment. It never sends. It is how a business's own workflow or made tool pays a saved account ([the build plan](build-plan-saved-tools-payments.md), P1 and S3).
 - **Permission:** `money.pay`, given to owners and to roles the owner chooses, always with `pay_limits`.
 

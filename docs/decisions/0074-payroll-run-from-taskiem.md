@@ -1,6 +1,6 @@
 # 0074 — Payroll run from Taskiem on Payrolla's Connect API, confirmed with Payrolla's own code
 
-Date: 2026-11-23 · Status: **Proposed** (P4b planned, not built) · Plan: [Payroll in Taskiem, on Payrolla](../spec/chat-pay-people.md#payroll-in-taskiem-on-payrolla) · Build plan: [P4b](../spec/build-plan-saved-tools-payments.md#stage-4-the-rest-of-payments) · Amends: [0044](0044-rails-and-products.md), its note of 22 November 2026 (approving was a link into Payrolla) · Partner: Payrolla's replies ([Phase A](../integrations/payrolla-reference/05-phase-a-response.md), [Phase B](../integrations/payrolla-reference/06-phase-b-response.md), [Phase C](../integrations/payrolla-reference/07-phase-c-response.md)) and [our answers](../integrations/payrolla-reference/08-taskiem-answers.md)
+Date: 2026-11-23 · Status: **Accepted (24 November 2026)** (P4b planned; the plan's open points settled by the founder the same day) · Plan: [Payroll in Taskiem, on Payrolla](../spec/chat-pay-people.md#payroll-in-taskiem-on-payrolla) · Build plan: [P4b](../spec/build-plan-saved-tools-payments.md#stage-4-the-rest-of-payments) · Amends: [0044](0044-rails-and-products.md), its note of 22 November 2026 (approving was a link into Payrolla) · Partner: Payrolla's replies ([Phase A](../integrations/payrolla-reference/05-phase-a-response.md), [Phase B](../integrations/payrolla-reference/06-phase-b-response.md), [Phase C](../integrations/payrolla-reference/07-phase-c-response.md)) and [our answers](../integrations/payrolla-reference/08-taskiem-answers.md)
 
 ## Context
 
@@ -71,7 +71,7 @@ Payrolla decided one thing differently. Taskiem asked it to accept **a Taskiem-s
 | Option | Why not |
 | --- | --- |
 | Taskiem's passkey and a Taskiem-signed approval, as asked | Payrolla refused it, for a good reason: it can check a signature, not that a person used a passkey. Payrolla says it may offer it later as something an owner opts into per company |
-| Taskiem's passkey **and** Payrolla's code on every approval | Two factors for one decision, from two products, and the second adds nothing Payrolla relies on. Left for the founder: [the plan's open points](../spec/chat-pay-people.md#for-the-founder-to-decide) |
+| Taskiem's passkey **and** Payrolla's code on every approval | Two factors for one decision, from two products, and the second adds nothing Payrolla relies on. Settled by the founder, 24 November 2026: no passkey of Taskiem's own ([the plan's settled points](../spec/chat-pay-people.md#settled-by-the-founder-24-november-2026), 3) |
 | Keep approving as a link into Payrolla (P4a) | A business would still use two products for the one thing that matters most. Kept only for a key connection without `payroll:approve`, until its owner reconnects |
 | Embed Payrolla's screens (its "trust the app's sign-in" option included) | Already refused (0044's note of 22 November 2026). R6's embed stays unbuilt |
 | Taskiem's own approval policies on top of Payrolla's (a second approver, a limit) | Two sets of rules about one payroll, which can disagree. Payrolla's are the payroll's, and Taskiem shows them |
@@ -89,7 +89,7 @@ Payrolla decided one thing differently. Taskiem asked it to accept **a Taskiem-s
 - **The connector `payrolla@1`** gains `auth.oauth2` (PKCE, HTTP Basic at the token URL, a platform app per mode, sign-up fields in `authorize_params`), the writes of Phases A to C, the new events, and Taskiem's own webhook subscription per connection.
 - **`engine/access`** gains `payroll.prepare` and `payroll.approve`.
 - **The Payrolla templates change.** The approval card becomes Taskiem's own card with **Approve**, and `payrolla-approve-by-chat` stays only for key connections without `payroll:approve`. The lock reminder offers **Lock and pay**. The payday check reads Payrolla's funding instead of another connection's balance.
-- **Paying people's settled rules change for payroll only.** The first-payment warning on payroll approvals (P1) is not built: Taskiem never sees a salary account, and Payrolla holds every bank change for a second approver. A code typed in a chat thread is accepted for payroll, where a payment's PIN is never typed in a message. Both are for the founder to confirm.
+- **Paying people's settled rules change for payroll only.** The first-payment warning on payroll approvals (P1) is not built: Taskiem never sees a salary account, and Payrolla holds every bank change for a second approver. A code typed in a chat thread is accepted for payroll, where a payment's PIN is never typed in a message. Both were confirmed by the founder on 24 November 2026 ([the plan's settled points](../spec/chat-pay-people.md#settled-by-the-founder-24-november-2026), 2 and 4).
 - **The P7 request is answered.** Payrolla's open questions are answered in [08-taskiem-answers](../integrations/payrolla-reference/08-taskiem-answers.md), a draft for the founder to send.
 - **The local copy of Payrolla's OpenAPI file is out of date** (`payrolla-reference/api/`, from 23 October). The current one is fetched before P4b-1, and the fake Payrolla the tests use follows it.
 
