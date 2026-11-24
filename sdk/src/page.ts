@@ -20,6 +20,9 @@ export const PAGE_FORMAT = "page/v1";
 /** What a page's expressions may read (pages §5): never steps, secrets or the environment. */
 export const PAGE_ROOTS = ["row", "item", "outputs", "filters"] as const;
 
+/** What a board's move reads besides (G4): to, the column a card goes to. */
+export const MOVE_ROOTS = [...PAGE_ROOTS, "to"] as const;
+
 /** What a page's expressions read (pages §5): a table's row, a tool's item
  * and outputs, and the page's filter values. Values are untyped. */
 export interface PageContext {
@@ -30,6 +33,8 @@ export interface PageContext {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   outputs: any;
   filters: Record<string, string>;
+  /** A board's move only: the column the card goes to (G4). */
+  to: string;
 }
 
 /** Words, a CEL string, or an arrow function compiled to CEL. */
@@ -55,6 +60,10 @@ export interface PageSource {
   tool?: string;
   inputs?: Record<string, unknown>;
   output?: string;
+  /** G5: the business's saved things of a kind it made (by name), in the order a date field of theirs comes (coming), only those within so many days. */
+  saved?: string;
+  coming?: string;
+  within?: number;
   filters?: Condition[];
   order?: { column: string; desc?: boolean }[];
   uses?: string[];
@@ -116,6 +125,7 @@ export type PageBlock =
       group?: { column: string; order?: string[] };
       detail?: PageDetail;
       actions?: PageAction[];
+      status?: RowStatus;
       empty?: string;
     }
   | {
@@ -127,10 +137,52 @@ export type PageBlock =
       size?: "full" | "half";
       detail?: PageDetail;
       actions?: PageAction[];
+      status?: RowStatus;
       empty?: string;
     }
   | { id: string; type: "buttons"; actions: PageAction[]; title?: string }
-  | { id: string; type: "status"; workflow: string; title?: string };
+  | { id: string; type: "status"; workflow: string; title?: string }
+  | {
+      id: string;
+      type: "board";
+      source: PageSource;
+      item: PageItem;
+      board: { column: string; columns: { value: string; label?: string }[]; move?: PageAction };
+      title?: string;
+      size?: "full" | "half";
+      detail?: PageDetail;
+      actions?: PageAction[];
+      status?: RowStatus;
+      empty?: string;
+    }
+  | {
+      id: string;
+      type: "chart";
+      source: PageSource;
+      chart: ChartSpec;
+      title?: string;
+      size?: "full" | "half";
+      naira?: boolean;
+      empty?: string;
+    };
+
+/** What a chart shows (G4): over time (by a date column, a period, the last so many) or by a group (a column of words), counted or added up (of); or a tool's rows, each a label and a number. */
+export interface ChartSpec {
+  kind: "bars" | "line";
+  of?: string;
+  by?: string;
+  period?: "day" | "week" | "month";
+  last?: number;
+  label?: string;
+  value?: string;
+}
+
+/** Each row shows where a run of workflow is: the run a column names (run), the run that waits, or last waited, under what the row names (to), or, with neither, the run the page's address names. */
+export interface RowStatus {
+  workflow: string;
+  run?: string;
+  to?: string;
+}
 
 /** A page/v1 document. */
 export interface PageDocument {
@@ -148,10 +200,10 @@ export interface PageDocument {
 // --------------------------------------------------------------- values
 
 /** A value as the document writes it: words as they are, a function compiled to "=CEL". */
-export function pageValue(v: PageValue, path = "value"): string {
+export function pageValue(v: PageValue, path = "value", roots: readonly string[] = PAGE_ROOTS): string {
   if (typeof v === "function") {
     try {
-      return "=" + compileFunction(v.toString(), PAGE_ROOTS);
+      return "=" + compileFunction(v.toString(), roots);
     } catch (e) {
       if (e instanceof ExpressionError) throw new ExpressionError(`${path}: ${e.message}`);
       throw e;
@@ -160,11 +212,11 @@ export function pageValue(v: PageValue, path = "value"): string {
   return v;
 }
 
-function values(m: Record<string, unknown> | undefined, path: string): Record<string, unknown> | undefined {
+function values(m: Record<string, unknown> | undefined, path: string, roots: readonly string[] = PAGE_ROOTS): Record<string, unknown> | undefined {
   if (m === undefined) return undefined;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(m)) {
-    if (v !== undefined) Object.defineProperty(out, k, { value: typeof v === "function" ? pageValue(v as PageValue, `${path}.${k}`) : v, enumerable: true, writable: true, configurable: true });
+    if (v !== undefined) Object.defineProperty(out, k, { value: typeof v === "function" ? pageValue(v as PageValue, `${path}.${k}`, roots) : v, enumerable: true, writable: true, configurable: true });
   }
   return out;
 }
@@ -189,6 +241,11 @@ export function figure(id: string, f: Omit<Extract<PageBlock, { type: "figure" }
 
 type ItemIn = { title: PageValue; sub?: PageValue; state?: { text: PageValue; tone?: Tone; tones?: Record<string, Tone> } };
 type DetailIn = { title: PageValue; lines?: { label: string; value: PageValue; naira?: boolean }[] };
+type RowStatusIn = { workflow: string; run?: PageValue; to?: PageValue };
+
+function rowStatus(r: RowStatusIn | undefined, path: string): RowStatus | undefined {
+  return r && clean({ workflow: r.workflow, run: word(r.run, `${path}.run`), to: word(r.to, `${path}.to`) });
+}
 
 function item(i: ItemIn, path: string): PageItem {
   return clean({
@@ -209,22 +266,60 @@ function detail(d: DetailIn | undefined, path: string): PageDetail | undefined {
 /** A list: rows, each a title, a line and a state; grouped, with a card and buttons. */
 export function list(
   id: string,
-  l: { source: PageSource; item: ItemIn; title?: string; size?: "full" | "half"; group?: { column: string; order?: string[] }; detail?: DetailIn; actions?: PageAction[]; empty?: string },
+  l: { source: PageSource; item: ItemIn; title?: string; size?: "full" | "half"; group?: { column: string; order?: string[] }; detail?: DetailIn; actions?: PageAction[]; status?: RowStatusIn; empty?: string },
 ): PageBlock {
-  return clean({ id, type: "list" as const, ...l, item: item(l.item, `${id}.item`), detail: detail(l.detail, `${id}.detail`) });
+  return clean({ id, type: "list" as const, ...l, item: item(l.item, `${id}.item`), detail: detail(l.detail, `${id}.detail`), status: rowStatus(l.status, `${id}.status`) });
 }
 
 /** A table: rows in up to six columns, a yes/no one ticked in place with edit. */
 export function table(
   id: string,
-  t: { source: PageSource; columns: { column: string; label?: string; naira?: boolean; edit?: boolean }[]; title?: string; size?: "full" | "half"; detail?: DetailIn; actions?: PageAction[]; empty?: string },
+  t: { source: PageSource; columns: { column: string; label?: string; naira?: boolean; edit?: boolean }[]; title?: string; size?: "full" | "half"; detail?: DetailIn; actions?: PageAction[]; status?: RowStatusIn; empty?: string },
 ): PageBlock {
-  return clean({ id, type: "table" as const, ...t, detail: detail(t.detail, `${id}.detail`) });
+  return clean({ id, type: "table" as const, ...t, detail: detail(t.detail, `${id}.detail`), status: rowStatus(t.status, `${id}.status`) });
 }
 
 /** The page's own buttons, three at most. */
 export function buttons(id: string, actions: PageAction[], title?: string): PageBlock {
   return clean({ id, type: "buttons" as const, actions, title });
+}
+
+/** A board (G4): a table's or a tool's rows in columns by a choice; a card moved to another column opens the move tool (moveAction), held to its roles and care. */
+export function board(
+  id: string,
+  b: {
+    source: PageSource;
+    item: ItemIn;
+    column: string;
+    columns: { value: string; label?: string }[];
+    move?: PageAction;
+    title?: string;
+    size?: "full" | "half";
+    detail?: DetailIn;
+    actions?: PageAction[];
+    status?: RowStatusIn;
+    empty?: string;
+  },
+): PageBlock {
+  const { column, columns, move, ...rest } = b;
+  return clean({
+    id,
+    type: "board" as const,
+    ...rest,
+    board: clean({ column, columns, move }),
+    item: item(b.item, `${id}.item`),
+    detail: detail(b.detail, `${id}.detail`),
+    status: rowStatus(b.status, `${id}.status`),
+  });
+}
+
+/** A chart (G4): bars or a line, one measure over time or by a group, worked out by the server. A tool's chart names each row's label and value (over item). */
+export function chart(
+  id: string,
+  c: { source: PageSource; kind: "bars" | "line"; of?: string; by?: string; period?: "day" | "week" | "month"; last?: number; label?: PageValue; value?: PageValue; title?: string; size?: "full" | "half"; naira?: boolean; empty?: string },
+): PageBlock {
+  const { kind, of, by, period, last, label, value, ...rest } = c;
+  return clean({ id, type: "chart" as const, ...rest, chart: clean({ kind, of, by, period, last, label: word(label, `${id}.label`), value: word(value, `${id}.value`) }) });
 }
 
 /** A run's state in plain words, of a workflow the page declares. */
@@ -239,6 +334,11 @@ type ActionOpts = { when?: PageValue };
 /** A made tool's form, filled in from the row (a masked value is asked, not filled). */
 export function toolAction(label: string, tool: string, inputs?: Record<string, PageValue | number | boolean>, opts: ActionOpts & { once?: boolean } = {}): PageAction {
   return clean({ label, tool, inputs: values(inputs, `${label}.inputs`), once: opts.once, when: word(opts.when, `${label}.when`) });
+}
+
+/** A board's move (G4): the tool a card moved to another column opens, its values over the card (row or item) and to, the column it goes to. Never once, never when. */
+export function moveAction(label: string, tool: string, inputs?: Record<string, PageValue | number | boolean>): PageAction {
+  return clean({ label, tool, inputs: values(inputs, `${label}.inputs`, MOVE_ROOTS) });
 }
 
 /** A signal to one run of a workflow that declares it for pages ("pages": true on its signal step), after a Yes. */

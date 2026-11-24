@@ -237,7 +237,7 @@ func (s *Server) addThing(w http.ResponseWriter, r *http.Request) {
 
 // patchThing is PATCH /v1/things/{id}: status (have, sold, broken, given,
 // gone), serial, warranty_until, note, label_id (clear_label to take it
-// off). Sold with sale_price_kobo (sale_paid_how cash or transfer) is
+// off), supplier_id (clear_supplier to take it off). Sold with sale_price_kobo (sale_paid_how cash or transfer) is
 // money in, "Sale of things we had": it needs invoice.manage too, and is
 // recorded once; the same sale again with the same Idempotency-Key (a
 // retry) answers 200 with the row as it is.
@@ -271,6 +271,9 @@ func (s *Server) patchThing(w http.ResponseWriter, r *http.Request) {
 		detail := map[string]any{"thing_id": id}
 		if in.Status != nil {
 			detail["status"] = *in.Status
+		}
+		if in.SupplierID != nil || in.ClearSupplier {
+			detail["supplier_id"] = in.SupplierID
 		}
 		return auditTx(r, tx, "thing.change", t.Name, detail)
 	}); err != nil {

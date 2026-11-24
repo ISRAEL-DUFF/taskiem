@@ -1,0 +1,13 @@
+{
+  "schema": "wd-test/v1",
+  "template": "tool-call-a-system",
+  "params": {},
+  "cases": [
+    {
+      "name": "shows the two fields chosen",
+      "trigger": {"body": {"value": "AD-12"}},
+      "mocks": {"ask": {"output": {"status": 200, "body": {"status": "shipped", "updated": "2026-11-20", "secret_note": "not shown"}}}},
+      "expect": {"status": "completed", "answer": {"title": "AD-12", "lines": [{"label": "status", "value": "shipped"}, {"label": "updated", "value": "2026-11-20"}]}}
+    }
+  ]
+}

@@ -74,10 +74,10 @@ func TestAIBuildProposesAndSavesADraft(t *testing.T) {
 	owner.must(204, "PUT", "/v1/variables/prod/ops_phone", map[string]any{"value": varValue})
 	owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "paystack@1", "name": "main",
 		"credentials": map[string]string{"secret_key": credValue}})
-	// Saved things by name, title and kind (saved objects S3), never what
+	// Saved things by name and kind (saved objects S3), never what
 	// they hold.
 	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "price-list", "title": "Price list", "kind": "text", "details": map[string]any{"body": "SAVED_BODY_SEEDED_6060"}})
-	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "supplier", "title": "Dangote", "kind": "bank_account", "bank_name": "GTBank", "account_number": "0123456789"})
+	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "supplier", "title": "Okeke Nwosu Trading", "kind": "bank_account", "bank_name": "GTBank", "account_number": "0123456789"})
 
 	b := build(t, w, owner, map[string]any{"goal": "When a loan is approved pay it with Paystack after approval; borrower BVN 22198765432, email ada@example.com", "environment": "prod"})
 	if b["status"] != "proposed" {
@@ -95,7 +95,7 @@ func TestAIBuildProposesAndSavesADraft(t *testing.T) {
 	for _, r := range f.Requests() {
 		sent += ai.PromptText(r)
 	}
-	for _, leak := range []string{secretValue, credValue, varValue, "22198765432", "ada@example.com", "SAVED_BODY_SEEDED_6060", "0123456789", "6789"} {
+	for _, leak := range []string{secretValue, credValue, varValue, "22198765432", "ada@example.com", "SAVED_BODY_SEEDED_6060", "0123456789", "6789", "Okeke Nwosu"} {
 		if strings.Contains(sent, leak) {
 			t.Errorf("%q reached the model", leak)
 		}

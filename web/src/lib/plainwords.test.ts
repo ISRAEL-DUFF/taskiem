@@ -40,6 +40,11 @@ const OWNER_FILES = [
   // Pages (decision 0072): the list, a page, the editor and their words.
   "pages/Pages.tsx",
   "pages/PageEditor.tsx",
+  "pages/PageEditorParts.tsx",
+  "pages/PageEditorG4.tsx",
+  "pages/PageEditorG5.tsx",
+  "pages/PageStarters.tsx",
+  "pages/PageG4.tsx",
   "lib/pages.ts",
   // Your tools (made tools M1): the sheet, its answer, the tool's page,
   // and Use it from chat in the builder.

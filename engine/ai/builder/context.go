@@ -52,17 +52,17 @@ type Context struct {
 	// links): their names and how it sees them (supplier, customer or
 	// both), for link@1 and the link trigger.
 	Linked []LinkedBusiness `json:"linked_businesses,omitempty"`
-	// Saved are the business's saved things (saved objects S3): name,
-	// title and kind only, never what they hold.
+	// Saved are the business's saved things (saved objects S3): name and
+	// kind only, never what they hold (build plan M6: not even a title,
+	// which for a saved person is their name).
 	Saved []SavedThing `json:"saved_things,omitempty"`
 }
 
 // SavedThing is one of the business's saved things, as the model is told
-// it: what it is called, never a value.
+// it: what it is called and its kind, never a value.
 type SavedThing struct {
-	Name  string `json:"name"`
-	Title string `json:"title"`
-	Kind  string `json:"kind"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
 	// A made-up kind's (kind custom): its name, and the fields a run
 	// reads by key.
 	KindName string   `json:"kind_name,omitempty"`

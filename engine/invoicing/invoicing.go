@@ -68,6 +68,9 @@ type Customer struct {
 	Name  string `json:"name"`
 	Phone string `json:"phone,omitempty"`
 	Email string `json:"email,omitempty"`
+	// Address is where the customer is, printed on the invoice (a saved
+	// person's or business's place: build plan H6). Sealed with the rest.
+	Address string `json:"address,omitempty"`
 	// Key is the business's own key for the customer ("student:42"), when
 	// it has one: invoices with the same key are one customer's. Without
 	// it, a customer is their phone number (else email): CustomerID.
@@ -534,6 +537,9 @@ func (s *Invoices) ListOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, stat
 
 // --- writing ---
 
+// MaxAddress is how long a customer's address may be.
+const MaxAddress = 300
+
 // check validates a draft against the settings and returns its lines and
 // total.
 func check(d Draft) ([]Line, int64, error) {
@@ -551,6 +557,9 @@ func check(d Draft) ([]Line, int64, error) {
 		if a, err := mail.ParseAddress(d.Customer.Email); err != nil || a.Address != d.Customer.Email {
 			return nil, 0, invalid("%q is not an email address", d.Customer.Email)
 		}
+	}
+	if len([]rune(strings.TrimSpace(d.Customer.Address))) > MaxAddress {
+		return nil, 0, invalid("the customer's address has up to %d characters", MaxAddress)
 	}
 	if !ValidCustomerKey(d.Customer.Key) {
 		return nil, 0, invalid("the customer's key has up to 100 letters, digits and ':', '.', '_', '/' or '-'")

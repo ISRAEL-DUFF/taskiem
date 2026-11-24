@@ -132,6 +132,12 @@ type Words struct {
 	// Treat are the answers to how a purchase line is treated, in words
 	// (what-a-business-buys §6, In chat): each answer's words.
 	Treat map[TreatAnswer][]string `json:"treat,omitempty"`
+	// Topics are the words a message about one of the chat menus' topics
+	// tends to have, by the topic's id (docs/spec/chat-menus.md §8.3):
+	// each matched as the start of a word ("rider" finds "riders"), or,
+	// with a space in it, anywhere in the message. The api's catalogue
+	// holds the topics; its test holds these to it.
+	Topics map[string][]string `json:"topics,omitempty"`
 }
 
 // prefixIntents take what follows them; the others are whole messages.
@@ -191,6 +197,9 @@ func LoadWords() (map[Tag]*Words, error) {
 				}
 				w.Treat[a] = foldAll(ps)
 			}
+			for t, ps := range w.Topics {
+				w.Topics[t] = foldAll(ps)
+			}
 			w.Markers = foldAll(w.Markers)
 			w.Fillers = foldAll(w.Fillers)
 			w.ForWords = foldAll(w.ForWords)
@@ -227,6 +236,15 @@ func mustWords() map[Tag]*Words {
 func ForWords(t Tag) []string {
 	if w := mustWords()[t]; w != nil {
 		return w.ForWords
+	}
+	return nil
+}
+
+// TopicWords are a language's words for the chat menus' topics, by topic
+// id, folded (see Fold); nil for a language with none.
+func TopicWords(t Tag) map[string][]string {
+	if w := mustWords()[t]; w != nil {
+		return w.Topics
 	}
 	return nil
 }

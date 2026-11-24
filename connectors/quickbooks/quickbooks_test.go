@@ -31,7 +31,11 @@ func TestConformance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep := conntest.Run(context.Background(), New(Options{}), s, conntest.Options{})
+	// The fixtures' dates are fixed (changes_since asks from 25 October
+	// 2026, within QuickBooks' 30 days): the clock is too, so the case
+	// never ages out.
+	at := func() time.Time { return time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC) }
+	rep := conntest.Run(context.Background(), New(Options{Now: at}), s, conntest.Options{})
 	for _, r := range rep.Results {
 		for _, p := range r.Problems {
 			t.Errorf("%s: %s", r.Case, p)

@@ -72,6 +72,12 @@
                 <data android:pathPrefix="/g/"/>
                 <!-- A password reset's link (lib/screens/forgot_password.dart). -->
                 <data android:path="/reset-password"/>
+                <!-- One of the business's pages (/pages/<name>, a Tell me
+                     message's page button's link: pages H5), and never a page's
+                     editor (/pages/<name>/edit), which stays on the web. Android
+                     12 and later read this pattern; earlier ones open the link in
+                     the browser, as before. -->
+                <data android:pathAdvancedPattern="/pages/[a-z][a-z0-9-]+"/>
             </intent-filter>
             <!-- The links go to app_links, not Flutter's own router. -->
             <meta-data android:name="flutter_deeplinking_enabled" android:value="false"/>

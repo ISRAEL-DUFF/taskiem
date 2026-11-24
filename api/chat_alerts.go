@@ -630,6 +630,7 @@ func (s *Server) approvalAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 			if a.FirstPayment, err = s.firstPayment(ctx, tx, p.TenantID, a.Environment, a.Subject); err != nil {
 				return err
 			}
+			a.Subject = maskSubjectAccounts(a.Subject)
 			who, err := runAsker(ctx, tx, p.TenantID, a.RunID)
 			if err != nil {
 				return err

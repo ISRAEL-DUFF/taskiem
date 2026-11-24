@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSavedPicks } from "./SavedPicks";
 import { sendSaved } from "./SavedCard";
 import { SaveAsItem, useSaveAs } from "./SaveAs";
@@ -49,7 +49,13 @@ import { ChatHead } from "./ChatHead";
 import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
 import { useConfirm } from "./ConfirmSheet";
-import { BookSheet, loadTheirTools, OrdersSheet, PayButton, ShopSheet, TheirToolSheet, ToolsMenu, type CustomerTool, type PersonTool } from "./PersonTools";
+import { BookSheet, loadTheirTools, OrdersSheet, PayButton, ShopSheet, TheirRunCard, TheirToolSheet, ToolsMenu, type CustomerTool, type PersonTool } from "./PersonTools";
+import { toast } from "../toast";
+import { keepTheirRun, keptTheirRuns, withTheirRuns, type KeptTheirRun } from "../lib/theirRuns";
+
+/** A run of one of their tools, placed in the conversation by its time. */
+type TheirRunItem = { id: string; created_at: string; mine: false; theirRun: KeptTheirRun };
+type ShownItem = PersonMessage | TheirRunItem;
 import { NewChatSheet, ShareToPerson } from "./People";
 import { peopleDraft } from "./PeopleChat";
 import { photoOf as peoplePhoto, requestsWords, rowKey, rowPath, rowPreview, type ChatList, type ChatListItem } from "../lib/people";
@@ -409,7 +415,22 @@ export function PersonChatPage() {
   const [reporting, setReporting] = useState(false);
   // Their tools (made tools T5): read when the tools button opens.
   const [theirs, setTheirs] = useState<CustomerTool[]>([]);
-  const [their, setTheir] = useState<{ tool: CustomerTool; from?: DOMRect }>();
+  const [their, setTheir] = useState<{ tool: CustomerTool; from?: DOMRect; values?: Record<string, unknown>; n: number }>();
+  // Their tools' runs, kept in this chat on this browser (build plan H6):
+  // each in the conversation in its place, its answer read again.
+  const [theirRuns, setTheirRuns] = useState<KeptTheirRun[]>(() => keptTheirRuns(id));
+  useEffect(() => setTheirRuns(keptTheirRuns(id)), [id]);
+  // A button on an answer opens another of their tools, filled in.
+  const openTheirTool = (command: string, values: Record<string, unknown>) =>
+    void (theirs.length > 0 ? Promise.resolve(theirs) : loadTheirTools(id)).then((list) => {
+      setTheirs(list);
+      const t = list.find((x) => x.command === command);
+      if (!t) {
+        toast("This isn't available any more.", "error");
+        return;
+      }
+      setTheir((cur) => ({ tool: t, values, n: (cur?.n ?? 0) + 1 }));
+    });
   useEffect(() => {
     if (tool?.key !== "menu") return;
     let live = true;
@@ -428,7 +449,11 @@ export function PersonChatPage() {
   const loadingOlder = useRef(false);
   const loadOlderRef = useRef<() => void>(() => undefined);
   const olderCb = useCallback(() => loadOlderRef.current(), []);
-  const thread = useThread({ items: messages, isMine: (m) => m.mine, hasOlder, loadOlder: olderCb });
+  const shown = useMemo<ShownItem[] | undefined>(
+    () => (messages ? withTheirRuns<ShownItem>(messages, theirRuns, hasOlder, (r) => ({ id: `their-run:${r.id}`, created_at: r.at, mine: false, theirRun: r })) : undefined),
+    [messages, theirRuns, hasOlder],
+  );
+  const thread = useThread({ items: shown, isMine: (m) => m.mine, hasOlder, loadOlder: olderCb });
   const base = `/v1/me/chats/${encodeURIComponent(id)}`;
   const c = chat.data;
 
@@ -724,7 +749,7 @@ export function PersonChatPage() {
       )}
       <ErrorBox error={sendError ?? act.error ?? pollError ?? chat.error} />
       <ChatStream
-        items={messages}
+        items={shown}
         thread={thread}
         hasOlder={hasOlder}
         prefix="person"
@@ -732,6 +757,12 @@ export function PersonChatPage() {
         startsRun={(prev, m) => !prev || prev.mine !== m.mine}
         empty={<>Say hello to {name}. They will answer here.</>}
         render={(m, { first }) => {
+          if ("theirRun" in m)
+            return (
+              <BubbleShell id={m.id} mine={false} first={first} testid="person-their-run" className="card-bubble" what={m.theirRun.name}>
+                <TheirRunCard chat={id} run={m.theirRun} onOpen={openTheirTool} />
+              </BubbleShell>
+            );
           const ord = m.card?.reference && m.card.type !== "invoice" ? ordersByRef.get(m.card.reference) : undefined;
           // An order's or a delivery's card shows where the order is now.
           const card = m.card ? liveCard(m.card, ord) : undefined;
@@ -909,11 +940,23 @@ export function PersonChatPage() {
           theirs={theirs}
           onTheirs={(t, from) => {
             setTool(undefined);
-            setTheir({ tool: t, from });
+            setTheir((cur) => ({ tool: t, from, n: (cur?.n ?? 0) + 1 }));
           }}
         />
       )}
-      {c && their && <TheirToolSheet chat={id} tools={theirs} start={{ tool: their.tool }} from={their.from} onClose={() => setTheir(undefined)} />}
+      {c && their && (
+        <TheirToolSheet
+          key={their.n}
+          chat={id}
+          start={{ tool: their.tool, values: their.values }}
+          from={their.from}
+          onStarted={(r) => {
+            setTheir(undefined);
+            setTheirRuns(keepTheirRun(id, r));
+          }}
+          onClose={() => setTheir(undefined)}
+        />
+      )}
       {c && tool?.key === "shop" && (
         <ShopSheet
           chat={id}

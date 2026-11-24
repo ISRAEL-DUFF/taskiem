@@ -256,5 +256,98 @@
       "babu alama",
       "ba alama"
     ]
+  },
+  "topics": {
+    "sales": [
+      "sayarwa",
+      "sayar",
+      "ciniki"
+    ],
+    "stock": [
+      "kaya",
+      "kwali",
+      "buhu",
+      "ya kare",
+      "ya rage",
+      "ya lalace"
+    ],
+    "products": [
+      "farashi",
+      "hoto",
+      "sabis"
+    ],
+    "page": [
+      "shafi",
+      "shago",
+      "lokacin buɗewa"
+    ],
+    "orders": [
+      "oda",
+      "odar"
+    ],
+    "riders": [
+      "ɗan aike",
+      "mai kai kaya",
+      "okada",
+      "keke",
+      "babur"
+    ],
+    "bookings": [
+      "alƙawari",
+      "ranar hutu"
+    ],
+    "buying": [
+      "mai kawo",
+      "dillali",
+      "sun iso"
+    ],
+    "money": [
+      "kuɗi",
+      "kashe",
+      "kashewa",
+      "dizal"
+    ],
+    "pay": [
+      "biya",
+      "tura"
+    ],
+    "owe": [
+      "bashi",
+      "ina bin",
+      "yana bina",
+      "ana bina"
+    ],
+    "staff": [
+      "ma'aikaci",
+      "ma'aikata",
+      "aiki"
+    ],
+    "lists": [
+      "jeri",
+      "jerin",
+      "tebur",
+      "rikodi"
+    ],
+    "auto": [
+      "tunatar",
+      "kowace rana",
+      "kowane mako"
+    ],
+    "saved": [
+      "ajiye",
+      "adana"
+    ],
+    "school": [
+      "ɗalibi",
+      "ɗalibai",
+      "makaranta",
+      "iyaye"
+    ],
+    "account": [
+      "harshe",
+      "kalmar sirri",
+      "shiga",
+      "tsarina"
+    ]
   }
 }

@@ -63,10 +63,13 @@ export interface AlertProof {
     | "no_location";
   photo_url?: string;
   photo_source?: "camera" | "sent";
+  /** The customer signed on the rider's phone (device fields D2). */
+  signed?: boolean;
+  signature_url?: string;
 }
 
 /** Which was read by the phone and which was sent, in words. */
-export function proofWords(p: AlertProof): { where?: string; photo?: string } {
+export function proofWords(p: AlertProof): { where?: string; photo?: string; signed?: string } {
   const where = {
     confirmed_at_door: "Location read by the rider's phone, at the door",
     far_from_address:
@@ -81,7 +84,7 @@ export function proofWords(p: AlertProof): { where?: string; photo?: string } {
       : p.photo_source === "sent"
         ? "Photo sent by the rider"
         : undefined;
-  return { where, photo };
+  return { where, photo, signed: p.signed ? "Signed by the customer" : undefined };
 }
 
 /** The masked pin on a map: never the coordinates in words. */

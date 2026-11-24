@@ -1,0 +1,32 @@
+{
+  "id": "stock-count",
+  "title": "Stock count",
+  "about": "A count sheet: each item and how many were counted where, with totals, and a button to count one.",
+  "icon": "box",
+  "tables": [
+    {"name": "stock_counts", "title": "Stock counts", "columns": [
+      {"name": "item", "title": "Item", "type": "text", "required": true},
+      {"name": "counted", "title": "Counted", "type": "integer", "required": true},
+      {"name": "place", "title": "Where", "type": "text"},
+      {"name": "note", "title": "Note", "type": "text"}]}
+  ],
+  "tools": [
+    {"command": "count-stock", "name": "Count an item", "about": "Writes down how many of an item were counted", "kind": "add", "table": "stock_counts",
+     "asks": ["item", "counted", "place", "note"], "icon": "box"},
+    {"command": "recount", "name": "Count it again", "about": "Puts right how many of an item were counted", "kind": "change", "table": "stock_counts",
+     "asks": ["counted"], "icon": "box"}
+  ],
+  "page": {"page": "page/v1", "name": "stock-count", "title": "Stock count", "icon": "box", "about": "What was counted, item by item",
+    "filters": [{"id": "q", "type": "search", "columns": ["item", "place"]}],
+    "blocks": [
+      {"id": "items", "type": "figure", "label": "Items counted", "value": "count", "lead": true, "source": {"table": "stock_counts"}},
+      {"id": "total", "type": "figure", "label": "Pieces counted", "value": "sum", "of": "counted", "source": {"table": "stock_counts"}},
+      {"id": "today", "type": "figure", "label": "Counted today", "value": "count", "change": {"column": "created_at", "period": "day"}, "source": {"table": "stock_counts"}},
+      {"id": "add", "type": "buttons", "actions": [{"label": "Count an item", "tool": "count-stock"}]},
+      {"id": "rows", "type": "table", "title": "The count", "source": {"table": "stock_counts", "order": [{"column": "item"}], "uses": ["q"]},
+       "columns": [{"column": "item", "label": "Item"}, {"column": "counted", "label": "Counted"}, {"column": "place", "label": "Where"}, {"column": "created_at", "label": "When"}],
+       "actions": [{"label": "Count again", "tool": "recount", "inputs": {"ref": "=row.id"}}],
+       "empty": "Nothing counted yet"},
+      {"id": "by_place", "type": "chart", "title": "Counted by where", "source": {"table": "stock_counts"}, "chart": {"kind": "bars", "of": "counted", "by": "place"}}
+    ]}
+}

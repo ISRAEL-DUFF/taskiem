@@ -303,6 +303,13 @@ function PublishReviews() {
                 <Link to={`/workflows/${r.workflow_id}?v=${r.version}`}>
                   {r.workflow} v{r.version}
                 </Link>
+                {r.changes && r.changes.length > 0 && (
+                  <ul className="plain-list hint" aria-label={`What publishing ${r.workflow} changes`} data-testid="publish-changes">
+                    {r.changes.map((c) => (
+                      <li key={c}>{c}</li>
+                    ))}
+                  </ul>
+                )}
               </td>
               <td className="hint">asked {fmtTime(r.requested_at)}</td>
               <td style={{ textAlign: "right" }}>

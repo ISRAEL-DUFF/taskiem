@@ -130,7 +130,8 @@ func TestRules(t *testing.T) {
 	good, bad := mustLoad(t, goodPayout), mustLoad(t, badPayout)
 	for _, name := range ruleNames() {
 		switch name {
-		case "capability_when_unnamed", "no_payment_with_product", "reply_in_window", "opted_in_only", "invoice_copied_once", "books_by_capability":
+		case "capability_when_unnamed", "no_payment_with_product", "reply_in_window", "opted_in_only", "invoice_copied_once", "books_by_capability",
+			"tool_declared", "customer_tool_public", "reads_saved":
 			continue // their good definitions are below
 		}
 		if ok, why := rules[name](good, reg); !ok {

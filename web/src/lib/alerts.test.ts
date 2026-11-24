@@ -49,6 +49,8 @@ describe("alerts", () => {
       proofWords({ mark: "confirmed_at_door", photo_source: "sent" }).where,
     ).toContain("read by the rider's phone, at the door");
     expect(proofWords({}).where).toBeUndefined();
+    expect(proofWords({ signed: true }).signed).toBe("Signed by the customer");
+    expect(proofWords({}).signed).toBeUndefined();
     expect(pinLink({ lat: 6.4281, lng: 3.4219, source: "device" })).toBe(
       "https://www.google.com/maps?q=6.428,3.422",
     );

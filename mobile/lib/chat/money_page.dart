@@ -38,7 +38,7 @@ import 'bills_page.dart' show BillsPage;
 import 'invoice_match.dart' show InvoiceMatchPage, channelWords, unmatchedPath;
 import 'labels_page.dart' show LabelsPage;
 import 'spending.dart' show SpendingCard;
-import 'things_page.dart' show ThingsPage;
+import 'things_page.dart' show ThingsPage, thingsOnly;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'money_sheets.dart' show dateLabel;
 import 'product_form.dart' show formKey;
@@ -274,6 +274,11 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
   int _asked = 0;
 
   DateTime get _now => (widget.now ?? DateTime.now)();
+
+  /// Someone who may see stock but not the money (table.read without
+  /// invoice.read): Money is only Things we have for them, as on the web
+  /// (build-plan-gaps H2, g-things-menu), and nothing of the money is read.
+  bool get _thingsOnly => thingsOnly(widget.auth);
   Period get _period => periodFor(_choice, _now, (from: _from.text.trim(), to: _to.text.trim()));
   String? get _periodProblem => _choice == 'custom' ? periodProblem(_period) : null;
 
@@ -292,6 +297,7 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
         if (_choice == 'custom' && _periodProblem == null) _load();
       });
     }
+    if (_thingsOnly) return;
     _load();
     _loadSide();
     startPolling(const Duration(seconds: 30), _load);
@@ -378,6 +384,23 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
+    if (_thingsOnly) {
+      return TkScreen(
+        title: 'Money',
+        back: !widget.tab,
+        compact: true,
+        children: [
+          TkSection(
+            title: 'Go to',
+            inset: 56,
+            children: [
+              TkListRow(title: 'Things we have', sub: 'What the business bought to keep', icon: 'b-hash', square: look.violet, onTap: () => _push(context, ThingsPage(auth: widget.auth))),
+            ],
+          ),
+          Text('The money itself is for those who manage it.', style: tkText(size: 13, color: t.muted)),
+        ],
+      );
+    }
     final p = _period;
     final problem = _periodProblem;
     final s = problem == null ? _sum : null;

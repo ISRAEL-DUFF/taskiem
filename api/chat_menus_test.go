@@ -11,9 +11,11 @@ import (
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/dispatch"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
@@ -558,4 +560,93 @@ func TestChatActionRun(t *testing.T) {
 	// Not an action, not theirs, not a conversation of theirs.
 	run(buyer, 404, "no.such", nil)
 	run(buyer, 404, "staff.mine", map[string]any{"link": "00000000-0000-4000-8000-000000000000"})
+}
+
+// A command typed in full counts toward most used (chat-menus.md §6.1,
+// g-menu-used): "invoice …" typed three times puts Send an invoice first in
+// Money, in the Taskiem chat and on WhatsApp alike; a message nothing read
+// as a command counts nothing.
+func TestChatMenusTypedCommandsCount(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	owner := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
+	const on = "+2348010000072"
+	w.bind(t, owner, on)
+	first := func(topic string) string {
+		t.Helper()
+		for _, x := range owner.must(200, "GET", "/v1/chat/actions", nil)["topics"].([]any) {
+			if tp := x.(map[string]any); tp["id"] == topic {
+				return tp["actions"].([]any)[0].(map[string]any)["id"].(string)
+			}
+		}
+		t.Fatalf("no topic %s", topic)
+		return ""
+	}
+	uses := func() (invoice, all int) {
+		t.Helper()
+		if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT COALESCE(sum(uses) FILTER (WHERE action = 'money.invoice'), 0), COALESCE(sum(uses), 0)
+			FROM chat_action_uses`).Scan(&invoice, &all); err != nil {
+			t.Fatal(err)
+		}
+		return invoice, all
+	}
+	if got := first("money"); got == "money.invoice" {
+		t.Fatalf("before: %s", got)
+	}
+	for _, words := range []string{"invoice Ada 25,000 for 5 bags of rice", "invoice Bayo 4,000 for a cake"} {
+		taskiemSays(t, owner, words)
+		taskiemSays(t, owner, "cancel")
+	}
+	w.say(t, on, "invoice Chidi 9,000 for 2 crates of eggs")
+	w.say(t, on, "cancel")
+	if n, _ := uses(); n != 3 {
+		t.Fatalf("three typed: %d uses", n)
+	}
+	if got := first("money"); got != "money.invoice" {
+		t.Fatalf("after three: %s first", got)
+	}
+	// Words nothing read as a command: no use of anything.
+	_, before := uses()
+	taskiemSays(t, owner, "the weather is lovely today")
+	if _, after := uses(); after != before {
+		t.Fatalf("a message nothing read counted: %d to %d", before, after)
+	}
+}
+
+// Topics by their words in the person's language, then English
+// (chat-menus.md §8.3, g-menu-words): with no model, "owo" in Yoruba is the
+// Money topic's menu, without its tone marks; English words still work for
+// someone who chose Yoruba; Hausa's own words find theirs.
+func TestChatMenusTopicWordsInTheirLanguage(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN, lang.YO, lang.HA}}
+	owner := w.tenant(t, "Ada Foods", "ada@adafoods.test")
+	const yn, hn = "+2348010000073", "+2348010000074"
+	w.bind(t, owner, yn)
+	w.say(t, yn, "language yoruba")
+	topicOf := func(on, text string) string {
+		t.Helper()
+		got := w.send(t, on, whatsapptest.Text(text))
+		if len(got) != 1 || got[0].ListButton == "" || len(got[0].List) == 0 {
+			t.Fatalf("%q: no menu: %+v", text, got)
+		}
+		w.say(t, on, "cancel")
+		return strings.TrimPrefix(strings.SplitN(got[0].List[0].ID, ".", 2)[0], "act:")
+	}
+	for text, want := range map[string]string{
+		"owo":                       "money",
+		"owó mi dà":                 "money",
+		"àkọsílẹ̀ mi":               "lists",
+		"who is the worker on duty": "staff",
+	} {
+		if got := topicOf(yn, text); got != want {
+			t.Errorf("yo %q: %s, want %s", text, got, want)
+		}
+	}
+	w.bind(t, owner, hn)
+	w.say(t, hn, "language hausa")
+	if got := topicOf(hn, "ma'aikata na"); got != "staff" {
+		t.Errorf("ha: %s", got)
+	}
 }

@@ -140,6 +140,9 @@ func (s *Server) askStarter(ctx context.Context, a forms.ChatAsk) bool {
 		s.Logger.Warn("forms: asking a run's starter", "tenant", a.Tenant, "err", err)
 		return false
 	}
+	if !isChoice {
+		s.armCode(ctx, a, a.Users[0], channel)
+	}
 	return true
 }
 
@@ -152,6 +155,10 @@ func (s *Server) formChoiceAnswer(ctx context.Context, c *chat, text string) (bo
 	}
 	var pressed uuid.UUID
 	pick := ""
+	if strings.HasPrefix(c.in.Reply, formButtonPrefix+"send:") {
+		// A form step's Send as it is (forms_chat.go), not a choice.
+		return false, nil
+	}
 	if rest, ok := strings.CutPrefix(c.in.Reply, choiceReplyPrefix); ok {
 		id, key, _ := strings.Cut(rest, ":")
 		var err error

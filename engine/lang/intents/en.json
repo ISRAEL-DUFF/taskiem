@@ -47,5 +47,24 @@
     "track": ["keep track of it", "keep track of them", "keep track", "track it", "track them", "track"],
     "another": ["another", "another label", "another one", "something else"],
     "no_label": ["no label", "not labelled", "not labeled", "none"]
+  },
+  "topics": {
+    "sales": ["sale", "sold", "sell", "selling", "customer bought", "customer buy"],
+    "stock": ["stock", "carton", "crate", "shelf", "finish", "remain", "spoil", "expire", "inventory", "count"],
+    "products": ["product", "price", "service", "item", "photo"],
+    "page": ["page", "website", "qr", "opening", "close shop", "open shop", "hours"],
+    "orders": ["order", "refund", "delivered"],
+    "riders": ["rider", "dispatch", "delivery", "deliver", "okada", "bike", "keke", "motorcycle"],
+    "bookings": ["booking", "appointment", "slot", "day off"],
+    "buying": ["supplier", "restock", "depot", "wholesale", "distributor", "purchase", "received"],
+    "money": ["money", "spent", "spend", "expense", "cash", "transfer", "invoice", "diesel", "fuel", "rent"],
+    "pay": ["pay", "payee", "transfer to", "send money"],
+    "owe": ["owe", "owing", "debt", "debtor", "credit", "balance", "pay me"],
+    "staff": ["staff", "task", "worker", "team", "approv", "employee"],
+    "lists": ["list", "table", "record", "spreadsheet"],
+    "auto": ["automat", "workflow", "remind", "every week", "every day", "every month", "every friday"],
+    "saved": ["save", "saved", "remember"],
+    "school": ["student", "school", "fees", "parent", "pupil", "term", "clearance"],
+    "account": ["language", "password", "login", "sign in", "subscription", "my plan"]
   }
 }

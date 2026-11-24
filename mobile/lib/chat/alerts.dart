@@ -11,6 +11,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../app/links.dart' show openInBrowser;
 import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
@@ -731,6 +732,13 @@ class _AlertCardState extends State<_AlertCard> {
                 ),
               ],
             ),
+            if (a.proof case final proof?) ...[
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.only(left: 46, right: 4),
+                child: DeliveryProof(proof: proof, reference: a.reference ?? ''),
+              ),
+            ],
             if (step != null || give != null) ...[
               const SizedBox(height: 12),
               Padding(
@@ -769,6 +777,132 @@ class _AlertCardState extends State<_AlertCard> {
             if (_error != null) TkErrorBox(_error!),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// alerts.ts proofWords: which was read by the phone and which was sent,
+/// in words, and that the customer signed.
+({String? where, String? photo, String? signed}) proofWords(ChatAlertProof p) => (
+  where: switch (p.mark) {
+    'confirmed_at_door' => 'Location read by the rider’s phone, at the door',
+    'far_from_address' => 'Location read by the rider’s phone, far from the address',
+    'read_by_phone' => 'Location read by the rider’s phone',
+    'said_by_rider' => 'Location sent by the rider (a pin they placed)',
+    _ => null,
+  },
+  photo: switch (p.photoSource) {
+    'camera' => 'Photo taken in the app',
+    'sent' => 'Photo sent by the rider',
+    _ => null,
+  },
+  signed: p.signed == true ? 'Signed by the customer' : null,
+);
+
+/// alerts.ts pinLink: the masked pin on a map, never the coordinates in
+/// words.
+Uri pinLink(ChatAlertProofWhere w) => Uri.parse('https://www.google.com/maps?q=${w.lat.toStringAsFixed(3)},${w.lng.toStringAsFixed(3)}');
+
+/// How a proof's photo is drawn: from its short-lived link (a test gives
+/// its own).
+ImageProvider Function(String url) proofImage = NetworkImage.new;
+
+/// ChatAlerts.tsx ProofOf (build-plan-gaps H3, g-dev-confirm): a
+/// delivery's proof on its Confirm card. The photo; the pin at its masked
+/// point (about 100 m), opening a map; that the customer signed, opening
+/// what they drew; and which was read by the phone and which was sent.
+class DeliveryProof extends StatelessWidget {
+  const DeliveryProof({super.key, required this.proof, required this.reference});
+  final ChatAlertProof proof;
+  final String reference;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final w = proofWords(proof);
+    final where = proof.where;
+    Widget line(String icon, Color tone, String words, {String? said, VoidCallback? open}) {
+      final row = Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: tone, borderRadius: BorderRadius.circular(7)),
+            child: TkIcon(icon, size: 14, stroke: 2, color: const Color(0xFFFFFFFF)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                words,
+                // A link in the kit's way (TkLink bold): bold, never underlined.
+                style: tkText(size: 13, weight: open != null ? 700 : 400, lineHeight: 1.35, color: open != null ? t.text : t.muted),
+              ),
+            ),
+          ),
+        ],
+      );
+      if (open == null) return row;
+      return TapArea(
+        child: Semantics(
+          link: true,
+          label: said ?? words,
+          onTap: open,
+          excludeSemantics: true,
+          child: TkPress(onTap: open, child: Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: row)),
+        ),
+      );
+    }
+
+    final lines = <Widget>[
+      if (where != null)
+        line(
+          'b-pin',
+          look.teal,
+          '${w.where ?? 'Location'}${where.coarse == true ? ' (rough)' : ''}',
+          said: 'Open the place on a map: ${w.where ?? 'Location'}',
+          open: () => unawaited(openInBrowser(pinLink(where))),
+        ),
+      if (w.photo != null) line('b-camera', look.violet, w.photo!),
+      if (w.signed != null)
+        line(
+          'b-note',
+          look.blue,
+          w.signed!,
+          said: proof.signatureUrl != null ? 'See what the customer signed' : null,
+          open: proof.signatureUrl == null ? null : () => unawaited(openInBrowser(Uri.parse(proof.signatureUrl!))),
+        ),
+    ];
+    return Semantics(
+      container: true,
+      label: 'The proof of delivery $reference',
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (proof.photoUrl != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 72,
+                height: 72,
+                color: t.tkSoft,
+                child: Image(
+                  image: proofImage(proof.photoUrl!),
+                  fit: BoxFit.cover,
+                  semanticLabel: 'The photo of delivery $reference',
+                  errorBuilder: (_, _, _) => Center(child: TkIcon('b-camera', size: 22, color: t.muted)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _gaps(lines, 6))),
+        ],
       ),
     );
   }

@@ -230,6 +230,9 @@ type chat struct {
 	// understood is that this message is a command the model gave
 	// (chat_understand.go): read once, never put to the model again.
 	understood bool
+	// typedSeen: the message was looked at as a typed command (chat_typed.go),
+	// once, whatever reads it again; unread: nothing read it as a command.
+	typedSeen, unread bool
 	// uses are the person's uses of the menus' actions, read once for a
 	// message (chat_menus.go).
 	uses map[string]int
@@ -324,7 +327,7 @@ type chatData struct {
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
 // number bound to no one. It reports whether it handled the message.
-// Tenants' own numbers have their public menus built in
+// Tenants' own numbers have their customer menus built in
 // (whatsapp_public.go).
 type WhatsAppPublic func(ctx context.Context, number string, in whatsapp.Inbound) (bool, error)
 
@@ -565,14 +568,20 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 			}
 		}
 	}
-	// A location or a photo answering a form step, or "send" for one
-	// waiting on its require_source (forms_chat.go).
-	if done, err := s.formChatAnswer(ctx, c); done || err != nil {
+	// A location or a photo for the tool input being asked
+	// (tools_device_chat.go).
+	if done, err := s.toolDeviceAnswer(ctx, c); done || err != nil {
 		return err
 	}
 	// A run's question of one choice answered by its button or its words
-	// (forms_starter.go).
+	// (forms_starter.go): before a code asked for, so a choice's word is
+	// never taken as a code.
 	if done, err := s.formChoiceAnswer(ctx, c, in.Text); done || err != nil {
+		return err
+	}
+	// A location or a photo answering a form step, a code asked for, or
+	// "send" for one waiting on its require_source (forms_chat.go).
+	if done, err := s.formChatAnswer(ctx, c); done || err != nil {
 		return err
 	}
 	// A completed WhatsApp form carries its flow token.
@@ -606,7 +615,7 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 }
 
 // waUnbound answers a number bound to no one: the code it was sent, if it
-// sends that back; a tenant's public menu on its own number; or how to
+// sends that back; a tenant's customer menu on its own number; or how to
 // link it. guest is a number that is bound, writing to the own number of
 // a business its person is not on the team of: a customer, a rider or a
 // supplier there like any other number, never linked or signed up again.
@@ -698,7 +707,7 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 		}
 	}
 	if wa.Own() {
-		// The public menu answers a customer who asks for it (its word,
+		// The customer menu answers a customer who asks for it (its word,
 		// or a choice of it under way); anything else a customer writes
 		// to the business's own number is their conversation with it.
 		if s.waPublicAsked(ctx, wa, number, in) {
@@ -825,7 +834,7 @@ func normalizeCommand(s string) string {
 	return strings.Trim(strings.ToLower(strings.Join(strings.Fields(s), " ")), " ?!.")
 }
 
-func (s *Server) waCommand(ctx context.Context, c *chat) error {
+func (s *Server) waCommand(ctx context.Context, c *chat) (err error) {
 	text := c.in.Text
 	if c.in.Reply != "" {
 		text = c.in.Reply
@@ -834,6 +843,15 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// Commands in the person's language and in English (engine/lang);
 	// yes, no and cancel are only ever matched from the word lists.
 	m, matched := lang.MatchIntent(text, c.lang.Match())
+	// A catalogue's command typed in full is a use of its action (most
+	// used first, chat-menus.md §6.1), once it was read as that command.
+	if id, ok := s.typedUse(ctx, c, text, m, matched); ok {
+		defer func() {
+			if err == nil && !c.unread {
+				s.actionUsed(ctx, c, id)
+			}
+		}()
+	}
 	if matched {
 		switch m.Intent {
 		case lang.IntentCancel:
@@ -862,6 +880,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// A button on a tool's answer or a Tell me message (tools_buttons.go).
 	if id, ok := strings.CutPrefix(text, buttonReplyPrefix); ok {
 		return s.waToolButton(ctx, c, id)
+	}
+	// A Tell me message's button that opens a page (pages_notice.go).
+	if id, ok := strings.CutPrefix(text, pageButtonPrefix); ok {
+		return s.waPageButton(ctx, c, id)
 	}
 	// A row chosen from a tool's list answer (tools_rows.go).
 	if ref, ok := strings.CutPrefix(text, rowReplyPrefix); ok {
@@ -903,6 +925,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	// A menu's row pressed, a number for a numbered menu, an answer to a
 	// question, and help (chat_menus.go).
+	// A forwarded message with account details, or a reply of "pay"
+	// quoting one: the name checked and "how much, and for what?"
+	// (payments_forward.go), whatever the conversation was in the middle
+	// of.
+	if done, err := s.waPayForward(ctx, c); done || err != nil {
+		return err
+	}
 	if done, err := s.waMenuWords(ctx, c, text, cmd); done || err != nil {
 		return err
 	}
@@ -924,11 +953,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// A reply quoting a linked business's message, into its conversation
 	// (link_chat.go), whatever else the conversation is in the middle of.
 	if done, err := s.waQuotedReply(ctx, c); done || err != nil {
+		c.unread = true // not a command of Taskiem's (chat_typed.go)
 		return err
 	}
 	// "..." first: a message straight to the linked businesses it
 	// mentions (chat_direct.go), read by no command and no model.
 	if done, err := s.waDirect(ctx, c); done || err != nil {
+		c.unread = true // not a command of Taskiem's (chat_typed.go)
 		return err
 	}
 	// A question about a saved thing ("what's @generator's last service
@@ -942,16 +973,19 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// With chat tools, a message naming linked businesses is for them,
 	// unless it calls Taskiem (chat_tools.go).
 	if done, err := s.toolsDirect(ctx, c); done || err != nil {
+		c.unread = true // not a command of Taskiem's (chat_typed.go)
 		return err
 	}
 	// A business's own tool by "/command" (tools_chat.go), before the
 	// built-in tools' "/" links.
 	if strings.HasPrefix(strings.TrimSpace(text), "/") {
 		if done, err := s.waMadeTool(ctx, c, text); done || err != nil {
+			c.unread = true // not a command of Taskiem's (chat_typed.go)
 			return err
 		}
 		// A business's page by "/name": its short form (pages_chat.go).
 		if done, err := s.waPage(ctx, c, text); done || err != nil {
+			c.unread = true // not a command of Taskiem's (chat_typed.go)
 			return err
 		}
 	}
@@ -1298,17 +1332,22 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// (tools_chat.go).
 	if !matched {
 		if done, err := s.waMadeTool(ctx, c, text); done || err != nil {
+			c.unread = true // not a command of Taskiem's (chat_typed.go)
 			return err
 		}
 		// A business's page by its name ("tickets"): its short form, after
 		// Taskiem's own words and the business's tools (pages_chat.go).
 		if done, err := s.waPage(ctx, c, text); done || err != nil {
+			c.unread = true // not a command of Taskiem's (chat_typed.go)
 			return err
 		}
 	}
 	if c.state == stateStepUp {
+		c.unread = true
 		return c.say(ctx, s, c.t("wa.stepup_waiting", "step", c.data.Step))
 	}
+	// Nothing below reads it as a command typed (chat_typed.go).
+	c.unread = true
 	// Not recognised: a typed request for a tool, read by the model, is
 	// answered with its form, filled in (chat_tool_requests.go).
 	if c.state == stateIdle && !matched && !c.understood {
@@ -1824,6 +1863,17 @@ func (s *Server) waFields(ctx context.Context, c *chat) ([]whatsapp.Field, error
 
 // waFieldsOf are the required inputs of a workflow version.
 func (s *Server) waFieldsOf(ctx context.Context, tenant, wf uuid.UUID, version int) ([]whatsapp.Field, error) {
+	return s.fieldsOf(ctx, tenant, wf, version, whatsapp.InputFields)
+}
+
+// toolFieldsOf are a version's inputs the reader may fill from words: its
+// required fields, then its optional ones a chat can carry
+// (whatsapp.ToolFields).
+func (s *Server) toolFieldsOf(ctx context.Context, tenant, wf uuid.UUID, version int) ([]whatsapp.Field, error) {
+	return s.fieldsOf(ctx, tenant, wf, version, whatsapp.ToolFields)
+}
+
+func (s *Server) fieldsOf(ctx context.Context, tenant, wf uuid.UUID, version int, read func(json.RawMessage, map[string]json.RawMessage) ([]whatsapp.Field, error)) ([]whatsapp.Field, error) {
 	var def []byte
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, version).Scan(&def)
@@ -1838,7 +1888,7 @@ func (s *Server) waFieldsOf(ctx context.Context, tenant, wf uuid.UUID, version i
 	if d.RawInputs != nil {
 		raw = d.RawInputs.Schema
 	}
-	return whatsapp.InputFields(raw, d.RawTypes)
+	return read(raw, d.RawTypes)
 }
 
 // waCollect takes the answer for the next input field.
@@ -1937,7 +1987,7 @@ func (s *Server) waAskConfirm(ctx context.Context, c *chat, data chatData) error
 	if err := s.saveSession(ctx, c, stateConfirming, data, waPendingTTL); err != nil {
 		return err
 	}
-	lines, err := s.maskedLines(ctx, c.tenant.ID, data.Inputs, 12)
+	lines, err := s.maskedLines(ctx, c.tenant.ID, chatInputWords(data.Inputs), 12)
 	if err != nil {
 		return err
 	}

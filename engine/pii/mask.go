@@ -36,9 +36,9 @@ type Masker struct {
 // are masked instead.
 func NewMasker(taint Taint) *Masker {
 	atoms := Taint{}
-	for k, cat := range taint {
+	for k, mk := range taint {
 		if !strings.HasPrefix(k, "s:") {
-			atoms[k] = cat
+			atoms[k] = mk
 			continue
 		}
 		v, composite := k[2:], false
@@ -49,7 +49,7 @@ func NewMasker(taint Taint) *Masker {
 			}
 		}
 		if !composite {
-			atoms[k] = cat
+			atoms[k] = mk
 		}
 	}
 	return &Masker{taint: atoms, byKey: map[string]string{}, values: map[string]any{}, cats: map[string]string{}, counts: map[string]int{}, restored: Taint{}}
@@ -131,8 +131,8 @@ func (m *Masker) maskKnown(v any) any {
 		return m.maskString(t)
 	}
 	if k, ok := scalarKey(v); ok {
-		if cat, hit := m.taint[k]; hit {
-			return m.placeholder(v, cat)
+		if mk, hit := m.taint[k]; hit {
+			return m.placeholder(v, mk.Category)
 		}
 	}
 	return v
@@ -140,7 +140,7 @@ func (m *Masker) maskKnown(v any) any {
 
 func (m *Masker) maskString(s string) string {
 	if cat, ok := m.taint["s:"+s]; ok && s != "" && !isPlaceholder(s) {
-		return m.placeholder(s, cat)
+		return m.placeholder(s, cat.Category)
 	}
 	return m.MaskText(s)
 }
@@ -168,10 +168,10 @@ func (m *Masker) MaskText(s string) string {
 	}
 	type hit struct{ val, cat string }
 	var hits []hit
-	for k, cat := range m.taint {
+	for k, mk := range m.taint {
 		v := k[2:]
 		if utf8.RuneCountInString(v) >= MinMaskWord && strings.Contains(s, v) {
-			hits = append(hits, hit{v, cat})
+			hits = append(hits, hit{v, mk.Category})
 		}
 	}
 	sort.Slice(hits, func(i, j int) bool {

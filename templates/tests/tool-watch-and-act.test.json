@@ -1,0 +1,19 @@
+{
+  "schema": "wd-test/v1",
+  "template": "tool-watch-and-act",
+  "params": {},
+  "cases": [
+    {
+      "name": "the button's tool marks the row",
+      "trigger": {"body": {"row": 9}},
+      "mocks": {"mark": {"output": {"affected": 1, "rows": [{"id": 9}]}}},
+      "expect": {"status": "completed", "answer": {"text": "Marked handled."}}
+    },
+    {
+      "name": "a row gone is said plainly",
+      "trigger": {"body": {"row": 99}},
+      "mocks": {"mark": {"output": {"affected": 0, "rows": []}}},
+      "expect": {"status": "completed", "answer": {"text": "That row was not found."}}
+    }
+  ]
+}

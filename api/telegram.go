@@ -220,8 +220,9 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 	}
 	in := whatsapp.Inbound{ID: strconv.FormatInt(u.ID, 10), Type: "text", Text: strings.TrimSpace(u.Text)}
 	if u.ReplyTo != 0 {
-		in.Quoted = strconv.FormatInt(u.ReplyTo, 10)
+		in.Quoted, in.QuotedText = strconv.FormatInt(u.ReplyTo, 10), u.ReplyText
 	}
+	in.Forwarded = u.Forwarded
 	user, err := tg.UserOf(ctx, u.FromID)
 	if err != nil {
 		return err

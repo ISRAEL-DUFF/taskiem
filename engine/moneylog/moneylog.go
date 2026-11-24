@@ -246,6 +246,20 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 			return same, false, err
 		}
 	}
+	// The fee a payout sent back returned with it, where the rail says.
+	feeBack := e.FeeKobo
+	if e.Kind == "payout" && e.Category == "" {
+		// A payment to a person (paying people): its payout says what it
+		// was for, and its fee is its own line (bank charges), written when
+		// the payment ends.
+		cat, ok, err := PayoutPurposeTx(ctx, tx, tenant, e.Channel, e.Reference)
+		if err != nil {
+			return uuid.Nil, false, err
+		}
+		if ok {
+			e.Category, e.FeeKobo = cat, nil
+		}
+	}
 	var payer map[string]any
 	if e.PayerName != "" || e.PayerAccount != "" {
 		if l.PII == nil {
@@ -301,6 +315,12 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 		err := tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND entry_key = $2`, tenant, key).Scan(&id)
 		return id, false, err
 	}
+	if e.Kind == "payout" && e.Status == "reversed" {
+		// A payment to a person the bank sent back after it was paid.
+		if err := l.reversedPaymentTx(ctx, tx, tenant, e, feeBack); err != nil {
+			return uuid.Nil, false, err
+		}
+	}
 	return id, true, nil
 }
 
@@ -351,6 +371,9 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 		e.Direction, e.Kind, e.Reference = "out", "payout", str(fields, "payout_id")
 		e.Status = strings.TrimPrefix(event, "payout.")
 		e.Note = clip(str(fields, "reason"), 300)
+		// The fee that came back with it, where the rail says (paying
+		// people: the fee's own line is then undone too).
+		e.FeeKobo = kobo(fields, "fee_kobo")
 	case "refund.pending", "refund.processed", "refund.failed":
 		// Money out of the business back to a customer: its own movement,
 		// known by the payment refunded (the rail's refund reference is

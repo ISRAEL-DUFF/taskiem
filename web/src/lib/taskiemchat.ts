@@ -16,6 +16,12 @@ export interface TaskiemMessage {
   text: string;
   buttons?: TaskiemButton[];
   created_at: string;
+  /** The payment (or batch) a diary line, a receipt or a "paid you" card
+   * is about: shown as it stands (paid, failed with Try again). */
+  payment?: string;
+  /** On a "paid you" card: how its payment stands now. */
+  payment_status?: string;
+  batch?: string;
   /** Being sent from this page: shown at once, until the answer comes. */
   local?: boolean;
 }

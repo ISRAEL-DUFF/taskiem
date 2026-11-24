@@ -88,6 +88,14 @@ export interface Choice {
   label: string;
   /** Said yes to putting more than 50 on Things we have. */
   trackMany?: boolean;
+  /** Asked how many of the stock item one is (askUses): the question
+   * ("How many g is one bag?"); none when not asked. */
+  usesAsk?: string;
+  /** What was typed for it is not a whole number. */
+  usesBad?: boolean;
+  /** Its uses are the stock item's own, as remembered or on the order
+   * line: sent though not asked here, until the stock item changes. */
+  usesKept?: boolean;
   /** For a remembered item changed on one order: kept for next time too. */
   remember?: boolean;
 }
@@ -99,20 +107,83 @@ export const fromMemory = (m: Remembered): Choice => ({
   treatment: m.treatment,
   stockItemId: m.stock_item_id,
   uses: m.uses > 1 ? m.uses : undefined,
+  usesKept: m.uses > 1 || undefined,
   label: m.label ?? "",
 });
 
-/** A line of an order as an answer (its label's name from the business's
- * labels). */
+/** A line of an order as an answer (its label's name as the server sends
+ * it, a merged label's the one kept; else from the business's labels). */
 export const fromLine = (
-  l: Pick<PurchaseLine, "treatment" | "stock_item_id" | "uses" | "label_id">,
+  l: Pick<PurchaseLine, "treatment" | "stock_item_id" | "uses" | "label_id" | "label">,
   labels: SpendLabel[] | undefined,
 ): Choice => ({
   treatment: l.treatment ?? "record",
   stockItemId: l.treatment === "stock" ? l.stock_item_id : undefined,
   uses: (l.uses ?? 1) > 1 ? l.uses : undefined,
-  label: labelName(labels, l.label_id),
+  usesKept: (l.uses ?? 1) > 1 || undefined,
+  label: lineLabel(l, labels),
 });
+
+/** A line's label as cards show it: the server's name of the label kept
+ * (so a label merged since shows as the one kept), else its id looked up
+ * among the business's labels; "" for none. */
+export const lineLabel = (
+  l: Pick<PurchaseLine, "label_id" | "label">,
+  labels: SpendLabel[] | undefined,
+): string => l.label || labelName(labels, l.label_id);
+
+/** The units that count things one by one: one bought is one of the stock
+ * item. As stock.AskUses. */
+const COUNT_UNITS = new Set(["", "piece", "pc", "unit", "item", "each", "one", "no"]);
+
+/** A unit word for one: bags, bag; boxes, box (stock.Singular). */
+export function singular(u: string): string {
+  const l = u.toLowerCase();
+  if (l.length > 3 && l.endsWith("ies")) return u.slice(0, -3) + "y";
+  if (["xes", "ches", "shes", "sses"].some((s) => l.endsWith(s))) return u.slice(0, -2);
+  if (l.length > 2 && l.endsWith("s") && !l.endsWith("ss")) return u.slice(0, -1);
+  return u;
+}
+
+/** The units that measure rather than count (stock.measureUnits). */
+const MEASURE_UNITS = new Set(
+  "g gram kg kilo kilogram mg ml cl l litre yard metre meter m cm mm inch foot feet ft lb oz".split(" "),
+);
+
+const unitKey = (u: string | undefined) => singular((u ?? "").trim()).toLowerCase();
+
+/** Whether a line bought in lineUnit, going into a stock item counted in
+ * stockUnit, asks how many of the stock item one of it is (g-uses-ask):
+ * counted in another unit (a bag into grams) with nothing saying it yet;
+ * a line with no unit asks only of a stock item measured (grams, yards).
+ * The server's stock.AskUses, and the app's askUses, by the same rule. */
+export function askUses(
+  lineUnit: string | undefined,
+  stockUnit: string | undefined,
+  uses?: number,
+): boolean {
+  if ((uses ?? 1) > 1) return false;
+  const s = unitKey(stockUnit);
+  const l = unitKey(lineUnit);
+  if (COUNT_UNITS.has(s) || l === s) return false;
+  return l !== "" || MEASURE_UNITS.has(s);
+}
+
+/** The uses question: "How many g is one bag?" (one of the item when the
+ * line has no unit). */
+export const usesQuestion = (stockUnit: string, lineUnit: string | undefined, item: string) =>
+  `How many ${stockUnit} is one ${lineUnit?.trim() ? singular(lineUnit.trim()) : item}?`;
+
+/** Why a uses typed will be refused, or "" (empty is 1). */
+export function usesProblem(s: string): string {
+  const raw = s.trim();
+  if (raw === "") return "";
+  // Commas only as thousands: "50,000" is a number, "2,5" is not.
+  if (!/^(\d{1,3}(,\d{3})+|\d+)$/.test(raw)) return "A whole number, like 1000.";
+  const n = Number(raw.replace(/,/g, ""));
+  if (n < 1 || n > 1_000_000) return "A whole number, like 1000.";
+  return "";
+}
 
 /** A label's name by its id ("" when none or not among them). */
 export const labelName = (
@@ -178,6 +249,12 @@ export function choiceProblem(c: Choice): string {
     if (c.sells && c.price?.trim() && !(feeKobo(c.price) > 0))
       return "A selling price in naira, like 25,000.";
   }
+  // Asked how many of the stock item one is: answered, as a whole number
+  // (H2 review fix 2), before the line can go.
+  if (c.usesAsk) {
+    if (c.usesBad) return "How many is a whole number, like 1000.";
+    if (!c.uses) return `Say: ${c.usesAsk}`;
+  }
   return "";
 }
 
@@ -226,7 +303,10 @@ export function lineBody(
   const out: LineBody = { treatment: c.treatment };
   if (c.treatment === "stock") {
     out.stock_item_id = ids.stockItemId;
-    if (c.uses && c.uses > 1) out.uses = c.uses;
+    // Only what was asked and answered, or the stock item's own as
+    // remembered (H2 review fix 3): uses left from another stock item are
+    // never sent.
+    if ((c.usesAsk || c.usesKept) && c.uses && c.uses > 1) out.uses = c.uses;
   }
   if (ids.labelId) out.label_id = ids.labelId;
   if (c.treatment === "track" && c.trackMany) out.track_many = true;

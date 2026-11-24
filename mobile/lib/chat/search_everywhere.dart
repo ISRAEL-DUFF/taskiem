@@ -2,11 +2,13 @@
 // what Taskiem can do and what the business has. As the words are typed,
 // the results in groups, three of each: Actions (the person's catalogue:
 // "add rider" finds "Add a rider"), Chats (the businesses linked), Products,
-// Invoices and bills, Orders, Customers; a group's "Show more", or its chip,
-// shows all of it. Invoices, orders and customers are searched on the
-// server, every record (the picker's search, E1); the rest are the lists
-// the phone already has. An action is done as from Today (its form first,
-// its answer in a sheet); anything else opens where it is worked on.
+// Services, Invoices and bills, Orders, Customers, Saved; a group's "Show
+// more", or its chip, shows all of it. Invoices, orders, customers,
+// services and saved things are searched on the server, every record (the
+// picker's search, E1); a saved thing comes by its name and kind only, the
+// person's own and their business's, never what it holds. The rest are the
+// lists the phone already has. An action is done as from Today (its form
+// first, its answer in a sheet); anything else opens where it is worked on.
 
 import 'dart:async';
 
@@ -21,10 +23,12 @@ import '../kit/sheet.dart' show showTkSheet;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'bills_page.dart' show openBill;
+import 'bookings_page.dart' show BookingsPage;
 import 'chats.dart';
 import 'invoices_page.dart' show openInvoice;
 import 'menu_card.dart' show ActionFormSheet, catalogueOf, menuIcon, runActionHere, topicColor;
 import 'purchases_page.dart' show openPurchase;
+import 'saved_accounts.dart' show SavedAccountsPage, savedKinds;
 import 'stock_page.dart' show StockPage;
 import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'tags.dart';
@@ -37,13 +41,19 @@ const searchKinds = {
   'action': 'Actions',
   'chat': 'Chats',
   'product': 'Products',
+  'service': 'Services',
   'invoice': 'Invoices',
   'order': 'Orders',
   'customer': 'Customers',
+  'saved': 'Saved',
 };
 
-/// The server's kinds for a chip (and for All, every one).
-const _serverKinds = {'invoice': 'invoice,bill', 'order': 'order,purchase', 'customer': 'customer'};
+/// The server's kinds for a chip.
+const _serverKinds = {'invoice': 'invoice,bill', 'order': 'order,purchase', 'customer': 'customer', 'service': 'service', 'saved': 'saved'};
+
+/// All asks each of these on its own, so one kind's many never crowd out
+/// another's few (services and saved things have no date to come first by).
+const _allKinds = ['invoice,bill,order,purchase,customer', 'service', 'saved'];
 
 /// Opens search everywhere over [context]; [onPath] opens a page of the app
 /// by its web path (a conversation, a customer's chat).
@@ -112,22 +122,29 @@ class _SearchEverywhereState extends State<SearchEverywhere> {
     _ask();
   }
 
-  /// Invoices, orders and customers: asked of the server a moment after
-  /// the last key.
+  /// Invoices, orders, customers, services and saved things: asked of the
+  /// server a moment after the last key.
   void _ask() {
     _soon?.cancel();
     final words = _words;
     if (words.isEmpty) return;
-    final kinds = _kind == 'all' ? 'invoice,bill,order,purchase,customer' : _serverKinds[_kind];
+    final all = _kind == 'all';
+    final kinds = all ? _allKinds.join(',') : _serverKinds[_kind];
     if (kinds == null) return;
     final key = '$kinds|${words.toLowerCase()}';
     if (_found?.key == key) return;
     _soon = Timer(widget.debounce, () async {
       try {
-        final r = await widget.chats.api.chatRefs(q: words, kind: kinds, limit: _kind == 'all' ? '30' : '20');
+        final api = widget.chats.api;
+        final rs = await Future.wait([
+          if (all)
+            for (final (i, k) in _allKinds.indexed) api.chatRefs(q: words, kind: k, limit: i == 0 ? '30' : '10')
+          else
+            api.chatRefs(q: words, kind: kinds, limit: '20'),
+        ]);
         if (!mounted || _words.toLowerCase() != words.toLowerCase()) return;
         setState(() {
-          _found = (key: key, refs: r.refs, cursor: r.cursor ?? '');
+          _found = (key: key, refs: [for (final r in rs) ...r.refs], cursor: all ? '' : (rs.first.cursor ?? ''));
           _offline = false;
         });
       } on Object {
@@ -171,6 +188,16 @@ class _SearchEverywhereState extends State<SearchEverywhere> {
 
   List<TagSuggestion> _products() => suggest(productRefs(_stock), _words, limit: null);
 
+  /// Services and saved things found, as rows.
+  List<TagSuggestion> _others(String kind) {
+    final f = _found;
+    if (f == null || !f.key.endsWith('|${_words.toLowerCase()}')) return const [];
+    return [
+      for (final r in f.refs)
+        if (r.kind == kind) ?foundTag(r, kindOne: (k) => savedKinds[k]?.one),
+    ];
+  }
+
   List<TagSuggestion> _refs(Set<String> kinds) {
     final f = _found;
     final now = widget.chats.now();
@@ -205,6 +232,10 @@ class _SearchEverywhereState extends State<SearchEverywhere> {
         openStorefrontOrder(context, auth, s.name);
       case 'purchase':
         unawaited(openPurchase(context, auth, s.id));
+      case 'service':
+        unawaited(Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => BookingsPage(auth: auth))));
+      case 'saved':
+        unawaited(Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => SavedAccountsPage(auth: auth, mine: s.savedOwner == 'mine'))));
       default:
         unawaited(Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => StockPage(auth: auth, backLabel: 'Back to Search'))));
     }
@@ -277,9 +308,14 @@ class _SearchEverywhereState extends State<SearchEverywhere> {
               ]),
             if (on('chat')) _group('chat', 'Chats', [for (final s in _chats()) _row(s, 'b-chat', look.teal)]),
             if (on('product')) _group('product', 'Products', [for (final s in _products()) _row(s, 'b-box', look.lime)]),
+            if (on('service')) _group('service', 'Services', [for (final s in _others('service')) _row(s, 'b-clock', look.teal)]),
             if (on('invoice')) _group('invoice', 'Invoices and bills', [for (final s in _refs({'invoice', 'bill'})) _row(s, 'b-receipt', look.blue)]),
             if (on('order')) _group('order', 'Orders', [for (final s in _refs({'order', 'purchase'})) _row(s, 'b-box', look.orange)]),
             if (on('customer')) _group('customer', 'Customers', [for (final s in _refs({'customer'})) _row(s, 'b-person', look.violet)]),
+            if (on('saved'))
+              _group('saved', 'Saved', [
+                for (final s in _others('saved')) _row(s, s.savedKind == 'custom' ? 'b-box' : savedKinds[s.savedKind]?.icon ?? 'b-note', look.orange),
+              ]),
           ];
     final nothing = words.isNotEmpty && groups.every((g) => g is SizedBox) && _found != null;
     return TkPageScreen(
@@ -310,14 +346,14 @@ class _SearchEverywhereState extends State<SearchEverywhere> {
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
             child: Text(
-              'Search what Taskiem can do ("add rider", "sell"), your products, invoices, orders, customers and chats.',
+              'Search what Taskiem can do ("add rider", "sell"), your products, services, invoices, orders, customers, chats and saved things.',
               style: tkText(size: 14, lineHeight: 1.45, color: t.muted),
             ),
           ),
         if (_offline)
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
-            child: Text('Invoices, orders and customers could not be searched. Check your connection.', style: tkText(size: 13, color: t.muted)),
+            child: Text('Invoices, orders, customers, services and saved things could not be searched. Check your connection.', style: tkText(size: 13, color: t.muted)),
           ),
         ...groups.where((g) => g is! SizedBox),
         if (nothing)
