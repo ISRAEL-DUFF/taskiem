@@ -245,8 +245,13 @@ func toolValues(d *wd.Definition, input map[string]any) []toolValue {
 	}
 	slices.Sort(names)
 	out := []toolValue{}
+	devices := wd.DeviceInputs(d)
 	for _, k := range names {
 		label, value := k, fmt.Sprint(input[k])
+		if kind := devices[k]; kind != "" && kind != wd.DeviceScan {
+			// A place, a photo, a signature: in words, never coordinates.
+			value = deviceInputWords(kind, input[k])
+		}
 		// A scanned code ({text, format}, or as the run keeps it) reads as
 		// its text.
 		if m, ok := input[k].(map[string]any); ok {
@@ -390,11 +395,25 @@ func (s *Server) confirmTool(ctx context.Context, p *Principal, t toolRow, confi
 // runTool starts tool t's run as p, recorded with the tool's command and
 // the channel, under the plan's run limits as any run.
 func (s *Server) runTool(ctx context.Context, p *Principal, t toolRow, input map[string]any, channel, dedup string) (uuid.UUID, bool, error) {
+	// A location, a photo and a signature read as a form step's answers
+	// are (tools_device.go); the files named taken for this run.
+	input, files, err := s.readToolDevices(ctx, p, t, input, channel)
+	if err != nil {
+		return uuid.Nil, false, err
+	}
 	ref, created, err := s.Store.StartRun(ctx, runtime.StartRequest{
 		TenantID: p.TenantID, WorkflowID: t.Workflow, Version: t.Version, Environment: t.Environment,
 		Trigger:   map[string]any{"type": "manual", "body": input, "tool": t.Command, "channel": channel},
-		StartedBy: p.Actor(), TriggerID: "tool/" + t.Workflow.String(), DedupKey: dedup,
+		StartedBy: p.Actor(), TriggerID: "tool/" + t.Workflow.String(), DedupKey: dedup, DevicesRead: true,
 	})
+	if len(files) > 0 {
+		if err != nil || !created {
+			// Not started, or started before with its own: given back.
+			err = errors.Join(err, s.Forms.ReleaseToolFiles(ctx, p.TenantID, files))
+		} else {
+			err = s.Forms.AttachToolFiles(ctx, p.TenantID, files, ref.ID)
+		}
+	}
 	if err != nil {
 		return uuid.Nil, false, err
 	}

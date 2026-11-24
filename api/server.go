@@ -824,6 +824,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermRunStart)).Get("/scan/offers", s.scanOffers)
 			r.With(s.need(PermRunStart)).Post("/tools/{command}/read", s.readToolRoute)
 			r.With(s.need(PermRunStart)).Post("/tools/{command}/start", s.startToolRoute)
+			r.With(s.need(PermRunStart)).Post("/tools/{command}/files", s.holdToolFileRoute)
 			r.With(s.need(PermRunStart)).Post("/tools/{command}/confirm", s.confirmToolRoute)
 			r.With(s.need(PermRunStart)).Put("/tools/{command}/settings", s.setToolSettings)
 			r.With(s.need(PermRunStart)).Post("/tools/buttons/{button}", s.pressButtonRoute)

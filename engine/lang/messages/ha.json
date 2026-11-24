@@ -3504,6 +3504,36 @@
       "text": "amsa da eh ko a'a",
       "reviewed": false
     },
+    "wa.field.send_location": {
+      "text": "Aika wurin da kake nan don {label}: haɗa, sannan Location. Dalili: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's location input in chat (device fields, build-plan-gaps H3): it is sent as WhatsApp's or Telegram's own location message; {label} is the input's title and {why} why it is asked, in the tenant's words"
+    },
+    "wa.field.send_photo": {
+      "text": "Aika hoto a nan don {label}. Dalili: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's photo input in chat: a photo sent in the chat; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.type_code": {
+      "text": "Rubuta lambar don {label}: hira ba ta iya karanta ta. Dalili: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's scan input in chat, where nothing can scan: the code is typed; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.not_location": {
+      "text": "Wannan ba wuri ba ne. Aika shi a matsayin wuri: haɗa, sannan Location.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a location in chat and got words, or a location that did not come through"
+    },
+    "wa.field.not_photo": {
+      "text": "Wannan ba hoto ba ne. Aika hoton kansa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a photo in chat and got words"
+    },
+    "wa.field.photo_lost": {
+      "text": "Hoton bai iso ba. Sake aika shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A photo sent for a tool's input in chat could not be fetched from WhatsApp or Telegram"
+    },
     "wa.form.gone": {
       "text": "Ba a buƙatar wannan fom kuma. Aika *run* da sunan aiki don sake farawa.",
       "reviewed": false
@@ -3511,6 +3541,26 @@
     "wa.form.inputs": {
       "text": "{workflow} yana buƙatar bayanai {count}. Danna *{cta}* don shigar da su; za ka tabbatar kafin ya fara. Aika *cancel* don tsayawa.",
       "reviewed": false
+    },
+    "wa.form.code_now": {
+      "text": "Rubuta lambar a matsayin saƙonka na gaba a nan ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step put to the person in WhatsApp or Telegram asks a code (a scan field, build-plan-gaps H3 g-scan-wa): only their next message there is taken as the code; {why} is why it is asked, in the tenant's words"
+    },
+    "wa.form.code_then": {
+      "text": "Sannan rubuta lambar, idan an tambaya ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram asks a code after its location and photo: asked once they are sent; {why} is why it is asked"
+    },
+    "wa.form.code_next": {
+      "text": "An karɓa, don {title}. Yanzu rubuta lambar a matsayin saƙonka na gaba ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step's location and photo are in; its code is asked now, and only the person's next message there is taken as it; {title} is the question's title and {why} why the code is asked"
+    },
+    "wa.form.code_scan_only": {
+      "text": "Lambar da dole a karanta ba za a iya bayar da ita a hira ba: an bar ta.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram has a code that must be scanned (typing not allowed): it cannot be given there"
     },
     "wa.form.invalid": {
       "text": "Wannan fom ba shi da inganci kuma.",

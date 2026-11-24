@@ -1907,6 +1907,12 @@ class TaskiemApi {
     return ToolRun.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Send a photo or a signature for a tool's input (`POST /v1/tools/{command}/files`)
+  Future<HoldToolFileResponse> holdToolFile({required String command, String? environment}) async {
+    final j = await _t.send('POST', '/v1/tools/${Uri.encodeComponent(command)}/files', query: {'environment': ?environment});
+    return HoldToolFileResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// A run's answer (`GET /v1/runs/{run}/answer`)
   Future<ToolAnswer> getRunAnswer({required String run}) async {
     final j = await _t.send('GET', '/v1/runs/${Uri.encodeComponent(run)}/answer');
@@ -16613,6 +16619,49 @@ class ToolRun {
   Map<String, dynamic> toJson() => {
         'created': created,
         'run_id': runId,
+      };
+}
+
+class HoldToolFileResponse {
+  const HoldToolFileResponse({required this.field, required this.file});
+
+  final String field;
+  final HoldToolFileResponseFile file;
+
+  factory HoldToolFileResponse.fromJson(Map<String, dynamic> j) => HoldToolFileResponse(
+        field: j['field'] as String,
+        file: HoldToolFileResponseFile.fromJson(j['file'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'field': field,
+        'file': file.toJson(),
+      };
+}
+
+class HoldToolFileResponseFile {
+  const HoldToolFileResponseFile({required this.id, required this.name, required this.sha256, required this.size, required this.type});
+
+  final String id;
+  final String name;
+  final String sha256;
+  final int size;
+  final String type;
+
+  factory HoldToolFileResponseFile.fromJson(Map<String, dynamic> j) => HoldToolFileResponseFile(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        sha256: j['sha256'] as String,
+        size: (j['size'] as num).toInt(),
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'sha256': sha256,
+        'size': size,
+        'type': type,
       };
 }
 

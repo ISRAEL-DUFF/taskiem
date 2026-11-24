@@ -40,6 +40,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/saved"
+	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -315,7 +316,8 @@ func (s *Server) waToolFill(ctx context.Context, c *chat, data chatData, fields 
 	var notes []string
 	for _, f := range fields {
 		raw, ok := values[f.Name]
-		if !ok {
+		if !ok || f.Device == wd.DeviceLocation || f.Device == wd.DevicePhoto {
+			// A location or a photo is sent as one, never read from words.
 			continue
 		}
 		v, note, err := s.toolValueOf(ctx, c.tenant.ID, c.p, c.lang.Tag, f, raw)

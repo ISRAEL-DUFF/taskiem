@@ -568,6 +568,11 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 			}
 		}
 	}
+	// A location or a photo for the tool input being asked
+	// (tools_device_chat.go).
+	if done, err := s.toolDeviceAnswer(ctx, c); done || err != nil {
+		return err
+	}
 	// A location or a photo answering a form step, or "send" for one
 	// waiting on its require_source (forms_chat.go).
 	if done, err := s.formChatAnswer(ctx, c); done || err != nil {
@@ -1951,7 +1956,7 @@ func (s *Server) waAskConfirm(ctx context.Context, c *chat, data chatData) error
 	if err := s.saveSession(ctx, c, stateConfirming, data, waPendingTTL); err != nil {
 		return err
 	}
-	lines, err := s.maskedLines(ctx, c.tenant.ID, data.Inputs, 12)
+	lines, err := s.maskedLines(ctx, c.tenant.ID, chatInputWords(data.Inputs), 12)
 	if err != nil {
 		return err
 	}

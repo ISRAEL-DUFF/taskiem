@@ -29,7 +29,12 @@ type Field struct {
 	// fields of its schema; a data table's columns may be optional, and a
 	// form leaves those blank.
 	Required bool
-	schema   *schemacheck.Schema
+	// Device is a tool's device input (build-plan-gaps H3): location or
+	// photo, answered by the chat's own location or photo message, or
+	// scan, a code typed; Why is the input's why, said when it is asked.
+	Device string
+	Why    string
+	schema *schemacheck.Schema
 }
 
 // ErrInputsUnsupported: the inputs need something chat cannot collect yet
@@ -82,6 +87,19 @@ func InputFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Fi
 			return nil, err
 		}
 		f := Field{Name: name, Title: str(ps, "title"), Description: str(ps, "description"), Type: str(ps, "type"), PII: str(ps, "x-pii"), Required: true}
+		switch f.Type {
+		case "signature":
+			// No pad in a chat: the start sends it unavailable.
+			continue
+		case "location", "photo":
+			f.Device, f.Why, f.Type, f.PII = f.Type, str(ps, "why"), "", ""
+			out = append(out, f)
+			continue
+		case "scan":
+			// A code typed: WhatsApp has no scanner.
+			f.Device, f.Why, f.Type = "scan", str(ps, "why"), "string"
+			ps = map[string]any{"type": "string", "minLength": 1, "maxLength": 2000}
+		}
 		if e, ok := ps["enum"].([]any); ok {
 			f.Enum = e
 		}
@@ -128,6 +146,12 @@ func (f Field) PromptIn(t lang.Tag) string {
 	tr := lang.Default().Text
 	var s string
 	switch {
+	case f.Device == "location":
+		s = tr(t, "wa.field.send_location", "label", label, "why", f.Why)
+	case f.Device == "photo":
+		s = tr(t, "wa.field.send_photo", "label", label, "why", f.Why)
+	case f.Device == "scan":
+		s = tr(t, "wa.field.type_code", "label", label, "why", f.Why)
 	case len(f.Enum) > 0:
 		opts := make([]string, len(f.Enum))
 		for i, e := range f.Enum {
@@ -158,6 +182,12 @@ func (f Field) Parse(text string) (any, error) { return f.ParseIn(text, lang.EN)
 // schema's own refusals stay in English).
 func (f Field) ParseIn(text string, t lang.Tag) (any, error) {
 	text = strings.TrimSpace(text)
+	switch f.Device {
+	case "location":
+		return nil, errors.New(lang.Default().Text(t, "wa.field.not_location"))
+	case "photo":
+		return nil, errors.New(lang.Default().Text(t, "wa.field.not_photo"))
+	}
 	var v any
 	switch f.Type {
 	case "integer":
@@ -205,6 +235,9 @@ func (f Field) ParseIn(text string, t lang.Tag) (any, error) {
 // Check checks a value against the field's schema; the error says what is
 // wrong.
 func (f Field) Check(v any) error {
+	if f.schema == nil {
+		return nil // a location or a photo: read by the run, not here
+	}
 	doc, _ := json.Marshal(v)
 	if probs := f.schema.Validate(doc); len(probs) > 0 {
 		msg := probs[0]

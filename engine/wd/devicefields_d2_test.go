@@ -39,7 +39,7 @@ func TestScanInput(t *testing.T) {
 		{`"formats":["ean_13","upc_a"]`, `"formats":["pdf417"]`, "pdf417 is not a code format"},
 		{`"count":{"type":"integer","minimum":0}`, `"count":{"type":"scan","why":"again"}`, "at most one scan"},
 		{`"count":{"type":"integer","minimum":0}`, `"count":{"type":"object","properties":{"inner":{"type":"scan","why":"x"}}}`, "one of its top-level inputs"},
-		{`"count":{"type":"integer","minimum":0}`, `"count":{"type":"signature","why":"x"}`, "A signature field is asked by a form step"},
+		{`"count":{"type":"integer","minimum":0}`, `"count":{"type":"signature"}`, `"count" asks for a signature: say why`},
 		{`"trigger":{"type":"manual"},`, `"trigger":{"type":"manual"},"tool":{"command":"count","name":"Count","about":"Count","for":"customers"},`, "a tool for customers cannot take a scan"},
 		{`"trigger":{"type":"manual"},`, `"trigger":{"type":"form","config":{"title":"Count"}},`, "one of its top-level inputs, in a workflow started by hand"},
 	} {

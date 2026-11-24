@@ -3504,6 +3504,36 @@
       "text": "answer yes or no",
       "reviewed": false
     },
+    "wa.field.send_location": {
+      "text": "Send your location for here for {label}: attach, then Location. Why: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's location input in chat (device fields, build-plan-gaps H3): it is sent as WhatsApp's or Telegram's own location message; {label} is the input's title and {why} why it is asked, in the tenant's words"
+    },
+    "wa.field.send_photo": {
+      "text": "Send one photo for here for {label}. Why: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's photo input in chat: a photo sent in the chat; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.type_code": {
+      "text": "Type the code for {label}: chat no fit scan am. Why: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's scan input in chat, where nothing can scan: the code is typed; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.not_location": {
+      "text": "That one no be location. Send am as location: attach, then Location.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a location in chat and got words, or a location that did not come through"
+    },
+    "wa.field.not_photo": {
+      "text": "That one no be photo. Send the photo itself.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a photo in chat and got words"
+    },
+    "wa.field.photo_lost": {
+      "text": "The photo no reach. Send am again.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A photo sent for a tool's input in chat could not be fetched from WhatsApp or Telegram"
+    },
     "wa.form.gone": {
       "text": "We no need that form again. Send *run* and the workflow name to start again.",
       "reviewed": false
@@ -3511,6 +3541,26 @@
     "wa.form.inputs": {
       "text": "{workflow} need {count} input. Tap *{cta}* to enter dem; you go confirm before e start. Send *cancel* to stop.",
       "reviewed": false
+    },
+    "wa.form.code_now": {
+      "text": "Type the code as your next message for here ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step put to the person in WhatsApp or Telegram asks a code (a scan field, build-plan-gaps H3 g-scan-wa): only their next message there is taken as the code; {why} is why it is asked, in the tenant's words"
+    },
+    "wa.form.code_then": {
+      "text": "Then type the code, when dem ask ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram asks a code after its location and photo: asked once they are sent; {why} is why it is asked"
+    },
+    "wa.form.code_next": {
+      "text": "I don get am, for {title}. Now type the code as your next message ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step's location and photo are in; its code is asked now, and only the person's next message there is taken as it; {title} is the question's title and {why} why the code is asked"
+    },
+    "wa.form.code_scan_only": {
+      "text": "Code wey must scan no fit come from chat: we leave am out.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram has a code that must be scanned (typing not allowed): it cannot be given there"
     },
     "wa.form.invalid": {
       "text": "That form no valid again.",

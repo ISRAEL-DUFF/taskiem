@@ -38330,7 +38330,7 @@ paths:
       tags:
       - Tools
       summary: Start a tool
-      description: 'Its values checked against its form, then its care: a tool whose steps only read starts at once (201, with the values as read, the echo); any other answers 200 with a confirm and the values to show, to send back with the same values. Held to the workflow''s roles. An Idempotency-Key header makes a start at once safe to retry.'
+      description: 'Its values checked against its form, then its care: a tool whose steps only read starts at once (201, with the values as read, the echo); any other answers 200 with a confirm and the values to show, to send back with the same values. Held to the workflow''s roles. An Idempotency-Key header makes a start at once safe to retry. A location input is sent as the device read it ({lat, lng, accuracy_m, at, fix}), or {address} typed; a photo or a signature as {file: id} from POST /v1/tools/{command}/files; any of them {state: refused or unavailable, reason}. The server sets each one''s source and state (docs/spec/device-fields.md §17).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -38384,6 +38384,85 @@ paths:
                 $ref: '#/components/schemas/ToolStart'
         '422':
           description: The values do not fit the tool's form
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  problems:
+                    type: array
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tools/{command}/files:
+    post:
+      operationId: holdToolFile
+      tags:
+      - Tools
+      summary: Send a photo or a signature for a tool's input
+      description: 'A members'' tool may take a location, a photo and a signature among its inputs (docs/spec/device-fields.md §17). A photo or a signature is sent first, on its own, as the multipart part named by its input (app: "app" from the phone app, whose photo is taken with its camera; else it is marked sent), through the forms'' file rules (a photo JPEG or PNG, cleaned to at most 2,000 px; a signature a PNG of at most 1 MB; scanned for malware; private). It is held a day for this person, this tool and this input; the start names it as {file: id} (a signature with {signed_by} beside it) and takes it once. 422 when the input takes no file or the file is not one it takes. Held to the workflow''s roles.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      parameters:
+      - name: command
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The tool's command
+      - name: environment
+        in: query
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                app:
+                  type: string
+                  description: '"app" when the phone app sends it'
+              additionalProperties:
+                type: string
+                format: binary
+                description: The photo or the signature, named by its input
+      responses:
+        '201':
+          description: Held for the start
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [field, file]
+                properties:
+                  field:
+                    type: string
+                  file:
+                    type: object
+                    required: [id, name, type, size, sha256]
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      type:
+                        type: string
+                      size:
+                        type: integer
+                      sha256:
+                        type: string
+        '422':
+          description: The input takes no file, or not this one
           content:
             application/json:
               schema:

@@ -3504,6 +3504,36 @@
       "text": "zaa ee ma ọ bụ mba",
       "reviewed": false
     },
+    "wa.field.send_location": {
+      "text": "Zipu ebe ị nọ ebe a maka {label}: tinye, wee pịa Location. Ihe kpatara ya: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's location input in chat (device fields, build-plan-gaps H3): it is sent as WhatsApp's or Telegram's own location message; {label} is the input's title and {why} why it is asked, in the tenant's words"
+    },
+    "wa.field.send_photo": {
+      "text": "Zipu foto ebe a maka {label}. Ihe kpatara ya: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's photo input in chat: a photo sent in the chat; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.type_code": {
+      "text": "Pịnye koodu maka {label}: nkata enweghị ike ịgụ ya. Ihe kpatara ya: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's scan input in chat, where nothing can scan: the code is typed; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.not_location": {
+      "text": "Nke ahụ abụghị ebe. Zipu ya dịka ebe: tinye, wee pịa Location.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a location in chat and got words, or a location that did not come through"
+    },
+    "wa.field.not_photo": {
+      "text": "Nke ahụ abụghị foto. Zipu foto ahụ n'onwe ya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a photo in chat and got words"
+    },
+    "wa.field.photo_lost": {
+      "text": "Foto ahụ abataghị. Zipu ya ọzọ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A photo sent for a tool's input in chat could not be fetched from WhatsApp or Telegram"
+    },
     "wa.form.gone": {
       "text": "A chọghịzi fọm ahụ. Ziga *run* na aha usoro ọrụ ka ịmalite ọzọ.",
       "reviewed": false
@@ -3511,6 +3541,26 @@
     "wa.form.inputs": {
       "text": "{workflow} chọrọ ntinye {count}. Pịa *{cta}* ka itinye ha; ị ga-akwado tupu ọ malite. Ziga *cancel* ka ịkwụsị.",
       "reviewed": false
+    },
+    "wa.form.code_now": {
+      "text": "Pịnye koodu ahụ dịka ozi gị ọzọ ebe a ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step put to the person in WhatsApp or Telegram asks a code (a scan field, build-plan-gaps H3 g-scan-wa): only their next message there is taken as the code; {why} is why it is asked, in the tenant's words"
+    },
+    "wa.form.code_then": {
+      "text": "Mgbe ahụ pịnye koodu ahụ, mgbe a jụrụ ya ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram asks a code after its location and photo: asked once they are sent; {why} is why it is asked"
+    },
+    "wa.form.code_next": {
+      "text": "Anatara m ya, maka {title}. Ugbu a pịnye koodu ahụ dịka ozi gị ọzọ ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step's location and photo are in; its code is asked now, and only the person's next message there is taken as it; {title} is the question's title and {why} why the code is asked"
+    },
+    "wa.form.code_scan_only": {
+      "text": "Koodu a ga-agụrịrị enweghị ike inye ya na nkata: a hapụrụ ya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram has a code that must be scanned (typing not allowed): it cannot be given there"
     },
     "wa.form.invalid": {
       "text": "Fọm ahụ adịghịzi mma.",

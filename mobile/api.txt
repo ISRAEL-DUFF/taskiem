@@ -403,6 +403,7 @@ listTools
 readTool
 startTool
 confirmTool
+holdToolFile
 getRunAnswer
 setToolSettings
 # A code scanned from the home screen (device fields D2)

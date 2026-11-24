@@ -160,7 +160,7 @@ func (s *Server) waToolReady(ctx context.Context, c *chat, data chatData) (bool,
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return true, err
 	}
-	lines, err := s.maskedLines(ctx, c.tenant.ID, data.Inputs, 12)
+	lines, err := s.maskedLines(ctx, c.tenant.ID, chatInputWords(data.Inputs), 12)
 	if err != nil {
 		return true, err
 	}
@@ -235,6 +235,10 @@ func (s *Server) waToolRun(ctx context.Context, c *chat, t toolRow, data chatDat
 	}
 	if input == nil {
 		input = map[string]any{}
+	}
+	if d, err := s.definitionFor(t.Workflow, t.Version, def); err == nil {
+		// A signature, which a chat cannot draw, unavailable (tools_device_chat.go).
+		chatDeviceInputs(d, input, c.ch.Name())
 	}
 	raw, _ := json.Marshal(input)
 	if probs := s.inputProblems(t.Workflow, t.Version, def, raw); len(probs) > 0 {

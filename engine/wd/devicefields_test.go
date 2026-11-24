@@ -104,17 +104,69 @@ func TestDeviceFieldsValidate(t *testing.T) {
 	}
 }
 
-func TestDeviceFieldsOnlyOnFormSteps(t *testing.T) {
-	for _, doc := range []string{
-		`{"schema":"wd/v1","id":"wf_a","version":1,"name":"A","trigger":{"type":"manual"},
-		 "inputs":{"schema":{"type":"object","properties":{"where":{"type":"location","why":"x"}}}},
-		 "steps":[{"id":"n","type":"transform","config":{"output":{}}}]}`,
-		`{"schema":"wd/v1","id":"wf_a","version":1,"name":"A","trigger":{"type":"form","config":{"title":"Visit"}},
-		 "inputs":{"schema":{"type":"object","properties":{"site":{"type":"string"},"proof":{"type":"photo","why":"x"}}}},
-		 "steps":[{"id":"n","type":"transform","config":{"output":{}}}]}`,
+// siteVisit is a members' tool whose inputs ask the device (build-plan-gaps
+// H3): where the visit was, a photo and the site manager's signature.
+const siteVisit = `{"schema":"wd/v1","id":"wf_visit","version":1,"name":"Add a site visit",
+ "trigger":{"type":"manual"},"tool":{"command":"visit","name":"Add a site visit","about":"Record a visit to a site"},
+ "inputs":{"schema":{"type":"object","required":["where"],"properties":{
+  "where":{"type":"location","why":"so the visit is recorded where it was","max_accuracy_m":200},
+  "proof":{"type":"photo","why":"a photo of the work"},
+  "signed":{"type":"signature","why":"the site manager signs it off","ask_name":true},
+  "note":{"type":"string"}}}},
+ "steps":[{"id":"n","type":"transform","config":{"output":{}}}]}`
+
+// A location, a photo and a signature are a members' tool's top-level
+// inputs (build-plan-gaps H3); anywhere else they are a form step's.
+func TestDeviceFieldsAsToolInputs(t *testing.T) {
+	if p := wd.Validate([]byte(siteVisit)); len(p) != 0 {
+		t.Fatalf("a site visit: %v", p)
+	}
+	d, err := wd.Load([]byte(siteVisit))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := wd.DeviceInputs(d); len(got) != 3 || got["where"] != "location" || got["proof"] != "photo" || got["signed"] != "signature" {
+		t.Fatalf("DeviceInputs: %v", got)
+	}
+	// What a start may send for each.
+	for _, c := range []struct {
+		body string
+		ok   bool
+	}{
+		{`{"where":{"lat":6.45,"lng":3.39,"accuracy_m":12,"at":"2026-11-24T10:00:00Z","fix":"gps"},"proof":{"file":"0193"},"signed":{"file":"0194","signed_by":"Ada"}}`, true},
+		{`{"where":{"address":"12 Allen Avenue"}}`, true},
+		{`{"where":{"state":"refused","reason":"no"},"proof":{"state":"unavailable"}}`, true},
+		{`{"where":{"lat":200,"lng":3}}`, false},
+		{`{"where":{"lat":6.45,"lng":3.39},"proof":{"id":"0193","state":"answered","source":"camera"}}`, false},
+		{`{}`, false},
 	} {
-		if p := fmtProblems(wd.Validate([]byte(doc))); !strings.Contains(p, "field is asked by a form step; a workflow's inputs cannot ask a device yet") {
-			t.Errorf("%s", p)
+		if got := d.ValidateInputs([]byte(c.body)); (len(got) == 0) != c.ok {
+			t.Errorf("%s: %v, want ok %v", c.body, got, c.ok)
+		}
+	}
+
+	for _, c := range []struct{ from, to, want string }{
+		{`"tool":{"command":"visit","name":"Add a site visit","about":"Record a visit to a site"}`, `"tool":{"command":"visit","name":"Add a site visit","about":"Record a visit to a site","for":"customers"}`, "a tool for customers cannot ask for a location"},
+		{`"note":{"type":"string"}`, `"note":{"type":"location","why":"again"}`, "both ask for a location"},
+		{`"note":{"type":"string"}`, `"note":{"type":"object","properties":{"inner":{"type":"photo","why":"x"}}}`, "A photo in a workflow's inputs is one of its top-level inputs"},
+		{`"why":"so the visit is recorded where it was",`, ``, `"where" asks for a location: say why`},
+		{`"trigger":{"type":"manual"},"tool":{"command":"visit","name":"Add a site visit","about":"Record a visit to a site"},`, `"trigger":{"type":"form","config":{"title":"Visit"}},`, "A location in a workflow's inputs is one of its top-level inputs"},
+	} {
+		doc := strings.Replace(siteVisit, c.from, c.to, 1)
+		if doc == siteVisit {
+			t.Fatalf("%q not in the fixture", c.from)
+		}
+		if p := fmtProblems(wd.Validate([]byte(doc))); !strings.Contains(p, c.want) {
+			t.Errorf("%s → %s: %s, want %q", c.from, c.to, p, c.want)
+		}
+	}
+	// A customers' tool keeps refusing each of them.
+	for _, kind := range []string{"photo", "signature"} {
+		doc := strings.Replace(siteVisit, `"about":"Record a visit to a site"}`, `"about":"Record a visit to a site","for":"customers"}`, 1)
+		doc = strings.Replace(doc, `"where":{"type":"location","why":"so the visit is recorded where it was","max_accuracy_m":200},`, ``, 1)
+		doc = strings.Replace(doc, `"required":["where"],`, ``, 1)
+		if p := fmtProblems(wd.Validate([]byte(doc))); !strings.Contains(p, "a tool for customers cannot ask for a "+kind) {
+			t.Errorf("customers' %s: %s", kind, p)
 		}
 	}
 }

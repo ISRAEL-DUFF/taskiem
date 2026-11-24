@@ -153,6 +153,12 @@ type StartRequest struct {
 	// schema does not name, as paths under it (a connector trigger's
 	// declared pii: a message's sender and text), sealed with the rest.
 	TriggerPII []pii.Path
+	// DevicesRead: the caller read the trigger body's device inputs (a
+	// location, a photo, a signature) as a form step's answers are read,
+	// their source from the channel and a photo the file the person sent
+	// with it (api: a tool's start, the Run). Otherwise any such input is
+	// kept unavailable: nothing but those readers may say a device answered.
+	DevicesRead bool
 }
 
 // ParentRun is the subflow step a child run was started by.
@@ -241,7 +247,7 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			}
 		}
 		if fork == nil {
-			req.Trigger = withScanRead(def, req.Trigger)
+			req.Trigger = withScanRead(def, req.Trigger, req.DevicesRead)
 		}
 		// Capability steps run as the rails the environment's connections
 		// are, pinned now so the run never changes rail; a fork keeps the
@@ -340,6 +346,11 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			Trigger: req.Trigger, Env: req.Env, Connectors: pins, Policies: policies,
 		}
 		paths := triggerPaths(def)
+		if who, err := uuid.Parse(req.StartedBy); err == nil && fork == nil {
+			// A tool's location input is the member who started it, and
+			// sealed under them (device fields §5).
+			paths = pii.LocationsOwnedBy(paths, &pii.Owner{Category: "member", Value: who.String()})
+		}
 		var saved map[string]any
 		var savedPaths []pii.Path
 		if fork != nil && fork.saved != nil {
@@ -1548,7 +1559,7 @@ func dbTx(ctx context.Context, s *Store, tenant uuid.UUID, fn func(pgx.Tx) error
 // keeps it (device fields §7, D2): {state, source, text, format}, its
 // source set here from whether the phone gave a format, never from the
 // body. The caller's maps are left as they were.
-func withScanRead(def *wd.Definition, raw any) any {
+func withScanRead(def *wd.Definition, raw any, devicesRead bool) any {
 	trigger, ok := raw.(map[string]any)
 	if !ok {
 		return raw
@@ -1564,7 +1575,16 @@ func withScanRead(def *wd.Definition, raw any) any {
 	for k, v := range body {
 		b[k] = v
 	}
-	if !def.ReadScanInput(b) {
+	changed := def.ReadScanInput(b)
+	if !devicesRead {
+		for name, kind := range wd.DeviceInputs(def) {
+			if _, ok := b[name]; ok && kind != wd.DeviceScan {
+				b[name] = map[string]any{"state": "unavailable", "reason": "it was not answered on a device"}
+				changed = true
+			}
+		}
+	}
+	if !changed {
 		return trigger
 	}
 	out := make(map[string]any, len(trigger))

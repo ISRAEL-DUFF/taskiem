@@ -140,6 +140,9 @@ func (s *Server) askStarter(ctx context.Context, a forms.ChatAsk) bool {
 		s.Logger.Warn("forms: asking a run's starter", "tenant", a.Tenant, "err", err)
 		return false
 	}
+	if !isChoice {
+		s.armCode(ctx, a, a.Users[0], channel)
+	}
 	return true
 }
 

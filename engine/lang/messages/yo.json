@@ -3504,6 +3504,36 @@
       "text": "ẹ dáhùn bẹ́ẹ̀ni tàbí bẹ́ẹ̀kọ́",
       "reviewed": false
     },
+    "wa.field.send_location": {
+      "text": "Fi ibi tí o wà ránṣẹ́ síbí fún {label}: so mọ́, lẹ́yìn náà Location. Ìdí: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's location input in chat (device fields, build-plan-gaps H3): it is sent as WhatsApp's or Telegram's own location message; {label} is the input's title and {why} why it is asked, in the tenant's words"
+    },
+    "wa.field.send_photo": {
+      "text": "Fi fọ́tò kan ránṣẹ́ síbí fún {label}. Ìdí: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's photo input in chat: a photo sent in the chat; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.type_code": {
+      "text": "Tẹ kóòdù náà fún {label}: ìjíròrò kò lè ka á. Ìdí: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's scan input in chat, where nothing can scan: the code is typed; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.not_location": {
+      "text": "Ìyẹn kì í ṣe ibi. Fi ránṣẹ́ bí ibi: so mọ́, lẹ́yìn náà Location.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a location in chat and got words, or a location that did not come through"
+    },
+    "wa.field.not_photo": {
+      "text": "Ìyẹn kì í ṣe fọ́tò. Fi fọ́tò náà gan-an ránṣẹ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a photo in chat and got words"
+    },
+    "wa.field.photo_lost": {
+      "text": "Fọ́tò náà kò dé. Tún un fi ránṣẹ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A photo sent for a tool's input in chat could not be fetched from WhatsApp or Telegram"
+    },
     "wa.form.gone": {
       "text": "A kò nílò fọ́ọ̀mù yẹn mọ́. Ẹ fi *run* àti orúkọ iṣẹ́ kan ránṣẹ́ láti tún bẹ̀rẹ̀.",
       "reviewed": false
@@ -3511,6 +3541,26 @@
     "wa.form.inputs": {
       "text": "{workflow} nílò ìwọlé {count}. Ẹ tẹ *{cta}* láti kọ wọ́n; ẹ ó fìdí rẹ̀ múlẹ̀ kí ó tó bẹ̀rẹ̀. Ẹ fi *cancel* ránṣẹ́ láti dúró.",
       "reviewed": false
+    },
+    "wa.form.code_now": {
+      "text": "Tẹ kóòdù náà gẹ́gẹ́ bí ìfiránṣẹ́ rẹ tó kàn síbí ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step put to the person in WhatsApp or Telegram asks a code (a scan field, build-plan-gaps H3 g-scan-wa): only their next message there is taken as the code; {why} is why it is asked, in the tenant's words"
+    },
+    "wa.form.code_then": {
+      "text": "Lẹ́yìn náà tẹ kóòdù náà, nígbà tí a bá béèrè ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram asks a code after its location and photo: asked once they are sent; {why} is why it is asked"
+    },
+    "wa.form.code_next": {
+      "text": "Ó ti dé, fún {title}. Báyìí tẹ kóòdù náà gẹ́gẹ́ bí ìfiránṣẹ́ rẹ tó kàn ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step's location and photo are in; its code is asked now, and only the person's next message there is taken as it; {title} is the question's title and {why} why the code is asked"
+    },
+    "wa.form.code_scan_only": {
+      "text": "Kóòdù tí a gbọ́dọ̀ kà kò ṣeé fún ní ìjíròrò: a fi í sílẹ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram has a code that must be scanned (typing not allowed): it cannot be given there"
     },
     "wa.form.invalid": {
       "text": "Fọ́ọ̀mù yẹn kò wúlò mọ́.",

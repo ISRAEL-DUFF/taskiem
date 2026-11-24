@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/plain"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -139,10 +140,21 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, errors.Join(errBadRequest, err))
 		return
 	}
+	// A location input read as the device gave it, from the app or the
+	// web (build-plan-gaps H3); a photo or a signature is sent with a
+	// tool's start, so here it is unavailable.
+	if d, err := s.definitionFor(wf, version, def); err == nil && len(wd.DeviceInputs(d)) > 0 {
+		if body, ok := input.(map[string]any); ok {
+			if why := forms.ReadToolInputs(toolInputsSchema(d), body, "app", nil, time.Now()); why != "" {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "input does not match the workflow's inputs schema", "problems": []string{why}})
+				return
+			}
+		}
+	}
 	ref, created, err := s.Store.StartRun(r.Context(), runtime.StartRequest{
 		TenantID: p.TenantID, WorkflowID: wf, Version: version, Environment: env,
 		Trigger:   map[string]any{"type": "manual", "body": input},
-		StartedBy: p.Actor(), TriggerID: "api/" + wf.String(), DedupKey: key,
+		StartedBy: p.Actor(), TriggerID: "api/" + wf.String(), DedupKey: key, DevicesRead: true,
 	})
 	if err != nil {
 		s.fail(w, r, err)

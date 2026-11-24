@@ -3999,6 +3999,36 @@
       "reviewed": true,
       "context": "Why an answer was refused (fills {reason} in wa.run.does_not_fit)"
     },
+    "wa.field.send_location": {
+      "text": "Send your location here for {label}: attach, then Location. Why: {why}",
+      "reviewed": true,
+      "context": "Asks for a tool's location input in chat (device fields, build-plan-gaps H3): it is sent as WhatsApp's or Telegram's own location message; {label} is the input's title and {why} why it is asked, in the tenant's words"
+    },
+    "wa.field.send_photo": {
+      "text": "Send a photo here for {label}. Why: {why}",
+      "reviewed": true,
+      "context": "Asks for a tool's photo input in chat: a photo sent in the chat; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.type_code": {
+      "text": "Type the code for {label}: a chat cannot scan one. Why: {why}",
+      "reviewed": true,
+      "context": "Asks for a tool's scan input in chat, where nothing can scan: the code is typed; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.not_location": {
+      "text": "That is not a location. Send it as one: attach, then Location.",
+      "reviewed": true,
+      "context": "A tool asked for a location in chat and got words, or a location that did not come through"
+    },
+    "wa.field.not_photo": {
+      "text": "That is not a photo. Send the photo itself.",
+      "reviewed": true,
+      "context": "A tool asked for a photo in chat and got words"
+    },
+    "wa.field.photo_lost": {
+      "text": "The photo did not come through. Send it again.",
+      "reviewed": true,
+      "context": "A photo sent for a tool's input in chat could not be fetched from WhatsApp or Telegram"
+    },
     "wa.form.gone": {
       "text": "That form is no longer needed. Send *run* and a workflow's name to start again.",
       "reviewed": true,
@@ -4008,6 +4038,26 @@
       "text": "{workflow} needs {count} input(s). Tap *{cta}* to enter them; you confirm before it starts. Send *cancel* to stop.",
       "reviewed": true,
       "context": "The message carrying an inputs form; {cta} is button.fill_in"
+    },
+    "wa.form.code_now": {
+      "text": "Type the code as your next message here ({why}).",
+      "reviewed": true,
+      "context": "A form step put to the person in WhatsApp or Telegram asks a code (a scan field, build-plan-gaps H3 g-scan-wa): only their next message there is taken as the code; {why} is why it is asked, in the tenant's words"
+    },
+    "wa.form.code_then": {
+      "text": "Then type the code, when asked ({why}).",
+      "reviewed": true,
+      "context": "A form step in WhatsApp or Telegram asks a code after its location and photo: asked once they are sent; {why} is why it is asked"
+    },
+    "wa.form.code_next": {
+      "text": "Got it, for {title}. Now type the code as your next message ({why}).",
+      "reviewed": true,
+      "context": "A form step's location and photo are in; its code is asked now, and only the person's next message there is taken as it; {title} is the question's title and {why} why the code is asked"
+    },
+    "wa.form.code_scan_only": {
+      "text": "A code that must be scanned cannot be given in a chat: it is left out.",
+      "reviewed": true,
+      "context": "A form step in WhatsApp or Telegram has a code that must be scanned (typing not allowed): it cannot be given there"
     },
     "wa.form.invalid": {
       "text": "That form is not valid any more.",

@@ -197,15 +197,17 @@ func DeviceFieldProblems(schema map[string]any, to FormTo, path string) []Proble
 }
 
 // deviceFieldsOutsideSteps refuses device fields anywhere in a
-// workflow's inputs schema but one: a scan, at the top of the inputs of a
-// workflow started by hand (a member's tool, or the Run's), which the
-// phone's scan from the home screen fills in (device fields §7, D2). A
-// form that starts a workflow and a customers' tool cannot take one; a
-// location, a photo and a signature are asked by a form step.
+// workflow's inputs schema but one place: the top level of the inputs of
+// a workflow started by hand (a member's tool, or the Run's). There a
+// scan (the phone's scan from the home screen fills it, device fields §7,
+// D2), a location, a photo and a signature (build-plan-gaps H3) are asked
+// as a form step asks them, one of each. A form that starts a workflow
+// cannot take one, and a tool for customers or a linked business takes
+// none: the founder's answer (build-plan-gaps §14) is members' tools only.
 func deviceFieldsOutsideSteps(d *Definition) []Problem {
 	schema, types := d.InputsSchema()
 	var out []Problem
-	scans := 0
+	top := map[string]any{}
 	var walk func(v any, path string, depth int)
 	walk = func(v any, path string, depth int) {
 		m, ok := v.(map[string]any)
@@ -213,18 +215,16 @@ func deviceFieldsOutsideSteps(d *Definition) []Problem {
 			return
 		}
 		if k := DeviceKind(m); k != "" {
-			top := depth == 1 && strings.HasPrefix(path, "/inputs/schema/properties/")
+			atTop := depth == 1 && strings.HasPrefix(path, "/inputs/schema/properties/")
 			switch {
-			case k == DeviceScan && d.Tool.Audience() != ToolForMembers:
-				out = append(out, Problem{Path: path, Message: "a tool for customers cannot take a scan: WhatsApp has no scanner"})
-			case k == DeviceScan && top && d.Trigger.Type == "manual":
-				if scans++; scans == 2 {
-					out = append(out, Problem{Path: path, Message: "a workflow's inputs take at most one scan: the code the phone read"})
-				}
+			case d.Tool.Audience() != ToolForMembers:
+				out = append(out, Problem{Path: path, Message: notForCustomers(k, d.Tool.Audience())})
+			case atTop && d.Trigger.Type == "manual":
+				top[strings.TrimPrefix(path, "/inputs/schema/properties/")] = m
 			case k == DeviceScan:
 				out = append(out, Problem{Path: path, Message: "A scan in a workflow's inputs is one of its top-level inputs, in a workflow started by hand (a manual trigger): the code the phone read"})
 			default:
-				out = append(out, Problem{Path: path, Message: fmt.Sprintf("%s field is asked by a form step; a workflow's inputs cannot ask a device yet", strings.ToUpper(deviceNoun(k)[:1])+deviceNoun(k)[1:])})
+				out = append(out, Problem{Path: path, Message: fmt.Sprintf("%s in a workflow's inputs is one of its top-level inputs, in a workflow started by hand (a manual trigger, a tool for members); elsewhere it is asked by a form step", upperFirst(deviceNoun(k)))})
 			}
 			return
 		}
@@ -241,12 +241,49 @@ func deviceFieldsOutsideSteps(d *Definition) []Problem {
 	for _, k := range sortedKeys(types) {
 		walk(types[k], "/types/"+k, 0)
 	}
-	if name, p, ok := ScanInput(d); ok && scans == 1 {
-		// Its why and options, as a form step's scan.
-		one := map[string]any{"type": "object", "properties": map[string]any{name: p}}
-		out = append(out, DeviceFieldProblems(one, FormTo{}, "/inputs/schema")...)
+	if len(top) > 0 {
+		// Their why and options, and one of each, as a form step's. A
+		// required signature is fine: the app and the web have a pad, and
+		// a chat sends it unavailable.
+		one := map[string]any{"type": "object", "properties": top}
+		for _, p := range DeviceFieldProblems(one, FormTo{}, "/inputs/schema") {
+			if strings.Contains(p.Message, "both ask for a scan") {
+				p.Message = "a workflow's inputs take at most one scan: the code the phone read"
+			}
+			out = append(out, p)
+		}
 	}
 	return out
+}
+
+// notForCustomers is why a tool for customers (or for a linked business)
+// cannot ask a device.
+func notForCustomers(kind, audience string) string {
+	who := "a tool for customers"
+	if audience == ToolForLinked {
+		who = "a tool for linked businesses"
+	}
+	switch kind {
+	case DeviceScan:
+		return who + " cannot take a scan: WhatsApp has no scanner"
+	case DeviceLocation:
+		return who + " cannot ask for a location: a customer gives one only by sending WhatsApp's own location message, which a workflow reads as trigger.body.location"
+	}
+	return fmt.Sprintf("%s cannot ask for %s: only a tool for members takes one", who, deviceNoun(kind))
+}
+
+func upperFirst(s string) string { return strings.ToUpper(s[:1]) + s[1:] }
+
+// DeviceInputs are a workflow's device inputs (build-plan-gaps H3): its
+// top-level inputs of a device kind, in a workflow started by hand for
+// members, name to kind. Empty for any other workflow.
+func DeviceInputs(d *Definition) map[string]string {
+	if d.Trigger.Type != "manual" || d.Tool.Audience() != ToolForMembers {
+		return nil
+	}
+	raw, _ := d.InputsSchema()
+	schema, _ := raw.(map[string]any)
+	return DeviceFields(schema)
 }
 
 // ScanInput is a workflow's scan input (device fields §7, D2): its first
@@ -314,6 +351,38 @@ func scanInputSchema() map[string]any {
 			"state": map[string]any{"enum": []any{"answered", "refused", "unavailable"}}, "source": str,
 			"reason": map[string]any{"type": "string", "maxLength": 500}}},
 	}}
+}
+
+// deviceInputSchema is what a device input takes before the run reads it
+// (build-plan-gaps H3): a location as the device read it ({lat, lng,
+// accuracy_m, at, fix}) or an address typed; a photo or a signature as
+// the file the app or the web sent first (POST /v1/tools/{command}/files:
+// {file}, a signature's signer beside it); any of them refused or
+// unavailable, with a reason.
+func deviceInputSchema(kind string) map[string]any {
+	if kind == DeviceScan {
+		return scanInputSchema()
+	}
+	str := map[string]any{"type": "string"}
+	props := map[string]any{
+		"state":  map[string]any{"enum": []any{"answered", "refused", "unavailable"}},
+		"reason": map[string]any{"type": "string", "maxLength": 500},
+	}
+	if kind == DeviceLocation {
+		props["lat"] = map[string]any{"type": "number", "minimum": -90, "maximum": 90}
+		props["lng"] = map[string]any{"type": "number", "minimum": -180, "maximum": 180}
+		props["accuracy_m"] = map[string]any{"type": "number", "minimum": 0}
+		props["at"] = str
+		props["fix"] = map[string]any{"enum": []any{"gps", "network"}}
+		props["address"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 500}
+		props["source"] = str
+	} else {
+		props["file"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 64}
+		if kind == DeviceSignature {
+			props["signed_by"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 120}
+		}
+	}
+	return map[string]any{"type": "object", "additionalProperties": false, "properties": props}
 }
 
 // scanInputProblems checks a scan input beyond its schema: a code, of a
