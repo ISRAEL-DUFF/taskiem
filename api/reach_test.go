@@ -70,7 +70,8 @@ func newReachWorld(t *testing.T) *reachWorld {
 	hash := bytes.Repeat([]byte{8}, 32)
 	msgs := &sender.Queue{Vault: e.Vault, HashKey: hash}
 	book := &reach.Book{Pool: e.Store.Pool, Vault: e.Vault, HashKey: hash}
-	if err := e.Registry.Register(notify.New(&notify.Notifier{Pool: e.Store.Pool, Chat: []string{"whatsapp", "telegram"}, Messages: msgs, Reach: book})); err != nil {
+	if err := e.Registry.Register(notify.New(&notify.Notifier{Pool: e.Store.Pool, Chat: []string{"whatsapp", "telegram"}, Messages: msgs, Reach: book,
+		Files: api.SavedFileLinks{Pool: e.Store.Pool, BaseURL: waPublicURL}})); err != nil {
 		t.Fatal(err)
 	}
 	svc := &forms.Service{Pool: e.DB.App, Vault: e.Vault, Keys: keys, Messages: msgs, Start: e.Store.Start, Signal: e.Store.DeliverSignalOnce, FormHost: reachFormHost}

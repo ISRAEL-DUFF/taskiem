@@ -42,6 +42,9 @@ type Notifier struct {
 	// Reach finds people outside the business who asked for updates on a
 	// chat app (message); nil: they get SMS or email.
 	Reach *reach.Book
+	// Files makes the links to saved files messages send by SMS or email;
+	// nil: a message with a file is refused.
+	Files FileLinks
 }
 
 // Tell queues the message to its people, once per person for the key.
@@ -71,6 +74,8 @@ func (n *Notifier) Tell(ctx context.Context, m Message) (Result, error) {
 // linked (in Chat's order), else by email.
 func (n *Notifier) deliver(ctx context.Context, tx pgx.Tx, business string, m Message, people []person) (Result, error) {
 	var res Result
+	var file string // the saved file's line, its link made once
+	var err error
 	ids := make([]uuid.UUID, 0, len(people))
 	for _, p := range people {
 		ids = append(ids, p.id)
@@ -108,12 +113,17 @@ func (n *Notifier) deliver(ctx context.Context, tx pgx.Tx, business string, m Me
 		if n.Messages == nil || p.email == "" || placeholderEmail(p.email) {
 			continue // an account made by phone or chat has no mailbox
 		}
+		if file == "" && m.File != "" {
+			if file, err = n.fileLineFor(ctx, m.Tenant, m.File); err != nil {
+				return res, err
+			}
+		}
 		subject := m.Title
 		if subject == "" {
 			subject = "A message about " + business
 		}
 		if _, err := n.Messages.Enqueue(ctx, tx, sender.Message{Tenant: m.Tenant, Channel: sender.Email, Purpose: sender.PurposeNotice, To: p.email,
-			SenderName: business, Subject: subject, Text: text(m), Key: "notice:" + m.Key + ":" + p.id.String()}); err != nil {
+			SenderName: business, Subject: subject, Text: WithFileLine(text(m), file), Key: "notice:" + m.Key + ":" + p.id.String()}); err != nil {
 			return res, fmt.Errorf("telling %s by email: %w", maskEmail(p.email), err)
 		}
 		res.Email++
@@ -179,7 +189,7 @@ func (n *Notifier) Message(ctx context.Context, m Outside) (Delivery, error) {
 				return err
 			}
 			if len(people) > 0 {
-				r, err := n.deliver(ctx, tx, business, Message{Tenant: m.Tenant, Run: m.Run, Step: m.Step, Environment: m.Environment, Title: m.Title, Text: m.Text, Key: m.Key}, people)
+				r, err := n.deliver(ctx, tx, business, Message{Tenant: m.Tenant, Run: m.Run, Step: m.Step, Environment: m.Environment, Title: m.Title, Text: m.Text, File: m.File, Key: m.Key}, people)
 				switch {
 				case err != nil:
 					return err
@@ -228,9 +238,17 @@ func (n *Notifier) Message(ctx context.Context, m Outside) (Delivery, error) {
 		if n.Messages == nil {
 			return nil
 		}
+		file, err := n.fileLineFor(ctx, m.Tenant, m.File)
+		if err != nil {
+			return err
+		}
 		if phone != "" {
-			_, err := n.Messages.Enqueue(ctx, tx, sender.Message{Tenant: m.Tenant, Channel: sender.SMS, Purpose: sender.PurposeNotice, To: phone,
-				SenderName: business, Text: SMSText(business, m.Title, m.Text), Key: "message:" + m.Key})
+			sms, err := SMSTextWithFile(business, m.Title, m.Text, file)
+			if err != nil {
+				return err
+			}
+			_, err = n.Messages.Enqueue(ctx, tx, sender.Message{Tenant: m.Tenant, Channel: sender.SMS, Purpose: sender.PurposeNotice, To: phone,
+				SenderName: business, Text: sms, Key: "message:" + m.Key})
 			switch {
 			case errors.Is(err, sender.ErrAllowance):
 				d.OverAllowance = true
@@ -247,7 +265,7 @@ func (n *Notifier) Message(ctx context.Context, m Outside) (Delivery, error) {
 				subject = "A message from " + business
 			}
 			if _, err := n.Messages.Enqueue(ctx, tx, sender.Message{Tenant: m.Tenant, Channel: sender.Email, Purpose: sender.PurposeNotice, To: m.Email,
-				SenderName: business, Subject: subject, Text: text(Message{Title: m.Title, Text: m.Text}), Key: "message-email:" + m.Key}); err != nil {
+				SenderName: business, Subject: subject, Text: WithFileLine(text(Message{Title: m.Title, Text: m.Text}), file), Key: "message-email:" + m.Key}); err != nil {
 				return err
 			}
 			d.Via = "email"

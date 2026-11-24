@@ -338,7 +338,7 @@ A new block in the definition touches everything that reads one. None of it is h
 | Reader of a definition | What it must do |
 | --- | --- |
 | `engine/wd`, `engine/wdcheck`, `schemas/wd-v1.schema.json`, the contract page | Parse and validate it (§12) |
-| `engine/wddiff`, `engine/wdtext` | Say a change in plain words ("Customers can now use it", "It now also says 'diesel'"), since these are what an approver reads. **Built 24 November 2026** (build plan H6): `wdtext.Changes`, in each version of the history (`GET /v1/workflows/{id}`, the editor's **What changed in version N**) and in a publish waiting for a second person (`GET /v1/publish-requests`, Approvals); its words are in every language (drafts beside English), the web showing English |
+| `engine/wddiff`, `engine/wdtext` | Say a change in plain words ("Customers can now use it", "It now also says 'diesel'"), since these are what an approver reads. **Built 24 November 2026** (build plan H6): `wdtext.Changes`, in each version of the history (`GET /v1/workflows/{id}`, the editor's **What changed in version N**), in a publish waiting for a second person (`GET /v1/publish-requests`, Approvals) and in the changes report (`GET /v1/reports/changes`); its words are in every language (drafts beside English), the web showing English |
 | `engine/wdmerge` | Two people changing `tool` at once is a conflict for a person; it is not merged field by field |
 | The builder and the canvas | **Use it from chat** (§13); the canvas shows that a workflow is a tool |
 | The TypeScript SDK, its codegen, `engine/flowcode` | `flow.tool({...})`, round-tripping to the definition |

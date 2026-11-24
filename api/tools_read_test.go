@@ -277,3 +277,25 @@ func TestReaderFillsOptionalInputs(t *testing.T) {
 		t.Fatalf("read: %v", got)
 	}
 }
+
+// A tool whose only input is optional (H6 review): the words after its
+// command are read for it, never dropped ("/log at Total").
+func TestReaderOnlyOptionalInput(t *testing.T) {
+	w := newWAWorld(t)
+	fake := &ai.Fake{Respond: func(req ai.Request) (*ai.Response, error) {
+		return &ai.Response{Text: `{"values":[{"field":"where","value":"Total"}]}`}, nil
+	}}
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN}, Model: fake}
+	owner := w.tenant(t, "Mama Put", "owner@onlyoptional.test")
+	wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Log a stop",
+		"definition": readerTool("wf_stop", "Log a stop", "log", "Record where the van stopped", nil, true, `{"type":"object","properties":{"where":{"type":"string","title":"Where"}}}`)})["id"].(string)
+	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+	const on = "+2348010000082"
+	w.bind(t, owner, on)
+	if r := w.say(t, on, "/log at Total"); !strings.Contains(r, "Start Log a stop") || !strings.Contains(r, "Total") {
+		t.Fatalf("/log at Total: %q", r)
+	}
+	if len(fake.Requests()) != 1 {
+		t.Fatalf("the words were not read: %d", len(fake.Requests()))
+	}
+}

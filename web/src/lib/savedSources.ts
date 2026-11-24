@@ -49,7 +49,7 @@ const RUN_FIELDS: Record<SavedKind, [string, string][]> = {
   file: [
     ["file_name", "File name"],
     ["file_type", "File type"],
-    ["file", "A link to send it"],
+    ["file", "The file, for a message to send"],
     ["note", "Note"],
   ],
 };

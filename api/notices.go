@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -51,7 +50,6 @@ func (s *Server) sendNoticeItem(ctx context.Context, it whatsapp.OutboxItem) err
 	}
 	title, _ := in["title"].(string)
 	message, _ := in["message"].(string)
-	message = notify.WithFile(message, in) // a saved file's name and link at its end
 	if strings.TrimSpace(message) == "" {
 		return fmt.Errorf("%w: no message", whatsapp.ErrNothingToSend)
 	}
@@ -72,7 +70,16 @@ func (s *Server) sendNoticeItem(ctx context.Context, it whatsapp.OutboxItem) err
 	if title == "" {
 		body = ""
 	}
-	m := whatsapp.AlertMessage(business, "notice", head, body, "", nil)
+	// A saved file: its name under the message, its link (made now) in
+	// the alert's link, which the template carries outside the window too.
+	name, link, err := s.savedFileLine(ctx, it.Tenant, in)
+	if err != nil {
+		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
+	}
+	if link != "" {
+		body = strings.TrimLeft(body+"\n\n"+strings.TrimSpace(name), "\n")
+	}
+	m := whatsapp.AlertMessage(business, "notice", head, body, link, nil)
 	m.Text = strings.TrimRight(m.Text, "\n")
 	m.Tenant = it.Tenant
 	// Its buttons, each filling a tool's form (tools_buttons.go).

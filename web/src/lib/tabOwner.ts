@@ -1,6 +1,7 @@
 // What a browser tab keeps for the person signed in: their chat drafts,
 // the message to Taskiem still in flight, the gate's recent checks (names
-// and fee standing) and the business an agent is working in. A session
+// and fee standing), the business an agent is working in, and the runs of
+// businesses' tools kept in a person's chats (lib/theirRuns.ts). A session
 // that runs out (a 401) keeps them, so the same person signing in again
 // carries on; someone else signing in in the tab, or signing out, forgets
 // them. Unsaved builder edits are not theirs alone (lib/keep.ts): they stay.
@@ -13,6 +14,7 @@ import { keepInflight } from "./taskiemchat";
 import { forgetChatTools } from "./useChatTools";
 import { forgetMadeTools } from "./useMadeTools";
 import { forgetAIPhotoSetting } from "./photoAI";
+import { forgetTheirRuns } from "./theirRuns";
 
 const OWNER = "taskiem-owner";
 
@@ -24,6 +26,7 @@ function clearPersonal() {
   forgetChatTools();
   forgetMadeTools();
   forgetAIPhotoSetting();
+  forgetTheirRuns();
   setAgentSession(null);
 }
 

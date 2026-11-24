@@ -485,6 +485,19 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
     }
   }
 
+  /// The invoice's PDF, handed to the phone to open or keep: masked as the
+  /// card is, the customer's details in full once they were shown (the
+  /// same rule, and audit, as the web).
+  Future<void> _invoicePdf(Map<String, dynamic> x) async {
+    try {
+      final path = '/v1/invoices/${Uri.encodeComponent(_str(x['id']))}/pdf${_revealed != null ? '?reveal=true' : ''}';
+      final bytes = await _auth.transport.bytes(path);
+      await handOffFile(Uint8List.fromList(bytes), '${_str(x['number'])}.pdf', 'application/pdf', null);
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    }
+  }
+
   /// A receipt's PDF, handed to the phone to open or keep.
   Future<void> _receiptPdf(Map<String, dynamic> rc) async {
     try {
@@ -713,6 +726,10 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
                   padding: const EdgeInsets.only(top: 8),
                   child: Text('The customer’s details are hidden. Someone who may see personal data can show them.', style: tkHint(t)),
                 ),
+              // The invoice as a document (GET /v1/invoices/{id}/pdf): the
+              // customer's details as shown here, revealed only once shown.
+              const SizedBox(height: 12),
+              TkSmallButton(label: 'Open the PDF', icon: 'b-receipt', onPressed: _busy ? null : () => _invoicePdf(x)),
             ],
           ),
         ],

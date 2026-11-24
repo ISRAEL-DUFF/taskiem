@@ -18,7 +18,8 @@ export interface SavedUse {
 export interface RunSavedRead {
   id: string;
   name: string;
-  title: string;
+  /** Left out for a saved person unless the run is revealed. */
+  title?: string;
   kind: string;
   steps: string[];
   read_at: string;

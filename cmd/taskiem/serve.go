@@ -885,7 +885,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 			WakeInterval: cfg.Wake.Interval, WakeInTx: cfg.Wake.InTx}}
 	// A business's saved things its workflows read, at each run's start
 	// (saved objects S3).
-	e.store.Saved = api.SavedResolver(e.store, &media.Service{Credentials: e.tables().Credentials, Guard: &egress.Guard{Logger: log}, Logger: log})
+	e.store.Saved = api.SavedResolver(e.store)
 	e.stock = &stock.Stock{Pool: pool, Catalogue: &storefront.XenibaseCatalogue{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
 		MoneyLog: &moneylog.Log{Pool: pool, PII: vault}}
 	stockOps.Set(e.stock)
@@ -930,7 +930,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		e.tg = telegram.New(pool, *cfg.Telegram, &egress.Guard{Logger: log}, log)
 	}
 	// Tell me: on the chat channels this deployment runs, else by email.
-	n := &notify.Notifier{Pool: pool}
+	// Saved files a message sends get a short link, made when it sends.
+	n := &notify.Notifier{Pool: pool, Files: api.SavedFileLinks{Pool: pool, BaseURL: cfg.PublicURL}}
 	if e.wa != nil {
 		n.Chat = append(n.Chat, "whatsapp")
 	}

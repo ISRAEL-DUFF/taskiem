@@ -66,7 +66,7 @@ describe("saved things as a step's values", () => {
     expect(labels("place")).toEqual(["Address", "Street and number", "Area", "Landmark", "Phone", "Note"]);
     expect(labels("person")).toEqual(["Phone", "Email", "Address", "Birthday", "Note"]);
     expect(labels("provider_account")).toEqual(["Provider", "Number with them", "Name on the account", "What it is", "Note"]);
-    expect(labels("file")).toEqual(["File name", "File type", "A link to send it", "Note"]);
+    expect(labels("file")).toEqual(["File name", "File type", "The file, for a message to send", "Note"]);
   });
 
   it("gives a made-up kind's fields, but for sensitive ones, files, bank accounts and those never shared", () => {

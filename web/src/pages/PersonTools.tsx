@@ -192,7 +192,7 @@ function TheirToolRunner({
   const yes = (s: ToolStart) =>
     act(async () => {
       const r = await post<{ run_id: string }>(path("confirm"), { confirm: s.confirm, input: input ?? {} });
-      onStarted({ id: r.run_id, command: tool.command, name: tool.name, at: new Date().toISOString(), values: s.values });
+      onStarted({ id: r.run_id, command: tool.command, name: tool.name, at: new Date().toISOString() });
     });
 
   if (phase.at === "yes")

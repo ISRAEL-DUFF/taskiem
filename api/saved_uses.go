@@ -8,6 +8,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/saved"
 )
 
 // Each run's use of a business's saved thing (build plan H6, g-saved-wf;
@@ -35,8 +37,10 @@ type savedUse struct {
 const savedUsesMax = 50
 
 // savedRuns is GET /v1/saved/{id}/runs: the latest runs that read one of
-// the business's saved things, newest first.
+// the business's saved things, newest first; an environment's key sees
+// its environment's runs only, as it does everywhere.
 func (s *Server) savedRuns(w http.ResponseWriter, r *http.Request) {
+	env := principalFrom(r.Context()).Environment
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "not found")
@@ -53,7 +57,7 @@ func (s *Server) savedRuns(w http.ResponseWriter, r *http.Request) {
 		}
 		rows, err := tx.Query(r.Context(), `SELECT u.run_id, u.workflow_id, COALESCE(w.name, ''), u.version, u.name, u.steps, u.read_at, COALESCE(r.status, '')
 			FROM saved_uses u LEFT JOIN workflows w ON w.id = u.workflow_id LEFT JOIN runs r ON r.id = u.run_id
-			WHERE u.object_id = $1 ORDER BY u.read_at DESC LIMIT $2`, id, savedUsesMax)
+			WHERE u.object_id = $1 AND ($3 = '' OR r.environment = $3) ORDER BY u.read_at DESC LIMIT $2`, id, savedUsesMax, env)
 		if err != nil {
 			return err
 		}
@@ -69,21 +73,29 @@ func (s *Server) savedRuns(w http.ResponseWriter, r *http.Request) {
 
 // runSavedRead is one saved thing a run read.
 type runSavedRead struct {
-	ID     uuid.UUID `json:"id"`
-	Name   string    `json:"name"`
-	Title  string    `json:"title"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	// Title is how it is shown; a saved person's is their name, personal
+	// data, so it is left out unless the run is revealed (audited).
+	Title  string    `json:"title,omitempty"`
 	Kind   string    `json:"kind"`
 	Steps  []string  `json:"steps"`
 	ReadAt time.Time `json:"read_at"`
 }
 
-// runSavedReads are the saved things run read at its start, by name.
-func runSavedReads(ctx context.Context, tx pgx.Tx, run uuid.UUID) ([]runSavedRead, error) {
+// runSavedReads are the saved things run read at its start, by name; a
+// person's title (their name) only when revealed.
+func runSavedReads(ctx context.Context, tx pgx.Tx, run uuid.UUID, revealed bool) ([]runSavedRead, error) {
 	rows, err := tx.Query(ctx, `SELECT o.id, u.name, o.title, o.kind, u.steps, u.read_at
 		FROM saved_uses u JOIN saved_objects o ON o.id = u.object_id WHERE u.run_id = $1 ORDER BY u.name`, run)
 	if err != nil {
 		return nil, err
 	}
 	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[runSavedRead])
+	for i := range out {
+		if out[i].Kind == saved.KindPerson && !revealed {
+			out[i].Title = ""
+		}
+	}
 	return nonNil(out), err
 }

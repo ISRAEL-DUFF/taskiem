@@ -18105,6 +18105,31 @@ paths:
                 format: binary
         default:
           $ref: '#/components/responses/Error'
+  /v1/saved-files/{token}:
+    get:
+      operationId: openSavedFileLink
+      tags:
+      - Saved
+      summary: A saved file a message carried
+      description: 'For anyone, signed in or not: the link a workflow''s message gave a business''s saved file (build plan H6; made when the message was sent, good for a week). A redirect to the file in the business''s storage, for five minutes; 404 once the link has expired or the saved thing was removed. Thirty a minute per address.'
+      security: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '302':
+          description: To the file
+        '404':
+          description: No such link, or it expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/chat-links/{code}:
     get:
       operationId: getChatLinkCard
@@ -44242,7 +44267,6 @@ components:
       required:
       - id
       - name
-      - title
       - kind
       - steps
       - read_at
@@ -44254,6 +44278,7 @@ components:
           type: string
         title:
           type: string
+          description: How it is shown; left out for a saved person (their name is personal data) unless the run is revealed.
         kind:
           type: string
         steps:

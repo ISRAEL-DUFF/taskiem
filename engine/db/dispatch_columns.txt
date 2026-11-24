@@ -1727,6 +1727,11 @@ saved_files.tenant_id
 saved_files.object_id
 saved_files.path
 saved_files.created_at
+saved_file_links.token_hash
+saved_file_links.tenant_id
+saved_file_links.object_id
+saved_file_links.expires_at
+saved_uses.run_id
 saved_reminders.id
 saved_reminders.last_sent
 saved_reminders.person_id

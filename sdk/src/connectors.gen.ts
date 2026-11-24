@@ -1658,7 +1658,7 @@ export interface NotifyMessageInput {
   about?: Val<string>;
   /** Their email address: used when they cannot be reached by phone */
   email?: Val<string>;
-  /** One of the business's saved files to send with it, written =saved.price_list (or its link alone, =saved.price_list.file; build plan H6): its name and a link to it, good for a week, go at the end of the message, by chat, SMS or email alike. It is read when the run starts, from the business's saved things only, never a person's own */
+  /** One of the business's saved files to send with it, written =saved.price_list (or =saved.price_list.file; nothing else names one; build plan H6): its name and a short link to it, made when the message is sent and good for a week, go at the end of the message, kept whole wherever the message is cut (by chat, SMS or email alike). Which saved file it is comes from the run's start, from the business's saved things only, never a person's own */
   file?: Value;
   /** The message */
   message: Val<string>;
@@ -1672,7 +1672,7 @@ export interface NotifyMessageInput {
 export interface NotifyTellInput {
   /** Up to three buttons (decision 0073, made tools §10; pages §9), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles (never running it by itself), or one of the business's pages with its filters set (page, filters), for whoever presses it if the page's roles let them open it: its short form in the chat and its link, which opens in the app and on the web. once (a tool's): the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them */
   buttons?: Value;
-  /** One of the business's saved files to send with it, written =saved.price_list (or its link alone, =saved.price_list.file; build plan H6): its name and a link to it, good for a week, go at the end of the message, by chat, SMS or email alike. It is read when the run starts, from the business's saved things only, never a person's own */
+  /** One of the business's saved files to send with it, written =saved.price_list (or =saved.price_list.file; nothing else names one; build plan H6): its name and a short link to it, made when the message is sent and good for a week, go at the end of the message, kept whole wherever the message is cut (by chat, SMS or email alike). Which saved file it is comes from the run's start, from the business's saved things only, never a person's own */
   file?: Value;
   /** With to: members, their sign-in emails */
   members?: Value;

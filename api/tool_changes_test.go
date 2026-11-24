@@ -35,6 +35,10 @@ func TestToolChangesInPlainWords(t *testing.T) {
 	if _, ok := versions[1].(map[string]any)["changes"]; ok {
 		t.Errorf("the first version says changes: %v", versions[1])
 	}
+	// The changes report says them in the same words.
+	if rep := toJSON(owner.must(200, "GET", "/v1/reports/changes", nil)["rows"]); !strings.Contains(rep, "It now also says 'diesel'") || strings.Contains(rep, "~ tool") {
+		t.Errorf("the changes report: %s", rep)
+	}
 
 	// For customers, waiting for a second publisher: the review says so,
 	// from the version live in prod.

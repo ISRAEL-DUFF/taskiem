@@ -364,7 +364,6 @@ func (s *Server) sendReachItem(ctx context.Context, it whatsapp.OutboxItem) erro
 	}
 	title, _ := in["title"].(string)
 	message, _ := in["message"].(string)
-	message = notify.WithFile(message, in) // a saved file's name and link at its end
 	about, _ := in["about"].(string)
 	if strings.TrimSpace(message) == "" {
 		return fmt.Errorf("%w: no message", whatsapp.ErrNothingToSend)
@@ -402,9 +401,17 @@ func (s *Server) sendReachItem(ctx context.Context, it whatsapp.OutboxItem) erro
 		}
 		return err
 	}
-	body := message
+	// A saved file: its name and a link made now, after the message, and
+	// kept whole in the template's one line outside the window.
+	var file string
+	if name, link, err := s.savedFileLine(ctx, it.Tenant, in); err != nil {
+		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
+	} else if link != "" {
+		file = notify.FileLine(name, link)
+	}
+	body := notify.WithFileLine(message, file)
 	if title != "" {
-		body = "*" + title + "*\n\n" + message
+		body = "*" + title + "*\n\n" + body
 	}
 	if about == "" {
 		about = title
@@ -416,8 +423,9 @@ func (s *Server) sendReachItem(ctx context.Context, it whatsapp.OutboxItem) erro
 	if title != "" {
 		head = title + ": " + message
 	}
-	if r := []rune(head); len(r) > 500 {
-		head = string(r[:500]) + "…"
+	head, err = notify.CutFor(head, " ", file, 500)
+	if err != nil {
+		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
 	}
 	tpl := whatsapp.TplUpdate
 	m := whatsapp.Message{Text: ch.Prefix(business) + body, Tenant: it.Tenant, Template: &tpl,
@@ -461,13 +469,23 @@ func (s *Server) reachFallback(ctx context.Context, it whatsapp.OutboxItem, busi
 	phone, _ := in["phone"].(string)
 	title, _ := in["title"].(string)
 	message, _ := in["message"].(string)
-	message = notify.WithFile(message, in)
 	if s.Messages == nil || phone == "" {
 		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, why)
 	}
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
+	// A saved file: its line kept whole in the SMS, the message cut for it.
+	var file string
+	if name, link, err := s.savedFileLine(ctx, it.Tenant, in); err != nil {
+		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
+	} else if link != "" {
+		file = notify.FileLine(name, link)
+	}
+	sms, err := notify.SMSTextWithFile(business, title, message, file)
+	if err != nil {
+		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
+	}
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
 		_, err := s.Messages.Enqueue(ctx, tx, sender.Message{Tenant: it.Tenant, Channel: sender.SMS, Purpose: sender.PurposeNotice, To: phone,
-			SenderName: business, Text: notify.SMSText(business, title, message), Key: "message-fallback:" + it.ID.String()})
+			SenderName: business, Text: sms, Key: "message-fallback:" + it.ID.String()})
 		return err
 	})
 	if err != nil && !errors.Is(err, sender.ErrAllowance) && !errors.Is(err, sender.ErrInvalid) {

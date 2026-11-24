@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/saved"
@@ -21,22 +21,22 @@ import (
 // read now, so a change is used from the next run. Personal values (a
 // phone, an email, an address, an account number) and a made-up kind's
 // sensitive ones are sealed in the run's history; fields never to be shared
-// are left out. A saved file is a link to it, made at the run's start and
-// good for a week, so a step can send it (notify's file, an email's
-// attachment by its link: build plan H6). A person's own saved things are
-// never read: the run is the business's. Each thing read is recorded
-// against the run, with the steps that read it (saved_uses, 00641).
+// are left out. A saved file is a reference to it (file:
+// "saved-file:<id>"), never a link: a message step sending it gets a link
+// made when it sends (saved_file_links.go; build plan H6). A person's own
+// saved things are never read: the run is the business's. Each thing read
+// is recorded against the run, with the steps that read it (saved_uses,
+// 00641), the latest savedUsesKept for each thing.
 
 // SavedResolver is the engine's reader of saved things for the runs of
-// store, its files signed by files (nil: a file has no link): set on it
-// wherever runs start (the API, schedules, the workers).
-func SavedResolver(store *runtime.Store, files *media.Service) runtime.SavedResolver {
-	return (&Server{Store: store, Media: files}).savedForRuns
+// store: set on it wherever runs start (the API, schedules, the workers).
+func SavedResolver(store *runtime.Store) runtime.SavedResolver {
+	return (&Server{Store: store}).savedForRuns
 }
 
-// savedFileTTL is how long a saved file's link in a run lasts: long
-// enough for a message to be read, as far as a signed link may go.
-const savedFileTTL = media.MaxSignedTTL
+// savedUsesKept is how many of the latest runs that read a saved thing
+// are kept for its page (a run's purge takes its rows too, 00643).
+const savedUsesKept = 200
 
 // savedForRuns is the engine's runtime.SavedResolver: tx is in the
 // business's scope.
@@ -96,6 +96,11 @@ func (s *Server) savedForRuns(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO saved_uses (tenant_id, object_id, run_id, workflow_id, version, name, steps) VALUES ($1, $2, $3, $4, $5, $6, $7)
 			ON CONFLICT (object_id, run_id) DO NOTHING`, tenant, x.ID, read.Run, read.Workflow, read.Version, x.Name, steps[:min(len(steps), 200)]); err != nil {
+			return nil, nil, err
+		}
+		// Only the latest are kept for the thing's page.
+		if _, err := tx.Exec(ctx, `DELETE FROM saved_uses WHERE object_id = $1 AND read_at < (
+			SELECT read_at FROM saved_uses WHERE object_id = $1 ORDER BY read_at DESC OFFSET $2 LIMIT 1)`, x.ID, savedUsesKept-1); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -161,11 +166,7 @@ func (s *Server) savedRunFields(ctx context.Context, tx pgx.Tx, o savedOwner, x 
 		// never goes into the run).
 		put("file_name", str("file_name"), "")
 		put("file_type", str("file_type"), "")
-		link, err := s.savedFileLink(ctx, tx, o, x)
-		if err != nil {
-			return nil, nil, err
-		}
-		put("file", link, "")
+		put("file", notify.FileRefPrefix+x.ID.String(), "")
 	case saved.KindCustom:
 		values, err := s.customValuesTx(ctx, tx, o, x)
 		if errors.Is(err, pii.ErrErased) {
@@ -199,29 +200,3 @@ func (s *Server) savedRunFields(ctx context.Context, tx pgx.Tx, o savedOwner, x 
 
 // savedRunOwnField are the fields every saved thing has in a run.
 var savedRunOwnField = map[string]bool{"name": true, "title": true, "kind": true, "note": true}
-
-// savedFileLink is a link to a business's saved file, good for a week
-// (savedFileTTL), signed in its own storage; "" when it has none (no
-// storage here, or the file cannot be signed now: a step sending it then
-// says so). Only a business's own file: a person's is never a run's.
-func (s *Server) savedFileLink(ctx context.Context, tx pgx.Tx, o savedOwner, x savedRow) (string, error) {
-	if s.Media == nil || o.mine() {
-		return "", nil
-	}
-	var path string
-	err := tx.QueryRow(ctx, `SELECT coalesce(path, '') FROM saved_files WHERE tenant_id = $1 AND person_id IS NULL AND object_id = $2 AND field = ''`, o.tenant, x.ID).Scan(&path)
-	if errors.Is(err, pgx.ErrNoRows) || err == nil && path == "" {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	url, _, err := s.Media.SignURL(ctx, o.tenant, path, savedFileTTL)
-	if err != nil {
-		if s.Logger != nil {
-			s.Logger.Warn("saved: a run's link to a saved file", "err", err)
-		}
-		return "", nil
-	}
-	return url, nil
-}

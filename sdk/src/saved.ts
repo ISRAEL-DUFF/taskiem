@@ -57,8 +57,9 @@ export interface SavedFile extends SavedBase {
   kind: "file";
   file_name: string;
   file_type: string;
-  /** A link to the file, made when the run starts and good for a week:
-   * what notify's file sends (`file: ({ saved }) => saved.price_list`). */
+  /** Which saved file it is ("saved-file:<id>"), never a link: a message
+   * step sends it with a short link made when it sends
+   * (`file: ({ saved }) => saved.price_list`). */
   file: string;
 }
 

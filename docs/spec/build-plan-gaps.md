@@ -130,8 +130,10 @@ The specs are [made tools](made-tools.md) and [saved objects](saved-objects.md).
 
 | Task | Details |
 | --- | --- |
-| **The app opens an invoice's PDF** | `GET /v1/invoices/{id}/pdf` exists and the web opens it; the app's invoice screen gets **Open the PDF** too (masked; revealed with the same rule as the web). |
-| **The changes report says tool changes in plain words** | `api/reports.go` still uses `wddiff`; use `wdtext.Changes` there as the version history and Approvals do. |
+| **The app opens an invoice's PDF** | `GET /v1/invoices/{id}/pdf` exists and the web opens it; the app's invoice screen gets **Open the PDF** too (masked; revealed with the same rule as the web). **Built 24 November 2026:** on the customer's card, handed to the phone to open or keep, `?reveal=true` only once the details were shown; `invoices_page_test.dart`. |
+| **The changes report says tool changes in plain words** | `api/reports.go` still uses `wddiff`; use `wdtext.Changes` there as the version history and Approvals do. **Built 24 November 2026:** `GET /v1/reports/changes` says each version's changes as the history does; `TestToolChangesInPlainWords`. |
+
+**Review of H6 (24 November 2026), fixed the same day:** a saved person's title (their name) is left out of a run's `saved` unless the run is revealed; a saved file in a run is its reference (`saved-file:<id>`), never a link: a message step gets a short link made when it sends (`saved_file_links`, 00644, the token kept as a hash; `GET /v1/saved-files/{token}` sends to the business's storage for five minutes), so nothing opening a file is kept in a run's history, nothing is signed at a run's start, and a late or resumed step's link is fresh; the link is kept whole wherever a message is cut (the notice template's link, the update template's line, the SMS's parts) and refused plainly when it cannot fit; only the saved root names a file (`=saved.price_list`), never a link or another expression; `saved_uses` keeps the latest 200 for each thing and a purged run's rows go with it (00643); an environment's key sees its environment's runs on a thing's page; the web keeps no typed values with a chat's runs and forgets them on signing out or another person signing in; a tool whose only input is optional reads the words after its command ("/log at Total"). Tests: `TestSavedFileSentByWorkflow`, `TestSavedFileBySMS`, `TestSavedFileByChat`, `TestMessageFile`, `TestReaderOnlyOptionalInput`, `theirRuns.test.ts`.
 
 ## 9. Phase H7: paying one person, finished
 

@@ -1,11 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { keepTheirRun, keptTheirRuns, THEIR_RUNS_MAX, withTheirRuns, type KeptTheirRun } from "./theirRuns";
+import { forgetTheirRuns, keepTheirRun, keptTheirRuns, THEIR_RUNS_MAX, withTheirRuns, type KeptTheirRun } from "./theirRuns";
 
 const mem = () => {
   const m = new Map<string, string>();
-  return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), m };
+  return {
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => void m.set(k, v),
+    removeItem: (k: string) => void m.delete(k),
+    key: (i: number) => [...m.keys()][i] ?? null,
+    get length() {
+      return m.size;
+    },
+    m,
+  };
 };
-const run = (id: string, at: string): KeptTheirRun => ({ id, command: "order-status", name: "Order status", at, values: [] });
+const run = (id: string, at: string): KeptTheirRun => ({ id, command: "order-status", name: "Order status", at });
 
 describe("their runs kept in a chat", () => {
   it("keeps each run once, the latest thirty, by chat", () => {
@@ -41,5 +50,17 @@ describe("their runs kept in a chat", () => {
     // Older messages still to load: none placed above them.
     expect(withTheirRuns(msgs, runs, true, as).map((x) => x.id)).toEqual(["m1", "run:mid", "m2", "run:late"]);
     expect(withTheirRuns(msgs, [], false, as)).toBe(msgs);
+  });
+
+  it("never keeps what was typed, and forgets every chat's runs on signing out", () => {
+    const s = mem();
+    keepTheirRun("c1", { ...run("r1", "2026-11-24T10:00:00Z"), values: [{ name: "phone", label: "Phone", value: "0803 123 4567" }] } as KeptTheirRun, s);
+    expect(s.m.get("taskiem_their_tool_runs:c1")).not.toContain("0803");
+    // An older page's typed values are dropped when read.
+    s.setItem("taskiem_their_tool_runs:c2", JSON.stringify([{ ...run("r2", "2026-11-24T10:00:00Z"), values: [{ value: "secret" }] }]));
+    expect(JSON.stringify(keptTheirRuns("c2", s))).not.toContain("secret");
+    s.setItem("other", "kept");
+    forgetTheirRuns(s);
+    expect([...s.m.keys()]).toEqual(["other"]);
   });
 });

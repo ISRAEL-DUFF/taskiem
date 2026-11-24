@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart' show Me;
+import 'package:taskiem/chat/attachments.dart' show handOffFile;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/invoices_page.dart';
 import 'package:taskiem/kit/forms.dart' show TkSwitch;
@@ -145,6 +146,10 @@ void main() {
                 'invoices': [x],
               });
             }
+            if (p.endsWith('/pdf')) {
+              sent.add('PDF ${req.url.path}?${req.url.query}');
+              return http.Response('%PDF-1.4', 200, headers: {'content-type': 'application/pdf'});
+            }
             if (p.startsWith('/v1/invoices/')) {
               if (req.url.queryParameters['reveal'] == 'true') {
                 sent.add('REVEAL');
@@ -263,6 +268,15 @@ void main() {
     await settle(t);
     expect(sent.last, 'POST /v1/invoices/I1/payments/P1/undo {}');
 
+    // The invoice's PDF (build plan H6): masked until the details are shown.
+    final handed = <String>[];
+    final was = handOffFile;
+    handOffFile = (bytes, name, type, from) async => handed.add('$name $type ${String.fromCharCodes(bytes)}');
+    addTearDown(() => handOffFile = was);
+    await t.tap(find.bySemanticsLabel('Open the PDF'));
+    await settle(t);
+    expect(sent.last, 'PDF /v1/invoices/I1/pdf?');
+    expect(handed, ['INV-0007.pdf application/pdf %PDF-1.4']);
     // The customer's address (build plan H6): masked, then shown.
     expect(t.widget<Text>(find.byKey(const Key('invoice-customer-address'))).data, '••• Yaba');
     await t.tap(find.bySemanticsLabel('Show customer details'));
@@ -270,6 +284,9 @@ void main() {
     expect(sent.last, 'REVEAL');
     expect(t.widget<Text>(find.byKey(const Key('invoice-customer-address'))).data, '4 Allen Avenue, Yaba');
     await snap(t, 'invoice-address');
+    await t.tap(find.bySemanticsLabel('Open the PDF'));
+    await settle(t);
+    expect(sent.last, 'PDF /v1/invoices/I1/pdf?reveal=true');
     expect(find.bySemanticsLabel('Call +2348031234567'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
   });

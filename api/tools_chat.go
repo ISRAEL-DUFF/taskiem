@@ -124,7 +124,8 @@ func (s *Server) waMadeTool(ctx context.Context, c *chat, text string) (bool, er
 	if len(fields) == 0 && (rest == "" || len(all) == 0) {
 		return true, s.waAskConfirm(ctx, c, data)
 	}
-	if len(all) > 1 && rest != "" {
+	// Several inputs, or only optional ones: the words are read for them.
+	if (len(all) > 1 || len(fields) == 0 && len(all) >= 1) && rest != "" {
 		// Words after it for several inputs: read by the model, shown
 		// filled in before anything runs (made tools M3, tools_read.go).
 		if values := s.chatToolWords(ctx, c, t, all, rest); len(values) > 0 {

@@ -18,7 +18,7 @@ Under **Invoices**, **New invoice** asks for:
 - **What it is for**: an amount with a short description, or a list of items, each with a quantity and a price.
 - **When it is due** (optional), and a note for the customer (optional).
 
-**The PDF.** **Open the PDF** on an invoice (`GET /v1/invoices/{id}/pdf`) is the invoice as a document to print or attach: the business, the number, its state and dates, who it is to with their address, its lines, the total, what was paid and what is due. Made on demand, nothing kept; the customer's details are masked unless the person may see personal data and has shown them (`?reveal=true`, audited). The app's invoice shows the address on the customer's card.
+**The PDF.** **Open the PDF** on an invoice (`GET /v1/invoices/{id}/pdf`) is the invoice as a document to print or attach: the business, the number, its state and dates, who it is to with their address, its lines, the total, what was paid and what is due. Made on demand, nothing kept; the customer's details are masked unless the person may see personal data and has shown them (`?reveal=true`, audited). The app's invoice shows the address on the customer's card and opens the PDF (masked until the details are shown, as on the web).
 
 It is saved as a **draft** with the business's next number (`INV-0001` upwards). A draft can be changed. **Send** sends it to the customer by SMS and email, with the link to its page, and the invoice becomes **sent**. Sending again sends the same link. A customer who has had many messages in the last hour (five an hour, twenty a day, from any business) is not sent another: the invoice is sent all the same, its page works, and it says which messages went.
 
