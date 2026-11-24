@@ -1,0 +1,205 @@
+<!--page {"title": "Your records · Taskiem", "description": "Keep your debtors, customers, stock and staff in Taskiem, not a spreadsheet. Add a row from WhatsApp, bring the sheet you already have, and ask questions in your own words.", "path": "/tables"}-->
+<style>
+/* a table that fills itself */
+.gt{width:100%;max-width:460px;border-radius:24px;background:#fff;color:#13261f;box-shadow:0 40px 80px -40px rgba(0,0,0,.6);overflow:hidden;font-size:14px}
+.gt-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid #e3e9e3}
+.gt-top b{font-size:16px}
+.gt-top span{font-family:var(--f-mono);font-size:11.5px;color:#5b6b64}
+.gt-search{margin:12px 16px 4px;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:12px;background:#f1f4ef;color:#5b6b64;font-size:13px}
+.gt-search i{font-style:normal;color:#13261f}
+.gt-search i::after{content:"";display:inline-block;width:1.5px;height:13px;margin-left:1px;background:#0d3b2e;vertical-align:-2px;animation:blink 1s infinite}
+.gt table{width:100%;border-collapse:collapse}
+.gt th{text-align:left;font-size:11px;font-family:var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:#5b6b64;padding:10px 16px;font-weight:500}
+.gt td{padding:11px 16px;border-top:1px solid #eef1ec;font-variant-numeric:tabular-nums}
+.gt td:last-child,.gt th:last-child{text-align:right}
+.gt tr.add td{animation:addrow 7s infinite}
+@keyframes addrow{0%,25%{background:transparent;opacity:0}32%{background:#c8f169;opacity:1}55%,92%{background:#f3fbe1;opacity:1}100%{opacity:0}}
+.gt tr.dim td{animation:dimrow 7s infinite}
+@keyframes dimrow{0%,60%{opacity:1}66%,92%{opacity:.3}100%{opacity:1}}
+.gt-foot{display:flex;justify-content:space-between;padding:12px 16px;border-top:1px solid #e3e9e3;font-size:12.5px;color:#5b6b64}
+.gt-foot b{color:#0d3b2e}
+/* chat: a row from WhatsApp */
+.mini{display:flex;flex-direction:column;gap:8px;padding:16px;border-radius:24px;background:#efeae2;max-width:420px;font-size:14px;color:#111b21;font-family:-apple-system,'Segoe UI',Roboto,var(--f-display)}
+.mini .b{max-width:86%;padding:8px 11px;border-radius:12px;background:#fff;box-shadow:0 1px .5px rgba(0,0,0,.13);align-self:flex-start}
+.mini .b.o{align-self:flex-end;background:#d9fdd3}
+.mini .b small{display:block;color:#667781;font-size:12px;margin-top:2px}
+.mini .b .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.mini .b .btns span{text-align:center;padding:7px;border-radius:8px;border:1px solid rgba(0,0,0,.12);font-weight:700;color:#0a7c66}
+.mini .s{animation:mseq 8s infinite;animation-delay:calc(var(--k) * 1.1s)}
+@keyframes mseq{0%,2%{opacity:0;transform:translateY(10px)}8%,90%{opacity:1;transform:none}96%,100%{opacity:0}}
+.cmds{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px}
+.cmds code{font-family:var(--f-mono);font-size:13px;padding:6px 10px;border-radius:10px;background:var(--card);border:1px solid var(--line);color:var(--ink)}
+/* a file becomes a table */
+.imp{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center}
+.file{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 14px;border-radius:16px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);font-size:12.5px;color:#fff;animation:filebob 4s ease-in-out infinite}
+.file b{width:44px;height:54px;border-radius:8px;display:grid;place-items:center;background:#1f7a50;color:#fff;font-size:11px;font-weight:800}
+@keyframes filebob{50%{transform:translateY(-6px)}}
+.pipe{position:relative;height:3px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden}
+.pipe::after{content:"";position:absolute;top:0;bottom:0;width:30%;background:var(--lime);animation:pipe 1.6s linear infinite}
+@keyframes pipe{from{left:-30%}to{left:100%}}
+.rows{display:grid;gap:5px;width:120px}
+.rows i{display:block;height:12px;border-radius:4px;background:rgba(200,241,105,.25);animation:rowin 4.8s infinite;animation-delay:calc(var(--k) * .25s)}
+@keyframes rowin{0%,10%{transform:scaleX(0);transform-origin:left}25%,90%{transform:none;background:rgba(200,241,105,.55)}100%{transform:none}}
+.impnote{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px}
+.impnote span{font-size:12.5px;font-weight:700;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.85)}
+/* ask */
+.ask{display:grid;gap:10px}
+.ask .q{justify-self:end;max-width:86%;padding:10px 14px;border-radius:16px;border-bottom-right-radius:4px;background:var(--pine);color:var(--lime);font-weight:600}
+.ask .a{max-width:90%;padding:12px 14px;border-radius:16px;border-bottom-left-radius:4px;background:var(--ground);border:1px solid var(--line);color:var(--ink)}
+.ask .a b{display:block;font-size:26px;letter-spacing:-.03em;color:var(--head)}
+.ask .seen{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px;color:var(--muted)}
+.ask .seen code{font-family:var(--f-mono);font-size:12px;padding:3px 8px;border-radius:8px;background:var(--mint-tint);color:var(--head)}
+.ask .seen s{font-family:var(--f-mono);font-size:12px;padding:3px 8px;border-radius:8px;background:var(--ground);color:var(--muted)}
+/* a row starts a workflow */
+.trig{display:grid;gap:14px;justify-items:center}
+.trig .n{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:var(--ground);border:1.5px solid var(--line);font-size:14.5px;animation:tn 6s infinite;animation-delay:calc(var(--k) * .9s)}
+.trig .n i{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:var(--pine);color:var(--lime);font-style:normal;font-weight:800;flex:none}
+.trig .arrow{width:2px;height:22px;background:var(--line);position:relative;overflow:hidden}
+.trig .arrow::after{content:"";position:absolute;left:0;right:0;height:10px;background:var(--acc);animation:drip 1.4s linear infinite}
+@keyframes drip{from{top:-10px}to{top:22px}}
+@keyframes tn{0%,4%{border-color:var(--line)}10%,40%{border-color:var(--acc)}55%,100%{border-color:var(--line)}}
+</style>
+{{HEADER}}
+<main>
+  <section class="hero phero">
+    <div class="hero-bleed" id="hero">
+      <div class="wrap">
+        <div class="hero-panel">
+          <div class="hero-copy">
+            <p class="label">Your records</p>
+            <h1 style="margin-top:16px">Your records, <em>without a spreadsheet.</em></h1>
+            <p class="lede">Keep your debtors, customers, stock and staff in Taskiem. Add a row from WhatsApp, bring the sheet you already have, and let your workflows read from it.</p>
+            <div class="cta-row">
+              <a class="btn btn-lime btn-big mag" href="/contact" data-go="web">Start free <span class="arr">→</span></a>
+              <a class="btn btn-ghost btn-big mag" href="/contact" data-go="chat">Try it on WhatsApp</a>
+            </div>
+          </div>
+          <div class="pvis" aria-hidden="true">
+            <div class="gt">
+              <div class="gt-top"><b>Debtors</b><span>37 rows · edited now</span></div>
+              <div class="gt-search">⌕ <i>Ok</i></div>
+              <table>
+                <thead><tr><th>Name</th><th>Phone</th><th>Balance</th></tr></thead>
+                <tbody>
+                  <tr class="add"><td>Chidi Okafor</td><td>0803 *** 4417</td><td>₦45,000</td></tr>
+                  <tr class="dim"><td>Funmi Bello</td><td>0812 *** 0938</td><td>₦12,500</td></tr>
+                  <tr><td>Emeka Okafor</td><td>0705 *** 2261</td><td>₦80,000</td></tr>
+                  <tr class="dim"><td>Ibrahim Musa</td><td>0909 *** 7710</td><td>₦23,000</td></tr>
+                </tbody>
+              </table>
+              <div class="gt-foot"><span>Total owed</span><b>₦1,284,500</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section class="frow" data-reveal>
+      <div class="fcopy">
+        <p class="label">From the chat</p>
+        <h2 class="h2">Add a row in a message.</h2>
+        <p>Type it the way you'd say it. Taskiem reads it back and adds it when you say yes. Find a row, change one, or start a new table, all from WhatsApp or Telegram.</p>
+        <div class="cmds"><code>add to debtors</code><code>find debtors Chidi</code><code>change 2</code><code>new table</code><code>add column</code></div>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="mini">
+          <div class="b o s" style="--k:0">add to debtors Chidi Okafor 0803 211 4417 45,000</div>
+          <div class="b s" style="--k:1">Add this to <b>Debtors</b>?<small>Name: Chidi Okafor · Phone: 0803 *** 4417 · Balance: ₦45,000</small><span class="btns"><span>Change</span><span>Yes</span></span></div>
+          <div class="b o s" style="--k:2">yes</div>
+          <div class="b s" style="--k:3">Added. Debtors has 37 rows now.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow flip" data-reveal>
+      <div class="fcopy">
+        <p class="label">Bring what you have</p>
+        <h2 class="h2">Your spreadsheet, moved in once.</h2>
+        <p>Send a CSV or Excel file in the chat, or share a Google Sheet's link. Every line is checked first, and sending the same file again never adds anything twice.</p>
+        <ul><li>Up to 5,000 rows at a time.</li><li>Download your table as a spreadsheet whenever you like.</li></ul>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard dark">
+          <div class="imp">
+            <div class="file"><b>XLSX</b>debtors.xlsx</div>
+            <div class="pipe"></div>
+            <div class="rows"><i style="--k:0"></i><i style="--k:1"></i><i style="--k:2"></i><i style="--k:3"></i><i style="--k:4"></i><i style="--k:5"></i></div>
+          </div>
+          <div class="impnote"><span>CSV</span><span>Excel</span><span>Google Sheets link</span><span>Checked line by line</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow" data-reveal>
+      <div class="fcopy">
+        <p class="label">Ask</p>
+        <h2 class="h2">Ask your records a question.</h2>
+        <p>"How much do my debtors owe?" "How many customers in Lekki?" Taskiem answers from your tables. The AI only sees the names of your tables and columns, never your rows, and it can only read.</p>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="ask">
+            <div class="q">how much do my debtors owe?</div>
+            <div class="a"><b>₦1,284,500</b>across 37 customers in Debtors.</div>
+            <div class="seen">The AI saw: <code>Debtors</code><code>name</code><code>balance</code> and never <s>Chidi Okafor · 0803…</s></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow flip" data-reveal>
+      <div class="fcopy">
+        <p class="label">Records that do things</p>
+        <h2 class="h2">A new row can start a workflow.</h2>
+        <p>When a row is added, changed or removed, a workflow can start. A new debtor gets a polite text. A stock count below its reorder level tells you. Your money log, stock and school records are kept for you, read-only, so they always add up.</p>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="trig">
+            <div class="n" style="--k:0"><i>+</i>Row added to Debtors: Chidi Okafor, ₦45,000</div>
+            <span class="arrow"></span>
+            <div class="n" style="--k:1"><i>⚙</i>Workflow: "Welcome a new debtor"</div>
+            <span class="arrow"></span>
+            <div class="n" style="--k:2"><i>✓</i>Text sent: "Hello Chidi, your balance is ₦45,000…"</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><p class="label">The details</p><h2 class="h2">Simple to use. Careful with people's data.</h2></div>
+      <ul class="facts" data-reveal>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg></span><b>Columns that fit</b><span>Text, numbers, yes or no, dates, phone numbers and emails.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></span><b>Who sees what</b><span>Decide who can read and who can edit. Phones and emails are hidden in chat and logs.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></span><b>Safe exports</b><span>Download as a spreadsheet, made safe to open in Excel.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/></svg></span><b>No lost edits</b><span>A change from the chat never overwrites a newer one made by someone else.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span><b>Who owes you</b><span>Debts are kept as invoices, so payments mark them paid by themselves.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg></span><b>On every plan</b><span>Tables come with every plan; see <a href="/pricing" style="color:var(--acc);font-weight:700">pricing</a> for how many.</span></li>
+      </ul>
+    </section>
+
+    <section class="pclose">
+      <div class="in">
+        <h2>Move your records in this afternoon.</h2>
+        <div class="cta-row"><a class="btn btn-lime btn-big mag" href="/contact" data-go="web">Start free <span class="arr">→</span></a><a class="btn btn-ghost btn-big mag" href="/contact" data-go="chat">Chat on WhatsApp</a></div>
+      </div>
+    </section>
+  </div>
+</main>
+{{FOOTER}}
+<script>
+(() => {
+  // the search box types a name, and the rows that don't match fade
+  const box = document.querySelector('.gt-search i');
+  if (!box || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const words = ['Okafor', ''];
+  let w = 0;
+  const type = async () => {
+    const t = words[w]; w = (w + 1) % words.length;
+    for (let i = 0; i <= t.length; i++) { box.textContent = t.slice(0, i); await new Promise(r => setTimeout(r, 90)); }
+  };
+  type(); setInterval(type, 3500);
+})();
+</script>
