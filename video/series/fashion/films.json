@@ -1,0 +1,6 @@
+{
+  "_note": "Options for composing each film: the phone's clock ('time') and theme. Films not listed use 13:00 and light.",
+  "know-your-numbers": {"time": "10:30"},
+  "price-list": {"time": "10:00"},
+  "a-deal": {"time": "10:15"}
+}
