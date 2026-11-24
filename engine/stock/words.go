@@ -1,6 +1,7 @@
 package stock
 
 import (
+	"math/big"
 	"regexp"
 	"slices"
 	"strconv"
@@ -64,6 +65,54 @@ func AskUses(lineUnit, stockUnit string, uses int64) bool {
 		return false
 	}
 	return l != "" || measureUnits[s]
+}
+
+// convert is each measure's size in its kind's smallest unit (mg, ml,
+// mm): "50 kg" into a stock item counted in g is 50,000.
+var convert = map[string]struct {
+	kind string
+	size int64
+}{
+	"mg": {"mass", 1}, "g": {"mass", 1000}, "gram": {"mass", 1000}, "kg": {"mass", 1_000_000}, "kilo": {"mass", 1_000_000},
+	"kilogram": {"mass", 1_000_000},
+	"ml": {"volume", 1}, "cl": {"volume", 10}, "l": {"volume", 1000}, "litre": {"volume", 1000},
+	"mm": {"length", 1}, "cm": {"length", 10}, "m": {"length", 1000}, "metre": {"length", 1000}, "meter": {"length", 1000},
+}
+
+var usesRe = regexp.MustCompile(`^\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?\s*([A-Za-z]+)?\s*\.?\s*$`)
+
+// ParseUses reads how many of a stock item counted in stockUnit one of a
+// line is, from an answer (g-uses-ask): a whole number ("50000",
+// "50,000"), or a number followed by the stock unit itself or one that
+// converts to it ("50 kg" into g is 50,000; "1.5 l" into ml is 1,500). A
+// decimal is taken only when it makes whole stock units, and commas only
+// as thousands ("2,5" is not a number). Anything else ("1 bag = 50,000g",
+// "a lot") is not an answer: ok is false. The result is 1 to MaxDelta.
+func ParseUses(text, stockUnit string) (int64, bool) {
+	m := usesRe.FindStringSubmatch(text)
+	if m == nil {
+		return 0, false
+	}
+	n, ok := new(big.Rat).SetString(strings.ReplaceAll(m[1], ",", "") + "." + m[2] + "0")
+	if !ok {
+		return 0, false
+	}
+	if u := unitKey(m[3]); u != "" && u != unitKey(stockUnit) {
+		from, okFrom := convert[u]
+		to, okTo := convert[unitKey(stockUnit)]
+		if !okFrom || !okTo || from.kind != to.kind {
+			return 0, false
+		}
+		n.Mul(n, big.NewRat(from.size, to.size))
+	}
+	if !n.IsInt() || !n.Num().IsInt64() {
+		return 0, false
+	}
+	v := n.Num().Int64()
+	if v < 1 || v > MaxDelta {
+		return 0, false
+	}
+	return v, true
 }
 
 func isUnit(w string) bool {

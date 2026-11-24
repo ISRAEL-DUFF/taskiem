@@ -15,7 +15,6 @@ package api
 import (
 	"context"
 	"errors"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -235,9 +234,24 @@ func (ta *treatAsk) quantity() string {
 
 // treatAnswers are the buying question's answers, as the model is told
 // them (chat_understand.go modelAnswer): the words lang.MatchTreat reads
-// in English, what follows a comma the stock item or the label said.
-var treatAnswers = []string{"just record it", "just record it, <its label>", "add to stock", "add to stock, <the stock item's name>",
-	"keep track of it", "keep track of it, <its label>"}
+// in English. Only the treatment is asked of the model: the stock item and
+// the label are asked of the person after.
+var treatAnswers = []string{"just record it", "add to stock", "keep track of it"}
+
+// modelTreatment is the treatment the model reads in an answer, when it
+// gives one of the three and nothing that looks like markup (< or >);
+// anything it adds after the treatment's words is dropped.
+func (s *Server) modelTreatment(ctx context.Context, c *chat, ta *treatAsk, text string) (stock.Treatment, bool) {
+	cmd := s.modelAnswer(ctx, c, text, s.treatQuestion(c, ta), treatAnswers)
+	if cmd == "" || strings.ContainsAny(cmd, "<>") {
+		return "", false
+	}
+	m, _, ok := lang.MatchTreat(cmd, []lang.Tag{lang.EN})
+	if !ok || (m != lang.TreatRecord && m != lang.TreatStock && m != lang.TreatTrack) {
+		return "", false
+	}
+	return stock.Treatment(m), true
+}
 
 // treatQuestion is the buying question as the person was asked it, with
 // what each answer does.
@@ -415,11 +429,12 @@ func (s *Server) waTreatReply(ctx context.Context, c *chat, text, cmd string) er
 			t = stock.Treatment(said)
 		default:
 			// Words of its own ("add 10 bags of rice", "we will sell
-			// them"): the model reads them as an answer to this question.
-			if cmd := s.modelAnswer(ctx, c, text, s.treatQuestion(c, ta), treatAnswers); cmd != "" {
-				if m, r, ok := lang.MatchTreat(cmd, []lang.Tag{lang.EN}); ok && (m == lang.TreatRecord || m == lang.TreatStock || m == lang.TreatTrack) {
-					t, rest = stock.Treatment(m), r
-				}
+			// them"): the model reads them as an answer to this question,
+			// the treatment only (review fix 4). Whatever else it says (a
+			// stock item, a label) is never taken: the next question asks
+			// it, so nothing the person did not say is saved.
+			if m, ok := s.modelTreatment(ctx, c, ta, text); ok {
+				t, rest = m, ""
 			}
 		}
 		if !t.Valid() {
@@ -452,14 +467,17 @@ func (s *Server) waTreatReply(ctx context.Context, c *chat, text, cmd string) er
 		}
 		return s.treatAskItem(ctx, c, ta, c.t("wa.treat.item_reminder", "item", whatsapp.SafeText(ta.Item)), nil)
 	case treatStepUses:
-		n := usesOf(text)
-		if n == 0 && !pressed {
+		// A whole number, or one in the stock unit or one converting to it
+		// ("50 kg" into g); else the model, given the question; else
+		// asked again.
+		n, ok := stock.ParseUses(text, ta.StockUnit)
+		if !ok && !pressed {
 			if cmd := s.modelAnswer(ctx, c, text, c.t("wa.treat.uses", "stock", ta.StockName, "unit", ta.StockUnit, "one", ta.one()),
-				[]string{"<a whole number of " + ta.StockUnit + ", digits only, like 1000>"}); cmd != "" {
-				n = usesOf(cmd)
+				[]string{"a whole number of " + ta.StockUnit + ", digits only, like 1000"}); cmd != "" && !strings.ContainsAny(cmd, "<>") {
+				n, ok = stock.ParseUses(cmd, ta.StockUnit)
 			}
 		}
-		if n == 0 {
+		if !ok {
 			return s.treatAskUses(ctx, c, ta, c.t("wa.treat.uses_reminder", "unit", whatsapp.SafeText(ta.StockUnit), "one", whatsapp.SafeText(ta.one())))
 		}
 		ta.Choice.Uses = n
@@ -621,24 +639,6 @@ func (s *Server) treatAskUses(ctx context.Context, c *chat, ta *treatAsk, before
 	ta.Step = treatStepUses
 	return s.treatSay(ctx, c, ta, before, c.t("wa.treat.uses", "stock", whatsapp.SafeText(ta.StockName), "unit", whatsapp.SafeText(ta.StockUnit),
 		"one", whatsapp.SafeText(ta.one())), nil)
-}
-
-// usesNumberRe is a whole number at the start of an answer ("1,000",
-// "50 kg", "50000g").
-var usesNumberRe = regexp.MustCompile(`^\s*(\d[\d,]*)`)
-
-// usesOf reads how many of the stock item one is from an answer; 0 when
-// it says none in range.
-func usesOf(text string) int64 {
-	m := usesNumberRe.FindStringSubmatch(text)
-	if m == nil {
-		return 0
-	}
-	n, err := strconv.ParseInt(strings.ReplaceAll(m[1], ",", ""), 10, 64)
-	if err != nil || n < 1 || n > stock.MaxDelta {
-		return 0
-	}
-	return n
 }
 
 // treatNewItem makes the line's item a new stock item, as counting in

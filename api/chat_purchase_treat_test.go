@@ -545,6 +545,11 @@ func TestPurchaseQuestionAsksUses(t *testing.T) {
 			return &ai.Response{Text: `{"kind":"command","id":"","pick":"","values":[],"command":"add to stock, rice","reply":""}`}, nil
 		case "fifty kilos":
 			return &ai.Response{Text: `{"kind":"command","id":"","pick":"","values":[],"command":"50000","reply":""}`}, nil
+		case "we keep it":
+			// A label of its own invention: never saved.
+			return &ai.Response{Text: `{"kind":"command","id":"","pick":"","values":[],"command":"keep track of it, Fancy Machines","reply":""}`}, nil
+		case "keep it please":
+			return &ai.Response{Text: `{"kind":"command","id":"","pick":"","values":[],"command":"keep track of it <b>","reply":""}`}, nil
 		}
 		return &ai.Response{Text: `{"kind":"cannot","id":"","pick":"","values":[],"command":"","reply":"Not an answer."}`}, nil
 	}}
@@ -560,17 +565,24 @@ func TestPurchaseQuestionAsksUses(t *testing.T) {
 		t.Fatalf("asked: %q", r)
 	}
 	// Its own words: the model is given the question, and its answer is
-	// Add to stock into Rice; then how many grams one bag is.
+	// Add to stock, the treatment only (review fix 4: the stock item it
+	// named is asked of the person); then how many grams one bag is.
 	r := w.say(t, on, "add 10 bags of rice")
-	if len(asked) != 1 || !strings.Contains(asked[0], "how should we treat it?") || !strings.Contains(asked[0], "add to stock, <the stock item's name>") {
+	if len(asked) != 1 || !strings.Contains(asked[0], "how should we treat it?") || !strings.Contains(asked[0], "- add to stock\n") {
 		t.Fatalf("the model was not given the question: %v", asked)
 	}
-	if !strings.Contains(r, "*Rice* is counted in g. How many g is one bag?") {
+	if !strings.Contains(r, "Which stock item does *Rice* go into?") {
+		t.Fatalf("which stock item: %q", r)
+	}
+	if r = w.say(t, on, "rice"); !strings.Contains(r, "*Rice* is counted in g. How many g is one bag?") {
 		t.Fatalf("uses asked: %q", r)
 	}
-	// Not a number: said again; in words, read by the model.
-	if r := w.say(t, on, "a lot"); !strings.Contains(r, "Say how many g one bag is, as a number") {
-		t.Fatalf("not a number: %q", r)
+	// Not a whole number in g: said again (review fix 1: never the
+	// leading digits); in words, read by the model.
+	for _, not := range []string{"a lot", "1.5", "2,5", "1 bag = 50,000g", "50 yards"} {
+		if r := w.say(t, on, not); !strings.Contains(r, "Say how many g one bag is, as a number") {
+			t.Fatalf("%q: %q", not, r)
+		}
 	}
 	if r := w.say(t, on, "fifty kilos"); !strings.Contains(r, "Label for *Rice*?") {
 		t.Fatalf("in words: %q", r)
@@ -599,5 +611,28 @@ func TestPurchaseQuestionAsksUses(t *testing.T) {
 	w.say(t, on, "order 3 yards of lace fabric from dangote")
 	if r := w.say(t, on, "add to stock, lace"); strings.Contains(r, "How many") || !strings.Contains(r, "Label for *Lace fabric*?") {
 		t.Fatalf("the same unit: %q", r)
+	}
+	w.say(t, on, "cancel")
+
+	// The model's treatment only: the label it invented is not saved; the
+	// label is asked.
+	// (A number gets twenty messages, then one every three seconds: the
+	// rest from a second person of the business.)
+	const bola = "+2348010000712"
+	w.bind(t, w.member(t, buyer, "bola@uses.test", "owner"), bola)
+	labels := func() int { return len(buyer.must(200, "GET", "/v1/money/labels", nil)["labels"].([]any)) }
+	had := labels()
+	w.say(t, bola, "order 1 generator from dangote")
+	if r := w.say(t, bola, "we keep it"); !strings.Contains(r, "Label for *Generator*?") || strings.Contains(r, "Fancy") {
+		t.Fatalf("its label: %q", r)
+	}
+	if labels() != had {
+		t.Fatal("a label the model invented was made")
+	}
+	w.say(t, bola, "cancel")
+	// Markup in its answer: not taken; asked again.
+	w.say(t, bola, "order 1 toolbox from dangote")
+	if r := w.say(t, bola, "keep it please"); !strings.Contains(r, "how should we treat it?") {
+		t.Fatalf("markup: %q", r)
 	}
 }

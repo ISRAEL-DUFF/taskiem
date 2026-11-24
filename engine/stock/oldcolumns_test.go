@@ -120,6 +120,13 @@ func TestOldColumnsInExpressions(t *testing.T) {
 		{"rows as an expression", step("insert_rows", `"rows":"=trigger.body.items.map(i, {'name': i.name, 'qty': i.n})"`), "s sets stock(qty)"},
 		{"one of the rows as an expression", step("upsert_rows", `"rows":["={'name': 'x', 'reorder_level': 3}"],"on_conflict":["=trigger.body.key ? 'name' : 'unit'"]`),
 			"s reads unit(unit); s sets reorder_level(reorder_level)"},
+		// H2 review fix 6: only a map literal's keys, never a ternary's
+		// strings before its colon.
+		{"a ternary inside a set's value", step("update_rows", `"key":"7","set":"={'note': trigger.body.low ? 'qty' : 'unit'}"`), ""},
+		{"a ternary as a row, no map", step("insert_rows", `"row":"=trigger.body.a ? 'qty' : 'unit'"`), ""},
+		{"a ternary in a list in a set's value", step("update_rows", `"key":"7","set":"={'tags': [x ? 'cost_price' : 'a']}"`), ""},
+		{"a filter's column chosen by a ternary is not one string", step("query_rows", `"filters":"=[{'column': c ? 'qty' : 'name', 'op': 'eq'}]","select":"name"`), ""},
+		{"a nested map's keys are", step("update_rows", `"key":"7","set":"={'note': 'x', 'qty': {'a': 1}['a']}"`), "s sets stock(qty)"},
 		{"the kept copy by expression is not", flow("", `{"id":"s","type":"connector","connector":"xenibase@1","action":"read_rows","input":{"table":"stock_items","select":"='count, qty'"}}`), ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
