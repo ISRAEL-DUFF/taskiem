@@ -22,7 +22,7 @@ import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/polling.dart';
 import '../kit/sheet.dart' show TkKitField, TkSavedTick, TkSheet, showTkSheet;
-import 'pay_sheet.dart' show PaySheet, refundPayAction;
+import 'pay_sheet.dart' show PaySheet, nairaTyped, refundPayAction;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show dayLabel, formatDuration, lagosDay, lagosTime, whenLabel;
@@ -858,8 +858,9 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
                     (_) => PaySheet(
                       auth: _auth,
                       action: refundPayAction('${o['reference']}'),
-                      initial: {'amount': '${refundKobo ~/ 100}', 'for': 'a refund'},
+                      initial: {'amount': nairaTyped(refundKobo), 'for': 'a refund'},
                       from: 'tools',
+                      orderReference: '${o['reference']}',
                     ),
                   ),
                 ),

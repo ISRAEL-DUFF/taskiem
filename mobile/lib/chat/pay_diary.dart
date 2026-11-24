@@ -113,24 +113,29 @@ class _PayDiaryLineState extends State<PayDiaryLine> {
 /// A receipt sent into the chat, or a payment to this person ("paid you"):
 /// a small card with its words; tapping a receipt opens its payment.
 class PayChatCard extends StatelessWidget {
-  const PayChatCard({super.key, required this.auth, required this.kind, required this.text, this.payment});
+  const PayChatCard({super.key, required this.auth, required this.kind, required this.text, this.payment, this.status});
   final Auth auth;
   final String kind;
   final String text;
   final String? payment;
 
+  /// How a "paid you" card's payment stands now: reversed when the bank
+  /// sent it back (Settled 6: the card follows it).
+  final String? status;
+
   @override
   Widget build(BuildContext context) {
     final look = TkLook.of(context);
     final receipt = kind == 'receipt';
+    final back = !receipt && (status == 'reversed' || status == 'failed');
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: TkCallout(
-        leading: TkSquare(receipt ? 'b-check' : 'b-bank', color: look.teal),
-        title: receipt ? 'Receipt' : 'Paid to you',
-        sub: text,
+        leading: TkSquare(receipt ? 'b-check' : (back ? 'b-x' : 'b-bank'), color: back ? look.red : look.teal),
+        title: receipt ? 'Receipt' : (back ? 'Came back' : 'Paid to you'),
+        sub: back ? '$text It did not reach your account: the bank sent it back.' : text,
         subLines: 4,
-        color: look.teal,
+        color: back ? look.red : look.teal,
         button: receipt && payment != null ? 'Open' : null,
         semantics: receipt ? 'Open the payment' : null,
         onPressed: receipt && payment != null ? () => unawaited(openPayment(context, auth, payment!)) : null,

@@ -476,3 +476,11 @@ export function payButtonWords(values: Record<string, string>): string {
   const k = payAmountKobo(values.amount ?? "");
   return k && !Number.isNaN(k) ? `Check and pay ${naira(k)}` : "Check and pay";
 }
+
+/** Kobo as naira to type in a form, exactly: "6500", or "6500.50" with
+ * its kobo (never rounded away). */
+export function nairaTyped(kobo: number): string {
+  const n = Math.trunc(kobo / 100);
+  const k = Math.abs(kobo % 100);
+  return k === 0 ? String(n) : `${n}.${String(k).padStart(2, "0")}`;
+}

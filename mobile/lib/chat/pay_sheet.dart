@@ -106,6 +106,14 @@ int? payBalanceAfter(Payment p) {
   _ => (words: 'Sent, waiting for the bank', again: false),
 };
 
+/// Kobo as naira to type in a form, exactly: "6500", or "6500.50" with
+/// its kobo (lib/payments.ts nairaTyped).
+String nairaTyped(int kobo) {
+  final k = kobo.abs() % 100;
+  final n = kobo ~/ 100;
+  return k == 0 ? '$n' : '$n.${'$k'.padLeft(2, '0')}';
+}
+
 /// A beneficiary's name from the bank's name: its first word, lowered.
 String beneficiaryName(String? accountName) {
   final w = (accountName ?? '').trim().split(RegExp(r'\s+')).first;
@@ -345,7 +353,11 @@ const noAccountInPhoto = 'No account number in that photo. Type it in.';
 /// form, then the payment prepared to check and pay. Closes with the
 /// payment once it is sent, or null.
 class PaySheet extends StatefulWidget {
-  const PaySheet({super.key, required this.auth, required this.action, this.initial = const {}, this.from = 'chat', this.riderId, this.staffId, this.said = '', this.saidIn = 'message', this.where});
+  const PaySheet({super.key, required this.auth, required this.action, this.initial = const {}, this.from = 'chat', this.riderId, this.staffId, this.said = '', this.saidIn = 'message', this.where, this.orderReference});
+
+  /// An order whose refund this pays back (Pay it back): the server caps it
+  /// at what is owed and marks the order refunded once paid.
+  final String? orderReference;
 
   /// The chat its diary line goes to: a linked business's (its link); the
   /// person's Taskiem chat when none is given (H7).
@@ -666,6 +678,7 @@ class _PaySheetState extends State<PaySheet> {
       note: note == null || values[note.key]!.isEmpty ? null : values[note.key],
       from: widget.from,
       where: widget.where,
+      orderReference: widget.orderReference,
     );
     try {
       Payment p;

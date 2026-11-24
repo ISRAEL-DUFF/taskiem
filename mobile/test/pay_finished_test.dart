@@ -300,6 +300,8 @@ void main() {
             PayDiaryLine(auth: auth, words: 'Paid CHIDI OKEKE ₦45,000 (delivery) · GTBank ••6789', when: 'You, 10:42', payment: 'p5'),
             PayDiaryLine(auth: auth, words: 'Paid MUSA BELLO ₦3,000 (delivery) · Access Bank ••2108', when: 'You, 10:43', payment: 'p6'),
             PayChatCard(auth: auth, kind: 'receipt', text: 'Paid CHIDI OKEKE ₦45,000 for a delivery on 21 Nov 2026', payment: 'p5'),
+            // A payment to this person the bank sent back: the card says so.
+            PayChatCard(auth: auth, kind: 'paid_you', text: 'Ada Foods paid you ₦3,000 for a delivery on 21 Nov 2026.', payment: 'p6', status: 'reversed'),
           ],
         ),
       ),
@@ -308,6 +310,8 @@ void main() {
     expect(find.textContaining('Received by the bank'), findsOneWidget);
     expect(find.textContaining('Failed: refunded to your balance'), findsOneWidget);
     expect(find.text('Try again'), findsOneWidget);
+    expect(find.text('Came back'), findsOneWidget);
+    expect(find.textContaining('It did not reach your account'), findsOneWidget);
     await looks(t, 'pay-diary');
   });
 
@@ -342,12 +346,33 @@ void main() {
     await t.pumpWidget(
       TaskiemApp(
         mode: TkMode.light,
-        home: _Host((c) => showTkSheet<Payment>(c, (_) => PaySheet(auth: api.auth(), action: refundPayAction('TK-ABC123'), initial: const {'amount': '5000', 'for': 'a refund'}, from: 'tools'))),
+        home: _Host(
+          (c) => showTkSheet<Payment>(
+            c,
+            (_) => PaySheet(
+              auth: api.auth(),
+              action: refundPayAction('TK-ABC123'),
+              initial: {'amount': nairaTyped(500050), 'for': 'a refund', 'number': '0123456789', 'bank': 'Guaranty Trust Bank'},
+              from: 'tools',
+              orderReference: 'TK-ABC123',
+            ),
+          ),
+        ),
       ),
     );
     await settle(t);
     expect(find.text('Pay back TK-ABC123'), findsWidgets);
-    expect(find.text('5000'), findsOneWidget);
+    // What is owed, exactly: its kobo kept.
+    expect(find.text('5000.50'), findsOneWidget);
     expect(find.text('Their account number'), findsOneWidget);
+    await t.tap(find.text('Next'));
+    await settle(t);
+    // The order goes with it: the server holds the payment to it.
+    final body = api.sent('POST', '/v1/payments').single;
+    expect(body['order_reference'], 'TK-ABC123');
+    expect(body['amount_kobo'], 500050);
+    expect(body['purpose'], 'refund');
+    expect(nairaTyped(500000), '5000');
+    expect(nairaTyped(500005), '5000.05');
   });
 }

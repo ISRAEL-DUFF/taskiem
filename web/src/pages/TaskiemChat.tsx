@@ -635,7 +635,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           if (m.kind === "receipt" || m.kind === "paid_you")
             return (
               <div className="tk-chart-row" data-msg={m.id}>
-                <PayChatCard kind={m.kind} text={m.text} payment={m.payment} />
+                <PayChatCard kind={m.kind} text={m.text} payment={m.payment} status={m.payment_status} />
               </div>
             );
           const choice = pressed.get(m.id);

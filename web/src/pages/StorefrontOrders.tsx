@@ -48,7 +48,7 @@ import { StorefrontTabs } from "./Storefront";
 import { BookingActions } from "./StorefrontBookings";
 import { SaveAfter, SavedDone } from "./SaveAfter";
 import { PaySheet } from "./PaySheet";
-import { PAY_FIELDS } from "../lib/payments";
+import { nairaTyped, PAY_FIELDS } from "../lib/payments";
 import { customerOffer, type SavedThing } from "../lib/saved";
 
 /** The money matched to an order (docs/matching.md), each with how; a wrong match is undone here while the order has not gone on. */
@@ -497,7 +497,8 @@ export function StorefrontOrder() {
                   title={`Pay back ${o.reference}`}
                   actionId="pay.account"
                   fields={PAY_FIELDS.account}
-                  initial={{ amount: String((o.deposit_kobo ?? o.total_kobo) / 100), for: "a refund" }}
+                  initial={{ amount: nairaTyped(o.deposit_kobo ?? o.total_kobo), for: "a refund" }}
+                  orderReference={o.reference}
                   from="tools"
                   lead={
                     <p className="hint" data-testid="refund-pay-lead">

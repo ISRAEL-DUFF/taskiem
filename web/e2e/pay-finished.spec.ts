@@ -178,6 +178,7 @@ for (const width of [390, 360])
           { id: "22222222-0000-4000-8000-0000000000d1", channel: "web", inbound: false, kind: "diary", created_at: now, payment: ID, text: "Paid CHIDI OKEKE ₦45,000 (delivery) · Guaranty Trust Bank ••6789" },
           { id: "22222222-0000-4000-8000-0000000000d2", channel: "web", inbound: false, kind: "diary", created_at: now, payment: FAILED, text: "Paid MUSA BELLO ₦3,000 (delivery) · Access Bank ••2108" },
           { id: "22222222-0000-4000-8000-0000000000d3", channel: "web", inbound: false, kind: "receipt", created_at: now, payment: ID, text: "Paid CHIDI OKEKE ₦45,000 for a delivery on 24 Nov 2026 · Guaranty Trust Bank ••6789." },
+          { id: "22222222-0000-4000-8000-0000000000d5", channel: "web", inbound: false, kind: "paid_you", created_at: now, payment: FAILED, payment_status: "reversed", text: "Ada Foods paid you ₦3,000 for a delivery on 24 Nov 2026, to your account ending 2108." },
           { id: "22222222-0000-4000-8000-0000000000d4", channel: "web", inbound: false, kind: "diary", created_at: now, batch: B1, text: "Paid 2 people ₦30,000 (riders, week 45)" },
         ],
       });
@@ -208,6 +209,9 @@ for (const width of [390, 360])
     await expect(lines.filter({ hasText: "MUSA BELLO" })).toContainText("Failed: refunded to your balance");
     await expect(lines.filter({ hasText: "Paid 2 people" }).getByTestId("pay-diary-state")).toBeVisible();
     await expect(page.getByTestId("pay-receipt-card")).toContainText("Receipt");
+    // A payment to this person the bank sent back: its card says so.
+    await expect(page.getByTestId("pay-paid-you")).toContainText("Came back");
+    await expect(page.getByTestId("pay-paid-you-back")).toBeVisible();
     await noAxe(page, "payments in the chat");
     await noSideways(page, width);
     await lines.filter({ hasText: "MUSA BELLO" }).getByTestId("pay-try-again").click();
@@ -248,22 +252,34 @@ test("an order's refund: Pay it back opens the Pay sheet, filled in with a refun
       revealed: false,
       order: {
         id: "0192e2e0-0000-7000-8000-00000000e001", reference: "TK-ABC123", kind: "order", status: "refund_due", customer: { name: "Bola Ade" },
-        basket: [{ id: "1", name: "Jollof rice", quantity: 2, price_kobo: 250_000, line_kobo: 500_000 }], total_kobo: 500_000, payment: "before_accept",
+        basket: [{ id: "1", name: "Jollof rice", quantity: 2, price_kobo: 250_000, line_kobo: 500_000 }], total_kobo: 500_050, payment: "before_accept",
         paid_by: "transfer", paid_at: now, created_at: now,
       },
     }),
   );
+  let prepared: Record<string, unknown> | undefined;
   await page.route((u) => u.pathname.startsWith("/v1/payments"), (r) => {
     const path = new URL(r.request().url()).pathname;
     if (path === "/v1/payments/banks") return json(r, 200, { from: "paystack/main", banks: [{ code: "058", name: "Guaranty Trust Bank" }] });
+    if (path === "/v1/payments" && r.request().method() === "POST") {
+      prepared = r.request().postDataJSON() as Record<string, unknown>;
+      return json(r, 409, { error: "TK-ABC123's refund is already on its way, or paid.", code: "refund_on_its_way" });
+    }
     return json(r, 404, { error: "not found" });
   });
   await page.goto("/storefront/orders/TK-ABC123");
   await page.getByTestId("refund-pay").click();
   const sheet = page.getByTestId("pay-sheet");
-  await expect(sheet.getByLabel("How much? in naira")).toHaveValue("5000");
+  // What is owed, exactly: its kobo kept.
+  await expect(sheet.getByLabel("How much? in naira")).toHaveValue("5000.50");
   await expect(sheet.getByRole("group", { name: "What is it for?" }).getByRole("button", { name: "a refund" })).toHaveAttribute("aria-pressed", "true");
   await expect(sheet.getByTestId("refund-pay-lead")).toBeVisible();
   await noAxe(page, "paying a refund back");
   await noSideways(page, 390);
+  // The order goes with it: the server holds the payment to it.
+  await sheet.getByTestId("pay-field-number").fill("0123456789");
+  await sheet.getByTestId("pay-bank").selectOption("Guaranty Trust Bank");
+  await sheet.getByTestId("pay-prepare").click();
+  await expect.poll(() => prepared).toMatchObject({ order_reference: "TK-ABC123", amount_kobo: 500_050, purpose: "refund" });
+  await expect(sheet.getByText("already on its way, or paid")).toBeVisible();
 });

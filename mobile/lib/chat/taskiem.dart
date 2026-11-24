@@ -1267,7 +1267,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
             return PayDiaryLine(auth: d.chats.auth, words: m.text, when: 'You, ${clock(m.createdAt)}', payment: m.payment, batch: m.batch);
           }
           if (m.kind == 'diary') return DiaryLine(words: m.text, when: 'You, ${clock(m.createdAt)}');
-          if (m.kind == 'receipt' || m.kind == 'paid_you') return PayChatCard(auth: d.chats.auth, kind: m.kind, text: m.text, payment: m.payment);
+          if (m.kind == 'receipt' || m.kind == 'paid_you') return PayChatCard(auth: d.chats.auth, kind: m.kind, text: m.text, payment: m.payment, status: m.paymentStatus);
           // startsRun: a run is one side's.
           final first = prev == null || prev.m.inbound != m.inbound;
           return Padding(

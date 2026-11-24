@@ -842,6 +842,7 @@ export function PaySheet({
   expectName: said,
   saidIn: saidWhere = "message",
   where,
+  orderReference,
 }: {
   title: string;
   actionId: string;
@@ -862,6 +863,9 @@ export function PaySheet({
   /** The chat its diary line goes to: a linked business's (its link);
    * the person's Taskiem chat when none is given. */
   where?: string;
+  /** An order whose refund this pays back (Pay it back): the server caps
+   * it at what is owed and marks the order refunded once paid. */
+  orderReference?: string;
 }) {
   const [start, setStart] = useState<Record<string, string>>(initial);
   const { can } = useAuth();
@@ -952,7 +956,11 @@ export function PaySheet({
     try {
       const r = await post<{ payment: Payment }>(
         "/v1/payments",
-        payBody(values, from, where),
+        {
+          ...payBody(values, from, where),
+          // Paying back an order's refund: the server holds it to the order.
+          ...(orderReference ? { order_reference: orderReference } : {}),
+        },
       );
       setPrepared(r.payment);
       setTell(r.payment.tell_payee ?? true);

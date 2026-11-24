@@ -48,7 +48,7 @@ Taskiem remembers the bank accounts a business has paid, so an approval to pay o
 
 ## Payments to people: what for, and the fee
 
-A payout that pays one of Taskiem's own payments to a person (Pay in Tools and the chat, [paying people](spec/chat-pay-people.md)) is recorded with what the payment was for as its category: *delivery*, *wages*, *bill*, *refund*, *stock bought*, or the payer's own word for other; reports and the journal split by it (*Payouts: Delivery*). Its fee is not on the payout's line: it is a line of its own, kind `fee`, category *bank charges*, written when the provider reports it as the payment ends. A paid payment the bank later sends back (`payout.reversed`) turns *reversed* on the payment too.
+A payout that pays one of Taskiem's own payments to a person (Pay in Tools and the chat, [paying people](spec/chat-pay-people.md)) is recorded with what the payment was for as its category: *delivery*, *wages*, *bill*, *refund*, *stock bought*, or the payer's own word for other; reports and the journal split by it (*Payouts: Delivery*). Its fee is not on the payout's line: it is a line of its own, kind `fee`, category *bank charges*, written when the provider reports it as the payment ends. A fee already on the payout's own line (the rail's answer heard before the payment knew its payout) is not written again, so it is counted once. A paid payment the bank later sends back (`payout.reversed`) turns *reversed* on the payment too; its fee line stands (the business bears the fee), unless the rail says the fee came back (the reversal's `fee_kobo`): a line of that much, reversed, then names the fee's line.
 
 ## Where to see it
 

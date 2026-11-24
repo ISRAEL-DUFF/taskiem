@@ -5,6 +5,7 @@ import {
   beneficiaryName,
   diaryState,
   feeWords,
+  nairaTyped,
   outcomeWords,
   payBody,
   paymentStatus,
@@ -94,5 +95,14 @@ describe("the batch's foot", () => {
   });
   it("says when the fees show after paying", () => {
     expect(batchMoney({ payments: rows, fees_kobo: 0, fees_unknown: 2, balance_kobo: null }).fees).toBe("The fees show after paying");
+  });
+});
+
+describe("Pay it back", () => {
+  it("fills in what is owed exactly, its kobo kept", () => {
+    expect(nairaTyped(500_000)).toBe("5000");
+    expect(nairaTyped(500_050)).toBe("5000.50");
+    expect(nairaTyped(500_005)).toBe("5000.05");
+    expect(nairaTyped(99)).toBe("0.99");
   });
 });

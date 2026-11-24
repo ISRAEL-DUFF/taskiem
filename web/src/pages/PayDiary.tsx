@@ -83,11 +83,29 @@ export function PayDiaryState({ payment, batch }: { payment?: string; batch?: st
 
 /** A receipt sent into the chat, or a payment to this person ("paid
  * you"): a small card with its words, and the receipt's PDF. */
-export function PayChatCard({ kind, text, payment }: { kind: "receipt" | "paid_you"; text: string; payment?: string }) {
+export function PayChatCard({
+  kind,
+  text,
+  payment,
+  status,
+}: {
+  kind: "receipt" | "paid_you";
+  text: string;
+  payment?: string;
+  /** How a "paid you" card's payment stands now: reversed when the bank
+   * sent it back (Settled 6: the card follows it). */
+  status?: string;
+}) {
+  const back = kind === "paid_you" && (status === "reversed" || status === "failed");
   return (
     <div className="pay-chat-card" data-testid={kind === "receipt" ? "pay-receipt-card" : "pay-paid-you"}>
-      <span className="pay-chat-card-label">{kind === "receipt" ? "Receipt" : "Paid to you"}</span>
+      <span className="pay-chat-card-label">{kind === "receipt" ? "Receipt" : back ? "Came back" : "Paid to you"}</span>
       <strong>{text}</strong>
+      {back && (
+        <span className="pay-diary-state danger" data-testid="pay-paid-you-back">
+          It did not reach your account: the bank sent it back.
+        </span>
+      )}
       {kind === "receipt" && payment && (
         <a href={`/v1/payments/${encodeURIComponent(payment)}/receipt/pdf`} target="_blank" rel="noreferrer">
           Open the receipt (PDF)
