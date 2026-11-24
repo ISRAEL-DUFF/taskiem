@@ -261,5 +261,98 @@
       "kò sí àmì",
       "láìsí àmì"
     ]
+  },
+  "topics": {
+    "sales": [
+      "títà",
+      "mo ta",
+      "oníbàárà rà",
+      "tà á"
+    ],
+    "stock": [
+      "ọjà",
+      "páálí",
+      "àpò",
+      "ọjà tó kù",
+      "ọjà ti tán",
+      "bàjẹ́"
+    ],
+    "products": [
+      "iye ọjà",
+      "fọ́tò",
+      "iṣẹ́ ìsìn"
+    ],
+    "page": [
+      "ojú ìwé",
+      "ṣọ́ọ̀bù",
+      "wákàtí"
+    ],
+    "orders": [
+      "àṣẹ",
+      "ìbéèrè",
+      "ìdápadà"
+    ],
+    "riders": [
+      "ọ̀kadà",
+      "kẹ̀kẹ́",
+      "alùpùpù",
+      "fi jíṣẹ́"
+    ],
+    "bookings": [
+      "ìpàdé",
+      "àkókò",
+      "ọjọ́ ìsinmi"
+    ],
+    "buying": [
+      "olùpèsè",
+      "ra ọjà wọlé",
+      "ọjà dé"
+    ],
+    "money": [
+      "owó",
+      "ìnáwó",
+      "epo dísù",
+      "owó ilé"
+    ],
+    "pay": [
+      "sanwó",
+      "san án"
+    ],
+    "owe": [
+      "gbèsè",
+      "jẹ mí",
+      "àwìn"
+    ],
+    "staff": [
+      "òṣìṣẹ́",
+      "olùrànlọ́wọ́",
+      "iṣẹ́ fún"
+    ],
+    "lists": [
+      "àkójọ",
+      "àkọsílẹ̀",
+      "tábìlì"
+    ],
+    "auto": [
+      "rán mi létí",
+      "ojoojúmọ́",
+      "ọ̀sọ̀ọ̀sẹ̀"
+    ],
+    "saved": [
+      "fi pamọ́",
+      "rántí",
+      "pamọ́"
+    ],
+    "school": [
+      "akẹ́kọ̀ọ́",
+      "ilé ẹ̀kọ́",
+      "òbí"
+    ],
+    "account": [
+      "èdè",
+      "ọ̀rọ̀ aṣínà",
+      "wọlé",
+      "ètò mi"
+    ]
   }
 }

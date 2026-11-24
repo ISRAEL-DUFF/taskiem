@@ -24,6 +24,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/embed"
 	"github.com/israel-duff/taskiem/engine/expansion"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -31,6 +32,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/wddiff"
 	"github.com/israel-duff/taskiem/engine/wdmerge"
+	"github.com/israel-duff/taskiem/engine/wdtext"
 	"github.com/israel-duff/taskiem/templates"
 )
 
@@ -566,6 +568,10 @@ type versionInfo struct {
 	// AIBuild is the AI build a version was saved from: the AI is its
 	// co-author, the person in created_by its author.
 	AIBuild *uuid.UUID `json:"ai_build"`
+	// Changes is what changed from the version before, in plain words
+	// (wdtext.Changes: a tool's phrases, who it is for, its answer, who may
+	// start it, the steps); empty for the first.
+	Changes []string `json:"changes,omitempty" db:"-"`
 }
 
 func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
@@ -597,6 +603,9 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 		}
 		versions, err = pgx.CollectRows(rows, pgx.RowToStructByPos[versionInfo])
 		if err != nil {
+			return err
+		}
+		if err := s.versionChanges(ctx, tx, sum.ID, versions); err != nil {
 			return err
 		}
 		deployments, err = deploymentsOf(ctx, tx, wf)
@@ -1224,4 +1233,57 @@ func (s *Server) listCallableWorkflows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"workflows": nonNil(out)})
+}
+
+// versionChangesMax is how many of a workflow's latest versions are told
+// what changed from the one before.
+const versionChangesMax = 30
+
+// versionChanges fills each version's changes from the version before it,
+// in plain words (made tools §17; build plan H6), for the latest ones.
+func (s *Server) versionChanges(ctx context.Context, tx pgx.Tx, wf uuid.UUID, versions []versionInfo) error {
+	if len(versions) == 0 {
+		return nil
+	}
+	oldest := versions[min(len(versions), versionChangesMax)-1].Version - 1
+	rows, err := tx.Query(ctx, `SELECT version, definition FROM workflow_versions WHERE workflow_id = $1 AND version >= $2`, wf, oldest)
+	if err != nil {
+		return err
+	}
+	defs := map[int][]byte{}
+	for rows.Next() {
+		var v int
+		var def []byte
+		if err := rows.Scan(&v, &def); err != nil {
+			rows.Close()
+			return err
+		}
+		defs[v] = def
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	reg := s.changesRegistry(ctx)
+	for i := range versions {
+		versions[i].Changes = []string{}
+		if i < versionChangesMax {
+			versions[i].Changes = wdtext.Changes(defs[versions[i].Version-1], defs[versions[i].Version], reg, lang.EN)
+		}
+	}
+	return nil
+}
+
+// changesRegistry names connectors and their actions in a change's words;
+// nil (their references as written) when it cannot be read.
+func (s *Server) changesRegistry(ctx context.Context) connector.Lookup {
+	p := principalFrom(ctx)
+	if s.Registry == nil || p == nil {
+		return nil
+	}
+	reg, err := s.Registry.For(connector.ManifestsOnly(ctx), p.TenantID.String())
+	if err != nil {
+		return nil
+	}
+	return reg
 }

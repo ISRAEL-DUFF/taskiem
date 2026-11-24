@@ -113,44 +113,44 @@
       "reviewed": false
     },
     "button.treat_label_another": {
-      "text": "Another",
+      "text": "Òmíràn",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: a label not offered, typed next"
+      "context": "Draft, not reviewed: A purchase line's label in chat: a label not offered, typed next"
     },
     "button.treat_label_none": {
-      "text": "No label",
+      "text": "Kò sí àmì",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: none (shown as Not labelled)"
+      "context": "Draft, not reviewed: A purchase line's label in chat: none (shown as Not labelled)"
     },
     "button.treat_many_record": {
-      "text": "Just record them",
+      "text": "Kàn kọ wọ́n sílẹ̀",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: no, just record them"
+      "context": "Draft, not reviewed: Keeping track of more than 50 of something bought: no, just record them"
     },
     "button.treat_many_yes": {
-      "text": "Yes, one row each",
+      "text": "Bẹ́ẹ̀ni, ọ̀kọ̀ọ̀kan",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: yes, a row on Things we have for each"
+      "context": "Draft, not reviewed: Keeping track of more than 50 of something bought: yes, a row on Things we have for each"
     },
     "button.treat_new_item": {
-      "text": "A new one",
+      "text": "Tuntun kan",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
+      "context": "Draft, not reviewed: Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
     },
     "button.treat_record": {
-      "text": "Just record it",
+      "text": "Kàn kọ ọ́ sílẹ̀",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes"
+      "context": "Draft, not reviewed: A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes"
     },
     "button.treat_stock": {
-      "text": "Add to stock",
+      "text": "Fi kún ọjà",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: counted into a stock item when it comes"
+      "context": "Draft, not reviewed: A purchase line's treatment in chat: counted into a stock item when it comes"
     },
     "button.treat_track": {
-      "text": "Keep track of it",
+      "text": "Máa tọ́pa rẹ̀",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: each one a row on Things we have"
+      "context": "Draft, not reviewed: A purchase line's treatment in chat: each one a row on Things we have"
     },
     "button.yes": {
       "text": "Bẹ́ẹ̀ni",
@@ -161,14 +161,14 @@
       "reviewed": false
     },
     "button.yes_sell": {
-      "text": "Yes, I sell it",
+      "text": "Bẹ́ẹ̀ni, mo ń tà á",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
+      "context": "Draft, not reviewed: Reply button, at most 20 characters: Do you sell it?"
     },
     "button.no_sell": {
-      "text": "No, I don't",
+      "text": "Rárá, n kò tà á",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
+      "context": "Draft, not reviewed: Reply button, at most 20 characters: Do you sell it?"
     },
     "button.yes_publish": {
       "text": "Bẹ́ẹ̀ni, gbé e jáde",
@@ -279,11 +279,11 @@
       "reviewed": false
     },
     "invoice.pay_unavailable_title": {
-      "text": "A customer could not pay online",
+      "text": "Oníbàárà kan kò lè sanwó lórí ayélujára",
       "reviewed": false
     },
     "invoice.pay_unavailable": {
-      "text": "A customer tried to pay {what} by {how}, but no payments service of yours can do that, so they were asked to pay you directly. Connect Paystack, Flutterwave, OPay or another payments service under Connections, and they can pay online.",
+      "text": "Oníbàárà kan gbìyànjú láti san {what} nípa {how}, ṣùgbọ́n kò sí iṣẹ́ ìsanwó yín tó lè ṣe bẹ́ẹ̀, nítorí náà a ní kí wọ́n sanwó fún yín tààrà. Ẹ so Paystack, Flutterwave, OPay tàbí iṣẹ́ ìsanwó mìíràn pọ̀ lábẹ́ Connections, wọn yóò sì lè sanwó lórí ayélujára.",
       "reviewed": false
     },
     "invoice.chat.account": {
@@ -312,10 +312,11 @@
     },
     "invoice.chat.link": {
       "text": "Invoice {number}: {link}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "invoice.chat.own_account": {
-      "text": "Pay {amount} for invoice {number} by bank transfer to your own account number:\nAccount number: {account}\nBank: {bank}\nIt is yours to keep: money paid into it is counted to your invoices.",
+      "text": "Ẹ san {amount} fún invoice {number} nípa bank transfer sí nọ́mbà àkáǹtì tiyín:\nNọ́mbà àkáǹtì: {account}\nBáńkì: {bank}\nTiyín ni láti máa lò: owó tí a bá san sínú rẹ̀ ni a ó kà mọ́ àwọn invoice yín.",
       "reviewed": false
     },
     "invoice.chat.paid": {
@@ -917,6 +918,11 @@
       "text": "Síwájú sí i…",
       "reviewed": false,
       "context": "Draft, not reviewed: The last row of the topics list on WhatsApp, for the rest; at most 24 characters"
+    },
+    "menu.all": {
+      "text": "Gbogbo {n}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The last button of a topic's menu on Telegram, after its first five: shows every one of its {n} actions"
     },
     "menu.more_line": {
       "text": "Àwọn àkòrí yòókù",
@@ -1574,19 +1580,19 @@
       "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.stock.new": {
-      "text": "Add something to count",
+      "text": "Ohun tuntun láti kà",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.stock.new.ask.what": {
-      "text": "What is it, and how many? Like 20 yards of ankara fabric.",
+      "text": "Kí ni, àti mélòó? Bíi 20 yards of ankara fabric.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.stock.new.line": {
-      "text": "Something new, sold or used: fabric, thread, bags",
+      "text": "Ohun tuntun, tí a ń tà tàbí lò: aṣọ, òwú, àpò",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.stock.one": {
       "text": "Iye ọjà kan",
@@ -1606,6 +1612,7 @@
     "menu.taken": {
       "text": "{title}: {values}.",
       "reviewed": false,
+      "same": true,
       "context": "Draft, not reviewed: Before a menu's next question, what Taskiem already took from the message (its model)"
     },
     "menu.tip": {
@@ -1752,31 +1759,31 @@
       "reviewed": false
     },
     "money.daily.riders": {
-      "text": "Riders yesterday:",
+      "text": "Àwọn rider àná:",
       "reviewed": false
     },
     "money.rider.delivered": {
-      "text": "{count} delivered",
+      "text": "ìfijíṣẹ́ {count}",
       "reviewed": false
     },
     "money.rider.door": {
-      "text": "{amount} paid at the door",
+      "text": "{amount} ni wọ́n san ní ẹnu ọ̀nà",
       "reviewed": false
     },
     "money.rider.cash": {
-      "text": "{amount} cash",
+      "text": "{amount} owó ní ọwọ́",
       "reviewed": false
     },
     "money.rider.remitted": {
-      "text": "{amount} handed in",
+      "text": "ó ti dá {amount} padà",
       "reviewed": false
     },
     "money.rider.owes": {
-      "text": "owes {amount}",
+      "text": "ó jẹ {amount}",
       "reviewed": false
     },
     "money.rider.rated": {
-      "text": "rated {rating} of 5",
+      "text": "ìdíyelé {rating} nínú 5",
       "reviewed": false
     },
     "money.daily.school": {
@@ -1820,7 +1827,7 @@
       "reviewed": false
     },
     "reach.stopped_dropped": {
-      "text": "You will no longer get updates from {business} here. Send START to get them again. What you were in the middle of here was dropped too.",
+      "text": "O kò ní gba ìròyìn láti ọ̀dọ̀ {business} níbí mọ́. Fi START ránṣẹ́ láti tún gbà wọ́n. A ti pa ohun tí o ń ṣe lọ́wọ́ níbí tì pẹ̀lú.",
       "reviewed": false
     },
     "customer.resumed": {
@@ -1868,11 +1875,11 @@
       "reviewed": false
     },
     "ready.saved_invalid": {
-      "text": "The workflow reads saved.{name}, which no saved thing can be called: names are letters, numbers and -, written with _ for -.",
+      "text": "Iṣẹ́ àdáṣe náà ń ka saved.{name}, orúkọ tí ohun ìpamọ́ kankan kò lè ní: orúkọ jẹ́ lẹ́tà, nọ́mbà àti -, a sì ń kọ - ní _.",
       "reviewed": false
     },
     "ready.saved": {
-      "text": "Save @{name} on the Saved page: the workflow reads it.",
+      "text": "Ẹ fi @{name} pamọ́ ní ojú-ìwé Saved: iṣẹ́ àdáṣe náà ń kà á.",
       "reviewed": false
     },
     "ready.table": {
@@ -2168,11 +2175,11 @@
       "reviewed": false
     },
     "door.linked_told": {
-      "text": "A chat was linked to your Taskiem account: {chat}. Not you? Unlink it now in Account on the web.",
+      "text": "A so ìjíròrò kan mọ́ àkọọ́lẹ̀ Taskiem rẹ: {chat}. Kì í ṣe ìwọ? Yọ ọ́ kúrò báyìí ní Account lórí wẹ́ẹ̀bù.",
       "reviewed": false
     },
     "door.cooling": {
-      "text": "This chat was linked to your account less than 24 hours ago, so it cannot send a sign-in or password link yet. That keeps your account safe if someone else linked it. Sign in on the web the way you usually do: {link}",
+      "text": "A so ìjíròrò yìí mọ́ àkọọ́lẹ̀ rẹ láìtó wákàtí 24 sẹ́yìn, nítorí náà kò tíì lè fi ìjápọ̀ ìwọlé tàbí ti password ránṣẹ́. Èyí ń dáàbò bo àkọọ́lẹ̀ rẹ bí ẹlòmíì bá so ó. Wọlé lórí wẹ́ẹ̀bù bí o ṣe máa ń ṣe: {link}",
       "reviewed": false
     },
     "wa.not_understood_help": {
@@ -2180,11 +2187,11 @@
       "reviewed": false
     },
     "wa.password.off": {
-      "text": "Signing in with WhatsApp or Telegram is off for you, so this chat sends no password link. Reset your password from the sign-in page, with your email: {link}",
+      "text": "Wíwọlé pẹ̀lú WhatsApp tàbí Telegram ti wà ní pípa fún ọ, nítorí náà ìjíròrò yìí kò ní fi ìjápọ̀ password ránṣẹ́. Tún password rẹ ṣe láti ojú-ìwé ìwọlé, pẹ̀lú imeeli rẹ: {link}",
       "reviewed": false
     },
     "wa.password.unconfirmed": {
-      "text": "Your email is not confirmed yet, so this chat cannot send a password link. Send *email you@example.com* and open the link we email you. Then send *password* again.",
+      "text": "A kò tíì fìdí imeeli rẹ múlẹ̀, nítorí náà ìjíròrò yìí kò lè fi ìjápọ̀ password ránṣẹ́. Fi *email you@example.com* ránṣẹ́ kí o sì ṣí ìjápọ̀ tí a bá fi ránṣẹ́ sí imeeli rẹ. Lẹ́yìn náà fi *password* ránṣẹ́ lẹ́ẹ̀kan sí i.",
       "reviewed": false
     },
     "door.tg_joined": {
@@ -2834,220 +2841,224 @@
       "context": "Draft, not reviewed: Customers' tools: a tool with an answer has started; the answer follows"
     },
     "wa.saved.bank": {
-      "text": "{bank}, account number {number}",
+      "text": "{bank}, nọ́mbà àkáǹtì {number}",
       "reviewed": false
     },
     "wa.saved.bank_name": {
-      "text": "The bank's name for it: {name}",
+      "text": "Orúkọ tí báńkì fún un: {name}",
       "reviewed": false
     },
     "wa.saved.business": {
-      "text": "{org}'s:",
+      "text": "Ti {org}:",
       "reviewed": false
     },
     "wa.saved.head": {
       "text": "@{name}: {title}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.saved.not_checked": {
-      "text": "Its name is not checked with the bank yet.",
+      "text": "A kò tíì ṣàyẹ̀wò orúkọ rẹ̀ pẹ̀lú báńkì.",
       "reviewed": false
     },
     "wa.saved.pick": {
-      "text": "Which @{name}?\n1. Your own: {mine}\n2. {org}'s: {theirs}\nReply 1 or 2.",
+      "text": "@{name} wo?\n1. Tiyín: {mine}\n2. Ti {org}: {theirs}\nẸ fi 1 tàbí 2 dáhùn.",
       "reviewed": false
     },
     "wa.saved.offer": {
-      "text": "Save {title} as @{name} for next time?",
+      "text": "Ṣé kí n fi {title} pamọ́ bí @{name} fún ìgbà míì?",
       "reviewed": false
     },
     "wa.saved.suggest": {
-      "text": "You've invoiced {title} {count} times. Save them as @{name} for next time?",
+      "text": "Ẹ ti fi invoice ránṣẹ́ sí {title} nígbà {count}. Ṣé kí n fi wọ́n pamọ́ bí @{name} fún ìgbà míì?",
       "reviewed": false
     },
     "wa.saved.two": {
-      "text": "You have two things called @{name}:",
+      "text": "Ẹ ní ohun méjì tí à ń pè ní @{name}:",
       "reviewed": false
     },
     "button.keep_mine": {
-      "text": "Keep it to myself",
+      "text": "Fún èmi nìkan",
       "reviewed": false
     },
     "button.save": {
-      "text": "Save",
+      "text": "Fi pamọ́",
       "reviewed": false
     },
     "wa.saved.need_bank": {
-      "text": "Which bank is {number} with? Say it again with the bank, like: save {name}: GTBank {number}",
+      "text": "Báńkì wo ni {number} wà? Ẹ tún un sọ pẹ̀lú báńkì náà, bíi: save {name}: GTBank {number}",
       "reviewed": false
     },
     "wa.saved.own_app": {
-      "text": "On this number only {org}'s saved things are kept and found. Keep your own in the Taskiem app.",
+      "text": "Lórí nọ́mbà yìí, ohun ìpamọ́ {org} nìkan ni a ń tọ́jú tí a sì ń wá. Ẹ tọ́jú tiyín nínú áàpù Taskiem.",
       "reviewed": false
     },
     "wa.saved.share_ask": {
       "text": "{question}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.saved.share_plain": {
-      "text": "Share @{name} with {to}?",
+      "text": "Ṣé kí n pín @{name} pẹ̀lú {to}?",
       "reviewed": false
     },
     "wa.saved.share_which": {
-      "text": "Which do you mean? {names}. Say it again with the whole name.",
+      "text": "Èwo ni ẹ ní lọ́kàn? {names}. Ẹ tún un sọ pẹ̀lú orúkọ náà ní kíkún.",
       "reviewed": false
     },
     "wa.saved.share_nobody": {
-      "text": "No linked business or customer is called {to}.",
+      "text": "Kò sí iṣẹ́ òwò tí ẹ so pọ̀ tàbí oníbàárà tí à ń pè ní {to}.",
       "reviewed": false
     },
     "wa.saved.share_none": {
-      "text": "You have nothing saved as @{name}.",
+      "text": "Ẹ kò ní ohunkóhun tí ẹ fi pamọ́ bí @{name}.",
       "reviewed": false
     },
     "wa.saved.shared": {
-      "text": "Shared @{name} with {to}.",
+      "text": "Mo ti pín @{name} pẹ̀lú {to}.",
       "reviewed": false
     },
     "wa.saved.share_left": {
-      "text": "Not shared.",
+      "text": "A kò pín in.",
       "reviewed": false
     },
     "wa.saved.share_reminder": {
-      "text": "Share @{name}? Tap Share or Cancel.",
+      "text": "Ṣé kí n pín @{name}? Ẹ tẹ Pín tàbí Fagilé.",
       "reviewed": false
     },
     "wa.saved.share_not": {
-      "text": "Not shared: {reason}",
+      "text": "A kò pín in: {reason}",
       "reviewed": false
     },
     "wa.saved.save_quoted_none": {
-      "text": "Reply to a message from a linked business to save it.",
+      "text": "Ẹ dáhùn sí ọ̀rọ̀ kan láti ọ̀dọ̀ iṣẹ́ òwò tí ẹ so pọ̀ láti fi í pamọ́.",
       "reviewed": false
     },
     "button.share": {
-      "text": "Share",
+      "text": "Pín",
       "reviewed": false
     },
     "wa.saved.field": {
       "text": "@{name}: {label}: {value}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.saved.field_empty": {
-      "text": "@{name} has no {label} saved.",
+      "text": "@{name} kò ní {label} tí a fi pamọ́.",
       "reviewed": false
     },
     "wa.saved.in_full": {
-      "text": "In full on the Saved page.",
+      "text": "Ní kíkún ní ojú-ìwé Saved.",
       "reviewed": false
     },
     "wa.invoice.saved_kind": {
-      "text": "@{name} is {kind}: an invoice goes to a person or a business. Write: invoice @someone 25k for \u2026",
+      "text": "@{name} jẹ́ {kind}: invoice ń lọ sọ́dọ̀ ènìyàn tàbí iṣẹ́ òwò. Ẹ kọ: invoice @someone 25k for …",
       "reviewed": false
     },
     "wa.deliver.to": {
-      "text": "Delivered to @{name}: {address}.",
+      "text": "A ó fi jíṣẹ́ sí @{name}: {address}.",
       "reviewed": false
     },
     "wa.mention.deliver_how": {
-      "text": "To have it delivered to @{name}, end the order with \"deliver to @{name}\".",
+      "text": "Láti jẹ́ kí a fi jíṣẹ́ sí @{name}, ẹ parí àṣẹ náà pẹ̀lú \"deliver to @{name}\".",
       "reviewed": false
     },
     "wa.deliver.set": {
-      "text": "{reference} will be delivered to @{name}: {address}.",
+      "text": "A ó fi {reference} jíṣẹ́ sí @{name}: {address}.",
       "reviewed": false
     },
     "wa.deliver.saved_kind": {
-      "text": "@{name} is {kind}: an order is delivered to a place. Write: deliver P-7QX4KD to @warehouse",
+      "text": "@{name} jẹ́ {kind}: ibì kan ni a ń fi àṣẹ jíṣẹ́ sí. Ẹ kọ: deliver P-7QX4KD to @warehouse",
       "reviewed": false
     },
     "wa.deliver.no_phone": {
-      "text": "@{name} has no phone for the rider. Add one to it on the Saved page, then try again.",
+      "text": "@{name} kò ní nọ́mbà fóònù fún rider. Ẹ fi ọ̀kan kún un ní ojú-ìwé Saved, lẹ́yìn náà ẹ gbìyànjú lẹ́ẹ̀kan sí i.",
       "reviewed": false
     },
     "wa.deliver.not": {
-      "text": "Not changed: {reason}",
+      "text": "A kò yí i padà: {reason}",
       "reviewed": false
     },
     "wa.remind.set": {
-      "text": "I'll remind you on {date} that @{name}'s {label} is due, and each year after. Say *my reminders* to see them.",
+      "text": "Màá rán yín létí ní {date} pé {label} @{name} ti tó, àti ní ọdọọdún lẹ́yìn náà. Ẹ sọ *my reminders* láti rí wọn.",
       "reviewed": false
     },
     "wa.remind.set_once": {
-      "text": "I'll remind you on {date} that @{name}'s {label} is due. Say *my reminders* to see them.",
+      "text": "Màá rán yín létí ní {date} pé {label} @{name} ti tó. Ẹ sọ *my reminders* láti rí wọn.",
       "reviewed": false
     },
     "wa.remind.no_dates": {
-      "text": "@{name} holds no date to remind you of. Give its kind a date field on the Saved page.",
+      "text": "@{name} kò ní ọjọ́ kankan tí a lè fi rán yín létí. Ẹ fún irú rẹ̀ ní ààyè ọjọ́ ní ojú-ìwé Saved.",
       "reviewed": false
     },
     "wa.remind.which": {
-      "text": "Which of @{name}'s dates? {list}. Say it again with one, like: remind me when @{name} insurance is due",
+      "text": "Èwo nínú àwọn ọjọ́ @{name}? {list}. Ẹ tún un sọ pẹ̀lú ọ̀kan, bíi: remind me when @{name} insurance is due",
       "reviewed": false
     },
     "wa.remind.passed": {
-      "text": "@{name}'s {label} was {date}, which has passed. Change it on the Saved page, or ask for a reminder each year.",
+      "text": "{label} @{name} jẹ́ {date}, ó sì ti kọjá. Ẹ yí i padà ní ojú-ìwé Saved, tàbí ẹ béèrè ìránnilétí ní ọdọọdún.",
       "reviewed": false
     },
     "wa.remind.none": {
-      "text": "You have no reminders. Say, for example: remind me when @car insurance is due",
+      "text": "Ẹ kò ní ìránnilétí kankan. Ẹ sọ, fún àpẹẹrẹ: remind me when @car insurance is due",
       "reviewed": false
     },
     "wa.remind.list": {
-      "text": "Your reminders:\n{list}\nTo stop one: stop reminding me about @car",
+      "text": "Àwọn ìránnilétí yín:\n{list}\nLáti dá ọ̀kan dúró: stop reminding me about @car",
       "reviewed": false
     },
     "wa.remind.every_year": {
-      "text": ", each year",
+      "text": ", ní ọdọọdún",
       "reviewed": false
     },
     "wa.remind.none_for": {
-      "text": "You have no reminders about @{name}.",
+      "text": "Ẹ kò ní ìránnilétí kankan nípa @{name}.",
       "reviewed": false
     },
     "wa.remind.stopped": {
-      "text": "No more reminders about @{name}.",
+      "text": "Kò sí ìránnilétí mọ́ nípa @{name}.",
       "reviewed": false
     },
     "wa.saved.not_saved": {
-      "text": "Not saved: {reason}",
+      "text": "A kò fi pamọ́: {reason}",
       "reviewed": false
     },
     "wa.saved.save_ask": {
-      "text": "Save this as @{name}?\n\n{card}\n\nIt goes in {where}.",
+      "text": "Ṣé kí n fi èyí pamọ́ bí @{name}?\n\n{card}\n\nYóò wà nínú {where}.",
       "reviewed": false
     },
     "wa.saved.save_left": {
-      "text": "Not saved.",
+      "text": "A kò fi pamọ́.",
       "reviewed": false
     },
     "wa.saved.save_reminder": {
-      "text": "Tap Save to keep it as @{name}, or Cancel.",
+      "text": "Ẹ tẹ Fi pamọ́ láti tọ́jú rẹ̀ bí @{name}, tàbí Fagilé.",
       "reviewed": false
     },
     "wa.saved.saved": {
-      "text": "Saved as @{name}. Type @{name} any time to call it up.",
+      "text": "A ti fi pamọ́ bí @{name}. Ẹ tẹ @{name} nígbàkígbà láti pè é jáde.",
       "reviewed": false
     },
     "wa.saved.taken": {
-      "text": "You already have something called @{name}. Choose another name.",
+      "text": "Ẹ ti ní ohun kan tí à ń pè ní @{name}. Ẹ yan orúkọ mìíràn.",
       "reviewed": false
     },
     "wa.saved.where_business": {
-      "text": "{org}'s saved things",
+      "text": "ohun ìpamọ́ {org}",
       "reviewed": false
     },
     "wa.saved.where_mine": {
-      "text": "your own saved things, which only you see",
+      "text": "ohun ìpamọ́ tiyín, tí ẹ̀yin nìkan ń rí",
       "reviewed": false
     },
     "wa.saved.yours": {
-      "text": "Your own:",
+      "text": "Tiyín:",
       "reviewed": false
     },
     "wa.stock.category": {
       "text": "*{category}* ({count}):\n{list}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.stock.category_more": {
       "text": "Fi *more* ránṣẹ́ fún àwọn tó kù.",
@@ -3270,84 +3281,95 @@
       "reviewed": false
     },
     "wa.treat.ask": {
-      "text": "*{item}* ({count}) from *{supplier}*: how should we treat it?",
+      "text": "*{item}* ({count}) láti ọ̀dọ̀ *{supplier}*: báwo ni kí a ṣe é?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. An order drafted in chat: a line the business has not said how to treat before"
+      "context": "Draft, not reviewed: An order drafted in chat: a line the business has not said how to treat before"
     },
     "wa.treat.how": {
-      "text": "*Just record it*: no stock moves. *Add to stock*: counted in when it comes. *Keep track of it*: each one on Things we have. Or type it, like _keep track of it, Machines_.",
+      "text": "*Just record it* (Kàn kọ ọ́ sílẹ̀): kò sí ọjà tó máa yí padà. *Add to stock* (Fi kún ọjà): a ó kà á mọ́ ọjà nígbà tí ó bá dé. *Keep track of it* (Máa tọ́pa rẹ̀): ọ̀kọ̀ọ̀kan yóò wà lórí Things we have. Tàbí ẹ tẹ̀ ẹ́, bíi _keep track of it, Machines_.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under how should we treat it?: what each answer does, and how to type one with its label"
+      "context": "Draft, not reviewed: Under how should we treat it?: what each answer does, and how to type one with its label"
     },
     "wa.treat.item_reminder": {
-      "text": "Pick the stock item *{item}* goes into, or type its name. *A new one* makes it.",
+      "text": "Ẹ yan ọjà tí *{item}* ń lọ sí, tàbí ẹ tẹ orúkọ rẹ̀. *A new one* (Tuntun kan) yóò ṣe é.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Which stock item? was answered with something else"
+      "context": "Draft, not reviewed: Which stock item? was answered with something else"
     },
     "wa.treat.label": {
-      "text": "Label for *{item}*? Pick one, or type it.",
+      "text": "Àmì wo fún *{item}*? Ẹ yan ọ̀kan, tàbí ẹ tẹ̀ ẹ́.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: the business's most used labels, Another, No label"
+      "context": "Draft, not reviewed: A purchase line's label in chat: the business's most used labels, Another, No label"
     },
     "wa.treat.label_reminder": {
-      "text": "Pick a label for *{item}*, type one, or press *No label*.",
+      "text": "Ẹ yan àmì kan fún *{item}*, ẹ tẹ ọ̀kan, tàbí ẹ tẹ *No label* (Kò sí àmì).",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The label question was answered with something else"
+      "context": "Draft, not reviewed: The label question was answered with something else"
     },
     "wa.treat.label_type": {
-      "text": "Type the label for *{item}*, like _Machines_.",
+      "text": "Ẹ tẹ àmì fún *{item}*, bíi _Machines_.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Another was pressed: the label typed"
+      "context": "Draft, not reviewed: Another was pressed: the label typed"
     },
     "wa.treat.many": {
-      "text": "Put {count} {item} on Things we have, one row each?",
+      "text": "Ṣé kí n fi {count} {item} sórí Things we have, ìlà kan fún ọ̀kọ̀ọ̀kan?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 50: asked first"
+      "context": "Draft, not reviewed: Keep track of it for more than 50: asked first"
     },
     "wa.treat.new_item": {
-      "text": "*{name}* will be a new stock item. Do you sell it?",
+      "text": "*{name}* yóò di ọjà tuntun. Ṣé ẹ ń tà á?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A new stock item for a purchase line: one question before it is made"
+      "context": "Draft, not reviewed: A new stock item for a purchase line: one question before it is made"
     },
     "wa.treat.no_item": {
-      "text": "None of your stock items is called *{name}*.",
+      "text": "Kò sí ọ̀kan nínú ọjà yín tí à ń pè ní *{name}*.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A stock item typed for a purchase line is not one of the business's"
+      "context": "Draft, not reviewed: A stock item typed for a purchase line is not one of the business's"
     },
     "wa.treat.not_labelled": {
-      "text": "Not labelled",
+      "text": "Kò ní àmì",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line with no label, said back"
+      "context": "Draft, not reviewed: A purchase line with no label, said back"
     },
     "wa.treat.not_saved": {
-      "text": "*{item}* could not be changed: {reason}.",
+      "text": "A kò lè yí *{item}* padà: {reason}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer could not be saved (the order moved on meanwhile)"
+      "context": "Draft, not reviewed: A purchase line's answer could not be saved (the order moved on meanwhile)"
     },
     "wa.treat.reminder": {
-      "text": "How should we treat *{item}*? Press one, or type *just record it*, *add to stock* or *keep track of it*. *cancel* leaves it.",
+      "text": "Báwo ni kí a ṣe *{item}*? Ẹ tẹ ọ̀kan, tàbí ẹ tẹ *just record it*, *add to stock* tàbí *keep track of it*. *cancel* yóò fi sílẹ̀.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. How should we treat it? was answered with something else"
+      "context": "Draft, not reviewed: How should we treat it? was answered with something else"
     },
     "wa.treat.saved": {
       "text": "*{item}*: {how}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer saved and remembered: how it is treated, and its label"
+      "same": true,
+      "context": "Draft, not reviewed: A purchase line's answer saved and remembered: how it is treated, and its label"
     },
     "wa.treat.to_stock": {
-      "text": "Add to stock ({item})",
+      "text": "Fi kún ọjà ({item})",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. How a purchase line is treated, said back: into which stock item"
+      "context": "Draft, not reviewed: How a purchase line is treated, said back: into which stock item"
     },
     "wa.treat.too_many": {
-      "text": "{count} {item} are too many to keep track of one by one (at most {max}), so it is just recorded. You can add one row for the lot on Things we have.",
+      "text": "{count} {item} pọ̀ jù láti tọ́pa ọ̀kọ̀ọ̀kan (kò gbọdọ̀ ju {max} lọ), nítorí náà a kàn kọ ọ́ sílẹ̀. Ẹ lè fi ìlà kan fún gbogbo rẹ̀ kún Things we have.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 200: it cannot be, and is just recorded"
+      "context": "Draft, not reviewed: Keep track of it for more than 200: it cannot be, and is just recorded"
+    },
+    "wa.treat.uses": {
+      "text": "A ń ka *{stock}* ní {unit}. {unit} mélòó ló wà nínú {one} kan? Sọ nọ́ńbà kan, bíi 1000.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Add to stock into a stock item counted in another unit (grams, yards): how many of the stock item one of the line bought is ({one} is the line's unit, like bag, or the item's name). Asked once; remembered with the item"
+    },
+    "wa.treat.uses_reminder": {
+      "text": "Sọ iye {unit} tó wà nínú {one} kan, ní nọ́ńbà, bíi 50.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The answer to how many of the stock item one of the line is was not a number: said again before the question"
     },
     "wa.treat.which_item": {
-      "text": "Which stock item does *{item}* go into? Pick one, or type its name.",
+      "text": "Ọjà wo ni *{item}* ń lọ sí? Ẹ yan ọ̀kan, tàbí ẹ tẹ orúkọ rẹ̀.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Add to stock was chosen for a purchase line: the stock item, materials included"
+      "context": "Draft, not reviewed: Add to stock was chosen for a purchase line: the stock item, materials included"
     },
     "wa.understood.confirm": {
       "text": "Mo rò pé ohun tí ẹ ń sọ ni: *{command}*\nṢé kí n ṣe é?",
@@ -3358,15 +3380,15 @@
       "reviewed": false
     },
     "wa.yes_stale": {
-      "text": "That button was for something earlier, so nothing was done. Send *yes* to confirm what is waiting now, or *cancel* to drop it.",
+      "text": "Bọ́tìnnì yẹn jẹ́ fún nǹkan tó ti kọjá, nítorí náà a kò ṣe nǹkan kan. Ẹ fi *yes* ránṣẹ́ láti fìdí ohun tó ń dúró báyìí múlẹ̀, tàbí *cancel* láti pa á tì.",
       "reviewed": false
     },
     "wa.yes_stale_none": {
-      "text": "That button was for something earlier. Nothing is waiting for an answer now.",
+      "text": "Bọ́tìnnì yẹn jẹ́ fún nǹkan tó ti kọjá. Kò sí ohun tó ń dúró de ìdáhùn báyìí.",
       "reviewed": false
     },
     "wa.yes_stale_public": {
-      "text": "That button was for something earlier, so nothing was started. Send *menu* to see what you can do here.",
+      "text": "Bọ́tìnnì yẹn jẹ́ fún nǹkan tó ti kọjá, nítorí náà a kò bẹ̀rẹ̀ nǹkan kan. Ẹ fi *menu* ránṣẹ́ láti rí ohun tí ẹ lè ṣe níbí.",
       "reviewed": false
     },
     "wa.cancelled_nothing_started": {
@@ -3489,6 +3511,36 @@
       "text": "ẹ dáhùn bẹ́ẹ̀ni tàbí bẹ́ẹ̀kọ́",
       "reviewed": false
     },
+    "wa.field.send_location": {
+      "text": "Fi ibi tí o wà ránṣẹ́ síbí fún {label}: so mọ́, lẹ́yìn náà Location. Ìdí: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's location input in chat (device fields, build-plan-gaps H3): it is sent as WhatsApp's or Telegram's own location message; {label} is the input's title and {why} why it is asked, in the tenant's words"
+    },
+    "wa.field.send_photo": {
+      "text": "Fi fọ́tò kan ránṣẹ́ síbí fún {label}. Ìdí: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's photo input in chat: a photo sent in the chat; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.type_code": {
+      "text": "Tẹ kóòdù náà fún {label}: ìjíròrò kò lè ka á. Ìdí: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's scan input in chat, where nothing can scan: the code is typed; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.not_location": {
+      "text": "Ìyẹn kì í ṣe ibi. Fi ránṣẹ́ bí ibi: so mọ́, lẹ́yìn náà Location.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a location in chat and got words, or a location that did not come through"
+    },
+    "wa.field.not_photo": {
+      "text": "Ìyẹn kì í ṣe fọ́tò. Fi fọ́tò náà gan-an ránṣẹ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a photo in chat and got words"
+    },
+    "wa.field.photo_lost": {
+      "text": "Fọ́tò náà kò dé. Tún un fi ránṣẹ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A photo sent for a tool's input in chat could not be fetched from WhatsApp or Telegram"
+    },
     "wa.form.gone": {
       "text": "A kò nílò fọ́ọ̀mù yẹn mọ́. Ẹ fi *run* àti orúkọ iṣẹ́ kan ránṣẹ́ láti tún bẹ̀rẹ̀.",
       "reviewed": false
@@ -3496,6 +3548,26 @@
     "wa.form.inputs": {
       "text": "{workflow} nílò ìwọlé {count}. Ẹ tẹ *{cta}* láti kọ wọ́n; ẹ ó fìdí rẹ̀ múlẹ̀ kí ó tó bẹ̀rẹ̀. Ẹ fi *cancel* ránṣẹ́ láti dúró.",
       "reviewed": false
+    },
+    "wa.form.code_now": {
+      "text": "Tẹ kóòdù náà gẹ́gẹ́ bí ìfiránṣẹ́ rẹ tó kàn síbí ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step put to the person in WhatsApp or Telegram asks a code (a scan field, build-plan-gaps H3 g-scan-wa): only their next message there is taken as the code; {why} is why it is asked, in the tenant's words"
+    },
+    "wa.form.code_then": {
+      "text": "Lẹ́yìn náà tẹ kóòdù náà, nígbà tí a bá béèrè ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram asks a code after its location and photo: asked once they are sent; {why} is why it is asked"
+    },
+    "wa.form.code_next": {
+      "text": "Ó ti dé, fún {title}. Báyìí tẹ kóòdù náà gẹ́gẹ́ bí ìfiránṣẹ́ rẹ tó kàn ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step's location and photo are in; its code is asked now, and only the person's next message there is taken as it; {title} is the question's title and {why} why the code is asked"
+    },
+    "wa.form.code_scan_only": {
+      "text": "Kóòdù tí a gbọ́dọ̀ kà kò ṣeé fún ní ìjíròrò: a fi í sílẹ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram has a code that must be scanned (typing not allowed): it cannot be given there"
     },
     "wa.form.invalid": {
       "text": "Fọ́ọ̀mù yẹn kò wúlò mọ́.",
@@ -3643,7 +3715,8 @@
     },
     "wa.ask.count": {
       "text": "{reading}: {count}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.ask.sum": {
       "text": "Àpapọ̀ {column}, {reading}: {total}",
@@ -3659,14 +3732,15 @@
     },
     "wa.ask.rows_head": {
       "text": "{reading} ({count}):",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.help.intro": {
       "text": "Ẹ lè fi ránṣẹ́:",
       "reviewed": false
     },
     "wa.help.saved": {
-      "text": "\u2022 *@* and a saved thing's name: tells it (*@mum*); ask about it (*what's @car insurance due?*); *save mum: GTBank 0123456789*; *remind me when @car insurance is due*; *my reminders*",
+      "text": "• *@* àti orúkọ ohun ìpamọ́: yóò sọ ọ́ (*@mum*); béèrè nípa rẹ̀ (*what's @car insurance due?*); *save mum: GTBank 0123456789*; *remind me when @car insurance is due*; *my reminders*",
       "reviewed": false
     },
     "wa.help.invoice": {
@@ -3726,15 +3800,15 @@
       "reviewed": false
     },
     "wa.invoice.confirm_linked": {
-      "text": "Send {name}, a business on Taskiem you are linked with, an invoice for {amount}: {for}? It goes into their bills.",
+      "text": "Ṣé kí n fi invoice {amount} ránṣẹ́ sí {name}, iṣẹ́ òwò lórí Taskiem tí ẹ so pọ̀ mọ́: {for}? Yóò wọ inú ìwé owó wọn.",
       "reviewed": false
     },
     "wa.invoice.sent_linked": {
-      "text": "Sent {number} to {name}'s bills on Taskiem for {amount}. You can see it under Invoices in the web app.",
+      "text": "Mo ti fi {number} ránṣẹ́ sínú ìwé owó {name} lórí Taskiem fún {amount}. Ẹ lè rí i lábẹ́ Invoices nínú web app.",
       "reviewed": false
     },
     "wa.invoice.pick_linked": {
-      "text": "Which {name} do you mean?\n{list}\nReply with its number, or send a phone number or email to invoice someone else.",
+      "text": "{name} wo ni ẹ ní lọ́kàn?\n{list}\nẸ fi nọ́mbà rẹ̀ dáhùn, tàbí ẹ fi nọ́mbà fóònù tàbí imeeli ránṣẹ́ láti fi invoice ránṣẹ́ sí ẹlòmíì.",
       "reviewed": false
     },
     "wa.invoice.confirm_reminder": {
@@ -4038,23 +4112,23 @@
       "reviewed": false
     },
     "wa.receive.account": {
-      "text": "Your account number with Taskiem:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nAnyone can pay you into it at any time; each payment shows under Money, To match.",
+      "text": "Nọ́mbà àkáǹtì yín pẹ̀lú Taskiem:\nNọ́mbà àkáǹtì: {account}\nBáńkì: {bank}\nOrúkọ àkáǹtì: {name}\nẸnikẹ́ni lè san owó sínú rẹ̀ nígbàkígbà; ìsanwó kọ̀ọ̀kan yóò hàn lábẹ́ Money, To match.",
       "reviewed": false
     },
     "wa.receive.balance": {
-      "text": "Your Taskiem wallet holds {amount} now.",
+      "text": "Àpò owó Taskiem yín ní {amount} báyìí.",
       "reviewed": false
     },
     "wa.receive.balance_unknown": {
-      "text": "We could not get your balance just now. Please try again in a few minutes.",
+      "text": "A kò lè rí iye owó tó wà nínú àpò yín báyìí. Ẹ jọ̀wọ́ gbìyànjú lẹ́ẹ̀kan sí i lẹ́yìn ìṣẹ́jú díẹ̀.",
       "reviewed": false
     },
     "wa.receive.no_number": {
-      "text": "Your account number is not ready yet. Open Settings, Payments to see why: {link}",
+      "text": "Nọ́mbà àkáǹtì yín kò tíì ṣetán. Ẹ ṣí Settings, Payments láti rí ìdí: {link}",
       "reviewed": false
     },
     "wa.receive.off": {
-      "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "text": "Ẹ kò tíì máa gba owó pẹ̀lú Taskiem. Ẹ tàn án ní Settings, Payments: {link}",
       "reviewed": false
     },
     "wa.riders.add_how": {
@@ -4200,6 +4274,11 @@
       "text": "Ṣí ojú-ìwé náà: {link}",
       "reviewed": false,
       "context": "Draft, not reviewed: A page's short form in a chat app: the link to open the page"
+    },
+    "wa.page.cannot_open": {
+      "text": "Ojú-ìwé yìí kì í ṣe èyí tí o lè ṣí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A Tell me message's button that opens a page, pressed by someone the page's roles do not let open it (or the page is gone)"
     },
     "wa.tool.list_empty": {
       "text": "Kò sí nǹkan láti fi hàn.",
@@ -4787,15 +4866,15 @@
       "reviewed": false
     },
     "wa.shop.turn_on_deliveries": {
-      "text": "Turn on deliveries now? Each confirmed order for delivery is then offered to your riders in turn, and their Delivered completes it. Your order form stays as it is.",
+      "text": "Ṣé kí n tan ìfijíṣẹ́ báyìí? Àṣẹ ìfijíṣẹ́ kọ̀ọ̀kan tí a fìdí rẹ̀ múlẹ̀ yóò máa lọ sọ́dọ̀ àwọn rider yín ní ọ̀kọ̀ọ̀kan, Mo ti fi lé e wọn yóò sì parí rẹ̀. Fọ́ọ̀mù àṣẹ yín yóò wà bí ó ṣe wà.",
       "reviewed": false
     },
     "wa.dispatch.on": {
-      "text": "Deliveries are on. Confirmed orders for delivery now go to your riders; reply *deliveries* to see today's.",
+      "text": "Ìfijíṣẹ́ ti tàn. Àwọn àṣẹ ìfijíṣẹ́ tí a fìdí wọn múlẹ̀ yóò máa lọ sọ́dọ̀ àwọn rider yín báyìí; ẹ fi *deliveries* dáhùn láti rí ti òní.",
       "reviewed": false
     },
     "wa.dispatch.on_failed": {
-      "text": "Deliveries are not on: {reason}.",
+      "text": "Ìfijíṣẹ́ kò tàn: {reason}.",
       "reviewed": false
     },
     "wa.shop.which_item": {
@@ -4828,7 +4907,8 @@
     },
     "wa.stock.count": {
       "text": "*{name}*: {count}.",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.stock.is_low": {
       "text": "Ó ti kéré: o máa ń ra mìíràn ní {level}.",
@@ -4887,29 +4967,29 @@
       "reviewed": false
     },
     "wa.stock.ask_sell": {
-      "text": "*{name}* is new: {qty}{cost}. Do you sell it?",
+      "text": "*{name}* jẹ́ tuntun: {qty}{cost}. Ṣé ẹ ń tà á?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Counting in something the business has none of (add 20 yards of ankara fabric): one question before it is added"
+      "context": "Draft, not reviewed: Counting in something the business has none of (add 20 yards of ankara fabric): one question before it is added"
     },
     "wa.stock.ask_sell_first": {
-      "text": "Start keeping stock with *{name}*: {qty}{cost}. Do you sell it?",
+      "text": "Ẹ bẹ̀rẹ̀ sí í tọ́jú ọjà pẹ̀lú *{name}*: {qty}{cost}. Ṣé ẹ ń tà á?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The first thing counted in, which starts keeping stock: the same question"
+      "context": "Draft, not reviewed: The first thing counted in, which starts keeping stock: the same question"
     },
     "wa.stock.sell_how": {
-      "text": "*Yes* adds it to your products too. *No* only keeps count of it: something you use, not sell.",
+      "text": "*Yes* yóò fi kún àwọn ọjà títà yín pẹ̀lú. *No* yóò kàn máa ka iye rẹ̀: ohun tí ẹ ń lò, kì í ṣe èyí tí ẹ ń tà.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under Do you sell it?: what each answer does"
+      "context": "Draft, not reviewed: Under Do you sell it?: what each answer does"
     },
     "wa.stock.sell_reminder": {
-      "text": "Do you sell *{name}*? Reply *yes* or *no*, or *cancel* to leave it.",
+      "text": "Ṣé ẹ ń ta *{name}*? Ẹ fi *yes* tàbí *no* dáhùn, tàbí *cancel* láti fi sílẹ̀.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Do you sell it? was answered with something else"
+      "context": "Draft, not reviewed: Do you sell it? was answered with something else"
     },
     "wa.stock.added_material": {
-      "text": "It is counted only: it is not one of your products.",
+      "text": "A kàn ń ka iye rẹ̀ ni: kì í ṣe ọ̀kan lára àwọn ọjà títà yín.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. After adding something not sold (No to Do you sell it?)"
+      "context": "Draft, not reviewed: After adding something not sold (No to Do you sell it?)"
     },
     "wa.stock.confirm_topup": {
       "text": "Ṣé kí a fi {qty} kún *{name}* ({from} → {to}){cost}?",
@@ -4969,7 +5049,8 @@
     },
     "sales.by_transfer": {
       "text": "Transfer",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "sales.by_pos": {
       "text": "POS",
@@ -5249,7 +5330,8 @@
     },
     "wa.count.line": {
       "text": "• {item}: {had} → {counted}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.count.same": {
       "text": "{count} rí bí Taskiem ṣe ní wọn.",
@@ -5296,7 +5378,7 @@
       "reviewed": false
     },
     "wa.signin.off": {
-      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Sign in on the web with your email and password: {link}",
+      "text": "Wíwọlé pẹ̀lú WhatsApp tàbí Telegram ti wà ní pípa fún ọ (Account lórí wẹ́ẹ̀bù). Wọlé lórí wẹ́ẹ̀bù pẹ̀lú imeeli àti password rẹ: {link}",
       "reviewed": false
     },
     "wa.signin.passkey": {
@@ -5929,7 +6011,8 @@
     },
     "wa.table.list_line_nocount": {
       "text": "{n}. {title}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.table.list_tail_add": {
       "text": "Ẹ fi *add to* àti orúkọ tábìlì ránṣẹ́ láti fi ìlà kan kún un.",
@@ -6040,11 +6123,11 @@
       "reviewed": false
     },
     "signup.ask_workspace": {
-      "text": "What should we call this workspace? (Send *cancel* to stop at any point.)",
+      "text": "Kí ni kí a pe workspace yìí? (Fi *cancel* ránṣẹ́ láti dúró nígbàkígbà.)",
       "reviewed": false
     },
     "signup.workspace_bad": {
-      "text": "A workspace name needs 2 to 80 characters, and no links or email addresses. What should we call it?",
+      "text": "Orúkọ workspace gbọ́dọ̀ ní lẹ́tà 2 sí 80, láìsí ìjápọ̀ tàbí àdírẹ́sì imeeli. Kí ni kí a pè é?",
       "reviewed": false
     },
     "signup.ask_name": {
@@ -6132,23 +6215,23 @@
       "reviewed": false
     },
     "signup.ask_kind": {
-      "text": "Is this for a business, or for workflows?\n\n*A business*: sell, take orders and bookings, send invoices, with your staff.\n*Workflows*: get work done for you or your team: forms, reminders, approvals, your other apps.",
+      "text": "Ṣé èyí jẹ́ fún okòwò, tàbí fún iṣẹ́ àdáṣe?\n\n*Okòwò kan*: ta ọjà, gba àṣẹ àti ìfiṣúra, fi invoice ránṣẹ́, pẹ̀lú àwọn òṣìṣẹ́ rẹ.\n*Iṣẹ́ àdáṣe*: jẹ́ kí iṣẹ́ di ṣíṣe fún ìwọ tàbí ẹgbẹ́ rẹ: fọ́ọ̀mù, ìránnilétí, ìfọwọ́sí, àwọn áàpù rẹ mìíràn.",
       "reviewed": false
     },
     "signup.button_business": {
-      "text": "A business",
+      "text": "Okòwò kan",
       "reviewed": false
     },
     "signup.button_workflows": {
-      "text": "Workflows",
+      "text": "Iṣẹ́ àdáṣe",
       "reviewed": false
     },
     "signup.starters_workflows": {
-      "text": "Here are two things to start with:",
+      "text": "Èyí ni ohun méjì láti fi bẹ̀rẹ̀:",
       "reviewed": false
     },
     "signup.tpl.leave-request": {
-      "text": "Leave requests",
+      "text": "Ìbéèrè ìsinmi",
       "reviewed": false
     },
     "dormant.form_title": {
@@ -6262,6 +6345,201 @@
     "wd.and": {
       "text": "{list} àti {last}",
       "reviewed": false
+    },
+    "wd.change.name": {
+      "text": "{name} ni a ń pè é báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its name; {name} is the business's"
+    },
+    "wd.change.tool_new": {
+      "text": "Ó ti di irinṣẹ́ báyìí: {command}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: it became a tool people call from the chat; {command} is like /expense"
+    },
+    "wd.change.tool_gone": {
+      "text": "Kì í ṣe irinṣẹ́ mọ́ ({command} ti lọ)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: it is no longer a tool; {command} is like /expense"
+    },
+    "wd.change.tool_name": {
+      "text": "{name} ni a ń pe irinṣẹ́ náà báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's name; {name} is the business's"
+    },
+    "wd.change.tool_command": {
+      "text": "Àṣẹ rẹ̀ ni {command} báyìí (ó jẹ́ {was} tẹ́lẹ̀)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's command; {command} and {was} are like /expense"
+    },
+    "wd.change.tool_about": {
+      "text": "Ó ń sọ báyìí pé ó wà fún: {about}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the line saying what the tool is for; {about} is the business's"
+    },
+    "wd.change.says_added": {
+      "text": "Ó tún ń sọ '{phrase}' báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a phrase that finds the tool from a message was added; {phrase} is the business's, like spent"
+    },
+    "wd.change.says_removed": {
+      "text": "Kò sọ '{phrase}' mọ́",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a phrase that found the tool was removed; {phrase} is the business's"
+    },
+    "wd.change.for_customers": {
+      "text": "Àwọn oníbàárà lè lò ó báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the business's customers may now use its tool"
+    },
+    "wd.change.for_members": {
+      "text": "Àwọn ènìyàn yín nìkan ló lè lò ó báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: only the business's own people may use its tool now"
+    },
+    "wd.change.for_linked": {
+      "text": "Àwọn iṣẹ́ òwò tí ẹ so pọ̀ mọ́ lè lò ó báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: businesses linked with this one may now use its tool"
+    },
+    "wd.change.tool_icon": {
+      "text": "Àmì rẹ̀ ti yí padà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's picture"
+    },
+    "wd.change.answer_now": {
+      "text": "Ó ń dáhùn pẹ̀lú {kind} báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what its tool answers with when it ends; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.change.answer_gone": {
+      "text": "Kò dáhùn mọ́: ó kàn ń sọ pé ó ti bẹ̀rẹ̀",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its tool no longer answers, it only says it started"
+    },
+    "wd.change.answer_changed": {
+      "text": "Ohun tí ó ń dáhùn ti yí padà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what its tool's answer shows"
+    },
+    "wd.change.answer.text": {
+      "text": "ọ̀rọ̀",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a few words"
+    },
+    "wd.change.answer.card": {
+      "text": "káàdì kan",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a card with lines"
+    },
+    "wd.change.answer.list": {
+      "text": "àkójọ kan",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a list of rows"
+    },
+    "wd.tool.called": {
+      "text": "Lò ó nínú ìjíròrò pẹ̀lú {command}: {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps (Describe it, the template library): it is a tool called from the chat; {command} is like /add-sale, {name} the tool's name"
+    },
+    "wd.tool.for_members": {
+      "text": "Àwọn ènìyàn rẹ nìkan ló lè lò ó",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the business's own people"
+    },
+    "wd.tool.for_customers": {
+      "text": "Àwọn oníbàárà rẹ lè lò ó, wọn yóò sì rí ohun tí a sàmì sí fún wọn nìkan",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the business's customers, whose answer shows only the outputs marked public"
+    },
+    "wd.tool.asks": {
+      "text": "Ó ń béèrè fún: {fields}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: what its tool asks for when it is called; {fields} is a list of field names"
+    },
+    "wd.tool.answers": {
+      "text": "Ó ń fèsì pẹ̀lú {kind}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: what its tool says back; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.tool.says_ran": {
+      "text": "Ó kàn ń sọ pé ó ti ṣiṣẹ́",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool has no answer, so it only says it ran"
+    },
+    "wd.tool.for_linked": {
+      "text": "Àwọn iṣẹ́ òwò tí ẹ so pọ̀ lè lò ó",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the businesses linked with this one"
+    },
+    "wd.tool.for_roles": {
+      "text": "Àwọn wọ̀nyí nìkan ló lè lò ó, yàtọ̀ sí àwọn olówó: {roles}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: only members with these roles may use its tool (owners always may); {roles} is a list of role names"
+    },
+    "wd.tool.companion": {
+      "text": "Ó wá pẹ̀lú {name}, ètò àkókò tí bọ́tìnnì rẹ̀ ń ṣí i, tí a fi pamọ́ bí àkọsílẹ̀ lẹ́gbẹ̀ẹ́ rẹ̀",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A drafted tool read back: the recipe it started from brings a schedule, saved as a draft beside it, whose button opens the tool; {name} is the schedule's name"
+    },
+    "wa.build.warn_customer_output": {
+      "text": "Gbogbo oníbàárà tó bá lò ó yóò rí {output}, tí ó wá láti ohun tí o pa mọ́ fún ara rẹ. Ṣàyẹ̀wò pé fún wọn ni.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Before saving a drafted tool for customers: an output it shows every customer is read from something the business keeps (a saved thing, a setting, a table's rows); {output} is the output's name"
+    },
+    "wa.build.tool_taken": {
+      "text": "Wọ́n ti mú {asked}, nítorí náà a ń pè é ní {command}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After saving a drafted tool: the command it asked for was taken (one of Taskiem's words, another tool's or a page's), so it was given the next free one; {asked} and {command} are like /prices"
+    },
+    "wa.build.tool_companion": {
+      "text": "A fi ètò àkókò rẹ̀, {name}, pamọ́ bí àkọsílẹ̀ pẹ̀lú.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After saving a drafted tool started from a recipe: the recipe's schedule was saved as a draft too; {name} is its name"
+    },
+    "wd.change.roles": {
+      "text": "Àwọn ipa wọ̀nyí nìkan ló lè bẹ̀rẹ̀ rẹ̀ báyìí: {roles}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: who may start it by hand; {roles} are the business's role names"
+    },
+    "wd.change.roles_all": {
+      "text": "Ẹnikẹ́ni tí ó lè bẹ̀rẹ̀ àwọn iṣẹ́ lè bẹ̀rẹ̀ rẹ̀ báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: anyone who may start workflows may start it again"
+    },
+    "wd.change.trigger": {
+      "text": "Ó ń bẹ̀rẹ̀ báyìí: {trigger}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: how it starts; {trigger} is a read-back line like Every Monday at 9:00"
+    },
+    "wd.change.inputs": {
+      "text": "Ohun tí ó ń béèrè ti yí padà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what it asks for when started"
+    },
+    "wd.change.outputs": {
+      "text": "Ohun tí ó ń dá padà ti yí padà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what it gives back when it ends"
+    },
+    "wd.change.settings": {
+      "text": "Àpèjúwe tàbí ètò rẹ̀ ti yí padà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its description or settings"
+    },
+    "wd.change.step_added": {
+      "text": "A fi kún un: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step added; {step} is a read-back line"
+    },
+    "wd.change.step_removed": {
+      "text": "A yọ ọ́ kúrò: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step removed; {step} is a read-back line"
+    },
+    "wd.change.step_changed": {
+      "text": "A yí i padà: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step changed; {step} is a read-back line"
     },
     "wd.approval": {
       "text": "Dúró de ìfọwọ́sí",
@@ -7416,7 +7694,7 @@
       "reviewed": false
     },
     "order.link.credit_unchecked_note": {
-      "text": "Waiting: {business} could not check your credit just now, so this order was not accepted by itself. Someone there will look at it.",
+      "text": "Ó ń dúró: {business} kò lè ṣàyẹ̀wò àyè gbèsè yín báyìí, nítorí náà àṣẹ yìí kò gbà fúnra rẹ̀. Ẹnìkan níbẹ̀ yóò wò ó.",
       "reviewed": false
     },
     "order.link.over_limit_title": {
@@ -7476,11 +7754,11 @@
       "reviewed": false
     },
     "wa.received.linked": {
-      "text": "{supplier} delivered order {reference} through Taskiem. Tap *All came* if it all came, or say what came of each item on the order's page.",
+      "text": "{supplier} fi àṣẹ {reference} jíṣẹ́ nípasẹ̀ Taskiem. Ẹ tẹ *All came* bí gbogbo rẹ̀ bá dé, tàbí ẹ sọ ohun tó dé nínú ọjà kọ̀ọ̀kan ní ojú-ìwé àṣẹ náà.",
       "reviewed": false
     },
     "wa.received.linked_wait": {
-      "text": "Order {reference} is with {supplier} on Taskiem and is not delivered yet; when it is, you record what came with *All came* or *Not all came*.",
+      "text": "Àṣẹ {reference} wà lọ́dọ̀ {supplier} lórí Taskiem, wọn kò sì tíì fi jíṣẹ́; nígbà tí wọ́n bá ṣe bẹ́ẹ̀, ẹ ó kọ ohun tó dé sílẹ̀ pẹ̀lú *All came* tàbí *Not all came*.",
       "reviewed": false
     },
     "wa.mention.which": {
@@ -7488,11 +7766,12 @@
       "reviewed": false
     },
     "order.link.auto_changed_title": {
-      "text": "{from} sent order {reference}, at your prices",
+      "text": "{from} fi àṣẹ {reference} ránṣẹ́, ní iye owó yín",
       "reviewed": false
     },
     "order.link.auto_changed": {
-      "text": "*{from}* ordered {note}. It proposed other prices, so it is sent back at yours for them to accept, as you set for them."
+      "text": "*{from}* béèrè fún {note}. Ó dábàá iye owó mìíràn, nítorí náà a dá a padà ní iye owó yín kí wọ́n gbà á, bí ẹ ṣe ṣètò fún wọn.",
+      "reviewed": false
     },
     "wa.help.fronts": {
       "text": "• *fronts*: àwọn ojú-ìwé rẹ mìíràn, bíi àtòjọ oúnjẹ; *add front Snacks*; *add dish Jollof rice 2500*; *turn on orders for Snacks*; *front Snacks on*; *orders Snacks*",
@@ -7884,7 +8163,8 @@
     },
     "customer.order_which": {
       "text": "{said}: {choices}?",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "customer.order_size": {
       "text": "Èwo nínú {product}? {choices}",
@@ -7903,63 +8183,63 @@
       "reviewed": false
     },
     "rider.photo_kept_for": {
-      "text": "Photo kept as proof of delivery for {reference}. Thank you.",
+      "text": "Mo ti tọ́jú àwòrán náà gẹ́gẹ́ bí ẹ̀rí ìfijíṣẹ́ fún {reference}. O ṣé.",
       "reviewed": false
     },
     "rider.photo_kept_which": {
-      "text": "Photo kept as proof of delivery for {reference}. If it is for another order, tap that order.",
+      "text": "Mo ti tọ́jú àwòrán náà gẹ́gẹ́ bí ẹ̀rí ìfijíṣẹ́ fún {reference}. Bí ó bá jẹ́ fún àṣẹ mìíràn, tẹ àṣẹ náà.",
       "reviewed": false
     },
     "rider.photo_moved": {
-      "text": "Done: the photo is now kept for {reference}.",
+      "text": "Ó ti parí: àwòrán náà ti wà fún {reference} báyìí.",
       "reviewed": false
     },
     "link.ended_open.mine": {
-      "text": "You ended the link with {name}. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "text": "Ẹ ti parí ìsopọ̀ pẹ̀lú {name}. Ìwọ̀nyí ṣì wà ní ṣíṣí láàárín yín: {list}. Wọn yóò wà bí wọ́n ṣe wà, wọn kò sì ní gba ìròyìn kankan mọ́ níbí, nítorí náà ẹ yanjú wọn pẹ̀lú {name} tààrà.",
       "reviewed": false
     },
     "link.ended_open.theirs": {
-      "text": "{name} ended the link with your business. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "text": "{name} ti parí ìsopọ̀ pẹ̀lú iṣẹ́ òwò yín. Ìwọ̀nyí ṣì wà ní ṣíṣí láàárín yín: {list}. Wọn yóò wà bí wọ́n ṣe wà, wọn kò sì ní gba ìròyìn kankan mọ́ níbí, nítorí náà ẹ yanjú wọn pẹ̀lú {name} tààrà.",
       "reviewed": false
     },
     "link.ended_open.orders": {
-      "text": "orders {refs}",
+      "text": "àṣẹ {refs}",
       "reviewed": false
     },
     "link.ended_open.orders_more": {
-      "text": "orders {refs} and {more} more",
+      "text": "àṣẹ {refs} àti {more} mìíràn",
       "reviewed": false
     },
     "link.ended_open.invoices": {
-      "text": "invoices {refs}",
+      "text": "invoice {refs}",
       "reviewed": false
     },
     "link.ended_open.invoices_more": {
-      "text": "invoices {refs} and {more} more",
+      "text": "invoice {refs} àti {more} mìíràn",
       "reviewed": false
     },
     "reach.reply_in_app": {
-      "text": "Reply in the Taskiem app: {link}",
+      "text": "Dáhùn nínú áàpù Taskiem: {link}",
       "reviewed": false
     },
     "reach.chat_link": {
-      "text": "To chat with {business}, open {link}",
+      "text": "Láti bá {business} sọ̀rọ̀, ṣí {link}",
       "reviewed": false
     },
     "signup.offer_everyone": {
-      "text": "Hello! Taskiem runs your business's errands from this chat: payments, invoices, stock, reminders, your shop page. Do you want to start, for free? If you buy from a business on Taskiem, tap *I'm a customer*. Type *no* for not now.\n\nTo chat in another language, type its name: {languages}.",
+      "text": "Ẹ n lẹ! Taskiem ń ṣe iṣẹ́ okòwò rẹ láti inú ìjíròrò yìí: owó tí wọ́n san, ìwé owó, ọjà, ìránnilétí, ojú-ìwé ṣọ́ọ̀bù rẹ. Ṣé o fẹ́ bẹ̀rẹ̀, lọ́fẹ̀ẹ́? Bí o bá ń rà lọ́wọ́ okòwò kan lórí Taskiem, tẹ *Oníbàárà ni mí*. Tẹ *no* bí kì í bá ṣe báyìí.\n\nLáti bá wa sọ̀rọ̀ ní èdè mìíràn, tẹ orúkọ rẹ̀: {languages}.",
       "reviewed": false
     },
     "signup.button_customer": {
-      "text": "I'm a customer",
+      "text": "Oníbàárà ni mí",
       "reviewed": false
     },
     "signup.customer": {
-      "text": "To chat with a business, open its Taskiem link, or find it in the Taskiem app: {link}",
+      "text": "Láti bá okòwò kan sọ̀rọ̀, ṣí ìjápọ̀ Taskiem rẹ̀, tàbí wá a nínú áàpù Taskiem: {link}",
       "reviewed": false
     },
     "signup.customer_no_app": {
-      "text": "To chat with a business, open its Taskiem link: the business shares it on its page, its receipts and its messages.",
+      "text": "Láti bá okòwò kan sọ̀rọ̀, ṣí ìjápọ̀ Taskiem rẹ̀: okòwò náà ń pín in lórí ojú-ìwé rẹ̀, nínú àwọn ìwé ẹ̀rí rẹ̀ àti nínú àwọn ọ̀rọ̀ rẹ̀.",
       "reviewed": false
     },
     "menu.pay.account": {
@@ -8063,35 +8343,35 @@
       "context": "Draft, not reviewed: A question's answer that is not an account number"
     },
     "wa.pay.which_bank": {
-      "text": "Which bank is the account with? Send it again with the bank, like: send 45k to 0123456789 gtbank for stock bought.",
+      "text": "Báńkì wo ni àkáǹtì náà wà? Ẹ tún un fi ránṣẹ́ pẹ̀lú báńkì náà, bíi: send 45k to 0123456789 gtbank for stock bought.",
       "reviewed": false
     },
     "wa.pay.not": {
-      "text": "Not prepared: {reason}",
+      "text": "A kò ṣètò rẹ̀: {reason}",
       "reviewed": false
     },
     "wa.pay.prepared": {
-      "text": "Ready to pay {amount} to {to}, {bank} {account}, for {for}.",
+      "text": "Ó ti ṣetán láti san {amount} sí {to}, {bank} {account}, fún {for}.",
       "reviewed": false
     },
     "wa.pay.first": {
-      "text": "This is the first payment to this account.",
+      "text": "Èyí ni ìsanwó àkọ́kọ́ sí àkáǹtì yìí.",
       "reviewed": false
     },
     "wa.pay.changed": {
-      "text": "This account changed since it was last paid: the owner's OK is asked.",
+      "text": "Àkáǹtì yìí ti yí padà láti ìgbà tí a sanwó sí i kẹ́yìn: a ń béèrè ìfọwọ́sí olùní.",
       "reviewed": false
     },
     "wa.pay.again": {
-      "text": "The same amount went to them in the last day: check it is not paid twice.",
+      "text": "Iye owó kan náà lọ sọ́dọ̀ wọn láàárín ọjọ́ kan sẹ́yìn: ẹ ṣàyẹ̀wò pé a kò san án lẹ́ẹ̀mejì.",
       "reviewed": false
     },
     "wa.pay.confirm_link": {
-      "text": "Nothing is sent yet. To pay, confirm with your passkey: {link}",
+      "text": "Kò sí ohun tí a tíì fi ránṣẹ́. Láti sanwó, ẹ fìdí rẹ̀ múlẹ̀ pẹ̀lú passkey yín: {link}",
       "reviewed": false
     },
     "wa.pay.confirm_app": {
-      "text": "Nothing is sent yet. To pay, confirm it with your passkey in Taskiem, under Pay.",
+      "text": "Kò sí ohun tí a tíì fi ránṣẹ́. Láti sanwó, ẹ fìdí rẹ̀ múlẹ̀ pẹ̀lú passkey yín nínú Taskiem, lábẹ́ Pay.",
       "reviewed": false
     },
     "wa.pay.list.how": {
@@ -8190,24 +8470,79 @@
       "context": "Draft, not reviewed: The message carrying a PIN form bound to one prepared payment (the passkey link was said just before): amount, who is paid"
     },
     "bill.transfer.send": {
-      "text": "Send exactly {amount} to {to}, for {reference}.",
+      "text": "Ẹ fi {amount} gẹ́lẹ́ ránṣẹ́ sí {to}, fún {reference}.",
       "reviewed": false
     },
     "bill.transfer.good_for": {
-      "text": "Good for {minutes} minutes.",
+      "text": "Ó wúlò fún ìṣẹ́jú {minutes}.",
       "reviewed": false
     },
     "bill.transfer.next": {
-      "text": "I'll say here when it lands.",
+      "text": "Màá sọ níbí nígbà tí ó bá dé.",
       "reviewed": false
     },
     "bill.transfer.asking": {
-      "text": "Getting an account number for {reference}: it comes here in a moment.",
+      "text": "A ń gba nọ́mbà àkáǹtì fún {reference}: yóò dé síbí láìpẹ́.",
       "reviewed": false
     },
     "bill.transfer.off": {
-      "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
+      "text": "Wọ́n ti pa invoice nínú Taskiem: ẹ sanwó ní ojú-ìwé ìsanwó wọn dípò rẹ̀.",
       "reviewed": false
+    },
+    "wa.pay.payee.paid": {
+      "text": "{business} ti san {amount} fún ọ fún {for} ní {date}, sí àkáǹtì rẹ tí ó parí pẹ̀lú {last4}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment told to the person paid (a rider, a staff member) once the bank confirmed it: who paid, how much, what for, the day, their account's last four digits. Never who approved, the balance or the fee"
+    },
+    "wa.pay.payee.back": {
+      "text": "{amount} tí {business} san fún ọ ní {date} kò dé àkáǹtì rẹ: báǹkì dá a padà. A ti sọ fún wọn.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment the person paid was told of did not reach them: the bank sent it back"
+    },
+    "wa.pay.result.reversed": {
+      "text": "{amount} sí {to} ti padà láti báǹkì: ó tún wà nínú owó rẹ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat was paid and later sent back by the bank: who and how much"
+    },
+    "wa.pay.result.receipt": {
+      "text": "Ìwé ẹ̀rí ìsanwó wọn, láti fi ránṣẹ́ sí wọn: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After a payment's result: the link to its receipt, to send to the person paid (Send them a receipt)"
+    },
+    "wa.pay.wallet": {
+      "text": "Àpò owó Taskiem · ó dé lẹ́sẹ̀kẹsẹ̀, kò sí owó ìdíyelé.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat goes Taskiem wallet to Taskiem wallet: at once, with no fee"
+    },
+    "wa.pay.fee": {
+      "text": "{amount} + owó ìdíyelé {fee}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat, before it is confirmed: the amount and the fee the payments account quoted (the business pays the fee)"
+    },
+    "wa.pay.fee_after": {
+      "text": "Owó ìdíyelé yóò hàn lẹ́yìn ìsanwó.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat whose payments account quotes no fee before paying"
+    },
+    "wa.pay.balance_after": {
+      "text": "Owó tó kù lẹ́yìn náà: {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat: the balance once it and its fee are paid"
+    },
+    "wa.pay.fwd.ask": {
+      "text": "Sanwó fún {name} ({bank} {account}) mélòó, àti fún kí ni?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Answer to a forwarded message (or a reply of pay) with account details: the bank's name for the account, the bank and the last four digits; asks the amount and what for"
+    },
+    "wa.pay.fwd.saved": {
+      "text": "Àkáǹtì {name} nìyẹn. Sanwó fún {name} mélòó?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Answer to a forwarded message with the account of one of the business's saved accounts: paid by its name; asks the amount"
+    },
+    "wa.pay.fwd.staff": {
+      "text": "Àwọn òṣìṣẹ́ máa ń sanwó sí àwọn àkáǹtì tí iṣẹ́ náà ti fi pamọ́ nìkan: ní kí olówó fi èyí pamọ́ ná.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A staff member forwarded account details not saved: staff pay the business's saved accounts only"
     },
     "payroll.settings.chat": {
       "text": "How your payroll is set up in Payrolla:\n{lines}\n\nChange any of it in Payrolla. See it here: {url}",

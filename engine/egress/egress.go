@@ -8,6 +8,7 @@ package egress
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -69,6 +70,10 @@ type Guard struct {
 	// reachable.
 	Loopback map[string]string
 	Timeout  time.Duration
+	// TLS, when set, is the TLS configuration of Client's connections:
+	// tests trust their own httptest TLS server's certificate with it.
+	// Nil is Go's default (the system's roots).
+	TLS *tls.Config
 	// Upstream is the explicit CONNECT proxy this guard's connections
 	// leave through; nil uses the process-wide one (SetUpstream), if any.
 	// Loopback exceptions are dialled directly.
@@ -228,6 +233,9 @@ func (g *Guard) Client(p Policy, timeout time.Duration) *http.Client {
 		DisableKeepAlives:     true,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: timeout,
+	}
+	if g.TLS != nil {
+		tr.TLSClientConfig = g.TLS.Clone()
 	}
 	return &http.Client{
 		Transport: tr,

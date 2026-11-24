@@ -15,12 +15,12 @@
 ALTER TABLE payroll_code_waits DROP CONSTRAINT payroll_code_waits_action_check;
 ALTER TABLE payroll_code_waits ADD CONSTRAINT payroll_code_waits_action_check CHECK (action IN ('approve', 'lock', 'pay_now', 'retry_failed'));
 ALTER TABLE chat_history DROP CONSTRAINT chat_history_kind_check;
-ALTER TABLE chat_history ADD CONSTRAINT chat_history_kind_check CHECK (kind IN ('text', 'button', 'voice', 'photo', 'form', 'location', 'diary', 'chart', 'menu', 'payroll_run', 'payslip'));
+ALTER TABLE chat_history ADD CONSTRAINT chat_history_kind_check CHECK (kind IN ('text', 'button', 'voice', 'photo', 'form', 'location', 'diary', 'chart', 'menu', 'receipt', 'paid_you', 'payroll_run', 'payslip'));
 
 -- +goose Down
 DELETE FROM chat_history WHERE kind = 'payslip';
 ALTER TABLE chat_history DROP CONSTRAINT chat_history_kind_check;
-ALTER TABLE chat_history ADD CONSTRAINT chat_history_kind_check CHECK (kind IN ('text', 'button', 'voice', 'photo', 'form', 'location', 'diary', 'chart', 'menu', 'payroll_run'));
+ALTER TABLE chat_history ADD CONSTRAINT chat_history_kind_check CHECK (kind IN ('text', 'button', 'voice', 'photo', 'form', 'location', 'diary', 'chart', 'menu', 'receipt', 'paid_you', 'payroll_run'));
 DELETE FROM payroll_code_waits WHERE action IN ('pay_now', 'retry_failed');
 ALTER TABLE payroll_code_waits DROP CONSTRAINT payroll_code_waits_action_check;
 ALTER TABLE payroll_code_waits ADD CONSTRAINT payroll_code_waits_action_check CHECK (action IN ('approve', 'lock'));

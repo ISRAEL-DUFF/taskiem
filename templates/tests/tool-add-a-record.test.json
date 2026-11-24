@@ -1,0 +1,19 @@
+{
+  "schema": "wd-test/v1",
+  "template": "tool-add-a-record",
+  "params": {"table": "sales"},
+  "cases": [
+    {
+      "name": "adds the row and says so",
+      "trigger": {"body": {"what": "2 bags of rice", "amount": 45000}},
+      "mocks": {"add": {"output": {"affected": 1, "rows": [{"id": 7}]}}},
+      "expect": {"status": "completed", "steps": {"add": "completed"}, "answer": {"text": "Added to sales: 45000."}}
+    },
+    {
+      "name": "an amount is not needed",
+      "trigger": {"body": {"what": "Gate repaired"}},
+      "mocks": {"add": {"output": {"affected": 1, "rows": [{"id": 8}]}}},
+      "expect": {"status": "completed", "answer": {"text": "Added to sales."}}
+    }
+  ]
+}

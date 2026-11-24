@@ -6,6 +6,14 @@ A **page** is a screen your business makes for itself: "Tickets" with how many a
 
 On a table's page, **Show as a page** makes a page from it in one tap: a figure of how many rows there are, one of how many were added this week beside last week, the rows as a list (grouped by a status column when the table has one, each row opening as a card of its columns), and a search. It is a draft until you publish it.
 
+## From a starter
+
+On **Pages**, **From a starter** offers seven pages ready to add, each with the table and the tools it needs, made with it: **Tickets desk** (Open, Doing and Done, **New ticket**, and the tickets on a board whose cards move through **Move a ticket**), **Expenses this month** (what was spent this month beside last month, a chart by week, every expense, and **Log an expense**, the ready-made tool [Add a record](templates.md#recipes-tools-for-the-chat)), **Leave** (what waits for a decision, the requests in groups with **Approve** and **Decline**, for admins and owners, and **Ask for leave**), **Stock count**, **Deliveries today** (**On the way** and **Delivered** on each), **Waiting list** (**Seen** and **Left** on each) and **Service log**. Each says what it brings before you add it ("The table Tickets: Title, Customer, Email, Priority, Status", "/new-ticket (New ticket): adds a row to Tickets, asking for Title, Customer, Email and Priority"). **Add** makes the table, the tools and the page together and, if you may publish, puts them to use at once. A name your business already uses is given the next free one (tickets_2, /new-ticket-2, tickets-2) and Taskiem says so; if you may not publish, they are saved as drafts and it says who can. Making the table needs the right to change tables, and the tools the right to change workflows. In the phone app, **Pages › Add a page › From a starter** does the same.
+
+## Describe it
+
+On **Pages**, **Describe it** takes one sentence ("a page of open tickets with how many are waiting, and a button to add one") and drafts the page: what it shows, and what it would make for it, a table and the tools its buttons open, named before anything is made, beside what it uses that you have. **Make it** makes them and the page, as a starter is made. The draft is checked as a page is before it is published; what it cannot make is said. The AI is told your tables' and columns' names and types, your tools' names and what they ask and answer by type, your kinds of saved things by their fields' names and types, and your pages' names: never a row, a saved thing or a value. It counts against the month's AI budget as building a workflow does, and its model calls are kept with it.
+
 ## What a page is made of
 
 | Part | Shows |
@@ -13,11 +21,13 @@ On a table's page, **Show as a page** makes a page from it in one tap: a figure 
 | **Heading** | A title and a line of words |
 | **Figure** | One number: how many rows, or a column added up (an amount in kobo drawn as naira), with its colour; optionally only this day, week or month's, with the change on the one before ("up 12% on last week"). Up to four sit side by side; one may be the page's main figure, drawn large |
 | **List** | Rows, each a title, a line under it and a state; may be put in groups by a column (Open, Doing, Done). A press opens the row as a card |
-| **Table** | Rows in up to six columns you pick; a press on a column (in the app, **Order**) puts them in its order. A yes or no column you mark **can be changed here** is a tick for those who may change the table's rows |
+| **Table** | Rows in up to six columns you pick; a press on a column (in the app, **Order**) puts them in its order. A yes or no column you mark **can be ticked here** is a tick for those who may change the table's rows, on the web and in the app |
 | **Buttons** | Up to three buttons for the whole page (**New ticket**) |
-| **Status** | Where a run of one of your workflows is, in plain words: queued, working, waiting for whom, done, failed. The run the page's address names (`?run=`), else the latest. The run itself, its times and who it waits for show to those who may read runs |
+| **Status** | Where a run of one of your workflows is, in plain words: queued, working, waiting for whom, done, failed. The run the page's address names (`?run=`), else the latest. The run itself, its times and who it waits for show to those who may read runs. A list's or a table's rows can each show **where their own run is** too (below) |
+| **Board** | Rows as cards in columns by a choice (Open, Doing, Done), from a table or a tool. Moving a card to another column opens a tool of yours, filled in (below) |
+| **Chart** | Bars or a line: one measure (how many, or a column added up) over time (each day, week or month) or by a group (a bar for each kind), or the rows a tool answers with. Every figure is worked out by Taskiem; the figures are under it too |
 
-Each figure, list and table reads one table (or your orders or invoices, below), with conditions every row it shows meets ("status is open") and an order. At the top of a page up to four **filters** narrow the parts that use them: a **search**, a **choice** from values you list, **dates** (today, this week, this month, or two days) and **Mine** (rows whose email column is the person's own). A list or table shows 25 rows, then **More**. A page has at most 12 parts.
+Each figure, list and table reads one table (or your orders or invoices, below), with conditions every row it shows meets ("status is open") and an order. At the top of a page up to four **filters** narrow the parts that use them: a **search**, a **choice** from values you list, **dates** (today, this week, this month, or two days) and **Mine** (rows whose email or phone number column is the person's own: their phone is the number they sign in by). A list or table shows 25 rows, then **More**. A page has at most 12 parts.
 
 ## Your orders, invoices, deliveries, customers and staff
 
@@ -37,6 +47,18 @@ They are counted, added up (Total, Paid, Owed, in naira), listed and narrowed as
 - **The customer** (name, phone, email) is shown masked to everyone, as the Orders and Invoices lists show it (B•••, •••5678); to see a customer, open the order or invoice. So a page never searches, picks, groups, adds up or puts rows in order by the customer. A delivery's rider is shown by name, but never searched, picked or put in order by: it is kept sealed, and opened only for the rows shown.
 - **A part over an area you turned off** (Settings, areas) cannot be published, and shows that it is turned off until you turn the area back on.
 
+## Your saved things
+
+A list, a table or a count can show your business's [saved things](spec/saved-objects.md) of a kind you made, such as **Generators**: **Add a part › A list of saved things**, the kind, and **In the order a date comes** (Next service): the soonest first, those past it at the top, each saying when ("In 3 days", "2 days ago", red once it has passed, amber within a week). **Only those due within** some days keeps the near ones; a count of them makes a figure ("Due within a week"). A search on the page looks in their names and the fields that are not private. They are shown as your saved things list shows them to everyone in the business: your business's own (never anyone's own on You), a private field masked (••7766), never opened on a page, and never what they are put in order by, searched or grouped by. An API key sees none. A button on each can open a tool with the thing's name; a private value is asked, never filled in.
+
+## A board and a chart
+
+**A board** shows a table's rows (or the rows one of your tools answers with) as cards in two to six columns, one for each value of a column of words you pick ("status": open, doing, done), each with its heading. A card shows its title, a line and its state, opens as a card of its columns, and has the list's buttons and its run's status. A row whose value is none of the columns is not on the board. On the web the columns sit side by side (one under another on a phone); in the app one under another.
+
+**Moving a card** to another column opens one of your tools, the board's **move** (`"move": {"label": "Move", "tool": "move-ticket", "inputs": {"ref": "=row.id", "status": "=to"}}`), with its form filled in from the card and the column it goes to (`to`). It is exactly a button: Taskiem reads the card again on the server, the tool runs as the person who moved it, held to the tool's roles (someone it is not for sees why, and cannot move cards) and its care (yes, or a passkey where it moves money), and the board is read again when it finishes. The tool does the move (it changes the row), so your own rules are kept. On the web a card is **dragged** to another column, or moved **by the keyboard**: its **Move** button picks it up, the arrow keys choose a column, Enter moves it there and Escape leaves it, each step said to a screen reader. In the app, a card's menu has **Move to Doing** and the other columns. Each column shows 25 cards, then **More**.
+
+**A chart** draws one measure as bars or a line: from a table, how many rows or a number column added up (in naira for an amount in kobo), **over time** by a date column, for each of the last 2 to 12 days, weeks (from Monday) or months up to now (in Lagos), or **by a group**, a bar for each value of a column of words, largest first (twelve at most, the rest as Others); or the rows one of your tools answers with, each a label and a number (`"label": "=item.week", "value": "=item.total"`). Taskiem works out every figure, the marks on its scale and a sentence saying it ("Highest ₦4,500 (Week of 17 November); latest ₦1,200 (Week of 24 November), 4 in all."); the web and the app only draw them, in both themes, and list the figures under it (**The figures**, **See the figures**), so a screen reader hears them. A chart adds up over the first 5,000 rows and says so when it stopped there. A line is for over time; by a group, draw bars. A chart adds up every row its own conditions pick: the filters at the top narrow lists, tables and boards. Neither reads your orders or invoices: a board and a chart show your own tables or a tool's answer.
+
 ## Buttons
 
 A button on a page (in a **Buttons** part) or on each row of a list or table (shown on the row and on its card) is one of three things:
@@ -45,7 +67,9 @@ A button on a page (in a **Buttons** part) or on each row of a list or table (sh
 - **A signal to a run**: tells a run of one of your workflows something it waits for (**Confirm** on a delivery), after **Yes**. Only to a run of the workflow the button names, waiting at a step that says a page may send it (`"pages": true` on the signal step), held to that workflow's roles; to no other run. A run that has moved on says so. Sending one needs the right to start runs (`run.start`).
 - **An approval**: opens the approval sheet of a run waiting at that step, with its PIN and rules, when it waits for the person.
 
-**When** hides a button for the rows it does not fit (`"when": "=row.status == 'delivered'"`). Pressing a button reads the row again on the server: nothing the screen sends is taken for a row's value.
+**When** hides a button for the rows it does not fit (`"when": "=row.status == 'delivered'"`; in the editor, **Show it only when**). Pressing a button reads the row again on the server: nothing the screen sends is taken for a row's value.
+
+**Where each row's run is:** a list or a table can show, on each row and its card, where a run of one of your workflows is for that row (`"status": {"workflow": "Confirm deliveries", "to": "=row.id"}`): the run waiting for the row, or that last did (**Confirm** on a delivery waits for that delivery), or the run whose number a column holds (`"run": "=row.run"`). Its words (Waiting, Done, Not started…) show to everyone the page opens to; the run itself and who it waits for only to those who may read runs.
 
 ## Parts a tool works out
 
@@ -56,7 +80,8 @@ A figure or a list can be fed by one of your tools that **answers at once** (onl
 ## A page as an alert, and as a tab
 
 - **An alert:** a figure that counts (a table's or a view's rows), marked **alert**, shows in the alerts at the end of your Taskiem chat while it is above zero: the page's name and the count, with **Open the page**. Only to those who may open the page.
-- **A tab under an area** (`"place": {"area": "orders"}`): the published page shows as a tab after Taskiem's own on that area's screens (Online shop and Orders, Money, Schools on the web; a **Your pages** section on the app's Money and Orders), while that area is on.
+- **A tab under an area** (`"place": {"area": "orders"}`): the published page shows as a tab after Taskiem's own on that area's screens (Online shop and Orders, Money, Schools on the web; a **Your pages** section on the app's Money and Orders), while that area is on. **Linked businesses** has tabs too (Linked businesses, Your business in Explore, then your pages placed there); in the app they are chips at its top.
+- **From a notification:** a Tell me message (`notify.tell`) can carry a button that opens a page with its filters set (`{"label": "See db-2", "page": "disk-alerts", "filters": {"host": "db-2"}}`). It shows, on WhatsApp and Telegram, only to people the page's roles let open it; pressed, it answers with the page's short form with those filters and its link, which opens the page with them in the app and on the web. Anyone else pressing it is told they cannot open the page.
 
 ## In the chat
 
@@ -77,13 +102,13 @@ An open page keeps itself up to date: when a row of a table it shows is changed 
 
 ## Making and changing one
 
-On the web, **Pages** lists your pages, pinned first. **New page** starts from a table; the editor has no technical words: **Add a part** (a count, a total, a list, a table, a heading), pick its table, what each row shows, the groups and the conditions, **Move up** and **Move down**, and a live preview at phone width. Changes are kept as a **draft** (Save draft); people keep seeing the published page until you **Publish**. Up to five pages can be **pinned**, shown in the menu under **Your pages**.
+On the web, **Pages** lists your pages, pinned first. **New page** starts from a table, from your orders, invoices, deliveries, customers or staff, or from nothing. The editor has no technical words: **Add a part** (a count, a total, a list, a table, a heading, a figure or a list a tool works out, **Buttons**, **Where a run is**, **A board**, **A chart**, **A board a tool works out**, **A chart a tool works out**; a board's columns, their headings and **Moving a card to another column** opens which tool, each of its values from the card, the column it goes to, words or asked; a chart's bars or line, what it shows and **For each** day, week or month by a date column, or each of a column's values), pick its table, what each row shows (a row's title can be two columns, "AC-12 · Musa"), the groups and the conditions, **Buttons on each row** (opens a tool's form with each value from the row, a filter, words or asked; tells a run something; opens a run's approval; and **Show it only when**), **Where each row's run is**, a count as **an alert**, a yes/no column that **can be ticked here**, **Also a tab under** one of Taskiem's areas, **Move up** and **Move down**, and a live preview at phone width. **About the page** also says about how many runs its tools start a day ("About 40 runs a day from this page: 20 views a day, 2 tools each") beside your plan's limit, and warns when that is more. Changes are kept as a **draft** (Save draft); people keep seeing the published page until you **Publish**. Up to five pages can be **pinned**, shown in the menu under **Your pages**.
 
 **Earlier versions**, in the editor, lists each time the page was published: who published it, when, and what changed ("Added Owed. Now opened by owners and support."). **Bring back** makes a version your draft, in place of your changes not published yet: people keep seeing the published page until you publish it, and publishing it is checked as any change is (a column gone since is said, and with four-eyes publishing another person publishes it).
 
 **Save as a file** keeps the page as a file (`tickets.page.json`) of what it shows and how, never your rows: a condition naming one person's phone or email is left out, and the editor says so. On **Pages**, **Make from a file** makes a page from one, as a draft: if the name is taken it gets the next free one (tickets-2), and Taskiem says which tables or columns it names that your business does not have, so you can make them or change the page before publishing it.
 
-In the phone app, **Pages** lists the pages you may open and opens each one: figures, lists, tables and cards, with its filters and pull to refresh. A table has **Order** at its head to put its rows in one of its columns' order (picked again, the other way round); a personal column is not offered to someone who may not read the table. Making and changing pages is on the web.
+In the phone app, **Pages** lists the pages you may open and opens each one: figures, lists, tables, boards (a card's menu moves it) and charts (a bar pressed says its figures) and cards, with its filters and pull to refresh. A table has **Order** at its head to put its rows in one of its columns' order (picked again, the other way round); a personal column is not offered to someone who may not read the table. Making and changing pages is on the web.
 
 If a table or a column a page uses is gone, that part shows "This part needs fixing" to those who may edit the page and is left out for everyone else.
 
@@ -93,7 +118,7 @@ If a table or a column a page uses is gone, that part shows "This part needs fix
 | --- | --- |
 | Pages a business makes, drafts counted (`max_pages`) | 10 on the lowest plans, 50 on Growing Business, no limit above. A business over it after moving to a lower plan keeps its pages and cannot add more |
 | Pinned pages | 5 |
-| Parts on a page | 12; 4 figures side by side; 6 columns in a table; 12 lines on a row's card |
+| Parts on a page | 12; 4 figures side by side; 6 columns in a table or a board; 12 lines on a row's card; 12 bars or points on a chart |
 | Rows a list or table shows | 25, then **More** |
 | A total | added up over the first 5,000 rows, and says so when it stopped there |
 
@@ -110,10 +135,14 @@ If a table or a column a page uses is gone, that part shows "This part needs fix
 | `DELETE /v1/pages/{name}` | Delete the page and its versions (a published one needs `page.publish`) |
 | `POST /v1/pages/validate` | A document's problems, nothing saved |
 | `GET /v1/pages/{name}/view?filters=` | The page as drawn for you: every part's figures and rows worked out on the server, masked for you (`draft=1` for the draft) |
-| `GET /v1/pages/{name}/blocks/{id}?cursor=` | More rows of a list or table, or a table in a column's order (`order`, `desc=1`) |
+| `GET /v1/pages/{name}/blocks/{id}?cursor=` | More rows of a list or table, or a table in a column's order (`order`, `desc=1`); a board's column's next cards (`lane`) |
 | `GET /v1/pages/{name}/live` | Server-sent events while the page is open: `changed` names the parts to read again (no data), at most once in two seconds |
-| `POST /v1/pages/{name}/act` | A button pressed: `{"block", "row", "action", "yes"}`; gives the tool to open with its values (start it with the `button`), sends a signal after `yes`, or gives the approval to open |
+| `POST /v1/pages/{name}/act` | A button pressed: `{"block", "row", "action", "yes"}`; gives the tool to open with its values (start it with the `button`), sends a signal after `yes`, or gives the approval to open. A board's card moved: `{"block", "row", "action": 0, "to": "doing"}` gives its move tool to open, the same way |
 | `POST /v1/pages/{name}/refresh` | What tools worked out on the page for you is let go, so it is worked out again |
+| `GET /v1/page-choices` | The tools you may use (whether each only reads, its answers and values) and the workflows (the signals a page may send them, their approvals; all of them if you read workflows, else those you may start) by name, for the editor (`page.edit`) |
+| `GET /v1/page-starters` | The starters, each with what it makes, in words, and its page's parts (`page.edit`) |
+| `POST /v1/page-starters/{id}/install` | `{"publish": true}`: its tables (`table.edit`), its tools (`workflow.edit`) and its page made, published where you may; says the names given and why anything is a draft |
+| `POST /v1/page-builds` | Describe it: `{"goal": "…"}`, drafted in the background; `GET /v1/page-builds/{id}` the draft, what it would make and use (`review`); `POST /v1/page-builds/{id}/make` makes it, once |
 | `GET /v1/page-records` | Your orders, invoices, deliveries, customers and staff as a page may show them: their columns, whether their area is on and whether you may see them (`page.edit`) |
 | `GET /v1/pages/{name}/versions` | Every published version, newest first: who, when, who it let open the page, what changed (`page.edit`) |
 | `POST /v1/pages/{name}/versions/{v}/bring-back` | That version becomes the draft (never published by this) |
@@ -122,8 +151,8 @@ If a table or a column a page uses is gone, that part shows "This part needs fix
 
 The web and the app both draw from `view`: neither reads a table for a page itself. Reads are recorded in the connection reads (`GET /v1/secrets/reads`, purpose `pages.view`). Making, saving, publishing, pinning and deleting are audited (`page.create`, `page.draft`, `page.publish` with who may open it and what it shows, `page.pin` when it changes, `page.delete`, `page.bring_back`, `page.export`, `page.import`), never with a row's values.
 
-In code, `@taskiem/sdk` (`sdk/src/page.ts`) writes a page: `page({ name, title }, figure(…), list(…, { actions: [toolAction(…), signalAction(…)] }))`, its values words, CEL or arrow functions over `row`, `item`, `outputs` and `filters`.
+In code, `@taskiem/sdk` (`sdk/src/page.ts`) writes a page: `page({ name, title }, figure(…), list(…, { actions: [toolAction(…), signalAction(…)] }), board(…, { move: moveAction("Move", "move-ticket", { ref: ({ row }) => row.id, status: ({ to }) => to }) }), chart(…))`, its values words, CEL or arrow functions over `row`, `item`, `outputs` and `filters` (and a move's `to`).
 
 ## Not yet
 
-Making buttons, tool parts, a status and a tab in the editor (they are written in the page's file or the SDK, and drawn and pressed everywhere), a page opened from a notification, boards and charts, starters and **Describe it** come in later phases ([the plan](spec/pages.md#14-phases)).
+In the app pages are drawn and added from a starter; Describe it and changing a page are on the web. Pages for customers and linked businesses are not in this plan.

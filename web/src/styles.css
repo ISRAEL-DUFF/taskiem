@@ -853,7 +853,10 @@ button.small:focus-visible { box-shadow: var(--ring); } /* the ring, which the l
 .form-view input[aria-invalid="true"], .form-view textarea[aria-invalid="true"], .form-view select[aria-invalid="true"] { border-color: var(--danger); }
 .form-view .device-field .toolbar { margin: 4px 0 6px; }
 /* The pad is paper in both themes: ink on white, so a signature kept reads the same wherever it is shown (device fields D2). */
-.form-view .signature-pad { --paper: #ffffff; --paper-ink: #14201b; display: block; width: 100%; max-width: 420px; height: 160px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--paper); touch-action: none; }
+.form-view .signature-pad, .tk-form-body .signature-pad { --paper: #ffffff; --paper-ink: #14201b; display: block; width: 100%; max-width: 420px; height: 160px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--paper); touch-action: none; }
+.code-scan-video { display: block; width: 100%; max-width: 420px; border-radius: var(--radius-sm); background: var(--text); margin: 8px 0; }
+.code-scan-video[hidden] { display: none; }
+.tk-form-body .device-field { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; }
 .money-input { display: flex; align-items: center; gap: 6px; }
 .money-input > span { font-weight: 600; color: var(--muted); }
 .form-buttons { margin-top: 8px; }
@@ -1380,6 +1383,11 @@ th { background: var(--panel-2); }
 .conn-actions .sub.warn { color: var(--tint-warn-text); }
 .template-card .list-icon { margin-bottom: 4px; }
 .template-card strong { font-weight: 600; font-size: 15px; }
+/* Recipes: templates that make a tool used from the chat (made tools §13). */
+.template-kinds { margin-bottom: 12px; }
+.template-card .tool-chip { align-self: flex-start; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.recipe-tool ul { margin: 6px 0 0; padding-left: 18px; }
+.notice.ok { background: color-mix(in srgb, var(--ok) 8%, var(--panel)); border-color: color-mix(in srgb, var(--ok) 28%, transparent); }
 /* Empty states: the icon larger, on the brand's tint. */
 .empty-icon { width: 56px; height: 56px; border-radius: 16px; background: var(--tint); color: var(--tint-text); }
 .empty-icon svg { width: 26px; height: 26px; }
@@ -2523,6 +2531,28 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .pay-sent { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .pay-sent p { margin: 0; }
 .pay-foot-hint { margin: 8px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+/* Paying people H7: the balance and Add money, the sheet's ticks, the receipt, and a payment's diary line. */
+.pay-balance { display: grid; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2, var(--panel)); border: 1px solid var(--border); font-size: 14px; }
+.pay-balance-line { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; justify-content: space-between; }
+.pay-balance-line strong { font-variant-numeric: tabular-nums; }
+.pay-balance-from { color: var(--muted); }
+.pay-add p { margin: 0; color: var(--muted); }
+.pay-add .pay-check-facts { margin-top: 6px; }
+.pay-ticks { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; border: 0; min-width: 0; }
+.pay-ticks .tk-check { align-items: flex-start; }
+.pay-ticks .tk-check input { margin-top: 3px; flex: none; }
+.pay-ticks .tk-check .tk-field-hint { display: block; font-weight: 400; }
+.pay-receipt { display: grid; gap: 8px; margin: 10px 0; }
+.pay-receipt-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pay-diary-state { font-weight: 600; }
+.pay-diary-state.ok { color: color-mix(in srgb, var(--ok) 75%, var(--text)); }
+.pay-diary-state.danger { color: color-mix(in srgb, var(--danger) 82%, var(--text)); }
+.pay-diary-state.info, .pay-diary-state.muted { color: var(--muted); }
+.pay-diary-again { margin-left: 8px; }
+.pay-chat-card { max-width: 420px; padding: 12px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); display: grid; gap: 6px; font-size: 14px; }
+.pay-chat-card-label { font-size: 12px; color: var(--muted); text-transform: none; }
+.pay-chat-card strong { font-size: 16px; overflow-wrap: anywhere; }
+.batch-short { margin: 10px 0; }
 .card .pay-check + .pay-warn, .card .pay-check ~ .toolbar { margin-top: 14px; }
 
 /* Pay several people (pages/PayBatch.tsx): a row's fields, a row's
@@ -2689,3 +2719,48 @@ a.treat-went { text-decoration: underline; text-underline-offset: 2px; }
 .payroll-card { max-width: 420px; margin: 4px 0; }
 .payroll-card h3 { margin: 0 0 4px; font-size: 15px; }
 .payroll-card-figure { font-size: 22px; font-weight: 700; margin: 0; font-variant-numeric: tabular-nums; }
+/* Saved things and the runs that read them (build plan H6). */
+.run-saved { display: block; }
+.saved-runs { margin: 12px 0; }
+.saved-runs h3 { margin: 0 0 6px; font-size: 1rem; }
+.pc-their-run { display: grid; gap: 6px; min-width: min(280px, 70vw); }
+.pc-their-run-head { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; color: var(--text); }
+.pc-their-run .hint { margin: 0; }
+.pc-their-run-head svg { width: 16px; height: 16px; flex: none; color: var(--brand); }
+
+/* Pages G4: a board (columns side by side on a wide screen, one under another on a phone) and a chart (plain SVG, the money screens' colour). */
+.pg-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.pg-lane { background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pg-lane h3 { margin: 0; font-size: 14px; }
+.pg-lane.target { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.pg-lane-empty { margin: 0; }
+.pg-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pg-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; min-width: 0; }
+.pg-card[draggable="true"] { cursor: grab; }
+.pg-card.dragging { opacity: 0.5; }
+.pg-card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.pg-card-open { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; border: 0; background: none; box-shadow: none; font: inherit; text-align: left; color: var(--text); min-width: 0; }
+.pg-card-open:disabled { opacity: 1; cursor: inherit; }
+.pg-card-open .title { font-weight: 600; overflow-wrap: anywhere; }
+.pg-card-open .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.pg-card-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
+.pg-card-move svg { width: 14px; height: 14px; }
+.pg-chart { position: relative; width: 100%; min-width: 0; }
+.pg-chart-svg { display: block; overflow: visible; }
+.pg-chart-grid { stroke: var(--border); stroke-width: 1; }
+.pg-chart-base { stroke: var(--muted); stroke-width: 1; opacity: 0.6; }
+.pg-chart-tick, .pg-chart-label { fill: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.pg-chart-bar { fill: var(--chart-in); }
+.pg-chart-bar.on { opacity: 0.8; }
+.pg-chart-line { fill: none; stroke: var(--chart-in); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pg-chart-dot { fill: var(--chart-in); stroke: var(--panel); stroke-width: 2; }
+.pg-chart-dot.on { r: 6; }
+.pg-chart-hit { fill: transparent; }
+.pg-chart-tip { position: absolute; transform: translate(-50%, -100%); background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; pointer-events: none; box-shadow: 0 4px 14px rgb(0 0 0 / 12%); white-space: nowrap; font-size: 13px; }
+.pg-chart-tip strong { color: var(--text); }
+.pg-chart-tip span { color: var(--muted); }
+.pg-chart-table summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.pg-chart-figures { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+.pg-chart-figures th, .pg-chart-figures td { padding: 6px 0; border-bottom: 1px solid var(--border); text-align: left; font-weight: 400; }
+.pg-chart-figures thead th { color: var(--muted); }
+.pg-chart-figures td, .pg-chart-figures thead th:last-child { text-align: right; font-variant-numeric: tabular-nums; }

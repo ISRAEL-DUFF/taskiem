@@ -1,0 +1,13 @@
+{
+  "schema": "wd-test/v1",
+  "template": "tool-daily-report",
+  "params": {},
+  "cases": [
+    {
+      "name": "lists today's rows",
+      "trigger": {"body": {}},
+      "mocks": {"today": {"output": {"rows": [{"id": 1, "what": "Rice", "amount": 45000}, {"id": 2, "what": "Beans", "amount": 12000}]}}},
+      "expect": {"status": "completed", "answer": {"title": "Today", "rows": [{"title": "Rice", "sub": "45000"}, {"title": "Beans", "sub": "12000"}]}}
+    }
+  ]
+}

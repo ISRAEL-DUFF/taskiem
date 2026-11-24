@@ -235,6 +235,9 @@ func (s *Source) From() string {
 	if s.Records != "" {
 		return RecordsPrefix + s.Records
 	}
+	if s.Saved != "" {
+		return SavedPrefix + strings.ToLower(s.Saved)
+	}
 	return s.Table
 }
 
@@ -242,6 +245,9 @@ func (s *Source) From() string {
 // its exact name, else one of the business's tables (by name or title,
 // as the checked query finds one; never a view).
 func Lookup(tables []datatables.Table, name string) (datatables.Table, bool) {
+	if IsSaved(name) {
+		return datatables.Table{}, false // a kind of saved things is Env.SavedKind's
+	}
 	if IsRecords(name) {
 		if v, ok := RecordViewOf(name); ok {
 			return v.Table(), true

@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type dataErrBody struct {
@@ -817,6 +818,11 @@ func (f *Fake) serveInsert(w http.ResponseWriter, q url.Values, p *project, name
 			}
 		}
 		row = clone(row)
+		for _, c := range t.Now {
+			if _, has := row[c]; !has {
+				row[c] = f.Now().UTC().Format(time.RFC3339Nano)
+			}
+		}
 		if len(t.Key) == 1 {
 			if _, has := row[t.Key[0]]; !has {
 				seq = nextSeq(t, written, seq)

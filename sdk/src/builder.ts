@@ -10,6 +10,7 @@
 // functions over the expression context, compiled to CEL by build().
 
 import { compileFunction, ExpressionError } from "./expr.js";
+import type { SavedAny } from "./saved.js";
 import type { ActionClass, ContainerLimits, Duration, FormTriggerConfig, Output, Retry, Step, Tool, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
 
 /** What an expression can read (wd/v1 rule 10). Values are untyped. */
@@ -23,6 +24,9 @@ export interface Context {
   env: Record<string, any>;
   run: { id: string; tenant_id: string; workflow_id: string; version: number; environment: string; started_at: string };
   secrets: Record<string, string>;
+  /** The business's saved things, by name ("price-list" is price_list),
+   * read when the run starts (saved objects §6.4). */
+  saved: Record<string, SavedAny>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   item: any;
   index: number;
@@ -394,7 +398,10 @@ export class Workflow extends Steps {
     if (o.settings !== undefined) def.settings = lowerAt(o.settings, "settings");
     if (o.outputs !== undefined) def.outputs = lowerAt(o.outputs, "outputs");
     if (o.roles !== undefined) def.roles = o.roles;
-    if (o.tool !== undefined) def.tool = o.tool;
+    // A list answer's rows read item, which code writes as a function
+    // (({ item }) => item.title), as it does in a foreach: lowered the same
+    // way, so the tool round-trips to its definition.
+    if (o.tool !== undefined) def.tool = lowerAt(o.tool, "tool");
     return def as unknown as WorkflowDefinition;
   }
 

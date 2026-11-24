@@ -11,6 +11,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/ai/repair"
+	"github.com/israel-duff/taskiem/engine/wdcheck"
 )
 
 // heuristic is the evaluation's offline "model": it reads the context
@@ -110,7 +111,25 @@ func heuristic(req ai.Request) (*ai.Response, error) {
 	if len(steps) == 0 {
 		steps = append(steps, map[string]any{"id": "note", "type": "transform", "config": map[string]any{"output": map[string]any{"todo": "build by hand"}}})
 	}
+	// A saved thing the goal names with @ is read by its name (rule 27).
+	saved := namedSaved(goal, ctxDoc)
+	if saved != "" {
+		steps = append(steps, map[string]any{"id": "saved_thing", "type": "transform", "config": map[string]any{"output": map[string]any{"name": "=saved." + saved + ".name"}}})
+	}
 	def := map[string]any{"schema": "wd/v1", "id": "wf_draft", "version": 1, "name": "Draft", "trigger": map[string]any{"type": "manual"}, "steps": steps}
+	if cmd, ok := toolGoal(goal); ok {
+		// A tool (rule 28): its command, an answer from an output a step
+		// gives, public when it is for customers.
+		last := steps[len(steps)-1]["id"].(string)
+		steps = append(steps, map[string]any{"id": "said", "type": "transform", "needs": []string{last}, "config": map[string]any{"output": map[string]any{"done": "Done"}}})
+		out := map[string]any{"name": "done", "type": "string", "title": "Done", "description": "What it says back", "value": "=steps.said.output.done"}
+		tool := map[string]any{"name": "Draft", "command": cmd, "about": "Drafted from the goal", "answer": map[string]any{"type": "text", "text": "=outputs.done"}}
+		if strings.Contains(goal, "customer") {
+			tool["for"], out["public"] = "customers", true
+		}
+		def["steps"], def["outputs"], def["tool"] = steps, []any{out}, tool
+		def["inputs"] = map[string]any{"schema": map[string]any{"type": "object", "properties": map[string]any{}}}
+	}
 	doc, _ := json.Marshal(def)
 	env, _ := json.Marshal(map[string]any{"summary": "Heuristic draft.", "assumptions": []string{}, "workflow": string(doc), "tests": []any{},
 		"template": "", "template_params": ""})
@@ -191,6 +210,40 @@ func compose(goal string, ctxDoc map[string]any) *ai.Response {
 	env, _ := json.Marshal(map[string]any{"summary": "Composes two templates.", "assumptions": []string{}, "workflow": string(doc), "tests": []any{},
 		"template": "", "template_params": ""})
 	return &ai.Response{Text: string(env)}
+}
+
+// toolWord finds the word a goal asks a tool to be called by: after
+// "type" or a "/".
+var toolWord = regexp.MustCompile(`(?:\btype\s+['"]?|(?:^|\s)/)([a-z][a-z0-9-]{1,23})`)
+
+// toolGoal reports whether a goal asks for a tool used from the chat, and
+// its command (made tools §13: Describe it).
+func toolGoal(goal string) (string, bool) {
+	m := toolWord.FindStringSubmatch(goal)
+	if m == nil && !strings.Contains(goal, "tool") && !strings.Contains(goal, "command") {
+		return "", false
+	}
+	cmd := "my-tool"
+	if m != nil {
+		cmd = m[1]
+	}
+	if wdcheck.ReservedCommand(cmd) {
+		cmd += "-now"
+	}
+	return cmd, true
+}
+
+// namedSaved is the saved thing of the context a goal names with @, as
+// the saved root reads it (price-list as price_list).
+func namedSaved(goal string, ctxDoc map[string]any) string {
+	things, _ := ctxDoc["saved_things"].([]any)
+	for _, raw := range things {
+		s, _ := raw.(map[string]any)
+		if n, _ := s["name"].(string); n != "" && strings.Contains(goal, "@"+n) {
+			return strings.ReplaceAll(n, "-", "_")
+		}
+	}
+	return ""
 }
 
 // heuristicTemplateScore is the retrieval score above which the

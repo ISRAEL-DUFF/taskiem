@@ -159,6 +159,8 @@ for (const width of [390, 360])
       bank_name: "Guaranty Trust Bank",
       amount_kobo: 4_500_000,
       purpose: "delivery",
+      // Paid from this business chat: its diary line goes here (H7).
+      where: link,
     });
     await noAxe(page, "the payment from a message, prepared");
     await sheet.getByRole("button", { name: "Close" }).click();

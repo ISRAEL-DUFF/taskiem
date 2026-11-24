@@ -932,7 +932,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		e.tg = telegram.New(pool, *cfg.Telegram, &egress.Guard{Logger: log}, log)
 	}
 	// Tell me: on the chat channels this deployment runs, else by email.
-	n := &notify.Notifier{Pool: pool}
+	// Saved files a message sends get a short link, made when it sends.
+	n := &notify.Notifier{Pool: pool, Files: api.SavedFileLinks{Pool: pool, BaseURL: cfg.PublicURL}}
 	if e.wa != nil {
 		n.Chat = append(n.Chat, "whatsapp")
 	}
@@ -992,7 +993,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	invoiceOps.Set(invoicing.Service{Invoices: e.invoices})
 	// Payments' own records, for the pay-person workflow and a workflow's
 	// payments@1 prepare (P1), with the accounts people are paid from.
-	payOps.Set(api.PaymentsOps(e.store, e.invoices, reg, vault))
+	payOps.Set(api.PaymentsOps(e.store, e.invoices, reg, vault, e.orders))
 	wireOrderTransfers(e.invoices, e.orders)
 	// The Schools area's record (decision 0046), read by schools@1. Every
 	// payment part counted towards a school's invoice gets a receipt, and

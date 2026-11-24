@@ -630,6 +630,14 @@ func ExportJournal(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to ti
 			other = Expense(category)
 		case "refund":
 			other = AccountRefunds
+		case "fee":
+			// A payout's fee as its own line (bank charges).
+			other = AccountFees
+		case "payout":
+			// A payment to a person, by what it was for (paying people).
+			if category != "" {
+				other = AccountPayouts + ": " + strings.ToUpper(category[:1]) + category[1:]
+			}
 		case "cash":
 			other = AccountOwner
 		case "statement":

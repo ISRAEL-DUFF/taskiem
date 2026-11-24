@@ -16,7 +16,8 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/csvsafe"
-	"github.com/israel-duff/taskiem/engine/wddiff"
+	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/wdtext"
 )
 
 // Compliance reports (spec 9.6) for examiners and internal audit, over a
@@ -285,7 +286,7 @@ func piiReport(ctx context.Context, tx pgx.Tx, _ *Server, _ uuid.UUID, from, to 
 // changesReport: every workflow version created in the period, who wrote
 // and published it, where it came from (a commit, a pull request), and what
 // changed from the version before.
-func changesReport(ctx context.Context, tx pgx.Tx, _ *Server, _ uuid.UUID, from, to time.Time) (*report, error) {
+func changesReport(ctx context.Context, tx pgx.Tx, s *Server, _ uuid.UUID, from, to time.Time) (*report, error) {
 	rows, err := tx.Query(ctx, `SELECT v.created_at, w.name, v.workflow_id::text, v.version, v.state, COALESCE(v.created_by, ''), v.published_by::text, v.published_at,
 			COALESCE(v.git_commit, ''), COALESCE(v.git_pr, ''), encode(v.digest, 'hex'), v.definition,
 			(SELECT p.definition FROM workflow_versions p WHERE p.workflow_id = v.workflow_id AND p.version = v.version - 1)
@@ -296,6 +297,7 @@ func changesReport(ctx context.Context, tx pgx.Tx, _ *Server, _ uuid.UUID, from,
 	}
 	defer rows.Close()
 	rep := &report{Columns: []string{"created_at", "workflow", "workflow_id", "version", "state", "created_by", "published_by", "published_at", "git_commit", "git_request", "digest", "changes"}}
+	reg := s.changesRegistry(ctx)
 	for rows.Next() {
 		var at time.Time
 		var name, wf, state, by, commit, pr, digest string
@@ -308,7 +310,7 @@ func changesReport(ctx context.Context, tx pgx.Tx, _ *Server, _ uuid.UUID, from,
 		}
 		changes := []string{"created"}
 		if prev != nil {
-			changes = wddiff.Diff(prev, def)
+			changes = wdtext.Changes(prev, def, reg, lang.EN) // in plain words, as the history and Approvals say them
 		}
 		row := map[string]any{"created_at": at, "workflow": name, "workflow_id": wf, "version": v, "state": state, "created_by": by,
 			"git_commit": commit, "git_request": pr, "digest": digest, "changes": changes}

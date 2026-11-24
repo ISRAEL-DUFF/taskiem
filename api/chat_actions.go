@@ -17,9 +17,11 @@ import (
 	"maps"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -525,62 +527,71 @@ func chatTopicByID(id string) (chatTopic, bool) {
 	return chatTopic{}, false
 }
 
-// topicHints are words a message about a topic tends to have (§8.3),
-// English and Pidgin, matched as the start of a word ("rider" finds
-// "riders"); those with a space anywhere in the message. Used when no model
-// can read the message.
-var topicHints = map[string][]string{
-	"sales":    {"sale", "sold", "sell", "selling", "customer bought", "customer buy"},
-	"stock":    {"stock", "carton", "crate", "shelf", "finish", "remain", "spoil", "expire", "inventory", "count"},
-	"products": {"product", "price", "service", "item", "photo"},
-	"page":     {"page", "website", "qr", "opening", "close shop", "open shop", "hours"},
-	"orders":   {"order", "refund", "delivered"},
-	"riders":   {"rider", "dispatch", "delivery", "deliver", "okada", "bike", "keke", "motorcycle"},
-	"bookings": {"booking", "appointment", "slot", "day off"},
-	"buying":   {"supplier", "restock", "depot", "wholesale", "distributor", "purchase", "received"},
-	"money":    {"money", "spent", "spend", "expense", "cash", "transfer", "invoice", "diesel", "fuel", "rent"},
-	"pay":      {"pay", "payee", "transfer to", "send money"},
-	"owe":      {"owe", "owing", "debt", "debtor", "credit", "balance", "pay me", "dey owe"},
-	"staff":    {"staff", "task", "worker", "team", "approv", "employee"},
-	"lists":    {"list", "table", "record", "spreadsheet"},
-	"auto":     {"automat", "workflow", "remind", "every week", "every day", "every month", "every friday"},
-	"saved":    {"save", "saved", "remember"},
-	"school":   {"student", "school", "fees", "parent", "pupil", "term", "clearance"},
-	"account":  {"language", "password", "login", "sign in", "subscription", "my plan"},
-}
-
-var hintWordRe = regexp.MustCompile(`[\p{L}]+`)
+var hintWordRe = regexp.MustCompile(`[\p{L}']+`)
 
 // topicByWords is the one topic a message's words point to, among those
-// the person can use: the most hints, and no tie.
+// the person can use (§8.3); see topicFromWords.
 func (s *Server) topicByWords(ctx context.Context, c *chat, text string) (chatTopic, bool) {
-	low := strings.ToLower(text)
-	words := hintWordRe.FindAllString(low, -1)
-	best, score, tie := chatTopic{}, 0, false
-	for _, t := range s.topicsFor(ctx, c) {
-		n := 0
-		for _, h := range topicHints[t.ID] {
-			if strings.Contains(h, " ") {
-				if strings.Contains(low, h) {
+	return topicFromWords(text, c.lang.Match(), s.topicsFor(ctx, c))
+}
+
+// topicFromWords is the one topic of topics a message's words point to:
+// the topics' words in each language's word lists (engine/lang/intents,
+// "topics"). Each language's best topic is scored by how many of its words
+// the message has; the language with the highest wins, the person's
+// language (first in tags) on a tie, so a weak match in it never beats a
+// stronger one in English; in that language the best topic, and no tie.
+// Words are matched as the chat's other words are, without case, accents
+// or tone marks: a short word (four letters or fewer) as a whole word, or
+// with an ending (s, es, ed, ing, er, ers; "obi" is not "obinrin"); a
+// longer one as the start of a word ("rider" finds "riders"); one with a
+// space anywhere in the message, from a word's start.
+func topicFromWords(text string, tags []lang.Tag, topics []chatTopic) (chatTopic, bool) {
+	folded := lang.Fold(text)
+	words := hintWordRe.FindAllString(folded, -1)
+	var pick chatTopic
+	top, unique := 0, false
+	for _, tag := range tags {
+		hints := lang.TopicWords(tag)
+		best, score, tie := chatTopic{}, 0, false
+		for _, t := range topics {
+			n := 0
+			for _, h := range hints[t.ID] {
+				if hintIn(h, folded, words) {
 					n++
 				}
-				continue
 			}
-			for _, w := range words {
-				if strings.HasPrefix(w, h) {
-					n++
-					break
-				}
+			switch {
+			case n > score:
+				best, score, tie = t, n, false
+			case n == score && n > 0:
+				tie = true
 			}
 		}
-		switch {
-		case n > score:
-			best, score, tie = t, n, false
-		case n == score && n > 0:
-			tie = true
+		if score > top {
+			pick, top, unique = best, score, !tie
 		}
 	}
-	return best, score > 0 && !tie
+	return pick, top > 0 && unique
+}
+
+// shortHintEndings are the endings a short topic word may take.
+var shortHintEndings = []string{"", "s", "es", "ed", "ing", "er", "ers"}
+
+// hintIn reports whether a topic's word (folded) is in a message (folded,
+// and as its words).
+func hintIn(h, folded string, words []string) bool {
+	if strings.Contains(h, " ") {
+		return strings.Contains(" "+folded+" ", " "+h)
+	}
+	short := utf8.RuneCountInString(h) <= 4
+	for _, w := range words {
+		rest, ok := strings.CutPrefix(w, h)
+		if ok && (!short || slices.Contains(shortHintEndings, rest)) {
+			return true
+		}
+	}
+	return false
 }
 
 // chatTopicNamed finds a topic by one of its words ("riders", "help stock").

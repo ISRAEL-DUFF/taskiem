@@ -142,6 +142,8 @@ func payEndWords(l lang.Tag, x payment) string {
 		return tr(l, "wa.pay.result.paid", "to", to, "amount", amount)
 	case "rejected":
 		return tr(l, "wa.pay.result.rejected", "to", to, "amount", amount)
+	case "reversed":
+		return tr(l, "wa.pay.result.reversed", "to", to, "amount", amount)
 	}
 	return tr(l, "wa.pay.result.failed", "to", to, "amount", amount, "reason", reason)
 }
@@ -239,6 +241,12 @@ func (s *Server) sendPayResultItem(ctx context.Context, it whatsapp.OutboxItem) 
 		title = payEndWords(l, one)
 		if base != "" {
 			link = base + "/payments/" + one.ID.String()
+		}
+		// A receipt to send them, when the payer asked for one (Settled 6).
+		if one.Status == "paid" && one.SendReceipt {
+			if u := s.receiptURL(it.Tenant, one.ID); u != "" {
+				body = tr(l, "wa.pay.result.receipt", "link", u)
+			}
 		}
 	}
 	// Outside WhatsApp's window the alert template carries the first line

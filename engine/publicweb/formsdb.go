@@ -231,11 +231,8 @@ func (d dbForms) Request(ctx context.Context, tokenHash []byte) (FormRequest, bo
 		r.Description = *x.Description
 	}
 	if v, err := expr.DecodeJSON(x.Schema); err == nil {
+		// Its device fields are asked on the page (formdevice.go).
 		r.Schema, _ = v.(map[string]any)
-		// The page does not ask a device yet (device fields D1): its
-		// device fields are not shown, and the answer has them
-		// unavailable (engine/forms).
-		r.Schema = wd.WithoutDeviceFields(r.Schema)
 	}
 	if r.Schema == nil {
 		r.Schema = map[string]any{}

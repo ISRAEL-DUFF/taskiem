@@ -25,6 +25,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/time/rate"
 
+	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/catalogue"
@@ -210,6 +211,9 @@ type Server struct {
 	// (the public host's inbox key, storefront.InboxKey of
 	// TASKIEM_PUBLIC_KEY); nil: the family inbox is not drained here.
 	SchoolInboxKey []byte
+	// SavedFiles makes the links to saved files the chat outbox sends; nil:
+	// SavedFileLinks on the store's pool and PublicURL (saved_file_links.go).
+	SavedFiles notify.FileLinks
 	// Forms are hosted forms' api side (S7); nil: forms cannot be deployed.
 	Forms *forms.Service
 	// Email is inbound email's api side (N10); MailDomain is where
@@ -470,6 +474,8 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/signup", s.signupOptions)
 		r.Get("/app/config", s.appConfig)                      // the phone app's config (app_config.go)
 		r.Get("/chat-links/{code}", s.getChatLinkCard)         // a business's card for its chat link (customer_links.go)
+		r.Get("/saved-files/{token}", s.openSavedFileLink)     // a saved file a message carried, by its link (saved_file_links.go)
+		r.Get("/pay-receipts/{token}/pdf", s.publicPayReceipt) // a payment's receipt sent to the person paid (payments_receipt.go)
 		s.peoplePublicRoutes(r)                                // a person's card at their link (people.go)
 		s.groupPublicRoutes(r)                                 // a group's preview at its link (people_groups.go)
 		r.Get("/transparency/lawful-requests", s.lawfulCounts) // the published count of lawful requests (lawful.go)
@@ -567,7 +573,6 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermSecretManage)).Get("/whatsapp/number/templates", s.getWhatsAppTemplates) // the own number's templates (whatsapp_templates.go)
 			r.With(s.need(PermSecretManage), s.tenantWide).Post("/whatsapp/number/templates/check", s.checkWhatsAppTemplates)
 			r.With(s.need(PermSecretManage), s.tenantWide).Post("/whatsapp/number/templates/{name}/submit", s.submitWhatsAppTemplate)
-			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/whatsapp/public-menu", s.putWhatsAppPublicMenu)
 			r.With(s.need(PermWorkflowRead)).Get("/reach", s.getReach)
 			// The business's chat link (customer_links.go, docs/spec/taskiem-for-everyone.md §8.2).
 			r.With(s.need(PermOrders)).Get("/customers/chat-link", s.getChatLink)
@@ -828,6 +833,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermRunStart)).Get("/scan/offers", s.scanOffers)
 			r.With(s.need(PermRunStart)).Post("/tools/{command}/read", s.readToolRoute)
 			r.With(s.need(PermRunStart)).Post("/tools/{command}/start", s.startToolRoute)
+			r.With(s.need(PermRunStart)).Post("/tools/{command}/files", s.holdToolFileRoute)
 			r.With(s.need(PermRunStart)).Post("/tools/{command}/confirm", s.confirmToolRoute)
 			r.With(s.need(PermRunStart)).Put("/tools/{command}/settings", s.setToolSettings)
 			r.With(s.need(PermRunStart)).Post("/tools/buttons/{button}", s.pressButtonRoute)
@@ -1120,7 +1126,7 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 		defer func() {
 			if v := recover(); v != nil {
 				ref := errorRef()
-				s.Logger.Error("panic in handler", "path", r.URL.Path, "panic", v, "reference", ref)
+				s.Logger.Error("panic in handler", "path", loggedPath(r.URL.Path), "panic", v, "reference", ref)
 				writeInternal(w, ref)
 			}
 		}()
@@ -1202,7 +1208,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "capability"})
 	default:
 		ref := errorRef()
-		s.Logger.Error("request failed", "path", r.URL.Path, "err", err, "reference", ref)
+		s.Logger.Error("request failed", "path", loggedPath(r.URL.Path), "err", err, "reference", ref)
 		writeInternal(w, ref)
 	}
 }

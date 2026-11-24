@@ -37,6 +37,7 @@ func (s *Server) invoiceRoutes(r chi.Router) {
 	r.With(read).Get("/invoices", s.listInvoices)
 	r.With(manage, s.tenantWide).Post("/invoices", s.createInvoice)
 	r.With(read).Get("/invoices/{id}", s.getCustomerInvoice)
+	r.With(read).Get("/invoices/{id}/pdf", s.getInvoicePDF)
 	r.With(manage, s.tenantWide).Put("/invoices/{id}", s.updateInvoice)
 	r.With(manage, s.tenantWide).Post("/invoices/{id}/send", s.sendInvoice)
 	r.With(manage, s.tenantWide).Post("/invoices/{id}/void", s.voidInvoice)
@@ -140,6 +141,54 @@ func (s *Server) getCustomerInvoice(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"invoice": x, "revealed": reveal})
 }
 
+// getInvoicePDF is an invoice as a PDF (build plan H6): its business, who
+// it is to with their address, its lines and what is due. The customer's
+// details are masked unless the caller holds pii.reveal and asks with
+// ?reveal=true, which is audited, as the invoice itself is.
+func (s *Server) getInvoicePDF(w http.ResponseWriter, r *http.Request) {
+	if !s.invoicesOn(w, r) {
+		return
+	}
+	p := principalFrom(r.Context())
+	reveal := r.URL.Query().Get("reveal") == "true"
+	if reveal && !p.Can(PermPIIReveal) {
+		writeErr(w, http.StatusForbidden, "requires "+PermPIIReveal)
+		return
+	}
+	var x invoicing.Invoice
+	var business string
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		if x, err = s.Invoices.Get(r.Context(), tx, p.TenantID, chi.URLParam(r, "id")); err != nil {
+			return invoiceErr(err)
+		}
+		if err := tx.QueryRow(r.Context(), `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&business); err != nil {
+			return err
+		}
+		if !reveal {
+			return nil
+		}
+		return auditTx(r, tx, "pii.reveal", "customer_invoice:"+x.Number, map[string]any{"as": "pdf"})
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !reveal {
+		maskInvoice(&x)
+	}
+	out, err := invoicing.PDF(business, x, time.Now())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", `inline; filename="`+x.Number+`.pdf"`)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Length", strconv.Itoa(len(out)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(out) //nolint:gosec // a PDF made here from the business's own record, sent as application/pdf with nosniff
+}
+
 // maskInvoice leaves enough to recognise the customer, as for orders.
 func maskInvoice(x *invoicing.Invoice) {
 	if r := []rune(x.Customer.Name); len(r) > 0 {
@@ -151,6 +200,20 @@ func maskInvoice(x *invoicing.Invoice) {
 	if at := strings.IndexByte(x.Customer.Email, '@'); at > 0 {
 		x.Customer.Email = x.Customer.Email[:1] + "•••" + x.Customer.Email[at:]
 	}
+	x.Customer.Address = maskPlace(x.Customer.Address)
+}
+
+// maskPlace leaves an address's last part (the area, the town) to
+// recognise it by: "4 Creek Road, Apapa" is "••• Apapa".
+func maskPlace(a string) string {
+	a = strings.TrimSpace(a)
+	if a == "" {
+		return ""
+	}
+	if i := strings.LastIndexAny(a, ",\n"); i >= 0 && strings.TrimSpace(a[i+1:]) != "" {
+		return "••• " + strings.TrimSpace(a[i+1:])
+	}
+	return "•••"
 }
 
 func (s *Server) createInvoice(w http.ResponseWriter, r *http.Request) {

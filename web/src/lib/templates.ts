@@ -3,7 +3,8 @@
 
 export interface TemplateParam {
   name: string;
-  type: "string" | "text" | "integer" | "number" | "boolean" | "time" | "weekday" | "connection";
+  /** command: a recipe's tool's word after "/" (made tools §13). */
+  type: "command" | "roles" | "string" | "text" | "integer" | "number" | "boolean" | "time" | "weekday" | "connection";
   title: string;
   description: string;
   required: boolean;
@@ -64,6 +65,52 @@ export interface Template {
   services?: string[][];
   /** For a template another workflow can use as a step (decision 0047): its interface. */
   callable?: CallableInterface;
+  /** For a recipe (made tools §13): the tool it makes, used from the chat. */
+  tool?: RecipeTool;
+}
+
+/** The tool a recipe makes, as the library shows it. */
+export interface RecipeTool {
+  name: string;
+  about: string;
+  for: "members" | "customers" | "linked";
+  icon?: string;
+  /** What it says back: text, card, list, or "" when it only says it ran. */
+  answer: "text" | "card" | "list" | "";
+  /** The word it is called by unless another is chosen. */
+  command: string;
+  /** How much it asks before it runs, worked out from its steps. */
+  care: "answers" | "yes" | "step_up";
+  /** The schedule installed beside it, whose button opens the tool. */
+  companion?: string;
+}
+
+/** What installing a recipe gave (POST /v1/templates/{id}/instantiate's tool). */
+export interface RecipeInstalled {
+  asked: string;
+  command: string;
+  changed: boolean;
+  companion?: { id: string; name: string };
+}
+
+/** A recipe's tool in plain words: who uses it, how much it asks, what it says back. */
+export function recipeWords(t: RecipeTool): string[] {
+  const out = [t.for === "customers" ? "Your customers use it" : "Your team uses it"];
+  out.push(t.care === "answers" ? "Answers at once: it only reads" : t.care === "step_up" ? "Asks yes and a passkey first" : "Asks yes first");
+  out.push(t.answer === "card" ? "Says back a card" : t.answer === "list" ? "Says back a list" : t.answer === "text" ? "Says back a sentence" : "Says it ran");
+  if (t.companion) out.push(`Comes with "${t.companion}", a schedule whose button opens it`);
+  return out;
+}
+
+/** A word typed for a tool, as the server writes it: "/Add Sale" is add-sale. */
+export function commandOf(typed: string): string {
+  return typed.trim().replace(/^\//, "").toLowerCase().split(/\s+/).filter(Boolean).join("-");
+}
+
+/** What installing a recipe says: its command, and the next free one when the one asked for was taken. */
+export function installedWords(r: RecipeInstalled): string {
+  const said = r.changed ? `/${r.asked} is taken, so it is called with /${r.command}.` : `It is called with /${r.command}.`;
+  return r.companion ? `${said} Its schedule, ${r.companion.name}, was saved as a draft too.` : said;
 }
 
 /** What a template step gives a callable template, and gets back. */
@@ -108,7 +155,7 @@ export const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday",
 export function initialValues(params: TemplateParam[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const p of params) {
-    out[p.name] = p.default === undefined || p.default === null ? "" : String(p.default);
+    out[p.name] = p.default === undefined || p.default === null ? "" : Array.isArray(p.default) ? p.default.join(", ") : String(p.default);
   }
   return out;
 }
@@ -151,6 +198,13 @@ export function toParams(params: TemplateParam[], values: Record<string, string>
       case "boolean":
         out[p.name] = raw === "true";
         break;
+      case "roles":
+        // Who may use a recipe's tool: role names, typed with commas.
+        out[p.name] = raw.split(",").map((r) => r.trim()).filter(Boolean);
+        break;
+      case "command":
+        out[p.name] = commandOf(raw);
+        break;
       default:
         out[p.name] = raw;
     }
@@ -171,5 +225,6 @@ export function byCategory(list: Template[]): [string, Template[]][] {
 
 /** A plain step line as the gallery shows it ("3a. Text the customer"). */
 export function lineLabel(l: TemplateLine): string {
+  if (l.number === "•") return `• ${l.text}`;
   return l.number ? `${l.number}. ${l.text}` : l.text;
 }

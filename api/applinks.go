@@ -83,7 +83,13 @@ func (a AppLinks) PasskeyOrigins() []string {
 // You's settings stay on the web. A payment (/payments/{id}, the link
 // the chat sends to confirm one) opens in the app. A person's link, /p/{code}
 // (people-chatting §5.2), opens the app as a business's chat link does.
-var appPaths = []string{"/chat", "/chat/*", "/m/*", "/p/*", "/you", "/you/chats/*", "/you/orders", "/you/orders/*", "/you/discover", "/you/discover/*", "/you/people/*", "/g/*", "/you/groups", "/you/groups/*", "/second-proof", "/invoices/*", "/trade-orders/*", "/storefront/orders/*", "/bills/*", "/purchases/*", "/approvals", "/approvals/*", "/payments", "/payments/*", "/payroll", "/payroll/*", "/reset-password"}
+// One of the business's pages (/pages/{name}, with its filters: the link a
+// Tell me message's page button answers with, pages H5) opens in the app.
+var appPaths = []string{"/chat", "/chat/*", "/m/*", "/p/*", "/you", "/you/chats/*", "/you/orders", "/you/orders/*", "/you/discover", "/you/discover/*", "/you/people/*", "/g/*", "/you/groups", "/you/groups/*", "/second-proof", "/invoices/*", "/trade-orders/*", "/storefront/orders/*", "/bills/*", "/purchases/*", "/approvals", "/approvals/*", "/payments", "/payments/*", "/payroll", "/payroll/*", "/pages/*", "/reset-password"}
+
+// appExcluded are under appPaths but stay on the web: a page's editor and
+// anything else past a page's name (/pages/{name}/edit).
+var appExcluded = []string{"/pages/*/*"}
 
 // assetLinks is Android's Digital Asset Links: the app handles these links
 // and shares these sign-ins (passkeys).
@@ -112,9 +118,14 @@ func (s *Server) appleSiteAssociation(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 		return
 	}
-	components := make([]map[string]string, 0, len(appPaths))
+	// The first component that matches decides: what the app must not
+	// take comes first.
+	components := make([]map[string]any, 0, len(appExcluded)+len(appPaths))
+	for _, p := range appExcluded {
+		components = append(components, map[string]any{"/": p, "exclude": true})
+	}
 	for _, p := range appPaths {
-		components = append(components, map[string]string{"/": p})
+		components = append(components, map[string]any{"/": p})
 	}
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	writeJSON(w, http.StatusOK, map[string]any{

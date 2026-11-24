@@ -21,6 +21,24 @@ const CategorySignerName = "name"
 // LocationKeys are the parts of a location answer that are sealed.
 var LocationKeys = []string{"lat", "lng", "address"}
 
+// LocationsOwnedBy gives each location path its owner, the person who
+// answered it: its coordinates (and the copies a run makes of them) are
+// sealed under that person's subject, so erasing them erases where they
+// were. A nil owner leaves the paths as they are.
+func LocationsOwnedBy(paths []Path, by *Owner) []Path {
+	if by == nil {
+		return paths
+	}
+	out := make([]Path, len(paths))
+	for i, p := range paths {
+		if p.Category == CategoryLocation {
+			p.By = by
+		}
+		out[i] = p
+	}
+	return out
+}
+
 // MaskLocation masks one sealed part of a location: a coordinate rounded
 // to three decimal places (about 110 m of latitude, less of longitude
 // away from the equator), anything else (an address typed) hidden.
@@ -75,7 +93,7 @@ func HideLocations(v any, taint Taint) any {
 
 func isLocation(m map[string]any, taint Taint) bool {
 	for _, k := range LocationKeys {
-		if key, ok := scalarKey(m[k]); ok && taint[key] == CategoryLocation {
+		if key, ok := scalarKey(m[k]); ok && taint.Category(key) == CategoryLocation {
 			return true
 		}
 	}

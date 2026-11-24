@@ -6,6 +6,77 @@ import (
 	"github.com/israel-duff/taskiem/engine/stock"
 )
 
+// g-uses-ask: a line into a stock item counted in another unit asks how
+// many of it one is; the same unit, a count of pieces or a product's own
+// uses ask nothing. lib/treat.test.ts and treat_line_test.dart hold the
+// same cases.
+func TestAskUses(t *testing.T) {
+	for _, c := range []struct {
+		line, stock string
+		uses        int64
+		ask         bool
+	}{
+		{"bag", "g", 1, true},
+		{"", "g", 1, true},
+		{"", "yards", 1, true},
+		{"", "bag", 1, false},
+		{"tin", "carton", 1, true},
+		{"bags", "kg", 0, true},
+		{"yard", "yards", 1, false},
+		{"Bags", "bag", 1, false},
+		{"bag", "", 1, false},
+		{"bag", "pcs", 1, false},
+		{"carton", "piece", 1, false},
+		{"bag", "g", 1000, false},
+	} {
+		if got := stock.AskUses(c.line, c.stock, c.uses); got != c.ask {
+			t.Errorf("%q into %q (uses %d): asks %v", c.line, c.stock, c.uses, got)
+		}
+	}
+}
+
+// H2 review fix 1: how many of the stock item one is, as answered: a
+// whole number, or a number in the stock unit or one converting to it;
+// never the leading digits of something else.
+func TestParseUses(t *testing.T) {
+	for _, c := range []struct {
+		text, stock string
+		want        int64
+		ok          bool
+	}{
+		{"50000", "g", 50000, true},
+		{"50,000", "g", 50000, true},
+		{" 1000. ", "g", 1000, true},
+		{"50 kg", "g", 50000, true},
+		{"50kg", "g", 50000, true},
+		{"50 kgs", "g", 50000, true},
+		{"50000g", "g", 50000, true},
+		{"50,000 grams", "g", 50000, true},
+		{"1.5 kg", "g", 1500, true},
+		{"1.5 l", "ml", 1500, true},
+		{"2 litres", "ml", 2000, true},
+		{"3 yards", "yard", 3, true},
+		{"24 bottles", "bottle", 24, true},
+		{"2 m", "cm", 200, true},
+		{"1500 g", "kg", 0, false}, // 1.5 kg: not whole
+		{"1.5", "g", 0, false},
+		{"2,5", "g", 0, false},
+		{"1 bag = 50,000g", "g", 0, false},
+		{"50 kg", "yard", 0, false},
+		{"50 kg", "ml", 0, false},
+		{"24 crates", "bottle", 0, false},
+		{"a lot", "g", 0, false},
+		{"0", "g", 0, false},
+		{"2000000", "g", 0, false},
+		{"", "g", 0, false},
+	} {
+		got, ok := stock.ParseUses(c.text, c.stock)
+		if got != c.want || ok != c.ok {
+			t.Errorf("%q in %s: %d %v, want %d %v", c.text, c.stock, got, ok, c.want, c.ok)
+		}
+	}
+}
+
 func TestParseAdd(t *testing.T) {
 	for _, c := range []struct {
 		in         string

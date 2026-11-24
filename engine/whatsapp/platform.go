@@ -204,6 +204,10 @@ type Message struct {
 	// message), with Text as its body; the other channels show its rows
 	// as buttons.
 	List *List
+	// Columns is how many buttons go to a row where a channel lays its
+	// buttons out in rows (Telegram: two for the topics menu, chat-menus
+	// §9); 0 or 1 is one to a row.
+	Columns int
 }
 
 // List is a list message: its button's words, and its rows in sections.

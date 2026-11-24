@@ -60,7 +60,11 @@ type Table struct {
 	// Types are the columns' Postgres types, where known (the schema API
 	// created them); a column without one reads as text.
 	Types map[string]string
-	rows  []map[string]any
+	// Now are the columns whose default is now() (the schema API made them
+	// so: created_at, updated_at): an insert that leaves one out is given
+	// the time, as Postgres gives it.
+	Now  []string
+	rows []map[string]any
 	// seq is the identity for a single-column key left out of an insert.
 	seq int64
 	// changes counts the committed changes (one per row).

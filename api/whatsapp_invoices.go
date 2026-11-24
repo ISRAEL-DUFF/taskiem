@@ -44,6 +44,9 @@ type chatInvoice struct {
 	// Saved: the customer came from a saved person (@acme), so saving them
 	// is not offered after.
 	Saved bool `json:"saved,omitempty"`
+	// Place is the customer's address from the saved person (sealed),
+	// printed on the invoice (build plan H6).
+	Place map[string]any `json:"place,omitempty"`
 }
 
 // linkedPick is a linked business an invoice's customer name could mean.
@@ -296,8 +299,18 @@ func (s *Server) waInvoiceSaved(ctx context.Context, c *chat, typed string, kobo
 	inv := &chatInvoice{AmountKobo: kobo, For: what, Saved: true}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		var err error
-		if inv.Name, err = s.Store.PII.SealTx(ctx, tx, c.tenant.ID, "name", sender.CleanName(x.Title)); err != nil || addr == "" {
+		if inv.Name, err = s.Store.PII.SealTx(ctx, tx, c.tenant.ID, "name", sender.CleanName(x.Title)); err != nil {
 			return err
+		}
+		// Where they are, from the saved person's (or business's) place:
+		// printed on the invoice.
+		if place := strings.TrimSpace(str("address")); place != "" {
+			if inv.Place, err = s.Store.PII.SealTx(ctx, tx, c.tenant.ID, "address", truncRunes(place, invoicing.MaxAddress)); err != nil {
+				return err
+			}
+		}
+		if addr == "" {
+			return nil
 		}
 		cat := "phone"
 		if isEmail {
@@ -408,6 +421,11 @@ func (s *Server) waInvoiceReply(ctx context.Context, c *chat, text, cmd string) 
 		if inv.Email {
 			cust = invoicing.Customer{Name: name, Email: addr}
 		}
+		if inv.Place != nil {
+			if cust.Address, err = s.openString(ctx, c, inv.Place); err != nil {
+				return err
+			}
+		}
 	}
 	svc := invoicing.Service{Invoices: s.Invoices}
 	actor := "user:" + c.p.UserID.String()
@@ -474,4 +492,12 @@ func (s *Server) smsCountries() []string {
 		return s.Invoices.Messages.Countries
 	}
 	return []string{"234"}
+}
+
+// truncRunes is s cut to n characters at most.
+func truncRunes(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
 }

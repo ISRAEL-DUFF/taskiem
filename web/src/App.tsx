@@ -95,6 +95,7 @@ import { StatementPage } from "./pages/Statement";
 import { StorefrontFront, StorefrontFronts } from "./pages/StorefrontFronts";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
+import { thingsOnly } from "./lib/things";
 import {
   InvoiceEdit,
   InvoiceMatch,
@@ -519,6 +520,14 @@ function SignedIn() {
       "Money",
       "money",
       invoiceAccess(can).see && areaOn(me.areas, "money"),
+    ],
+    // Things we have, for those who may see stock but not the money
+    // (what a business buys §5.3): Money shows them only this.
+    [
+      "/money/things",
+      "Things we have",
+      "tag",
+      thingsOnly(can) && areaOn(me.areas, "money"),
     ],
     // Paying people from the business's payments account (pages/Payments.tsx).
     ["/payments", "Pay people", "send", can("money.pay")],

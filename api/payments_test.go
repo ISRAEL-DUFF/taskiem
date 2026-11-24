@@ -139,35 +139,55 @@ func TestPayOnePerson(t *testing.T) {
 	if _, err := ops.Check(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), bad); err == nil {
 		t.Errorf("another amount passed the check")
 	}
+	// The route and the wallet are the payment's own too (H7): a bank
+	// payment is never sent to a wallet.
+	bad = good
+	bad.Route, bad.WalletID = "wallet", "w_someone"
+	if _, err := ops.Check(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), bad); err == nil {
+		t.Errorf("a wallet route passed the check of a bank payment")
+	}
+	bad = good
+	bad.WalletID = "w_someone"
+	if _, err := ops.Check(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), bad); err == nil {
+		t.Errorf("a wallet passed the check of a bank payment")
+	}
 	if out, err := ops.Check(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), good); err != nil || out["status"] != "sending" {
 		t.Fatalf("the payment's own run: %v %v", out, err)
 	}
 	// Only the payment's own run records how it ended.
-	if _, err := ops.Finish(ctx, biz, other, uuid.MustParse(id), "failed", "", "", "", nil); err == nil {
+	if _, err := ops.Finish(ctx, biz, other, uuid.MustParse(id), "failed", "", "", "", nil, ""); err == nil {
 		t.Errorf("another run recorded the payment's outcome")
 	}
 	// The workflow records how it ended.
-	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), "paid", "BAYO RICE MILLS", "trf_1", "", nil); err != nil {
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), "paid", "BAYO RICE MILLS", "trf_1", "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if p := owner.must(200, "GET", "/v1/payments/"+id, nil)["payment"].(map[string]any); p["status"] != "paid" || p["account_name"] != "BAYO RICE MILLS" {
 		t.Fatalf("paid: %v", p)
 	}
 
-	// Two confirms at once: one sends it, the other is told it was sent.
+	// Two confirms at once: one sends it, the other is told it was sent
+	// (or, when its passkey response came second, refused).
 	twice := owner.must(201, "POST", "/v1/payments", map[string]any{"payee": "bayo", "amount_kobo": 120000, "purpose": "bill"})["payment"].(map[string]any)["id"].(string)
 	proofs := []any{stepUp(t, owner, key, "money.pay", "payment:"+twice), stepUp(t, owner, key, "money.pay", "payment:"+twice)}
 	codes := make(chan int, 2)
 	for _, pf := range proofs {
 		go func() {
-			code, _ := owner.do("POST", "/v1/payments/"+twice+"/confirm", map[string]any{"passkey": pf})
+			code, body := owner.do("POST", "/v1/payments/"+twice+"/confirm", map[string]any{"passkey": pf})
+			if code == 403 && body["step_up"] == "passkey" {
+				// Both passed the first check and the later of the one
+				// key's two responses was verified first: the earlier
+				// one's counter no longer advances, refused as a copied
+				// key would be. Either way only one sends it.
+				code = 409
+			}
 			codes <- code
 		}()
 	}
 	if a, b := <-codes, <-codes; a+b != 202+409 {
 		t.Fatalf("two confirms at once: %d %d", a, b)
 	}
-	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(twice), uuid.MustParse(twice), "paid", "BAYO RICE MILLS", "trf_2", "", nil); err != nil {
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(twice), uuid.MustParse(twice), "paid", "BAYO RICE MILLS", "trf_2", "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 

@@ -1,4 +1,5 @@
 import { AreaPageTabs } from "./AreaPageTabs";
+import { thingsOnly } from "../lib/things";
 import { useId, useMemo, useState } from "react";
 import { ReceiveMoneyCard } from "./ReceiveMoney";
 import { SavedFill } from "./SavedFill";
@@ -104,6 +105,13 @@ const QUICK_PERIODS = PERIOD_CHOICES.filter((c) => c.value === "today" || c.valu
  * have for those who may see stock; Labels for those who manage money. */
 export function MoneyTabs() {
   const { can } = useAuth();
+  // Someone who may see stock but not the money: Things we have only.
+  if (thingsOnly(can))
+    return (
+      <nav className="tabs" aria-label="Money">
+        <NavLink to="/money/things">Things we have</NavLink>
+      </nav>
+    );
   return (
     <nav className="tabs" aria-label="Money">
       <NavLink to="/money" end>
@@ -169,6 +177,8 @@ export function MoneyOverview() {
   const fromId = useId();
   const toId = useId();
   if (oldLeaks !== null) return <Navigate to={`/money/leaks?${new URLSearchParams({ status: oldLeaks })}`} replace />;
+  // Money is only Things we have for those who may see stock, not money.
+  if (thingsOnly(can)) return <Navigate to="/money/things" replace />;
   const choose = (v: PeriodChoice) => {
     if (v === "today") setParams({}, { replace: true });
     else if (v === "custom") setParams({ period: v, from: custom.from || p.from, to: custom.to || p.to }, { replace: true });

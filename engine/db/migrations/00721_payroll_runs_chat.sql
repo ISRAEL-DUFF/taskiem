@@ -19,7 +19,7 @@
 -- conversation, its text the run's id and period (JSON), drawn live.
 -- +goose Up
 ALTER TABLE chat_history DROP CONSTRAINT chat_history_kind_check;
-ALTER TABLE chat_history ADD CONSTRAINT chat_history_kind_check CHECK (kind IN ('text', 'button', 'voice', 'photo', 'form', 'location', 'diary', 'chart', 'menu', 'payroll_run'));
+ALTER TABLE chat_history ADD CONSTRAINT chat_history_kind_check CHECK (kind IN ('text', 'button', 'voice', 'photo', 'form', 'location', 'diary', 'chart', 'menu', 'receipt', 'paid_you', 'payroll_run'));
 CREATE TABLE payroll_code_waits (
   tenant_id    uuid NOT NULL REFERENCES tenants(id),
   user_id      uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -41,7 +41,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON payroll_code_waits TO taskiem_app;
 
 ALTER TABLE whatsapp_outbox DROP CONSTRAINT whatsapp_outbox_kind_check;
 ALTER TABLE whatsapp_outbox ADD CONSTRAINT whatsapp_outbox_kind_check CHECK (kind IN ('approval', 'run_outcome', 'alert', 'notice', 'message', 'invoice', 'match',
-  'money_daily', 'school_approval', 'school_family', 'rider', 'sales_evening', 'supplier', 'balance', 'payment', 'payment_batch', 'payroll_run'));
+  'money_daily', 'school_approval', 'school_family', 'rider', 'sales_evening', 'supplier', 'balance', 'payment', 'payment_batch', 'payee_paid', 'payroll_run'));
 ALTER TABLE whatsapp_outbox ADD CONSTRAINT whatsapp_outbox_payroll_check CHECK (kind <> 'payroll_run' OR (user_id IS NOT NULL AND reach_reference IS NOT NULL));
 
 -- +goose Down
@@ -49,8 +49,8 @@ DELETE FROM whatsapp_outbox WHERE kind = 'payroll_run';
 ALTER TABLE whatsapp_outbox DROP CONSTRAINT whatsapp_outbox_payroll_check;
 ALTER TABLE whatsapp_outbox DROP CONSTRAINT whatsapp_outbox_kind_check;
 ALTER TABLE whatsapp_outbox ADD CONSTRAINT whatsapp_outbox_kind_check CHECK (kind IN ('approval', 'run_outcome', 'alert', 'notice', 'message', 'invoice', 'match',
-  'money_daily', 'school_approval', 'school_family', 'rider', 'sales_evening', 'supplier', 'balance', 'payment', 'payment_batch'));
+  'money_daily', 'school_approval', 'school_family', 'rider', 'sales_evening', 'supplier', 'balance', 'payment', 'payment_batch', 'payee_paid'));
 DROP TABLE payroll_code_waits;
 DELETE FROM chat_history WHERE kind = 'payroll_run';
 ALTER TABLE chat_history DROP CONSTRAINT chat_history_kind_check;
-ALTER TABLE chat_history ADD CONSTRAINT chat_history_kind_check CHECK (kind IN ('text', 'button', 'voice', 'photo', 'form', 'location', 'diary', 'chart', 'menu'));
+ALTER TABLE chat_history ADD CONSTRAINT chat_history_kind_check CHECK (kind IN ('text', 'button', 'voice', 'photo', 'form', 'location', 'diary', 'chart', 'menu', 'receipt', 'paid_you'));

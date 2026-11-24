@@ -52,8 +52,9 @@ Tests run the real orchestrator (`engine/decide`) over an in-memory history on a
 | `expect.outputs` | Instance id to expected output |
 | `expect.inputs` | Instance id to what the task sent (its resolved input; for `http` steps `{method, url, headers, query, body}`). Secret references stay as written: tests never see secret values |
 | `expect.calls` | Number of attempts sent, by instance id, or by step id across all its instances |
+| `expect.answer` | The answer the workflow's [tool](wd-v1.md#tools) gives, drawn from the run's outputs as the chat draws it (a customers' tool's from its `public` outputs alone): `{"text": "Logged 4500"}` for a text answer; `{"title", "ref", "state": {"text"}, "lines": [{"label", "value"}], "buttons": [{"label", "tool", "inputs"}]}` for a card; `{"title", "rows": [{"title", "sub"}]}` for a list. Matched as `outputs` are. The run must complete and the workflow declare a tool with an answer, so a tool is tested before it is published and a test fails when its answer changes (made tools §17; build plan H6) |
 
-Objects in `outputs` and `inputs` match when every expected key matches (extra keys are fine); lists and scalars must match exactly.
+Objects in `outputs`, `inputs` and `answer` match when every expected key matches (extra keys are fine); lists and scalars must match exactly.
 
 ## Errors
 

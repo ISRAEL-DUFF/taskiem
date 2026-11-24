@@ -43,6 +43,9 @@ type ChatAsk struct {
 	// (whatsapp, telegram, slack, web; else the app).
 	Starter bool
 	Channel string
+	// Asking is the business the request is in: Tenant, or for a link's
+	// person the other business.
+	Asking uuid.UUID
 }
 
 // AlertFormLink is the alert the person working a business link gets for
@@ -122,21 +125,28 @@ func (s *Service) sendToLink(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p
 	if _, err := tx.Exec(ctx, `UPDATE form_requests SET sent_at = now() WHERE id = $1`, p.id); err != nil {
 		return nil, err
 	}
-	return &ChatAsk{Tenant: other, Users: []uuid.UUID{user}, From: p.business, Request: p.id, Title: p.title, Schema: schemaRaw, Through: true}, nil
+	return &ChatAsk{Tenant: other, Users: []uuid.UUID{user}, From: p.business, Request: p.id, Title: p.title, Schema: schemaRaw, Through: true, Asking: tenant}, nil
 }
 
 // ChatKinds are the device fields a question has that a chat answers with
-// its own messages (a location, a photo), in the schema's order.
+// its own messages (a location, a photo), or with a code typed (a scan
+// that may be typed, build-plan-gaps H3), in the schema's order.
 func ChatKinds(schema map[string]any) []string {
 	props, _ := schema["properties"].(map[string]any)
 	var out []string
 	for _, name := range wd.SchemaOrder(schema) {
 		p, _ := props[name].(map[string]any)
-		if k := wd.DeviceKind(p); k == wd.DeviceLocation || k == wd.DevicePhoto {
+		if k := wd.DeviceKind(p); chatTakes(k, p) {
 			out = append(out, k)
 		}
 	}
 	return out
+}
+
+// chatTakes reports whether a chat answers a device field: a location or a
+// photo by its own message, a scan by the code typed where it may be.
+func chatTakes(kind string, p map[string]any) bool {
+	return kind == wd.DeviceLocation || kind == wd.DevicePhoto || (kind == wd.DeviceScan && p["allow_typed"] != false)
 }
 
 // ChatAnswerable reports whether a chat can answer a question whole: every
@@ -173,8 +183,8 @@ func FieldOf(schema map[string]any, kind string) string {
 }
 
 // ChatWhole reports whether what a chat has sent (fields named in have)
-// answers the question: every required location and photo, or, when none
-// is required, every location and photo it asks.
+// answers the question: every required location, photo and code that a
+// chat can give, or, when none is required, every one it asks.
 func ChatWhole(schema map[string]any, have map[string]bool) bool {
 	props, _ := schema["properties"].(map[string]any)
 	req, _ := schema["required"].([]any)
@@ -182,7 +192,7 @@ func ChatWhole(schema map[string]any, have map[string]bool) bool {
 	for _, r := range req {
 		name, _ := r.(string)
 		p, _ := props[name].(map[string]any)
-		if k := wd.DeviceKind(p); k == wd.DeviceLocation || k == wd.DevicePhoto {
+		if k := wd.DeviceKind(p); chatTakes(k, p) {
 			needed++
 			if !have[name] {
 				return false
@@ -194,7 +204,7 @@ func ChatWhole(schema map[string]any, have map[string]bool) bool {
 	}
 	for _, name := range wd.SchemaOrder(schema) {
 		p, _ := props[name].(map[string]any)
-		if k := wd.DeviceKind(p); (k == wd.DeviceLocation || k == wd.DevicePhoto) && !have[name] {
+		if k := wd.DeviceKind(p); chatTakes(k, p) && !have[name] {
 			return false
 		}
 	}

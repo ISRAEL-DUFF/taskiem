@@ -101,7 +101,7 @@ A person whose number is linked can send `tables` for the list, `add to <table>`
 
 ## Personal data
 
-Columns of type `phone` and `email`, and any column flagged `personal`, are personal data. The table page and the rows API return them as they are to people with `table.read` (the page is the record), and the connector declares rows as personal data, so they are masked in run outputs, in chat and in logs; they never appear in audit details, and the AI builder sees names and types, never rows. Keep the `table.read` permission to the people who should see the records.
+Columns of type `phone` and `email`, and any column flagged `personal`, are personal data. The table page and the rows API return them as they are to people with `table.read` (the page is the record). A workflow run seals a table's personal columns, and only those, by the table's definition when the row is read or written: they are masked in run outputs, tool answers, chat and logs, while its other columns show as they are ([privacy: data tables in a run](privacy.md#data-tables-in-a-run); a [kept table](#kept-tables)'s rows are still sealed whole). Personal values never appear in audit details, and the AI builder sees names and types, never rows. Keep the `table.read` permission to the people who should see the records, and remember that whoever may open a run (`run.read`) sees the ordinary columns its steps read.
 
 ## Limits
 

@@ -332,6 +332,7 @@ addSaved
 changeSaved
 removeSaved
 revealSaved
+listSavedRuns
 savedStepUpOptions
 checkAllSaved
 savedProvider
@@ -365,6 +366,12 @@ createPayment
 getPayment
 confirmPayment
 cancelPayment
+# Paying one person, finished (H7): the balance and Add money, the
+# receipt, Try again
+getPayBalance
+getPaymentReceipt
+sharePaymentReceipt
+payAgain
 getPayLimits
 putPayLimit
 # Where a staff member is paid, outside payroll (Pay on their page)
@@ -409,8 +416,12 @@ listTools
 readTool
 startTool
 confirmTool
+holdToolFile
 getRunAnswer
 setToolSettings
+# Recipes: templates that make a tool, installed from the app (build plan M6)
+listTemplates
+instantiateTemplate
 # A code scanned from the home screen (device fields D2)
 scanOffers
 
@@ -429,6 +440,11 @@ viewPage
 getPageBlock
 actOnPage
 refreshPage
+# Starters (pages G5): a page with its tables and tools, made from the app
+listPageStarters
+installPageStarter
+# A yes/no cell ticked in place on a page's table part (pages H5, g-pages-tick)
+updateTableRow
 # What a business buys U2a: the question on each line and its memory,
 # labels in Money settings (docs/spec/what-a-business-buys.md §6)
 setPurchaseLine
