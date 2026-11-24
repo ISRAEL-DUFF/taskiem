@@ -44,5 +44,38 @@
       "camera": "medium close-up, locked-off"
     }
   ],
-  "narration": {}
+  "narration": {
+    "food-find-a-supplier": {
+      "en": [
+        "Ada needs rice. She opens Find a business.",
+        "She searches for rice.",
+        "Bayo Rice Mills is listed. She taps Connect.",
+        "The request goes to Bayo."
+      ],
+      "pcm": [
+        "Ada need rice. She open Find a business.",
+        "She search for rice.",
+        "Bayo Rice Mills dey the list. She tap Connect.",
+        "The request go to Bayo."
+      ]
+    },
+    "food-reorder": {
+      "en": [
+        "The rice is running low, and Taskiem says so.",
+        "Reorder twenty.",
+        "Bayo's price list opens, with the order filled in.",
+        "She taps Review order.",
+        "Twenty bags: six hundred and fifty thousand naira. Place order.",
+        "The order is sent."
+      ],
+      "pcm": [
+        "The rice dey finish, and Taskiem talk am.",
+        "Reorder twenty.",
+        "Bayo price list open, with the order don fill.",
+        "She tap Review order.",
+        "Twenty bags: six hundred and fifty thousand naira. Place order.",
+        "The order don go."
+      ]
+    }
+  }
 }

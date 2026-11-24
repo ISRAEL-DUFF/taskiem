@@ -44,5 +44,50 @@
       "camera": "medium shot, slow push-in"
     }
   ],
-  "narration": {}
+  "narration": {
+    "food-send-invoice": {
+      "en": [
+        "The office lunch is eaten.",
+        "Ada opens the tools.",
+        "She taps Invoices.",
+        "Then New invoice.",
+        "Who it is for, and a phone number.",
+        "What it is for, and how much: thirty-seven thousand, five hundred.",
+        "Send it: Chinedu gets a pay link by text.",
+        "The invoice shows as Sent."
+      ],
+      "pcm": [
+        "The office don chop lunch.",
+        "Ada open the tools.",
+        "She tap Invoices.",
+        "Then New invoice.",
+        "Who e be for, and phone number.",
+        "Wetin e be for, and how much: thirty-seven thousand, five hundred.",
+        "Send am: Chinedu go get pay link for text.",
+        "The invoice show as Sent."
+      ]
+    },
+    "food-match-payment": {
+      "en": [
+        "A transfer arrives.",
+        "Ada opens the tools, then Money.",
+        "She taps To match.",
+        "The payment: thirty-seven thousand, five hundred.",
+        "Match to an invoice.",
+        "She picks Chinedu's invoice.",
+        "Match it, and it counts towards the invoice.",
+        "Back in Invoices, it shows as Paid."
+      ],
+      "pcm": [
+        "Transfer enter.",
+        "Ada open the tools, then Money.",
+        "She tap To match.",
+        "The payment: thirty-seven thousand, five hundred.",
+        "Match to an invoice.",
+        "She pick Chinedu invoice.",
+        "Match am, and e go count for the invoice.",
+        "Back for Invoices, e show as Paid."
+      ]
+    }
+  }
 }

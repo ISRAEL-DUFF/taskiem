@@ -40,5 +40,54 @@
       "camera": "medium shot, a gentle pan to the pot"
     }
   ],
-  "narration": {}
+  "narration": {
+    "food-open-your-shop": {
+      "en": [
+        "Meet Ada. She runs Ada's Kitchen in Yaba. She signs up with her WhatsApp number, and Taskiem sends a code.",
+        "",
+        "She types the code.",
+        "Taskiem asks her to agree to the terms.",
+        "A business, not workflows.",
+        "What is the business called? Ada's Kitchen.",
+        "Then her own name.",
+        "What does she sell? Food, number one.",
+        "How do customers pay? Cash and transfer.",
+        "Done: Ada's Kitchen is on Taskiem."
+      ],
+      "pcm": [
+        "Meet Ada. She dey run Ada's Kitchen for Yaba. She dey sign up with her WhatsApp number, and Taskiem go send code.",
+        "",
+        "She dey type the code.",
+        "Taskiem go ask make she agree to the terms.",
+        "Na business, no be workflows.",
+        "Wetin be the business name? Ada's Kitchen.",
+        "Then her own name.",
+        "Wetin she dey sell? Food, number one.",
+        "How customers dey pay? Cash and transfer.",
+        "E don do: Ada's Kitchen don dey Taskiem."
+      ]
+    },
+    "food-be-found": {
+      "en": [
+        "Ada wants buyers to find her.",
+        "She turns on Be found in Explore.",
+        "She types her area: Yaba, Lagos.",
+        "She picks Food and drinks.",
+        "Then Save.",
+        "Her card shows her line and area.",
+        "A buyer taps Find a business.",
+        "Ada's Kitchen is listed, as Food and drinks."
+      ],
+      "pcm": [
+        "Ada want make buyers find her.",
+        "She turn on Be found for Explore.",
+        "She type her area: Yaba, Lagos.",
+        "She pick Food and drinks.",
+        "Then Save.",
+        "Her card show her line and area.",
+        "Buyer go tap Find a business.",
+        "Ada's Kitchen dey the list, as Food and drinks."
+      ]
+    }
+  }
 }

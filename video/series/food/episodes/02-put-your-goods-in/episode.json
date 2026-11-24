@@ -43,5 +43,30 @@
       "camera": "over-the-shoulder two-shot"
     }
   ],
-  "narration": {}
+  "narration": {
+    "food-put-goods-in": {
+      "en": [
+        "Ada puts her party pack on the menu.",
+        "She opens Products, then Add product.",
+        "A photo of the jollof.",
+        "She types the name, the category, and the price.",
+        "Add product. The party pack is in.",
+        "To sell it in sizes, she opens it.",
+        "Sizes: five plates, ten plates, twenty plates.",
+        "She fills in the counts, then changes one.",
+        "Save. Three sizes, on sale."
+      ],
+      "pcm": [
+        "Ada dey put her party pack for the menu.",
+        "She open Products, then Add product.",
+        "Photo of the jollof.",
+        "She type the name, the category, and the price.",
+        "Add product. The party pack don enter.",
+        "To sell am for sizes, she open am.",
+        "Sizes: five plates, ten plates, twenty plates.",
+        "She fill the counts, then change one.",
+        "Save. Three sizes, ready to sell."
+      ]
+    }
+  }
 }

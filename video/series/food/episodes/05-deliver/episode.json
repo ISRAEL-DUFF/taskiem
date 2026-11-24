@@ -43,5 +43,28 @@
       "camera": "medium close-up, slight handheld feel"
     }
   ],
-  "narration": {}
+  "narration": {
+    "food-deliver": {
+      "en": [
+        "Chioma's order needs a rider.",
+        "She taps Assign rider.",
+        "Emeka is free, and covers Yaba.",
+        "Later, the Orders tab lists the order.",
+        "Emeka is offered it.",
+        "Emeka accepts.",
+        "He picks it up. On the way.",
+        "Delivered, paid in cash at the door."
+      ],
+      "pcm": [
+        "Chioma order need rider.",
+        "She tap Assign rider.",
+        "Emeka free, and e dey cover Yaba.",
+        "Later, the Orders tab go list the order.",
+        "Dem offer Emeka the delivery.",
+        "Emeka accept.",
+        "E pick am up. E dey road.",
+        "E don deliver, dem pay cash for door."
+      ]
+    }
+  }
 }

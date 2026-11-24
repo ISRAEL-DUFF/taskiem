@@ -44,5 +44,52 @@
       "camera": "medium close-up, eye-level"
     }
   ],
-  "narration": {}
+  "narration": {
+    "food-add-staff": {
+      "en": [
+        "Ada adds Tunde to the team.",
+        "She taps Add staff.",
+        "She types his name and phone number.",
+        "Tunde will be a cashier.",
+        "She sends the invitation, and Taskiem messages Tunde.",
+        "Tunde waits until he says yes.",
+        "Then Tunde is on the Team page."
+      ],
+      "pcm": [
+        "Ada dey add Tunde to the team.",
+        "She tap Add staff.",
+        "She type im name and phone number.",
+        "Tunde go be cashier.",
+        "She send the invitation, Taskiem go message Tunde.",
+        "Tunde go wait till e talk yes.",
+        "Then Tunde dey the Team page."
+      ]
+    },
+    "food-tasks-and-handover": {
+      "en": [
+        "Ada gives Tunde a task.",
+        "She writes it: restock the drinks fridge by two.",
+        "She chooses Tunde.",
+        "Tunde hears it in his chat.",
+        "The task shows under Everyone's.",
+        "On Tunde's phone, he taps Done when he finishes.",
+        "At closing, Tunde hands over. Taskiem adds up the shift.",
+        "",
+        "He counts the cash.",
+        "Taskiem says it is five hundred short."
+      ],
+      "pcm": [
+        "Ada give Tunde task.",
+        "She write am: restock the drinks fridge by two.",
+        "She choose Tunde.",
+        "Tunde go hear am for im chat.",
+        "The task show under Everyone's.",
+        "For Tunde phone, e go tap Done when e finish.",
+        "For closing, Tunde go hand over. Taskiem go add up the shift.",
+        "",
+        "E count the cash.",
+        "Taskiem talk say e short by five hundred."
+      ]
+    }
+  }
 }

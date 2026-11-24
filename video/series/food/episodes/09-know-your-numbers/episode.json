@@ -43,5 +43,24 @@
       "camera": "close-up, eye-level"
     }
   ],
-  "narration": {}
+  "narration": {
+    "food-know-your-numbers": {
+      "en": [
+        "At eight, Ada opens Taskiem.",
+        "Yesterday's sales: up twelve percent.",
+        "Owed, low stock, and deliveries today.",
+        "She taps Got it.",
+        "Later, she types briefing, and the card comes back.",
+        "And Today shows the day so far."
+      ],
+      "pcm": [
+        "For eight, Ada open Taskiem.",
+        "Yesterday sales: up twelve percent.",
+        "Wetin dem owe her, wetin dey finish, and deliveries today.",
+        "She tap Got it.",
+        "Later, she type briefing, and the card come back.",
+        "And Today show the day so far."
+      ]
+    }
+  }
 }

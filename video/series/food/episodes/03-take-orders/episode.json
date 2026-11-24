@@ -44,5 +44,44 @@
       "camera": "medium shot, eye-level"
     }
   ],
-  "narration": {}
+  "narration": {
+    "food-sell-at-counter": {
+      "en": [
+        "A customer orders lunch. Tunde takes it.",
+        "Tunde opens Sell.",
+        "Two jollof rice.",
+        "One zobo.",
+        "The total is eight thousand, five hundred.",
+        "Paid by transfer.",
+        "He records the sale."
+      ],
+      "pcm": [
+        "Customer order lunch. Tunde take am.",
+        "Tunde open Sell.",
+        "Two jollof rice.",
+        "One zobo.",
+        "The total na eight thousand, five hundred.",
+        "Dem pay by transfer.",
+        "He record the sale."
+      ]
+    },
+    "food-customer-order": {
+      "en": [
+        "Chioma messages on WhatsApp, and Taskiem reads it into an order.",
+        "Two jollof rice and a zobo.",
+        "Ada adds the delivery fee.",
+        "She saves it.",
+        "Then Confirm.",
+        "The order is confirmed."
+      ],
+      "pcm": [
+        "Chioma message for WhatsApp, and Taskiem read am into order.",
+        "Two jollof rice and zobo.",
+        "Ada add the delivery fee.",
+        "She save am.",
+        "Then Confirm.",
+        "The order don confirm."
+      ]
+    }
+  }
 }

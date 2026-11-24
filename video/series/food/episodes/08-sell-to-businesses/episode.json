@@ -44,5 +44,32 @@
       "camera": "close-up, eye-level"
     }
   ],
-  "narration": {}
+  "narration": {
+    "food-a-deal": {
+      "en": [
+        "Rivers Foods makes an offer.",
+        "Tunde taps Counter.",
+        "He counters: eight hundred and forty thousand.",
+        "He sends it.",
+        "Rivers counters, under Ada's lowest price.",
+        "Tunde taps Accept.",
+        "It waits for Ada's OK.",
+        "Ada sees it in Taskiem.",
+        "She taps Agree.",
+        "Agreed at eight hundred and twenty thousand."
+      ],
+      "pcm": [
+        "Rivers Foods make offer.",
+        "Tunde tap Counter.",
+        "E counter: eight hundred and forty thousand.",
+        "E send am.",
+        "Rivers counter, under Ada lowest price.",
+        "Tunde tap Accept.",
+        "E dey wait for Ada OK.",
+        "Ada see am for Taskiem.",
+        "She tap Agree.",
+        "Dem agree for eight hundred and twenty thousand."
+      ]
+    }
+  }
 }

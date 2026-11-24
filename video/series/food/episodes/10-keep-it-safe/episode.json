@@ -45,5 +45,46 @@
       "camera": "wide-to-medium slow pull-back"
     }
   ],
-  "narration": {}
+  "narration": {
+    "food-approve-a-payment": {
+      "en": [
+        "Tunde asks to pay Bayo.",
+        "She sees who asks, and how much.",
+        "She taps Approve.",
+        "First payment to this account: check the details.",
+        "She adds a comment. It is recorded.",
+        "Approve, and the card clears."
+      ],
+      "pcm": [
+        "Tunde ask to pay Bayo.",
+        "She see who ask, and how much.",
+        "She tap Approve.",
+        "Na first payment to this account: check the details.",
+        "She add comment. E go dey record.",
+        "Approve, and the card go clear."
+      ]
+    },
+    "food-app-lock": {
+      "en": [
+        "Ada turns on the app lock.",
+        "In Settings, she taps App lock.",
+        "The phone checks her fingerprint.",
+        "App lock is on.",
+        "She chooses when it asks: at once, or after a while.",
+        "Later, Taskiem is locked until she proves it is her.",
+        "",
+        "Fingerprint matched."
+      ],
+      "pcm": [
+        "Ada turn on the app lock.",
+        "For Settings, she tap App lock.",
+        "The phone dey check her fingerprint.",
+        "App lock don on.",
+        "She fit choose when e go ask: at once, or after small time.",
+        "Later, Taskiem go lock until she prove say na her.",
+        "",
+        "Fingerprint match."
+      ]
+    }
+  }
 }
