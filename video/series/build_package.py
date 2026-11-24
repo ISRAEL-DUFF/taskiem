@@ -367,8 +367,11 @@ def main():
         z = Path(args.out) / f"series-{args.series}.zip"
         with zipfile.ZipFile(z, "w", zipfile.ZIP_STORED) as zf:
             for p in sorted(out.rglob("*")):
-                if p.is_file() and "_work" not in p.parts and p.name != "_preview-silent.mp4" and "parts" not in p.parts:
-                    zf.write(p, p.relative_to(out.parent))
+                if not p.is_file() or "_work" in p.parts or p.name == "_preview-silent.mp4" or p.name.endswith(".txt") and "parts" in p.parts:
+                    continue
+                if "parts" in p.parts and (p.name.endswith("-preview-9x16.mp4") or any(x.endswith(".frames") for x in p.parts)):
+                    continue
+                zf.write(p, p.relative_to(out.parent))
         print(z)
 
 
