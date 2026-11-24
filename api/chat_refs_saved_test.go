@@ -2,10 +2,15 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -57,7 +62,8 @@ func TestSearchFindsSavedAndServices(t *testing.T) {
 		return strings.Join(n, ",")
 	}
 	got := search(owner, "mum", "saved")
-	if names(got) != "mum/mine,mum-shop/business" {
+	// Newest first, the person's own and the business's merged by date.
+	if names(got) != "mum-shop/business,mum/mine" {
 		t.Fatalf("mum: %s", names(got))
 	}
 	// Names and kinds only: nothing a saved thing holds or is titled.
@@ -67,7 +73,7 @@ func TestSearchFindsSavedAndServices(t *testing.T) {
 			t.Fatalf("%q in %s", secret, raw)
 		}
 	}
-	if got[0]["saved_kind"] != "bank_account" || got[1]["saved_kind"] != "place" {
+	if got[1]["saved_kind"] != "bank_account" || got[0]["saved_kind"] != "place" {
 		t.Fatalf("kinds: %s", raw)
 	}
 	// By its kind's words.
@@ -123,7 +129,78 @@ func TestSearchFindsSavedAndServices(t *testing.T) {
 		t.Fatalf("a page: %v", page)
 	}
 	next := owner.must(200, "GET", "/v1/chat-refs?q=mum&kind=saved&limit=1&cursor=saved:1", nil)
-	if refs := next["refs"].([]any); len(refs) != 1 || refs[0].(map[string]any)["name"] != "mum-shop" || next["cursor"] != "" {
+	if refs := next["refs"].([]any); len(refs) != 1 || refs[0].(map[string]any)["name"] != "mum" || next["cursor"] != "" {
 		t.Fatalf("the next page: %v", next)
+	}
+}
+
+// A search for saved things holds one pooled connection at a time (review
+// of H4): the person's own are read before the business's transaction
+// opens, so with a pool of one it still answers rather than waiting on
+// itself. Words are matched in the database: a % or an _ typed is itself,
+// and "Show more" goes on past what one page read, every match, none twice.
+func TestSearchSavedOneConnectionAtATime(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	owner := w.tenant(t, "Ada's Salon", "ada@ada.test")
+	owner.must(201, "POST", "/v1/me/saved", map[string]any{"name": "mum", "kind": "text", "title": "Note", "details": map[string]any{"body": "hello"}})
+	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "mum-shop", "kind": "text", "title": "Note", "details": map[string]any{"body": "hello"}})
+
+	cfg := w.env.Store.Pool.Config()
+	cfg.MaxConns, cfg.MinConns = 1, 0
+	small, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer small.Close()
+	was := w.srv.Store.Pool
+	w.srv.Store.Pool = small
+	done := make(chan map[string]any, 1)
+	go func() {
+		_, body := owner.do("GET", "/v1/chat-refs?q=mum&kind=saved", nil)
+		done <- body
+	}()
+	select {
+	case body := <-done:
+		w.srv.Store.Pool = was
+		if refs, _ := body["refs"].([]any); len(refs) != 2 {
+			t.Fatalf("with a pool of one: %v", body)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("the search waited on a second connection")
+	}
+
+	// % and _ typed are themselves, not any letters (a name holds neither).
+	for _, q := range []string{"m_m", "%25", "mu%25"} {
+		if got := owner.must(200, "GET", "/v1/chat-refs?kind=saved&q="+q, nil)["refs"].([]any); len(got) != 0 {
+			t.Fatalf("%s: %v", q, got)
+		}
+	}
+
+	// More than one page reads: every match, by Show more, none twice.
+	for i := range 230 {
+		owner.must(201, "POST", "/v1/saved", map[string]any{"name": fmt.Sprintf("crate-%03d", i), "kind": "text", "title": "Note", "details": map[string]any{"body": "x"}})
+	}
+	seen := map[string]bool{}
+	cursor := ""
+	for range 20 {
+		path := "/v1/chat-refs?q=crate&kind=saved&limit=50"
+		if cursor != "" {
+			path += "&cursor=" + cursor
+		}
+		page := owner.must(200, "GET", path, nil)
+		for _, r := range page["refs"].([]any) {
+			name := r.(map[string]any)["name"].(string)
+			if seen[name] {
+				t.Fatalf("%s twice", name)
+			}
+			seen[name] = true
+		}
+		if cursor, _ = page["cursor"].(string); cursor == "" {
+			break
+		}
+	}
+	if len(seen) != 230 {
+		t.Fatalf("found %d of 230", len(seen))
 	}
 }

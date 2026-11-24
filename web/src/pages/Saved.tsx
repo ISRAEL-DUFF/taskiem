@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, del, get, post, put } from "../api";
+import { ApiError, currentAgentSession, del, get, post, put, subscribeAgentSession } from "../api";
 import { Icon } from "../icons";
 import { useAuth } from "../auth";
 import { assert } from "../passkeys";
@@ -10,6 +10,7 @@ import { CustomSheet, FileSheet, KindSheet } from "./SavedKinds";
 import { ImportSheet } from "./SavedImport";
 import {
   BANK_SEARCH_FROM,
+  ownSavedShown,
   bankFields,
   bankValue,
   bankValueOf,
@@ -53,6 +54,8 @@ import {
  * connect a payments account so their names are checked with the bank. */
 export function SavedPage() {
   const provider = useLoad(() => get<SavedProvider>("/v1/saved/provider"), []);
+  const { me } = useAuth();
+  const agent = useSyncExternalStore(subscribeAgentSession, currentAgentSession);
   return (
     <>
       <p className="crumbs">
@@ -67,8 +70,9 @@ export function SavedPage() {
       <ErrorBox error={provider.error} />
       {provider.data && showConnectStep(provider.data) && <ConnectStep p={provider.data} />}
       <SavedCard mine={false} provider={provider.data} />
-      {/* The person's own, which search everywhere opens here (menus-everywhere §6). */}
-      <SavedCard mine />
+      {/* The person's own, which search everywhere opens here (menus-everywhere §6):
+          only in a person's own session (a field agent working here has none). */}
+      {ownSavedShown(me, agent) && <SavedCard mine />}
     </>
   );
 }

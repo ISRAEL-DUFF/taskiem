@@ -687,3 +687,13 @@ export function customerOffer(o: {
     name,
   };
 }
+
+/** Whether a session has saved things of the person's own to show
+ * (GET /v1/me/saved): a person signed in as themselves, not a field agent
+ * working in a business nor a gate session. */
+export function ownSavedShown(
+  me: { user?: unknown; field_agent?: boolean; gate_only?: boolean } | null | undefined,
+  agentSession: unknown,
+): boolean {
+  return !!me?.user && !me.field_agent && !me.gate_only && !agentSession;
+}

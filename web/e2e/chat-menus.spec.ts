@@ -285,7 +285,8 @@ for (const width of [390, 360])
     await box.fill("mum");
     const saved = page.getByTestId("search-saved");
     await expect(saved.getByRole("link")).toHaveCount(3);
-    await expect(saved.getByRole("link", { name: /@mum\b.*A bank account · Yours/ })).toBeVisible();
+    // Newest first, the person's own and the business's merged by date: @mum, saved first, is behind Show more.
+    await expect(saved.getByRole("link", { name: /@mums-pharmacy.*A place · The business's/ })).toBeVisible();
     await expect(saved.getByRole("button", { name: "Show more Saved" })).toBeVisible();
     const services = page.getByTestId("search-service");
     await expect(services.getByRole("link", { name: /Mum's haircut.*30 min/ })).toBeVisible();

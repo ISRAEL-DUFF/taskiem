@@ -256,8 +256,10 @@ func searchRefs(ctx context.Context, tx pgx.Tx, s refSearch, pages map[string]re
 	return out, strings.Join(cursor, ","), nil
 }
 
-// allRefPages are the Taskiem chat's lists, of what the person may see.
-func (s *Server) allRefPages(p *Principal) map[string]refPage {
+// allRefPages are the Taskiem chat's lists, of what the person may see;
+// own are the person's own saved things that may match words, read before
+// (nil: saved things were not asked for).
+func (s *Server) allRefPages(p *Principal, own *[]chatRef, words []string) map[string]refPage {
 	tenant := p.TenantID
 	pages := map[string]refPage{}
 	if p.Can(PermInvoiceRead) && s.Invoices != nil {
@@ -326,21 +328,10 @@ func (s *Server) allRefPages(p *Principal) map[string]refPage {
 			return pageOf(all, offset), nil
 		}
 	}
-	// Saved things: the person's own and their business's, by name and
-	// kind only (the picker's rule), each read in its own scope.
-	if person := savedSearcher(p); person != uuid.Nil {
-		var all []chatRef
-		read := false
-		pages["saved"] = func(ctx context.Context, _ pgx.Tx, offset int) ([]chatRef, error) {
-			if !read {
-				read = true
-				var err error
-				if all, err = s.savedRefs(ctx, person, tenant); err != nil {
-					return nil, err
-				}
-			}
-			return pageOf(all, offset), nil
-		}
+	// Saved things: the person's own (read before this transaction; own
+	// nil when not asked) and their business's, by name and kind only.
+	if person := savedSearcher(p); person != uuid.Nil && own != nil {
+		pages["saved"] = savedPage(*own, tenant, person, words)
 	}
 	if p.Can(PermOrders) {
 		pages["customer"] = func(ctx context.Context, tx pgx.Tx, offset int) ([]chatRef, error) {

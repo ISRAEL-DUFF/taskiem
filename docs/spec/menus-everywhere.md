@@ -233,9 +233,12 @@ The picker over the message box ("/product", "/invoice", "@"):
   for by name only (with no kind it answers the picker's kinds, as before):
   `service`, the business's services (to those who may manage its page, as
   its services list), with the price and minutes; and `saved`, the person's
-  own saved things and their business's (`api/chat_refs_saved.go`), each
-  read in its own scope, matched by its name or its kind's words ("mum",
-  "bank account", a made-up kind's name), and answered with **its name, its
+  own saved things and their business's (`api/chat_refs_saved.go`), matched
+  in the database by its name or its kind's words ("mum", "bank account", a
+  made-up kind's name; a % or _ typed is itself), the person's own read in
+  their own scope before the request's business transaction opens (one
+  pooled connection at a time), the business's on it, merged newest first,
+  and answered with **its name, its
   kind and whose it is only**: never its title, its hint, an account's
   number or anything it holds, as the picker and the model are told them.
   Another person's, another business's, and an API key's or an embed app's
@@ -249,7 +252,8 @@ The picker over the message box ("/product", "/invoice", "@"):
   page; a saved thing shows "@name", its kind and "Yours" or "The
   business's" (web `lib/found.ts`, app `foundTag`) and opens the saved
   things: in the app the person's own or the business's list, on the web
-  the Saved page, which now shows the person's own beside the business's.
+  the Saved page, which now shows the person's own beside the business's
+  (in a person's own session only: a field agent working there has none).
 
 ## 10. Phases
 

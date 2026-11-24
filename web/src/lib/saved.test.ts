@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bankFields,
+  ownSavedShown,
   bankValueOf,
   checkLine,
   detailsProblem,
@@ -343,5 +344,17 @@ describe("saving after an action", () => {
     expect(customerOffer({ ...base, kind: "trade" })).toBeNull();
     expect(customerOffer({ ...base, may: false })).toBeNull();
     expect(customerOffer({ ...base, name: "" })).toBeNull();
+  });
+});
+
+describe("the person's own saved things on the Saved page", () => {
+  it("shows them only in a person's own session", () => {
+    const user = { id: "u1" };
+    expect(ownSavedShown({ user }, null)).toBe(true);
+    expect(ownSavedShown({ user, field_agent: true }, null)).toBe(false);
+    expect(ownSavedShown({ user }, { id: "s1" })).toBe(false);
+    expect(ownSavedShown({ user, gate_only: true }, null)).toBe(false);
+    expect(ownSavedShown({}, null)).toBe(false);
+    expect(ownSavedShown(undefined, null)).toBe(false);
   });
 });
