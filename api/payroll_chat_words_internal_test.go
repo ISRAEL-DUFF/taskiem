@@ -1,8 +1,10 @@
 package api
 
 import (
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestPayrollAmount(t *testing.T) {
@@ -89,6 +91,29 @@ func TestPayrollChatPhrases(t *testing.T) {
 		for _, re := range []interface{ MatchString(string) bool }{payrollAddWords, payrollApproveCh, payrollRejectCh, payrollBonusWords, payrollLeaveWords} {
 			if re.MatchString(not) {
 				t.Errorf("%q read as a change", not)
+			}
+		}
+	}
+}
+
+// Approve buttons never share a title: the first name, then its last
+// initial, then the whole name, then a number, within 20 characters.
+func TestApproveTitles(t *testing.T) {
+	approve := func(n string) string { return "Approve " + n }
+	for _, c := range []struct{ names, want []string }{
+		{[]string{"Musa Ali", "Zainab Bello"}, []string{"Approve Musa", "Approve Zainab"}},
+		{[]string{"Musa Ali", "Musa Bello", "Zainab Bello"}, []string{"Approve Musa A.", "Approve Musa B.", "Approve Zainab"}},
+		{[]string{"Musa Ali", "Musa Akande"}, []string{"Approve Musa Ali", "Approve Musa Akande"}},
+		{[]string{"Oluwaseun Adebayo-Johnson", "Oluwaseun Adebayo-Jones"}, []string{"Approve Oluwaseun Ad", "Approve Oluwaseun 2"}},
+		{[]string{"Musa Ali", "Musa Ali"}, []string{"Approve Musa Ali", "Approve Musa Ali 2"}},
+	} {
+		got := approveTitles(c.names, approve)
+		if strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("%v: %q, want %q", c.names, got, c.want)
+		}
+		for _, g := range got {
+			if utf8.RuneCountInString(g) > 20 {
+				t.Errorf("%q is too long", g)
 			}
 		}
 	}

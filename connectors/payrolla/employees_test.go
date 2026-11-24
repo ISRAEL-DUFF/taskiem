@@ -2,6 +2,7 @@ package payrolla_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"regexp"
@@ -112,6 +113,33 @@ func TestEmployees(t *testing.T) {
 		if wr.Key == "" || wr.ActingUser != "tsk_user_"+me.String() {
 			t.Fatalf("a write without its headers: %+v", wr)
 		}
+	}
+}
+
+// AllEmployees reads every page (next_cursor), up to AllEmployeesPages;
+// Employees stops at max.
+func TestAllEmployeesPages(t *testing.T) {
+	_, team, cl := teamClient(t)
+	ctx := context.Background()
+	team.SetPageSize(2)
+	for i := range 7 {
+		team.AddEmployee(payrollatest.Employee{FirstName: fmt.Sprintf("Worker%d", i), LastName: "Ade", Phone: "+234801111220" + fmt.Sprint(i)})
+	}
+	all, err := cl.AllEmployees(ctx, "")
+	if err != nil || len(all) != 7 || all[6].FirstName != "Worker6" || team.Listed() != 4 {
+		t.Fatalf("all: %d %v, %d pages", len(all), err, team.Listed())
+	}
+	if some, err := cl.Employees(ctx, "", 3); err != nil || len(some) != 3 {
+		t.Fatalf("max: %d %v", len(some), err)
+	}
+	// A company past the bound: cut off at AllEmployeesPages pages.
+	team.SetPageSize(1)
+	for i := range payrolla.AllEmployeesPages {
+		team.AddEmployee(payrollatest.Employee{FirstName: fmt.Sprintf("More%d", i), LastName: "Ade", Phone: "+2348011113" + fmt.Sprintf("%03d", i)})
+	}
+	before := team.Listed()
+	if all, err := cl.AllEmployees(ctx, ""); err != nil || len(all) != payrolla.AllEmployeesPages || team.Listed()-before != payrolla.AllEmployeesPages {
+		t.Fatalf("bounded: %d %v", len(all), err)
 	}
 }
 

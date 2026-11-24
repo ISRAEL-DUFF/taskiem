@@ -159,6 +159,9 @@ type Server struct {
 	// oldColumnsChecked are the businesses whose workflows were checked
 	// for the catalogue's old stock columns since start (stock_oldcolumns.go).
 	oldColumnsChecked sync.Map
+	// payrollNames are each business's Payrolla employee names, kept a
+	// few minutes for the chat (payroll_names.go).
+	payrollNames payrollNameCache
 	// DocsURL is where the web app's help links point (TASKIEM_DOCS_URL);
 	// empty shows the in-product help only.
 	DocsURL string

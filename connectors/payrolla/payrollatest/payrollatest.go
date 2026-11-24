@@ -146,7 +146,29 @@ type Fake struct {
 	refreshN   int
 	signUps    []url.Values
 	extra      []route
+	refusals   map[string]refusal // method + " " + path -> what it answers instead
 	n          int
+}
+
+type refusal struct {
+	status int
+	code   string
+}
+
+// Refuse makes every request of method to path (under /api/v1, as
+// "/connect/employees/{id}") answer status with Payrolla's code instead,
+// until Refuse is called again with status 0.
+func (f *Fake) Refuse(method, path string, status int, code string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.refusals == nil {
+		f.refusals = map[string]refusal{}
+	}
+	if status == 0 {
+		delete(f.refusals, method+" "+path)
+		return
+	}
+	f.refusals[method+" "+path] = refusal{status: status, code: code}
 }
 
 type accessTok struct {
@@ -598,6 +620,11 @@ func (f *Fake) connect(w http.ResponseWriter, r *http.Request) {
 	if c == nil {
 		f.mu.Unlock()
 		writeErr(w, http.StatusUnauthorized, "API_KEY_INVALID", "unknown or revoked")
+		return
+	}
+	if no, ok := f.refusals[r.Method+" "+path]; ok {
+		f.mu.Unlock()
+		writeErr(w, no.status, no.code, "refused as the test asked")
 		return
 	}
 	write := r.Method != http.MethodGet && !strings.HasPrefix(path, "/connect/webhooks")

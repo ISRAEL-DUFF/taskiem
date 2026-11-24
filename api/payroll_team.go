@@ -307,7 +307,7 @@ func (s *Server) getPayrollTeam(w http.ResponseWriter, r *http.Request) {
 	}
 	var emps []payrolla.Employee
 	if err == nil {
-		emps, err = cl.Employees(ctx, "", 500)
+		emps, err = cl.AllEmployees(ctx, "")
 	}
 	if err != nil {
 		s.payFail(w, r, s.teamSays(ctx, p, conn, err, "employees"))
@@ -541,6 +541,7 @@ func (s *Server) addPayrollEmployee(w http.ResponseWriter, r *http.Request) {
 		}
 		var e payrolla.Employee
 		if e, err = cl.AddEmployee(ctx, ne, payrolla.Write{Key: key, User: p.UserID, Name: s.actingName(ctx, p)}); err == nil {
+			s.forgetPayrollNames(p.TenantID)
 			if in.StaffUser != nil {
 				if err := s.linkStaffToEmployee(r, *in.StaffUser, e); err != nil {
 					s.payFail(w, r, err)
@@ -675,6 +676,7 @@ func (s *Server) changePayrollEmployee(w http.ResponseWriter, r *http.Request) {
 		}
 		var e payrolla.Employee
 		if e, err = cl.ChangeEmployee(ctx, id, ch, payrolla.Write{Key: key, User: p.UserID, Name: s.actingName(ctx, p)}); err == nil {
+			s.forgetPayrollNames(p.TenantID)
 			_ = s.tx(r, func(tx pgx.Tx) error {
 				return auditTx(r, tx, "payroll.employee_change", "payrolla_employee:"+id, map[string]any{"fields": fields})
 			})
@@ -815,6 +817,7 @@ func (s *Server) endPayrollEmployee(w http.ResponseWriter, r *http.Request) {
 		}
 		var e payrolla.Employee
 		if e, err = cl.EndEmployment(ctx, id, payrolla.Write{Key: key, User: p.UserID, Name: s.actingName(ctx, p)}); err == nil {
+			s.forgetPayrollNames(p.TenantID)
 			_ = s.tx(r, func(tx pgx.Tx) error {
 				return auditTx(r, tx, "payroll.employee_end", "payrolla_employee:"+id, nil)
 			})
@@ -875,19 +878,15 @@ func (s *Server) getPayrollBankChanges(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var list []payrolla.BankChange
-	var emps []payrolla.Employee
+	var names map[string]string
 	if err == nil {
 		if list, err = cl.BankChanges(ctx); err == nil && len(list) > 0 {
-			emps, err = cl.Employees(ctx, "", 500)
+			names, _, err = changeNames(ctx, cl, list)
 		}
 	}
 	if err != nil {
 		s.payFail(w, r, s.teamSays(ctx, p, conn, err, "employees"))
 		return
-	}
-	names := map[string]string{}
-	for _, e := range emps {
-		names[e.ID] = e.Name()
 	}
 	ids := make([]string, 0, len(list))
 	for _, c := range list {

@@ -141,9 +141,23 @@ type EmployeeChange struct {
 // Employees are the company's employees, all pages up to max (status:
 // "ACTIVE,INACTIVE", or "" for all).
 func (cl *Client) Employees(ctx context.Context, status string, max int) ([]Employee, error) {
+	return cl.employeePages(ctx, status, max, max)
+}
+
+// AllEmployeesPages is how many pages AllEmployees reads at most, of
+// Payrolla's largest (100 each): a company of up to 2,000 people.
+const AllEmployeesPages = 20
+
+// AllEmployees are every one of the company's employees, page by page
+// (next_cursor), up to AllEmployeesPages pages; more is cut off.
+func (cl *Client) AllEmployees(ctx context.Context, status string) ([]Employee, error) {
+	return cl.employeePages(ctx, status, AllEmployeesPages*100, AllEmployeesPages)
+}
+
+func (cl *Client) employeePages(ctx context.Context, status string, max, pages int) ([]Employee, error) {
 	var all []Employee
 	cursor := ""
-	for len(all) < max {
+	for page := 0; len(all) < max && page < pages; page++ {
 		q := url.Values{"limit": {"100"}}
 		if status != "" {
 			q.Set("status", status)

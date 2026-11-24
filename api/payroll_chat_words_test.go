@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"fmt"
 	"net/netip"
 	"strings"
 	"testing"
@@ -127,6 +128,13 @@ func TestPayrollChatRunChanges(t *testing.T) {
 	if s := said(t, w, clerkNum, "put zainab back"); s != "zainab isn't left out of November 2026 payroll." {
 		t.Fatalf("not left out: %q", s)
 	}
+	// Payrolla refuses to name who is left out: said, never "not left out".
+	f.Refuse("GET", "/connect/employees/"+adaE, 403, "SCOPE_REQUIRED")
+	if s := said(t, w, clerkNum, "put ada back"); s != "Ask the owner to allow this in Payrolla." {
+		t.Fatalf("name refused: %q", s)
+	}
+	f.Refuse("GET", "/connect/employees/"+adaE, 0, "")
+	w.srv.ResetLimiters()
 	if s := said(t, w, clerkNum, "put ada back"); s != "Put Ada Obi back in November 2026 payroll?" {
 		t.Fatalf("put back: %q", s)
 	}
@@ -249,6 +257,13 @@ func TestPayrollChatStaff(t *testing.T) {
 			t.Fatalf("not payroll's words: %q", m.Text)
 		}
 	}
+	// Payrolla's names are kept a few minutes: the next "move" lists no
+	// one again.
+	listed := team.Listed()
+	w.send(t, num, whatsapptest.Text("move the chairs to the hall"))
+	if team.Listed() != listed {
+		t.Fatalf("listed again: %d -> %d", listed, team.Listed())
+	}
 
 	// A new account: the form.
 	if s := said(t, w, num, "change zainab's salary account"); !strings.HasPrefix(s, "A new salary account is typed only in a form") {
@@ -267,7 +282,9 @@ func TestPayrollChatStaff(t *testing.T) {
 	}
 	// Two people called by one name are asked about, never guessed.
 	team.AddEmployee(payrollatest.Employee{FirstName: "Musa", LastName: "Bello", Phone: "+2348011112298"})
-	if s := said(t, w, num, "move musa to sales"); s != "Which one: Musa Ali, Musa Bello? Say it again with their full name." {
+	// Musa added through Taskiem: the names kept were forgotten.
+	listed = team.Listed()
+	if s := said(t, w, num, "move musa to sales"); s != "Which one: Musa Ali, Musa Bello? Say it again with their full name." || team.Listed() != listed+1 {
 		t.Fatalf("which: %q", s)
 	}
 
@@ -520,5 +537,48 @@ func TestPayrollChatAccountChangeOnTelegram(t *testing.T) {
 	}
 	if team.Employee(emp).AccountNumber != "2222222222" {
 		t.Fatal("not approved")
+	}
+}
+
+// Account changes in a company of more than the employee list reads: the
+// names of those it did not reach are read one by one; two Musas waiting
+// get Approve buttons that read differently.
+func TestPayrollChatAccountChangesPaged(t *testing.T) {
+	w := newPayrollaWorld(t)
+	f := w.fake
+	team := payrollatest.NewTeam(f)
+	team.AddAccount("058", "0123456789", "MUSA I. ALI")
+	team.AddAccount("044", "2222222222", "MUSA I. ALI")
+	team.AddAccount("058", "0123456788", "MUSA BELLO")
+	team.AddAccount("044", "2222222223", "MUSA BELLO")
+	owner := w.tenant(t, "Amara Foods", "ngozi@amara.test")
+	w.connect(t, owner, map[string]any{"mode": "test"})
+	owner.must(201, "PUT", "/v1/roles/payroll", map[string]any{"permissions": []string{"payroll.read", "payroll.approve"}})
+	ada := namedMember(t, w, owner, "ada@amara.test", "Ada Obi", "payroll")
+	f.AddApprover(payrollatest.Approver{UserID: "a0000000-0000-4000-8000-000000000001", Name: "Ngozi Eze", Email: "ngozi@amara.test", Role: "OWNER", CanApprove: true, CanPay: true,
+		CanConfirm: true, LinkedAs: payrolla.ActingUser(personID(t, owner))})
+	f.AddApprover(payrollatest.Approver{UserID: "a0000000-0000-4000-8000-000000000003", Name: "Ada Obi", Email: "ada@amara.test", Role: "APPROVER", CanApprove: true,
+		CanConfirm: true, LinkedAs: payrolla.ActingUser(personID(t, ada))})
+	// One person a page: the list reads AllEmployeesPages people, and
+	// the Musas come after them.
+	team.SetPageSize(1)
+	for i := range payrolla.AllEmployeesPages {
+		team.AddEmployee(payrollatest.Employee{FirstName: "Worker", LastName: string(rune('A' + i)), Phone: fmt.Sprintf("+234801111%04d", 3000+i)})
+	}
+	ali := team.AddEmployee(payrollatest.Employee{FirstName: "Musa", LastName: "Ali", Phone: "+2348011112201", BankCode: "058", AccountNumber: "0123456789"})
+	bello := team.AddEmployee(payrollatest.Employee{FirstName: "Musa", LastName: "Bello", Phone: "+2348011112202", BankCode: "058", AccountNumber: "0123456788"})
+	owner.must(200, "POST", "/v1/payroll/team/"+ali+"/bank", map[string]any{"key": "b-1", "bank_code": "044", "account_number": "2222222222"})
+	owner.must(200, "POST", "/v1/payroll/team/"+bello+"/bank", map[string]any{"key": "b-2", "bank_code": "044", "account_number": "2222222223"})
+
+	web := ada.must(200, "GET", "/v1/payroll/bank-changes", nil)["changes"].([]any)
+	if len(web) != 2 || web[0].(map[string]any)["employee"] != "Musa Ali" || web[1].(map[string]any)["employee"] != "Musa Bello" {
+		t.Fatalf("on the web: %v", web)
+	}
+	adaNum := "+2348031119401"
+	w.bind(t, ada, adaNum)
+	list := oneBare(t, w.send(t, adaNum, whatsapptest.Text("account changes")))
+	if !strings.Contains(list.Text, "Musa Ali: MUSA I. ALI, Access Bank ••2222.") || !strings.Contains(list.Text, "Musa Bello: MUSA BELLO, Access Bank ••2223.") ||
+		len(list.Buttons) != 2 || list.Buttons[0].Title != "Approve Musa A." || list.Buttons[1].Title != "Approve Musa B." {
+		t.Fatalf("list: %+v", list)
 	}
 }

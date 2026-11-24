@@ -387,15 +387,20 @@ func (s *Server) payrollAskReason(ctx context.Context, c *chat, cp chatPayroll) 
 
 // payrollTeamPeople are the company's employees, as someone, for a name.
 func (s *Server) payrollTeamPeople(ctx context.Context, cl *payrolla.Client) ([]payrolla.Employee, []someone, error) {
-	emps, err := cl.Employees(ctx, "", 500)
+	emps, err := cl.AllEmployees(ctx, "")
 	if err != nil {
 		return nil, nil, err
 	}
+	return emps, peopleOf(emps), nil
+}
+
+// peopleOf are employees as someone, for a name.
+func peopleOf(emps []payrolla.Employee) []someone {
 	people := make([]someone, 0, len(emps))
 	for _, e := range emps {
 		people = append(people, someone{ID: e.ID, First: e.FirstName, Last: e.LastName})
 	}
-	return emps, people, nil
+	return people
 }
 
 // payrollConnFor is the chat person's Payrolla client and connection, or
@@ -542,7 +547,9 @@ func (s *Server) payrollMoveChat(ctx context.Context, c *chat, said, dept string
 	if err != nil {
 		return false, nil //nolint:nilerr // no Payrolla: not payroll's words
 	}
-	emps, people, err := s.payrollTeamPeople(ctx, cl)
+	// Names kept a few minutes: "move the generator to the shop" need
+	// not list Payrolla's employees each time.
+	emps, people, err := s.payrollNamesOf(ctx, c.tenant.ID, cl)
 	if err != nil {
 		return false, nil //nolint:nilerr // not payroll's words then
 	}
@@ -645,7 +652,12 @@ func (s *Server) payrollRunAsk(ctx context.Context, c *chat, do, said, amount, r
 		var out []someone
 		byEmp := map[string]string{}
 		for _, x := range ex {
-			n, _ := cl.RunEmployeeName(ctx, x.EmployeeID)
+			n, err := cl.RunEmployeeName(ctx, x.EmployeeID)
+			if err != nil {
+				// Never a name matched against nothing: Payrolla's refusal.
+				_, err = s.sayRefused(ctx, c, s.runSays(ctx, c.lang.Tag, c.p, nil, cl, r.ID, err))
+				return err
+			}
 			first, last, _ := strings.Cut(n, " ")
 			out = append(out, someone{ID: x.EmployeeID, First: first, Last: last})
 			byEmp[x.EmployeeID] = x.ID
@@ -794,6 +806,7 @@ func (s *Server) payrollStaffDo(ctx context.Context, c *chat, cp chatPayroll, na
 	if err != nil {
 		return s.sayTeamRefused(ctx, c, conn, err)
 	}
+	s.forgetPayrollNames(c.tenant.ID)
 	s.teamChatAudit(ctx, c, action, "payrolla_employee:"+cp.Employee, detail)
 	return c.say(ctx, s, words)
 }
@@ -823,19 +836,46 @@ func (s *Server) pendingChanges(ctx context.Context, cl *payrolla.Client) ([]pay
 	if err != nil || len(list) == 0 {
 		return nil, nil, nil, err
 	}
-	emps, err := cl.Employees(ctx, "", 500)
+	names, people, err := changeNames(ctx, cl, list)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	return list, names, people, nil
+}
+
+// changeNames are the names of everyone (by employee id), and those whose
+// account changes wait as someone: from Payrolla's employee list, and one
+// by one for anyone the list did not reach.
+func changeNames(ctx context.Context, cl *payrolla.Client, list []payrolla.BankChange) (map[string]string, []someone, error) {
+	emps, err := cl.AllEmployees(ctx, "")
+	if err != nil {
+		return nil, nil, err
+	}
 	names := map[string]string{}
-	var people []someone
 	for _, e := range emps {
 		names[e.ID] = e.Name()
-		if slices.ContainsFunc(list, func(c payrolla.BankChange) bool { return c.EmployeeID == e.ID }) {
+	}
+	for _, c := range list {
+		if _, ok := names[c.EmployeeID]; ok {
+			continue
+		}
+		e, err := cl.Employee(ctx, c.EmployeeID)
+		if payrolla.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		names[e.ID] = e.Name()
+		emps = append(emps, e)
+	}
+	var people []someone
+	for _, e := range emps {
+		if slices.ContainsFunc(list, func(c payrolla.BankChange) bool { return c.EmployeeID == e.ID }) && !slices.ContainsFunc(people, func(p someone) bool { return p.ID == e.ID }) {
 			people = append(people, someone{ID: e.ID, First: e.FirstName, Last: e.LastName})
 		}
 	}
-	return list, names, people, nil
+	return names, people, nil
 }
 
 // changeSays says an account change's refusal in words, in l: the code's
@@ -890,6 +930,14 @@ func (s *Server) payrollChangesChat(ctx context.Context, c *chat) error {
 	b.WriteString(c.t("payroll.change.title"))
 	var buttons []whatsapp.Button
 	approve := c.p.Can(PermPayrollApprove) && codeThread(c)
+	var titles []string
+	if approve {
+		shown := make([]string, 0, 3)
+		for _, x := range list[:min(3, len(list))] {
+			shown = append(shown, names[x.EmployeeID])
+		}
+		titles = approveTitles(shown, func(name string) string { return c.t("payroll.button.approve_who", "name", name) })
+	}
 	for _, x := range list {
 		var who string
 		switch {
@@ -903,9 +951,8 @@ func (s *Server) payrollChangesChat(ctx context.Context, c *chat) error {
 			who = c.t("payroll.change.asked_payrolla")
 		}
 		b.WriteString("\n" + c.t("payroll.change.line", "name", whatsapp.SafeText(names[x.EmployeeID]), "account", changeLine(x), "asked", who))
-		if approve && len(buttons) < 3 {
-			first, _, _ := strings.Cut(names[x.EmployeeID], " ")
-			buttons = append(buttons, whatsapp.Button{ID: payrollPrefix + "b:" + x.ID, Title: cutRunes(c.t("payroll.button.approve_who", "name", first), 20)})
+		if approve && len(buttons) < len(titles) {
+			buttons = append(buttons, whatsapp.Button{ID: payrollPrefix + "b:" + x.ID, Title: titles[len(buttons)]})
 		}
 	}
 	if c.p.Can(PermPayrollApprove) {
@@ -1098,4 +1145,57 @@ func (s *Server) payrollChangeReject(ctx context.Context, c *chat, said, note st
 	}
 	s.teamChatAudit(ctx, c, "payroll.bank_change_reject", bankChangeTarget(ch.ID), nil)
 	return c.say(ctx, s, c.t("payroll.change.rejected", "name", whatsapp.SafeText(name)))
+}
+
+// buttonTitleMax is the most a WhatsApp reply button's title holds.
+const buttonTitleMax = 20
+
+// approveTitles are the Approve buttons' titles for names, each different
+// from the others (WhatsApp refuses two buttons with one title): the first
+// name; for names that would read alike, the first name and the last
+// name's initial, then the whole name; and, when even those read alike
+// once cut to the button's 20 characters, a number after.
+func approveTitles(names []string, title func(name string) string) []string {
+	forms := func(n string) []string {
+		f := strings.Fields(n)
+		if len(f) == 0 {
+			return []string{n, n, n}
+		}
+		short := f[0]
+		if len(f) > 1 {
+			r, _ := utf8.DecodeRuneInString(f[len(f)-1])
+			short += " " + string(r) + "."
+		}
+		return []string{f[0], short, strings.Join(f, " ")}
+	}
+	level := make([]int, len(names))
+	out := make([]string, len(names))
+	for range 3 {
+		for i, n := range names {
+			out[i] = cutRunes(title(forms(n)[level[i]]), buttonTitleMax)
+		}
+		clash := false
+		for i := range out {
+			for j := range out {
+				if i != j && strings.EqualFold(out[i], out[j]) && level[i] < 2 {
+					level[i]++
+					clash = true
+					break
+				}
+			}
+		}
+		if !clash {
+			break
+		}
+	}
+	for i := range out {
+		for j := 0; j < i; j++ {
+			if strings.EqualFold(out[i], out[j]) {
+				n := fmt.Sprintf(" %d", i+1)
+				out[i] = strings.TrimSpace(cutRunes(out[i], buttonTitleMax-len(n))) + n
+				break
+			}
+		}
+	}
+	return out
 }

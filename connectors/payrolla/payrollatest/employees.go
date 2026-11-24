@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -69,6 +70,23 @@ type Team struct {
 	accounts   map[string]string // bank code + "/" + number -> the bank's name for it
 	challenges map[string]*teamChallenge
 	texted     map[string][]time.Time // codes texted to an employee
+	pageSize   int                    // the most a list page holds, when set (SetPageSize)
+	listed     int                    // GET /connect/employees lists served
+}
+
+// SetPageSize makes each page of the employee list hold at most n (a
+// request's limit is used when smaller), so a test sees paging.
+func (t *Team) SetPageSize(n int) {
+	t.f.mu.Lock()
+	defer t.f.mu.Unlock()
+	t.pageSize = n
+}
+
+// Listed is how many pages of the employee list were served.
+func (t *Team) Listed() int {
+	t.f.mu.Lock()
+	defer t.f.mu.Unlock()
+	return t.listed
 }
 
 var teams sync.Map // *Fake -> *Team
@@ -332,6 +350,7 @@ func (t *Team) serve(w http.ResponseWriter, r *http.Request, c *Conn) {
 		if ref == "" {
 			ref = q.Get("external_id")
 		}
+		t.listed++
 		list := []map[string]any{}
 		for _, e := range t.employees {
 			if ref != "" && e.ExternalRef != ref || q.Get("status") != "" && !slices.Contains(strings.Split(q.Get("status"), ","), e.Status) {
@@ -339,7 +358,21 @@ func (t *Team) serve(w http.ResponseWriter, r *http.Request, c *Conn) {
 			}
 			list = append(list, t.view(e, c))
 		}
-		writeData(w, http.StatusOK, map[string]any{"employees": list, "next_cursor": ""})
+		// Pages: limit (100 at most), cursor the index to go on from.
+		limit, _ := strconv.Atoi(q.Get("limit"))
+		if limit <= 0 || limit > 100 {
+			limit = 100
+		}
+		if t.pageSize > 0 && t.pageSize < limit {
+			limit = t.pageSize
+		}
+		from, _ := strconv.Atoi(q.Get("cursor"))
+		from = min(max(from, 0), len(list))
+		next := ""
+		if from+limit < len(list) {
+			next = strconv.Itoa(from + limit)
+		}
+		writeData(w, http.StatusOK, map[string]any{"employees": list[from:min(from+limit, len(list))], "next_cursor": next})
 	case r.Method == http.MethodPost && len(parts) == 2:
 		if need("employees:write") {
 			t.add(w, raw.Bytes(), c)
