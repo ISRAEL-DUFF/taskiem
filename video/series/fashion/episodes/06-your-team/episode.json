@@ -1,0 +1,48 @@
+{
+  "number": 6,
+  "slug": "your-team",
+  "title": "Your team",
+  "headline": "Your *team*",
+  "sub": "Add staff, give tasks, and hand over the shift.",
+  "mood": "sparse",
+  "films": [
+    "add-staff",
+    "tasks-and-handover"
+  ],
+  "recap": {
+    "en": "Fifty uniforms for Ada's Kitchen. Zainab needs help.",
+    "pcm": "Fifty uniform for Ada's Kitchen. Zainab need help."
+  },
+  "flow": [
+    {
+      "id": "E6-C1",
+      "who": "Zainab Yusuf",
+      "purpose": "she teaches Dami",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Shows Dami how to hold the shears over a bolt of fabric; Dami copies her carefully and Zainab nods",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara in indigo, gold and green, two sewing machines, a rack of finished outfits in plastic covers, a mirror with a fitting platform, a window on a yellow-painted wall",
+      "camera": "two-shot, medium, eye-level"
+    },
+    {
+      "id": "E6-C2",
+      "who": "Dami",
+      "purpose": "Dami finishes a task",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Holds up a finished apron proudly, then taps her phone and smiles with her dimple",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara in indigo, gold and green, two sewing machines, a rack of finished outfits in plastic covers, a mirror with a fitting platform, a window on a yellow-painted wall",
+      "camera": "medium close-up, eye-level"
+    }
+  ],
+  "bridge": {
+    "en": "Fifty uniforms need a lot of cloth. Where does Zainab buy it?",
+    "pcm": "Fifty uniform need plenty cloth. Where Zainab go buy am?"
+  },
+  "next": {
+    "number": 7,
+    "title": "Your suppliers",
+    "headline": "Your *suppliers*"
+  },
+  "narration": {}
+}

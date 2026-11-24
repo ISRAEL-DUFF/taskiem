@@ -1,0 +1,49 @@
+{
+  "number": 10,
+  "slug": "keep-it-safe",
+  "title": "Keep it safe",
+  "headline": "Keep it *safe*",
+  "sub": "Approvals for money going out, and the app lock.",
+  "mood": "sparse",
+  "films": [
+    "approve-a-payment",
+    "app-lock"
+  ],
+  "recap": {
+    "en": "Money is going out and coming in. How does Zainab keep it safe?",
+    "pcm": "Money dey go out, money dey come in. How Zainab go keep am safe?"
+  },
+  "flow": [
+    {
+      "id": "E10-C1",
+      "who": "Dami",
+      "purpose": "she asks to pay the supplier",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Looks at her phone, bites her lip, taps Send, then looks across at Zainab, who is at the cutting table",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara in indigo, gold and green, two sewing machines, a rack of finished outfits in plastic covers, a mirror with a fitting platform, a window on a yellow-painted wall",
+      "camera": "over-the-shoulder two-shot"
+    },
+    {
+      "id": "E10-C2",
+      "who": "Zainab Yusuf",
+      "purpose": "she approves",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Reads her phone, checks the amount, nods and taps once with a firm smile",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara in indigo, gold and green, two sewing machines, a rack of finished outfits in plastic covers, a mirror with a fitting platform, a window on a yellow-painted wall",
+      "camera": "close-up, eye-level"
+    },
+    {
+      "id": "E10-C3",
+      "who": "Zainab Yusuf",
+      "purpose": "closing: the week is done",
+      "seconds": 5,
+      "goes": "closing, after the footage",
+      "action": "Stands in the workroom doorway in the evening light, looks back at the busy room and smiles with quiet pride",
+      "setting": "Zuri Atelier workroom at dusk, warm lamp light, the rack full of finished outfits",
+      "camera": "wide-to-medium slow pull-back"
+    }
+  ],
+  "narration": {}
+}

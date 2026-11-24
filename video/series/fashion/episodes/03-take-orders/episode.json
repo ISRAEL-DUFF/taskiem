@@ -1,0 +1,59 @@
+{
+  "number": 3,
+  "slug": "take-orders",
+  "title": "Take orders",
+  "headline": "Take *orders*",
+  "sub": "Sell at the counter, from WhatsApp, and book a fitting.",
+  "mood": "sparse",
+  "films": [
+    "sell-at-counter",
+    "customer-order",
+    "book-a-fitting"
+  ],
+  "recap": {
+    "en": "Nneka needs an outfit by Saturday.",
+    "pcm": "Nneka need outfit by Saturday."
+  },
+  "flow": [
+    {
+      "id": "E3-C1",
+      "who": "Nneka Eze",
+      "purpose": "the customer messages in a hurry",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Sits on a sofa typing fast on her phone with both thumbs, glances at a mood-board picture, then at her wrist watch, and grins",
+      "setting": "Nneka's flat: neat, modern, a sofa, a laptop, a mood board on the wall",
+      "camera": "medium shot from the front, slight handheld feel"
+    },
+    {
+      "id": "E3-C2",
+      "who": "Dami",
+      "purpose": "serving at the counter",
+      "seconds": 4,
+      "goes": "between the counter sale and the order",
+      "action": "Hands a dress in a garment bag across the counter to a customer with a shy proud smile and a small nod",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara in indigo, gold and green, two sewing machines, a rack of finished outfits in plastic covers, a mirror with a fitting platform, a window on a yellow-painted wall",
+      "camera": "medium shot, eye-level"
+    },
+    {
+      "id": "E3-C3",
+      "who": "Nneka Eze",
+      "purpose": "bridge: the order is in",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Holds up her phone to show a picture, then checks her watch and raises an eyebrow with a smile",
+      "setting": "Zuri Atelier workroom, Surulere, at the fitting platform in front of the mirror",
+      "camera": "medium close-up, shallow depth of field"
+    }
+  ],
+  "bridge": {
+    "en": "The order is in. But a customer who has not paid is not a sale. How does Zainab get paid?",
+    "pcm": "The order don enter. But customer wey never pay no be sale. How Zainab go collect her money?"
+  },
+  "next": {
+    "number": 4,
+    "title": "Get paid",
+    "headline": "Get *paid*"
+  },
+  "narration": {}
+}

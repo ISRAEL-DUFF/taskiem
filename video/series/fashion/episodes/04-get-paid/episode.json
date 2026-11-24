@@ -1,0 +1,47 @@
+{
+  "number": 4,
+  "slug": "get-paid",
+  "title": "Get paid",
+  "headline": "Get *paid*",
+  "sub": "Send an invoice, and match the money when it arrives.",
+  "mood": "sparse",
+  "films": [
+    "get-paid"
+  ],
+  "recap": {
+    "en": "Nneka's outfit is ordered. Now, how does Zainab get paid?",
+    "pcm": "Nneka outfit don order. Now, how Zainab go collect her money?"
+  },
+  "flow": [
+    {
+      "id": "E4-C1",
+      "who": "Zainab Yusuf",
+      "purpose": "finishing the hem",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Folds the finished dress carefully, runs her hand along the hem, nods in satisfaction and drapes it over her arm",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara in indigo, gold and green, two sewing machines, a rack of finished outfits in plastic covers, a mirror with a fitting platform, a window on a yellow-painted wall",
+      "camera": "medium close-up, eye-level"
+    },
+    {
+      "id": "E4-C2",
+      "who": "Zainab Yusuf",
+      "purpose": "bridge: the dress is ready",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Zips the finished dress into a garment bag and hangs it on the rack with a quick pleased smile",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara in indigo, gold and green, two sewing machines, a rack of finished outfits in plastic covers, a mirror with a fitting platform, a window on a yellow-painted wall",
+      "camera": "medium shot, slow push-in"
+    }
+  ],
+  "bridge": {
+    "en": "Paid. The dress is ready, and it has to reach Nneka before Saturday.",
+    "pcm": "E don pay. The dress don ready, e must reach Nneka before Saturday."
+  },
+  "next": {
+    "number": 5,
+    "title": "Deliver",
+    "headline": "*Deliver*"
+  },
+  "narration": {}
+}

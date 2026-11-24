@@ -1,0 +1,47 @@
+{
+  "number": 8,
+  "slug": "sell-to-businesses",
+  "title": "Sell to businesses",
+  "headline": "Sell to *businesses*",
+  "sub": "A price list, an offer, and a deal within your limits.",
+  "mood": "sparse",
+  "films": [
+    "sell-to-businesses"
+  ],
+  "recap": {
+    "en": "Ada's Kitchen wants a price for fifty uniforms.",
+    "pcm": "Ada's Kitchen want price for fifty uniform."
+  },
+  "flow": [
+    {
+      "id": "E8-C1",
+      "who": "Ada Obi",
+      "purpose": "the buyer asks for a price",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Reads a message on her phone in her kitchen, taps her chin, then types a reply with a quick smile",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big pots, steam, a bright window",
+      "camera": "medium shot, slow push-in"
+    },
+    {
+      "id": "E8-C2",
+      "who": "Zainab Yusuf",
+      "purpose": "she agrees",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Reads her phone, gives a firm nod, then breaks into a wide smile and puts the phone down on the cutting table",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara in indigo, gold and green, two sewing machines, a rack of finished outfits in plastic covers, a mirror with a fitting platform, a window on a yellow-painted wall",
+      "camera": "close-up, eye-level"
+    }
+  ],
+  "bridge": {
+    "en": "A big deal, orders, money, a team. How does Zainab see it all in one place?",
+    "pcm": "Big deal, orders, money, team. How Zainab go see everything for one place?"
+  },
+  "next": {
+    "number": 9,
+    "title": "Know your numbers",
+    "headline": "Know your *numbers*"
+  },
+  "narration": {}
+}

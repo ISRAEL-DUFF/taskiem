@@ -1,0 +1,47 @@
+{
+  "number": 5,
+  "slug": "deliver",
+  "title": "Deliver",
+  "headline": "*Deliver*",
+  "sub": "Send an order with a rider, and see where it is.",
+  "mood": "sparse",
+  "films": [
+    "deliver"
+  ],
+  "recap": {
+    "en": "Nneka has paid. The dress must reach her before Saturday.",
+    "pcm": "Nneka don pay. The dress must reach her before Saturday."
+  },
+  "flow": [
+    {
+      "id": "E5-C1",
+      "who": "Emeka Nwosu",
+      "purpose": "the rider collects the garment bag",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Rides up to the workroom door on a small dark-pine motorcycle, takes a garment bag from Zainab's hand, and secures it on his back with a two-finger salute",
+      "setting": "Zuri Atelier doorway, Surulere, a yellow-painted wall, mid-morning sun",
+      "camera": "tracking shot beside the bike, eye-level"
+    },
+    {
+      "id": "E5-C2",
+      "who": "Nneka Eze",
+      "purpose": "the customer receives it",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Opens her front door, sees a garment bag, gasps with both hands to her cheeks, then laughs with delight",
+      "setting": "Nneka's flat entrance, bright daylight",
+      "camera": "medium close-up, slight handheld feel"
+    }
+  ],
+  "bridge": {
+    "en": "Delivered. But Ada's Kitchen has sent a big order: fifty uniforms. Zainab cannot sew them alone.",
+    "pcm": "E don reach. But Ada's Kitchen don send big order: fifty uniform. Zainab no fit sew them alone."
+  },
+  "next": {
+    "number": 6,
+    "title": "Your team",
+    "headline": "Your *team*"
+  },
+  "narration": {}
+}

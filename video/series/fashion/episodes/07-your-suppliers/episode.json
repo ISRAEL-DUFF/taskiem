@@ -1,0 +1,47 @@
+{
+  "number": 7,
+  "slug": "your-suppliers",
+  "title": "Your suppliers",
+  "headline": "Your *suppliers*",
+  "sub": "Link with a supplier and order from their price list.",
+  "mood": "sparse",
+  "films": [
+    "your-suppliers"
+  ],
+  "recap": {
+    "en": "To sew fifty uniforms, Zainab needs more cloth.",
+    "pcm": "To sew fifty uniform, Zainab need more cloth."
+  },
+  "flow": [
+    {
+      "id": "E7-C1",
+      "who": "Alhaja Sade",
+      "purpose": "the supplier at her stall",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Measures a yard of royal-blue Ankara along her arm with a slow practised movement, runs it between her fingers and gives a small nod",
+      "setting": "Balogun market stall: a narrow stall stacked floor to ceiling with bolts of fabric, a hanging scale, a stool, strong natural light from the doorway",
+      "camera": "medium shot, eye-level, slow push-in"
+    },
+    {
+      "id": "E7-C2",
+      "who": "Alhaja Sade",
+      "purpose": "she agrees the price",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Looks at her phone held at arm's length, raises one brow, then gives a slow warm smile and taps the counter once",
+      "setting": "Balogun market stall, bolts of fabric behind her",
+      "camera": "close-up, shallow depth of field"
+    }
+  ],
+  "bridge": {
+    "en": "The cloth is ordered. Now Ada's Kitchen wants a price for fifty uniforms. What does Zainab tell them?",
+    "pcm": "Cloth don order. Now Ada's Kitchen want price for fifty uniform. Wetin Zainab go tell dem?"
+  },
+  "next": {
+    "number": 8,
+    "title": "Sell to businesses",
+    "headline": "Sell to *businesses*"
+  },
+  "narration": {}
+}

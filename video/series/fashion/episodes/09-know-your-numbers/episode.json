@@ -1,0 +1,47 @@
+{
+  "number": 9,
+  "slug": "know-your-numbers",
+  "title": "Know your numbers",
+  "headline": "Know your *numbers*",
+  "sub": "Your morning at a glance, and how the week did.",
+  "mood": "sparse",
+  "films": [
+    "know-your-numbers"
+  ],
+  "recap": {
+    "en": "It is Friday morning. How did the week go?",
+    "pcm": "Na Friday morning. How the week go?"
+  },
+  "flow": [
+    {
+      "id": "E9-C1",
+      "who": "Zainab Yusuf",
+      "purpose": "Friday morning with the briefing",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Sips a cup of tea at her cutting table while reading her phone, and her eyebrows lift as the numbers appear; she smiles",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara in indigo, gold and green, two sewing machines, a rack of finished outfits in plastic covers, a mirror with a fitting platform, a window on a yellow-painted wall",
+      "camera": "medium close-up, warm morning light"
+    },
+    {
+      "id": "E9-C2",
+      "who": "Zainab Yusuf",
+      "purpose": "she is pleased",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Looks up from her phone with a quiet proud smile and nods once",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara in indigo, gold and green, two sewing machines, a rack of finished outfits in plastic covers, a mirror with a fitting platform, a window on a yellow-painted wall",
+      "camera": "close-up, eye-level"
+    }
+  ],
+  "bridge": {
+    "en": "The week is going well. But money is moving. How does Zainab keep it safe?",
+    "pcm": "The week dey go well. But money dey move. How Zainab go keep am safe?"
+  },
+  "next": {
+    "number": 10,
+    "title": "Keep it safe",
+    "headline": "Keep it *safe*"
+  },
+  "narration": {}
+}
