@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -162,7 +163,7 @@ func TestChartByGroupAndTool(t *testing.T) {
 	}
 	rows = append(rows, map[string]any{"kind": "fuel"}, map[string]any{"kind": "Fuel"}, map[string]any{"kind": "fuel"})
 	c := ChartFromRows(p.Blocks[2], expenses, rows, time.Now(), true)
-	if len(c.Points) != MaxChartPoints || c.Points[0].Label != "Fuel" || c.Points[0].Value != 2 || c.Points[11].Label != "Others" || c.Over == "" {
+	if len(c.Points) != MaxChartPoints || c.Points[0].Label != "Fuel" || c.Points[0].Value != 3 || c.Points[11].Label != "Others" || c.Over == "" {
 		t.Errorf("by kind: %+v", c.Points)
 	}
 	if c.LabelHead != "Kind" || c.ValueHead != "How many" {
@@ -202,5 +203,49 @@ func TestBoardLanes(t *testing.T) {
 	}
 	if f := LaneFilter(b, "do_ing%").(map[string]any); f["value"] != `do\_ing\%` || f["op"] != "ilike" {
 		t.Errorf("lane filter: %v", f)
+	}
+}
+
+// G4 review: a figure too large to draw is left out, never a scale without
+// end or a sum that is not a number; a value with none is "None given",
+// apart from a business's own "Other"; labels lose phone numbers.
+func TestChartRefusesHugeFiguresAndNamesBlanks(t *testing.T) {
+	tb := Block{ID: "c", Type: "chart", Source: &Source{Tool: "spend-by", Output: "rows"}, Chart: &Chart{Kind: "bar", Label: "=item.week", Value: "=item.total"}}
+	out := map[string]any{"rows": []any{
+		map[string]any{"week": "W1", "total": 1.7e308}, map[string]any{"week": "W2", "total": -1.7e308}, map[string]any{"week": "W3", "total": 5.0},
+	}}
+	done := make(chan ChartShown, 1)
+	go func() { done <- ChartFromTool(tb, out, Values{}) }()
+	select {
+	case c := <-done:
+		if len(c.Points) != 1 || c.Points[0].Label != "W3" || len(c.Ticks) > maxTicks+1 {
+			t.Errorf("huge figures: %+v", c)
+		}
+		for _, tk := range c.Ticks {
+			if !finite(tk.Value) || !finite(tk.Share) {
+				t.Errorf("a mark that is not a number: %+v", tk)
+			}
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the scale never ended")
+	}
+	if c := chartOf(tb, []string{"a"}, []string{"a"}, []float64{math.Inf(1)}); len(c.Ticks) != 0 || c.Summary == "" {
+		t.Errorf("an infinite figure drawn: %+v", c)
+	}
+
+	p := parseOK(t, g4Page)
+	rows := []map[string]any{{"kind": ""}, {"kind": "other"}, {"kind": "Other"}, {"kind": "call 08031234567"}}
+	c := ChartFromRows(p.Blocks[2], expenses, rows, time.Now(), false)
+	got := map[string]float64{}
+	for _, pt := range c.Points {
+		got[pt.Label] = pt.Value
+	}
+	if got["None given"] != 1 || got["Other"] != 2 || len(c.Points) != 3 {
+		t.Errorf("blanks and others: %v", got)
+	}
+	for l := range got {
+		if strings.Contains(l, "08031234567") {
+			t.Errorf("a phone number in a label: %q", l)
+		}
 	}
 }

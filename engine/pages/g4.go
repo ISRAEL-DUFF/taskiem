@@ -421,19 +421,23 @@ func ChartFromRows(b Block, t datatables.Table, rows []map[string]any, now time.
 			}
 		}
 	} else {
-		sums := map[string]float64{}
+		sums, spelt := map[string]float64{}, map[string]string{}
 		var keys []string
 		for _, raw := range rows {
 			v, ok := value(raw)
 			if !ok {
 				continue
 			}
-			k := groupKey(raw[c.By])
+			shown := groupKey(raw[c.By])
 			if byCol.Type == "boolean" {
-				k = map[string]string{"true": "Yes", "false": "No"}[k]
+				shown = map[string]string{"true": "Yes", "false": "No"}[shown]
 			}
+			// One bar per value whatever its case, as a board's lanes
+			// are; drawn as it was first written.
+			k := strings.ToLower(shown)
 			if _, seen := sums[k]; !seen {
 				keys = append(keys, k)
+				spelt[k] = shown
 			}
 			sums[k] += v
 		}
@@ -447,7 +451,14 @@ func ChartFromRows(b Block, t datatables.Table, rows []map[string]any, now time.
 			keys = keys[:MaxChartPoints-1]
 		}
 		for _, k := range keys {
-			labels, longs, vals = append(labels, GroupLabel(k)), append(longs, GroupLabel(k)), append(vals, sums[k])
+			// A value with none is "None given", never "Other" or "Others",
+			// which a business's own values could be; and a label is said
+			// as a tool's is, with phone numbers and emails taken out.
+			l := "None given"
+			if k != "" {
+				l = clip(whatsapp.SafeText(GroupLabel(spelt[k])))
+			}
+			labels, longs, vals = append(labels, l), append(longs, l), append(vals, sums[k])
 		}
 		if others {
 			labels, longs, vals = append(labels, "Others"), append(longs, "All the others"), append(vals, other)
@@ -525,9 +536,15 @@ func chartOf(b Block, labels, longs []string, vals []float64) ChartShown {
 		}
 	}
 	lo, hi, step := chartScale(vals, b.Naira, whole)
+	if !finite(lo) || !finite(hi) || !finite(step) || step <= 0 {
+		// Never reached: chartNumber refuses figures this large. Drawn as
+		// nothing rather than a scale without end.
+		out.Summary = "These figures are too large to draw."
+		return out
+	}
 	share := func(v float64) float64 { return math.Round((v-lo)/(hi-lo)*10000) / 10000 }
 	out.Zero = share(0)
-	for v := lo; v <= hi+step/2; v += step {
+	for i, v := 0, lo; i <= maxTicks && v <= hi+step/2; i, v = i+1, v+step {
 		out.Ticks = append(out.Ticks, Tick{Value: v, Shown: compactShown(v, b.Naira), Share: share(v)})
 	}
 	every := 1
@@ -647,8 +664,25 @@ func trimNum(f float64) string {
 	return strconv.FormatFloat(math.Round(f*100)/100, 'f', -1, 64)
 }
 
-// chartNumber reads a value as a number.
+// maxChartValue is the largest figure a chart takes, either way: ten
+// trillion naira in kobo. Larger is left out, so that the sum of every
+// row a chart reads stays a finite number a scale can be drawn for and
+// kobo fit an int64 (G4 review).
+const maxChartValue = 1e15
+
+// maxTicks bounds a scale's marks (it has five or so).
+const maxTicks = 20
+
+func finite(f float64) bool { return !math.IsNaN(f) && !math.IsInf(f, 0) }
+
+// chartNumber reads a value as a number, refusing one beyond
+// maxChartValue.
 func chartNumber(x any) (float64, bool) {
+	f, ok := chartNumberAny(x)
+	return f, ok && math.Abs(f) <= maxChartValue
+}
+
+func chartNumberAny(x any) (float64, bool) {
 	switch n := x.(type) {
 	case float64:
 		return n, !math.IsNaN(n) && !math.IsInf(n, 0)
