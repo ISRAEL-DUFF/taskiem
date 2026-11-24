@@ -232,3 +232,48 @@ func TestReadToolRoute(t *testing.T) {
 		t.Fatalf("a read started something: %d %v", runs, err)
 	}
 }
+
+// amountWhatWhere is a tool's inputs with an optional third, where (and an
+// optional photo, an object no chat carries).
+const amountWhatWhere = `{"type":"object","required":["amount","what"],"properties":{"amount":{"type":"number","title":"Amount"},"what":{"type":"string","title":"What"},"where":{"type":"string","title":"Where"},"photo":{"type":"object","title":"Photo"}}}`
+
+// Optional inputs read from words (build plan H6, g-ct-chip): the model is
+// told a tool's optional inputs too, marked as not required (one a chat
+// cannot carry, an object, left out); what it reads for them is shown with
+// the rest before anything runs, and goes into the run after yes; the
+// web's and the app's reader proposes them for the form too.
+func TestReaderFillsOptionalInputs(t *testing.T) {
+	w := newWAWorld(t)
+	fake := &ai.Fake{Respond: func(req ai.Request) (*ai.Response, error) {
+		return &ai.Response{Text: `{"kind":"tool","id":"fuel-log","pick":"","values":[{"field":"amount","value":"4500"},{"field":"what","value":"diesel"},{"field":"where","value":"Total"}],"command":"","reply":""}`}, nil
+	}}
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN}, Model: fake}
+	owner := w.tenant(t, "Mama Put", "owner@optional.test")
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"money": false}})
+	wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Log fuel",
+		"definition": readerTool("wf_fuel", "Log fuel", "fuel-log", "Record money spent on fuel or diesel", nil, true, amountWhatWhere)})["id"].(string)
+	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+	const on = "+2348010000081"
+	w.bind(t, owner, on)
+
+	r := w.say(t, on, "log 4500 diesel at Total")
+	if !strings.Contains(r, "Start Log fuel") || !strings.Contains(r, "4500") || !strings.Contains(r, "Total") {
+		t.Fatalf("filled in: %q", r)
+	}
+	prompt := ai.PromptText(fake.Requests()[0])
+	if !strings.Contains(prompt, `{"name":"where","title":"Where","type":"string"}`) || !strings.Contains(prompt, `"name":"amount","title":"Amount","type":"number","required":true`) || strings.Contains(prompt, `"photo"`) {
+		t.Fatalf("what the model was told: %s", prompt)
+	}
+	w.say(t, on, "yes")
+	var in string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT payload::text FROM run_events WHERE type = 'RunStarted' ORDER BY run_started_at DESC LIMIT 1`).Scan(&in); err != nil || !strings.Contains(in, `"Total"`) {
+		t.Fatalf("the run's input: %q %v", in, err)
+	}
+	// The web's and the app's reader: the optional value for the form too.
+	fake.Respond = func(req ai.Request) (*ai.Response, error) {
+		return &ai.Response{Text: `{"values":[{"field":"amount","value":"4500"},{"field":"what","value":"diesel"},{"field":"where","value":"Total"}]}`}, nil
+	}
+	if got := owner.must(200, "POST", "/v1/tools/fuel-log/read", map[string]any{"text": "4500 diesel at Total"}); toJSON(got["values"]) != `{"amount":4500,"what":"diesel","where":"Total"}` {
+		t.Fatalf("read: %v", got)
+	}
+}

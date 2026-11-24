@@ -1855,6 +1855,17 @@ func (s *Server) waFields(ctx context.Context, c *chat) ([]whatsapp.Field, error
 
 // waFieldsOf are the required inputs of a workflow version.
 func (s *Server) waFieldsOf(ctx context.Context, tenant, wf uuid.UUID, version int) ([]whatsapp.Field, error) {
+	return s.fieldsOf(ctx, tenant, wf, version, whatsapp.InputFields)
+}
+
+// toolFieldsOf are a version's inputs the reader may fill from words: its
+// required fields, then its optional ones a chat can carry
+// (whatsapp.ToolFields).
+func (s *Server) toolFieldsOf(ctx context.Context, tenant, wf uuid.UUID, version int) ([]whatsapp.Field, error) {
+	return s.fieldsOf(ctx, tenant, wf, version, whatsapp.ToolFields)
+}
+
+func (s *Server) fieldsOf(ctx context.Context, tenant, wf uuid.UUID, version int, read func(json.RawMessage, map[string]json.RawMessage) ([]whatsapp.Field, error)) ([]whatsapp.Field, error) {
 	var def []byte
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, version).Scan(&def)
@@ -1869,7 +1880,7 @@ func (s *Server) waFieldsOf(ctx context.Context, tenant, wf uuid.UUID, version i
 	if d.RawInputs != nil {
 		raw = d.RawInputs.Schema
 	}
-	return whatsapp.InputFields(raw, d.RawTypes)
+	return read(raw, d.RawTypes)
 }
 
 // waCollect takes the answer for the next input field.

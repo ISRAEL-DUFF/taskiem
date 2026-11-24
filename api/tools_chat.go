@@ -115,16 +115,24 @@ func (s *Server) waMadeTool(ctx context.Context, c *chat, text string) (bool, er
 	if err != nil {
 		return true, err
 	}
+	// The optional inputs too, for the words after it (H6, g-ct-chip).
+	all, err := s.toolFieldsOf(ctx, c.tenant.ID, t.Workflow, t.Version)
+	if err != nil {
+		return true, err
+	}
 	data := chatData{Workflow: t.Workflow, Name: t.Name, Version: t.Version, Environment: t.Environment, Inputs: map[string]any{}, Tool: t.Command}
-	if len(fields) == 0 {
+	if len(fields) == 0 && (rest == "" || len(all) == 0) {
 		return true, s.waAskConfirm(ctx, c, data)
 	}
-	if len(fields) > 1 && rest != "" {
+	if len(all) > 1 && rest != "" {
 		// Words after it for several inputs: read by the model, shown
 		// filled in before anything runs (made tools M3, tools_read.go).
-		if values := s.chatToolWords(ctx, c, t, fields, rest); len(values) > 0 {
-			return true, s.waToolFill(ctx, c, data, fields, values)
+		if values := s.chatToolWords(ctx, c, t, all, rest); len(values) > 0 {
+			return true, s.waToolFill(ctx, c, data, fields, all, values)
 		}
+	}
+	if len(fields) == 0 {
+		return true, s.waAskConfirm(ctx, c, data)
 	}
 	if len(fields) == 1 && rest != "" {
 		// One input: the rest of the message is it, read as an answer.

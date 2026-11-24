@@ -41,9 +41,26 @@ type Field struct {
 // (nested objects, lists).
 var ErrInputsUnsupported = errors.New("this workflow's inputs cannot be collected in chat yet")
 
+// errSkipField: an input a chat never asks (a signature, which needs a
+// pad); the start sends it unavailable.
+var errSkipField = errors.New("not asked in a chat")
+
 // InputFields lists the required fields of an inputs schema, in the order
 // it lists them. types are the definition's types, for $ref.
 func InputFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Field, error) {
+	return inputFields(schema, types, false)
+}
+
+// ToolFields are InputFields, then the optional fields a chat can carry
+// (words, numbers, yes or no, a choice), by name: what the reader may
+// fill from a person's words (made tools §6, "log 4500 diesel at Total"
+// fills an optional "where"). An optional field a chat cannot carry is
+// left out, never a reason to refuse the tool.
+func ToolFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Field, error) {
+	return inputFields(schema, types, true)
+}
+
+func inputFields(schema json.RawMessage, types map[string]json.RawMessage, optional bool) ([]Field, error) {
 	if len(schema) == 0 {
 		return nil, nil
 	}
@@ -78,23 +95,20 @@ func InputFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Fi
 	}
 	props, _ := root["properties"].(map[string]any)
 	req, _ := root["required"].([]any)
-	var out []Field
-	for _, r := range req {
-		name, _ := r.(string)
+	field := func(name string, required bool) (Field, error) {
 		raw, _ := json.Marshal(props[name])
 		ps, err := resolve(raw)
 		if err != nil {
-			return nil, err
+			return Field{}, err
 		}
-		f := Field{Name: name, Title: str(ps, "title"), Description: str(ps, "description"), Type: str(ps, "type"), PII: str(ps, "x-pii"), Required: true}
+		f := Field{Name: name, Title: str(ps, "title"), Description: str(ps, "description"), Type: str(ps, "type"), PII: str(ps, "x-pii"), Required: required}
 		switch f.Type {
 		case "signature":
 			// No pad in a chat: the start sends it unavailable.
-			continue
+			return Field{}, errSkipField
 		case "location", "photo":
 			f.Device, f.Why, f.Type, f.PII = f.Type, str(ps, "why"), "", ""
-			out = append(out, f)
-			continue
+			return f, nil
 		case "scan":
 			// A code typed: WhatsApp has no scanner.
 			f.Device, f.Why, f.Type = "scan", str(ps, "why"), "string"
@@ -107,10 +121,10 @@ func InputFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Fi
 		case "string", "integer", "number", "boolean":
 		case "":
 			if f.Enum == nil {
-				return nil, ErrInputsUnsupported
+				return Field{}, ErrInputsUnsupported
 			}
 		default:
-			return nil, ErrInputsUnsupported
+			return Field{}, ErrInputsUnsupported
 		}
 		// The field's own schema, with the definition's types for $ref.
 		own := map[string]any{}
@@ -122,7 +136,36 @@ func InputFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Fi
 		}
 		doc, _ := json.Marshal(own)
 		f.schema = schemacheck.New("https://schemas.taskiem.dev/chat-input/"+name+".json", doc)
+		return f, nil
+	}
+	var out []Field
+	asked := map[string]bool{}
+	for _, r := range req {
+		name, _ := r.(string)
+		f, err := field(name, true)
+		asked[name] = true
+		if errors.Is(err, errSkipField) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
 		out = append(out, f)
+	}
+	if !optional {
+		return out, nil
+	}
+	names := make([]string, 0, len(props))
+	for name := range props {
+		if !asked[name] {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		if f, err := field(name, false); err == nil {
+			out = append(out, f)
+		}
 	}
 	return out, nil
 }

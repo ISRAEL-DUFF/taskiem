@@ -107,7 +107,7 @@ Rules:
 **Calling it.**
 
 1. **With nothing after it** (`/expense`, a tile, a button with no values): the form. A sheet on the web and the app, `taskiem_inputs` on WhatsApp, and one question at a time on Telegram and Slack and wherever a form cannot carry the inputs, as `run` does now.
-2. **With words after it** (`/expense 4500 diesel`, or "spent 4,500 on diesel" by a `says` phrase or the reader): the reader fills what it can and the form opens **filled in**. A tool with one required input takes the rest of the message as that input, with no model.
+2. **With words after it** (`/expense 4500 diesel`, or "spent 4,500 on diesel" by a `says` phrase or the reader): the reader fills what it can, its optional inputs too ("log 4500 diesel at Total" fills an optional **where**: built 24 November 2026, build plan H6), and the form opens **filled in**, every value shown before anything runs. A tool with one input (or one required input when no model can read the words) takes the rest of the message as that input, with no model.
 3. **Then care** (§8): nothing more, **Yes**, or step-up.
 4. **Then the run**, started as the person, in `prod`, with `tool: <command>` and the channel in the audit entry. The start carries a key taken from the conversation when the summary (or the echo) is shown, so a **yes** sent twice, or a call repeated after a lost reply, starts one run, as adding a row does now.
 5. **Then the answer** (§7), in the conversation it was called from.
