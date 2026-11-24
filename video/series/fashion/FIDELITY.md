@@ -77,3 +77,23 @@ tool tile. A cut shows Dami's phone.
 is set as "remembered" so the "How should we treat it?" question does not appear; the price
 list (Ankara ₦3,500 a yard with a ₦3,200 break at 50, French lace, cotton lining, zips) is
 the story's. About 1.7 s of empty chat after the "Order sent" tick was trimmed.
+
+## Episode 2
+**put-goods-in**: the grid with a count in each cell is the **"Sizes and colours: Set up"
+editor on a product's own form**. The Products list's "Make one product with sizes and
+colours" button only groups two or more existing plain products into one and has no
+counts, so it is not filmed. The camera is a stand-in that hands back a drawn dress
+picture (the phone's camera screen is not shown). After the grid saves, the film ends on
+the Saved tick. Tools-panel counts (for example "Products 34 items") are the fixture's.
+
+## Episode 3
+**sell-at-counter**: the real Sell sheet; "Dami Ajayi" is an invented surname; the signed-in
+person keeps the owner's permissions in the fixture. Stock does not visibly go down (the
+caption repeats the app's own line "stock goes down").
+**customer-order**: the order card, Confirm and the confirmed state are the app's; the
+stand-in server recomputes totals. No WhatsApp-sent confirmation is shown; zones are empty,
+so the delivery fee is typed. The address line is scrolled out of view.
+**book-a-fitting**: Nneka's part opens the customer Book sheet over a plain background (her
+real chat screen was not built); a cut shows Zainab's phone; the tools panel behind her shows
+leftover fixture numbers (for example "Customers: could not load"). The services and the
+booking are the story's.

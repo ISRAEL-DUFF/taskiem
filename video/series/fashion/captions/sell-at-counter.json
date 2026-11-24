@@ -1,0 +1,27 @@
+[
+ {
+  "t": 0.0,
+  "text": "A customer buys a dress at the counter.",
+  "who": "Dami · Zuri Atelier"
+ },
+ {
+  "t": 3.4,
+  "text": "Dami opens Sell from the tools."
+ },
+ {
+  "t": 6.3,
+  "text": "The Ankara dress comes in sizes and colours. Tap Choose, then pick size 12 and Gold."
+ },
+ {
+  "t": 11.2,
+  "text": "It shows 12, Gold and how many are left. Add one."
+ },
+ {
+  "t": 14.0,
+  "text": "The bar shows one thing and ₦28,000. Tap Next."
+ },
+ {
+  "t": 16.2,
+  "text": "Choose how it was paid: Transfer. Tap Record the sale. It is saved, and stock goes down."
+ }
+]

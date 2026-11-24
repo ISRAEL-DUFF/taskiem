@@ -64,8 +64,7 @@ have. **Check** marks something to verify in the app before filming.
 ### Episode 2: Put your goods in
 - **Goal:** one product with sizes and colours, with photos, not thirty rows.
 - **Shows:** Products tool, Add product, category (Dresses), photos (take a
-  photo, from the phone, paste a link), "Make one product with sizes and
-  colours": the size by colour grid with a count in each cell.
+  photo, from the phone, paste a link), "Sizes and colours: Set up" on the product (a size by colour grid with a count in each cell).
 - **Hero feature:** sizes and colours with their own stock.
 - **Length:** 60 s / 1:30. **Needs:** an Ankara dress with sizes (10, 12, 14, 16)
   and colours.

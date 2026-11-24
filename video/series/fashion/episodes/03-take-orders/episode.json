@@ -55,5 +55,64 @@
     "title": "Get paid",
     "headline": "Get *paid*"
   },
-  "narration": {}
+  "narration": {
+    "sell-at-counter": {
+      "en": [
+        "A customer buys a dress at the counter.",
+        "Dami opens Sell.",
+        "The dress has sizes and colours. She picks twelve, gold.",
+        "One is added.",
+        "The total shows.",
+        "It was paid by transfer. She records the sale."
+      ],
+      "pcm": [
+        "Customer dey buy dress for counter.",
+        "Dami open Sell.",
+        "The dress get sizes and colours. She pick twelve, gold.",
+        "She add one.",
+        "The total show.",
+        "Customer pay by transfer. She record the sale."
+      ]
+    },
+    "customer-order": {
+      "en": [
+        "Nneka messages on WhatsApp, and Taskiem reads it into an order.",
+        "One Ankara dress, size twelve, gold.",
+        "Nneka wants two.",
+        "Zainab adds the delivery fee.",
+        "Then Confirm.",
+        "The order is confirmed."
+      ],
+      "pcm": [
+        "Nneka message for WhatsApp, and Taskiem read am into order.",
+        "One Ankara dress, size twelve, gold.",
+        "Nneka want two.",
+        "Zainab add the delivery fee.",
+        "Then Confirm.",
+        "The order don confirm."
+      ]
+    },
+    "book-a-fitting": {
+      "en": [
+        "Nneka wants a fitting. She opens Book.",
+        "She picks Fitting.",
+        "A day, and a free time.",
+        "She checks her booking.",
+        "Book. It is saved.",
+        "Later, Zainab checks her bookings.",
+        "She opens Services, then Open services.",
+        "Saturday, eleven o'clock: a fitting for Nneka."
+      ],
+      "pcm": [
+        "Nneka want fitting. She open Book.",
+        "She pick Fitting.",
+        "A day, and free time.",
+        "She check her booking.",
+        "Book. E don save.",
+        "Later, Zainab go check her bookings.",
+        "She open Services, then Open services.",
+        "Saturday, eleven o'clock: fitting for Nneka."
+      ]
+    }
+  }
 }
