@@ -180,13 +180,17 @@ So it cannot happen again, the catalogue check (`engine/lang/catalog.go`, `Check
 
 These were planned and not started. They come after H2 to H8, in this order, as the earlier plan has it.
 
-### M6: recipes and the AI builder for tools (`g-ct-m6`, the template part of `g-ct-later`)
+### M6: recipes and the AI builder for tools (`g-ct-m6`, the template part of `g-ct-later`) — done 24 November 2026
 
-- **The eight recipes** (made tools §13), each a template with its `tool` block, installed with a command taken at install: look up, add a record, list and act, ask for approval, tell the team, call a system, daily report, watch and act.
-- **The template library** shows recipes with a tool (§17).
-- **Describe it**, on the web and in the chat: drafts the workflow, its inputs, its outputs and the `tool` block together, read back in plain steps, saved as a draft; uses saved things by name ("every Friday send @price-list to last week's customers"); a tool for customers has only `public` outputs in its answer.
-- **The AI builder's schema, property rules and `evals/builder` cases** for tools, in English and Pidgin.
-- **Done when:** Describe it produces a working tool from one sentence, naming a saved thing.
+Every task built, on the server, the web, the app and the chat: [made tools, As built: T6](made-tools.md#as-built-t6-recipes-and-describe-it) says how. No migration.
+
+- **The eight recipes** (made tools §13), each a template with its `tool` block, installed with a command taken at install: look up, add a record, list and act, ask for approval, tell the team, call a system, daily report, watch and act. **Built:** `templates/library/tool-*.json` with a `command` parameter; the next free command when the word is taken, said so (`tool` in the instantiate answer); the daily report and watch and act install a schedule beside the tool (`companion`) whose button opens it. Tests: `TestRecipes`, `templates/tests/tool-*.test.json`, `TestRecipesInstallPublishAndRun` (each installed, published and run as a tool).
+- **The template library** shows recipes with a tool (§17). **Built:** `GET /v1/templates?tool=true` with each recipe's `tool`; the web's **Templates → Tools for the chat** (vitest `recipes.test.ts`, Playwright `e2e/recipes.spec.ts`); the app's **Ready-made tools** from **Add a tool** (`recipes_test.dart`, pictures `recipes`, `recipes-add`, `recipes-added`, light and dark, looked at).
+- **Describe it**, on the web and in the chat: drafts the workflow, its inputs, its outputs and the `tool` block together, read back in plain steps, saved as a draft; uses saved things by name ("every Friday send @price-list to last week's customers"); a tool for customers has only `public` outputs in its answer. **Built:** the builder's rule 28; saved things to the model by name and kind only; `wdtext` reads a tool back (`wd.tool.*`, drafts in ha, ig, pcm, yo), `read_back` on a build, the web's review and the chat's read-back (WhatsApp, Telegram, Slack, the web's and the app's Taskiem chat); a non-public answer for customers refused and corrected, `customer_tool_private_output` warning. Tests: `TestDescribeItMakesAWorkingTool`, `TestDescribeReadsTheToolBack`, `TestAIBuildProposesAndSavesADraft` (no title or body reaches the model), `e2e/recipes.spec.ts`.
+- **The AI builder's schema, property rules and `evals/builder` cases** for tools, in English and Pidgin. **Built:** rule 28, `customer_tool_private_output`; properties `tool_declared`, `customer_tool_public`, `reads_saved` (`TestToolRules`); `evals/builder/tools.jsonl` (eleven cases, English and Pidgin, with saved things in a case's context); the baseline regenerated.
+- **Done when:** Describe it produces a working tool from one sentence, naming a saved thing. **Checked 24 November 2026:** `TestDescribeItMakesAWorkingTool`, on the stand-in model the builder's tests use: "When I type prices-now, show me @price-list" is drafted, read back with "Use it from the chat with /prices-now", saved, published, and `/prices-now` answers with what `@price-list` holds.
+
+A finding to decide: text a tool reads from a data table shows masked (•••) in its answer, since a run seals a table's rows as personal data and an answer never opens a sealed value (§7). The look-up recipe works by that rule (numbers show; words on the run); sealing only a table's personal columns would change it for every tool.
 
 ### G4: board and chart (`g-pages-g4`) — done 24 November 2026
 
@@ -296,10 +300,10 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-pages-rowstatus | H5, done 24 November 2026 |
 | g-pages-tab | H5, done 24 November 2026 |
 | g-pages-cust | §12 |
-| g-ct-m6 | §11 M6 |
+| g-ct-m6 | §11 M6 (built 24 November 2026) |
 | g-ct-linked | §12 |
 | g-ct-files | §12 |
-| g-ct-later | H6 (plain words, wd-test answer: built 24 November 2026); §11 M6 (template library) |
+| g-ct-later | H6 (plain words, wd-test answer: built 24 November 2026); §11 M6 (template library: built 24 November 2026) |
 | g-ct-oldmenu | H6 (the public menu retired, §14: built 24 November 2026) |
 | g-ct-tg | §12 |
 | g-ct-webkeep | H6 (built 24 November 2026) |

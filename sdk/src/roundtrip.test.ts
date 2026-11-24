@@ -164,6 +164,23 @@ describe("round trip edge cases", () => {
     expect(evaluate(code)).toEqual(def);
   });
 
+  // A list answer's rows read item, written as a function in code (the
+  // recipes' lists, build plan M6).
+  it("writes a list answer, and back", () => {
+    const def = {
+      ...base([{ id: "find", type: "transform", config: { output: { rows: [] } } }]),
+      outputs: [{ name: "rows", type: "list", title: "Rows", description: "Open rows", value: "=steps.find.output.rows" }],
+      tool: {
+        name: "Open",
+        command: "open-rows",
+        about: "The open rows",
+        answer: { type: "list", from: "rows", title: "Open", item: { title: "=item.title", sub: "=item.amount" }, actions: [{ label: "Done", tool: "open-rows", inputs: { done: "=item.id" } }] },
+      },
+    } as WorkflowDefinition;
+    const code = sdk.generate(def, opts);
+    expect(evaluate(code)).toEqual(def);
+  });
+
   it("writes ai steps, and back", () => {
     const def = base([
       { id: "sort", type: "ai", input: { text: "=trigger.body.text", phone: "=trigger.body.phone" },

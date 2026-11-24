@@ -14,6 +14,15 @@ A workflow you start by hand can be a **tool**: something your people call from 
 
 **Changing a tool.** Each version in the workflow's history says what changed from the one before in plain words (**What changed in version 3** in the editor: "It now also says 'diesel'", "Customers can now use it", "It now answers with a card", "Only these roles can start it now: manager", the steps added, removed or changed), and a version waiting for a second person to publish it says the same on **Approvals**, from the version that is live. A test of the workflow ([wd-test/v1](contracts/wd-test-v1.md)) can state the answer it expects (`expect.answer`: the text, a card's fields, a list's rows), so a change to the answer fails the test before it is published.
 
+## Making one
+
+| Way | How |
+| --- | --- |
+| **Use it from chat** | The switch on a workflow started by hand, in the builder |
+| **A ready-made tool** | One of the eight [recipes](templates.md#recipes-tools-for-the-chat) (look up, add a record, list and act, ask for approval, tell the team, call a system, daily report, watch and act): **Templates → Tools for the chat** on the web, **Add a tool** among Taskiem's tools in the app. Choose the word it is called by; a word that is taken becomes the next free one (`add-sale-2`), and you are told |
+| **Describe it** | Say what it should do, on the web (**New workflow → Describe it**) or in the chat (WhatsApp, Telegram, Slack, the web's and the app's Taskiem chat: "when I type prices-now, show me @price-list"). The AI builder drafts the workflow with its inputs, outputs and `tool` block together, reads it back in plain steps with the tool after them (the word it is called by, who may use it, what it asks and what it says back), and saves it as a draft on your yes; publish it and it is a tool. It may use a saved thing by its `@name`: the model is told your saved things' names and kinds only, never what they hold, and the run reads it when it starts. A tool for customers shows only the outputs marked public in its answer, and the builder warns you when a public one is read from a saved thing, a setting or a table ([AI](ai.md#tools)) |
+| **The definition** | `tool` in the JSON, `flow.tool({...})` in code, Git |
+
 ## How careful it is
 
 Worked out from its steps when it is published, never chosen by whoever made it:

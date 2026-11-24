@@ -87,12 +87,36 @@ A template that keeps records in a [data table](data-tables.md) declares the tab
 
 **A table that exists already** is left as it is, and the answer says which of the columns the template uses it lacks (`{name, status: exists, missing: [...]}`); on WhatsApp and Telegram the chat says so, with the link to the Tables page. A draft made from a template, by the AI builder or picked in chat, makes the tables the template declares as well as any the model describes, when it is saved; the first table a business makes from chat is preceded by *Setting up your records*, since it makes the business's data project ([data tables](data-tables.md#how-provisioning-works)).
 
+## Recipes: tools for the chat
+
+A **recipe** is a template that makes a [tool](tools.md), a workflow people call from the chat by a word ([made tools §13](spec/made-tools.md#13-making-a-tool); build plan M6). Its definition carries the `tool` block, and its one parameter of type `command` is the word it is called by, chosen when it is installed. Eight ship, each generic and tied to no part of Taskiem:
+
+| Id | Kind | What it does | Asks before it runs |
+| --- | --- | --- | --- |
+| `tool-look-up` | Look up | Finds the first row of a table whose chosen column matches the words, and answers with a card: that row's name and two more of its columns | Nothing: it only reads |
+| `tool-add-a-record` | Record | Adds a row (what, amount, note) to one table, made with it if it is missing, with a sentence back | Yes |
+| `tool-list-and-act` | Pick | Lists a table's rows in a state (open), ten in the chat and all on the web and in the app, each with a **Mark it done** button that calls the tool again with that row (once) | Yes |
+| `tool-ask-for-approval` | Do, Decide | A request with a reason; the people with the role chosen decide with Approve and Reject; the asker is told in the chat they asked from | Yes |
+| `tool-tell-the-team` | Do | A message to everyone with a role, and how many it reached | Yes |
+| `tool-call-a-system` | Look up (for someone technical) | Reads a web address with the words as `q`, and shows two chosen fields of the answer as a card | Nothing: a `GET` |
+| `tool-daily-report` | Report | The tool lists today's rows of a table; with it comes a schedule that tells the role chosen, every day at a time, how many rows today and the total of a column, with a **See the list** button that opens the tool | Nothing |
+| `tool-watch-and-act` | Watch | The tool marks a row handled; with it comes a schedule that looks every day for rows at or below a level and tells the role, with a **Deal with it** button (once) that opens the tool on the first | Yes |
+
+- **The command, at install.** `POST /v1/templates/{id}/instantiate` takes the word as typed (`/Add Sale` is `add-sale`) or the recipe's own when none is given. When it is taken (one of Taskiem's own words in any language, a deployed tool's in any environment, or another workflow version's, so a recipe installed twice does not clash with its own draft) the recipe gets the next free one, `add-sale-2`, `-3`…, and the answer says so: `tool: {asked, command, changed}`.
+- **A companion.** The daily report and watch and act are two workflows: a schedule cannot be a tool, so the schedule (the template's `companion`) is installed beside the tool as its own draft workflow, filled with the same values, its button naming the tool's command (`tool.companion: {id, name}` in the answer). Publish both.
+- **What a run reads from a table** is sealed as personal data (the data tables' rows always are), so a tool shows text read from a table masked (•••) in its answer, and in full on the run to whoever may open it; numbers show as they are ([tools](tools.md#in-words)). The recipes answer with what a person typed or a count where they can.
+- **Retrieval.** Recipes `require` the words tool, command, type or button, so the AI builder offers one only for a goal about something used from the chat.
+- **Tests.** Each has its own workflow tests (`templates/tests/tool-*.test.json`, stating the answer), `TestRecipes` (each a tool called by its command, the companions' buttons), `TestTemplatesInstantiateCheckDryRunAndRoundTrip` (companions too), and `TestRecipesInstallPublishAndRun` (`api/recipes_test.go`): each installed, published and run as a tool on the real server, its answer drawn.
+
+`GET /v1/templates?tool=true` lists the recipes, each with `tool`: its name, what it is for, who uses it, what it says back, the command it is called by unless another is chosen, its care worked out from its steps, and its companion. On the web, **Templates** has **Tools for the chat**: each recipe's card names its command, its page says what the tool is, and installing it says the command given. In the app, **Add a tool** among Taskiem's tools (for people who may build) opens **Ready-made tools**: the recipes with their word and how much each asks, and a sheet to add one as a draft with its word; what the recipe needs with no default is asked there, the rest keeps the recipe's own (chosen again on the web).
+
 ## Parameters
 
 Each template has named, typed and described parameters:
 
 | Type | Accepts |
 | --- | --- |
+| `command` | A recipe's tool's word after `/`: 2 to 24 lower-case letters, digits and dashes, starting with a letter, written so from what a person types (`/Find Customer` is `find-customer`); one per template, and only a recipe has one |
 | `string`, `text` | One line (at most 200 characters unless the template says otherwise) or several (900); an optional pattern or list of values |
 | `integer`, `number` | Numbers, also as typed by people ("1,000", "₦2,500.50"), within the template's minimum and maximum |
 | `boolean` | yes or no |
@@ -151,9 +175,9 @@ The read-back (the Start page, the Guide and chat) says what a template step use
 
 | Route | Permission | What it does |
 | --- | --- | --- |
-| `GET /v1/templates` | any member | Every template: summary, parameters, variables, its steps in plain words (filled with the examples), and `available` (every connector it uses is available to the tenant). `?q=` ranks by keyword match, `?category=` filters, `?callable=true` keeps the [callable](#callable-templates) ones. A callable template also has `callable`: its `inputs` (a JSON Schema), the `params` a template step fills (those only its trigger uses are left out), its `outputs` and its computed `effect` |
+| `GET /v1/templates` | any member | Every template: summary, parameters, variables, its steps in plain words (filled with the examples), and `available` (every connector it uses is available to the tenant). `?q=` ranks by keyword match, `?category=` filters, `?callable=true` keeps the [callable](#callable-templates) ones, `?tool=true` the [recipes](#recipes-tools-for-the-chat), each with its `tool`. A callable template also has `callable`: its `inputs` (a JSON Schema), the `params` a template step fills (those only its trigger uses are left out), its `outputs` and its computed `effect` |
 | `GET /v1/templates/{id}` | any member | One template, with its definition (markers included) |
-| `POST /v1/templates/{id}/instantiate` | `workflow.edit` | `{"params": {...}, "name"?}`: a new workflow with a `draft` version 1, `created_by` the person, the template recorded on the version (`workflow_versions.template_id`), `workflow.create` audited with the template; answers the draft's `problems`, its `variables`, and `tables`: what became of each data table the template declares (above) (publishing checks) and the variables to set. Plan limits apply (`max_workflows`). Never publishes |
+| `POST /v1/templates/{id}/instantiate` | `workflow.edit` | `{"params": {...}, "name"?}`: a new workflow with a `draft` version 1, `created_by` the person, the template recorded on the version (`workflow_versions.template_id`), `workflow.create` audited with the template; answers the draft's `problems`, its `variables`, and `tables`: what became of each data table the template declares (above) (publishing checks) and the variables to set; for a recipe, `tool`: the command asked for, the one given, whether it changed, and its companion's draft. Plan limits apply (`max_workflows`). Never publishes |
 | `GET /v1/embed/{app}/templates` | end user | The app's `allowed_templates`, `available` only when the app also allows every connector they use |
 | `POST /v1/embed/{app}/templates/{id}/instantiate` | end user, `workflow.edit` | As above, for one of the app's templates (403 otherwise, and 403 `not_allowed` when the filled definition uses a connector the app does not allow) |
 

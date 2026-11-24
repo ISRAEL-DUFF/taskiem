@@ -254,7 +254,7 @@ Ticked 24 November 2026 for what is merged to main (PRs #214, #218, #220, #221, 
 - [x] M0 · [x] M1 · [x] D0
 - [x] M2 · [x] M3 · [x] M4 · [x] G0 · [x] G1 · [x] D1
 - [x] M5 · [x] G2 · [x] G3 · [x] D2
-- [ ] M6 · [x] G4 (24 November 2026, [build-plan-gaps.md](build-plan-gaps.md) §11) · [ ] G5 (not started: [build-plan-gaps.md](build-plan-gaps.md) §11)
+- [x] M6 (built 24 November 2026: [build-plan-gaps.md](build-plan-gaps.md) §11) · [x] G4 (24 November 2026, [build-plan-gaps.md](build-plan-gaps.md) §11) · [ ] G5 (not started: [build-plan-gaps.md](build-plan-gaps.md) §11)
 
 ## 7. Risks
 
