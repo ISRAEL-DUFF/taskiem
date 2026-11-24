@@ -161,7 +161,7 @@ All of this is built and tested against the stand-in provider, as P1 to P4 were.
 
 **Done when (the spec's own, in full):** an owner pays a rider ₦45,000 from Tools in under 30 seconds, sees the fee and the balance after before confirming, and it is recorded as a delivery in the money log with its fee as bank charges; the chat's diary line turns to "Received by the bank"; the rider sees a card in their chat; a changed account for a past payee is stopped for the owner's OK; and a forwarded message with an account number is answered with the name and "how much?".
 
-## 10. Phase H8: languages
+## 10. Phase H8: languages — done 24 November 2026
 
 | Task | Item |
 | --- | --- |
@@ -169,6 +169,12 @@ All of this is built and tested against the stand-in provider, as P1 to P4 were.
 | The 3 menu.stock.new entries; pcm's 60 menu entries identical to English checked one by one (some are right as Pidgin) | `g-menu-lang` |
 | Every word added by H2 to H7, as each phase lands (rule 3 of §2) | All |
 | Native speakers' review of all four languages | Outside the build (§12) |
+
+**Built 24 November 2026.** The check found far more than the 34 entries above: later phases had copied English into the four files, so 922 entries read as English (170 in Hausa, 171 in Igbo, 170 in Yoruba, 411 in Pidgin). Every one was gone through. Hausa, Igbo and Yoruba have drafts for all but the entries that are only placeholders and punctuation (13, 12 and 14, with *invoice* and *transfer* where the file already uses the loanword). In Pidgin, 137 have drafts and 274 are kept as English on purpose (short labels such as Save, Cancel and Money, and the day and unit names). An entry kept as English on purpose says `"same": true`. The contexts that said "Not translated yet" now say "Draft, not reviewed". Everything stays `"reviewed": false`.
+
+So it cannot happen again, the catalogue check (`engine/lang/catalog.go`, `Check`) now fails the build when a translation is the English words without `"same": true` (`engine/lang/lang_test.go`, `TestEnglishLeftInATranslationIsCaught`, and the whole catalogue in `TestEveryEnglishMessageIsInEveryCatalogue`); [languages.md](../languages.md) says so. Words in asterisks stay English, because they are typed commands, so a line can name a button in English while the button shows the translation. The native speakers' review should look at those lines (§12).
+
+**Done when:** no entry in ha, ig, pcm or yo reads as English unless it says it is the same on purpose, and the test holds every later change to that.
 
 ## 11. The later milestones (stage 8 of the earlier plan)
 
@@ -262,7 +268,7 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-recipes | §12 |
 | g-own-purchase | §12 |
 | g-old-cols | H2 (done 24 November 2026) |
-| g-stock-lang | H8 |
+| g-stock-lang | H8 (built 24 November 2026) |
 | g-uses-ask | H2 (done 24 November 2026) |
 | g-deprec | §12 |
 | g-thing-suggest | H2 (done 24 November 2026) |
@@ -303,7 +309,7 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-scan-erase | H3, done |
 | g-scan-sense | §12 |
 | g-scan-echo | Built; H1 fixes the doc |
-| g-menu-lang | H8 |
+| g-menu-lang | H8 (built 24 November 2026) |
 | g-menu-tg | H4 (built) |
 | g-menu-slack | H4 (built) |
 | g-menu-later | §12 |

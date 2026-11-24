@@ -18,7 +18,7 @@ Taskiem can talk to people on [WhatsApp](whatsapp.md), [USSD](ussd.md) and SMS i
 
 ## How it works
 
-**Catalogues.** Everything Taskiem says is a message id in `engine/lang/messages/<language>.json`. English (`en.json`) is the source: each entry has a `context` saying where it is sent. A message is filled with named placeholders such as `{workflow}`, which every translation must keep. A message missing from a catalogue is sent in English and logged once (`language catalogue: message missing`). A test fails the build when an English id is missing from any catalogue, when placeholders differ, or when a catalogue has an id English does not.
+**Catalogues.** Everything Taskiem says is a message id in `engine/lang/messages/<language>.json`. English (`en.json`) is the source: each entry has a `context` saying where it is sent. A message is filled with named placeholders such as `{workflow}`, which every translation must keep. A message missing from a catalogue is sent in English and logged once (`language catalogue: message missing`). A test fails the build when an English id is missing from any catalogue, when placeholders differ, or when a catalogue has an id English does not. It also fails when a translation is still the English words, unless the entry says `"same": true` (the English is right as it stands: a brand, a bare placeholder, a Pidgin word English shares); so a new message cannot ship untranslated (build-plan-gaps H8).
 
 **Words for commands.** `engine/lang/intents/<language>.json` lists, per language:
 
