@@ -6,7 +6,7 @@
   },
   "cases": [
     {
-      "name": "a paid employee is told the amount and sent their payslip link",
+      "name": "a paid employee is told the amount and sent their payslip link (connected in one step, not linked to a staff member)",
       "trigger": {
         "event": "payout.succeeded",
         "body": {
@@ -39,7 +39,8 @@
               "employment_type": "SALARIED",
               "start_date": "2024-02-01",
               "pay_method": "BANK"
-            }
+            },
+            "taskiem_payslips": true
           }
         },
         "tell": {
@@ -79,7 +80,7 @@
       }
     },
     {
-      "name": "a staff member linked in Taskiem gets Taskiem's own payslip card, not the link",
+      "name": "connected in one step, a staff member linked in Taskiem gets Taskiem's own payslip card, not the link",
       "trigger": {
         "event": "payout.succeeded",
         "body": {
@@ -112,7 +113,8 @@
               "employment_type": "SALARIED",
               "start_date": "2024-02-01",
               "pay_method": "BANK"
-            }
+            },
+            "taskiem_payslips": true
           }
         },
         "tell": {
@@ -135,6 +137,85 @@
         "steps": {
           "payslip": "skipped",
           "send_payslip": "skipped"
+        }
+      }
+    },
+    {
+      "name": "connected with a key, a staff member linked in Taskiem still gets the payslip link (Taskiem hears no payslip.issued)",
+      "trigger": {
+        "event": "payout.succeeded",
+        "body": {
+          "id": "01J9Z0000000000000000000E1",
+          "type": "payout.succeeded",
+          "api_version": "2026-11-01",
+          "created_at": "2026-10-28T10:00:00Z",
+          "company_id": "co",
+          "data": {
+            "run_id": "run-10",
+            "payslip_id": "ps-1",
+            "employee_id": "emp-1",
+            "amount_kobo": 18500000,
+            "method": "BANK",
+            "reference": "NIP-1"
+          }
+        }
+      },
+      "mocks": {
+        "employee": {
+          "output": {
+            "employee": {
+              "id": "emp-1",
+              "first_name": "Ngozi",
+              "last_name": "Eze",
+              "email": "ngozi@chuks.ng",
+              "phone": "+2348030000001",
+              "department": "Sales",
+              "status": "ACTIVE",
+              "employment_type": "SALARIED",
+              "start_date": "2024-02-01",
+              "pay_method": "BANK"
+            },
+            "taskiem_payslips": false
+          }
+        },
+        "tell": {
+          "output": {
+            "via": "staff_chat"
+          }
+        },
+        "payslip": {
+          "output": {
+            "url": "https://payroller.surge.sh/p/abc",
+            "expires_at": "2026-11-04T10:00:00Z"
+          }
+        },
+        "send_payslip": {
+          "output": {
+            "via": "staff_chat"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "employee": {
+            "employee_id": "emp-1"
+          },
+          "tell": {
+            "phone": "+2348030000001",
+            "message": "Chuks Electronics: hello Ngozi, your pay of NGN 185000 has been paid."
+          },
+          "payslip": {
+            "payslip_id": "ps-1"
+          },
+          "send_payslip": {
+            "message": "Chuks Electronics: your payslip is here, for 7 days: https://payroller.surge.sh/p/abc (you will be asked for the last four digits of your phone)."
+          }
+        },
+        "steps": {
+          "tell": "completed",
+          "payslip": "completed",
+          "send_payslip": "completed"
         }
       }
     },

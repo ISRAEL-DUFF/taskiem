@@ -299,7 +299,24 @@ func (c *client) getEmployee(ctx context.Context, req connector.Request) (connec
 	if err != nil {
 		return connector.Response{}, err
 	}
-	return c.get(ctx, req, "/connect/employees/"+emp, nil)
+	var out map[string]any
+	if err := c.do(ctx, req, http.MethodGet, "/connect/employees/"+emp, nil, nil, &out); err != nil {
+		return connector.Response{}, err
+	}
+	if out == nil {
+		out = map[string]any{}
+	}
+	out["taskiem_payslips"] = OwnSubscription(req.Credentials)
+	return connector.Response{Output: out}, nil
+}
+
+// OwnSubscription says whether a connection holds Taskiem's own
+// subscription (connected in one step, P4b-1): Taskiem then hears
+// payslip.issued itself and gives a staff member linked to the employee
+// its own payslip card. A key connection holds none, so a template sends
+// Payrolla's payslip link as before (payrolla-tell-staff).
+func OwnSubscription(creds map[string]string) bool {
+	return strings.TrimSpace(creds["refresh_token"]) != ""
 }
 
 // createPayslipLink asks for a fresh payslip link. Payrolla issues another

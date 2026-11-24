@@ -246,6 +246,7 @@ actions:
       type: object
       properties:
         employee: { type: object, properties: { id: { type: string }, first_name: { type: string }, last_name: { type: string }, email: { type: string }, phone: { type: string }, department: { type: string }, status: { type: string, description: "ACTIVE, INACTIVE or TERMINATED" }, employment_type: { type: string, description: "SALARIED, DAILY or COMMISSION" }, start_date: { type: string }, pay_method: { type: string, description: "WALLET, BANK or NONE" }, external_ref: { type: string } } }
+        taskiem_payslips: { type: boolean, description: "true when the connection was made in one step: Taskiem itself gives a staff member linked to this employee their payslip card (payslip.issued); false on a key connection, which hears no payslip.issued of its own" }
     pii:
       - { field: output.employee.first_name, category: name }
       - { field: output.employee.last_name, category: name }

@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/payrolla"
 	"github.com/israel-duff/taskiem/connectors/payrolla/payrollatest"
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/remote"
@@ -304,6 +305,7 @@ func TestPayrollaConnectInOneStep(t *testing.T) {
 func TestPayrollaKeyConnectionAndReconnect(t *testing.T) {
 	w := newPayrollaWorld(t)
 	f := w.fake
+	f.SetWorkers(payrollatest.Worker{ID: zainabE, First: "Zainab", Last: "Bello", GrossKobo: 45000000})
 	owner := w.tenant(t, "Amara Foods", "ngozi@amara.test")
 	key := f.AddKey("payroll:read", "employees:read")
 	conn := owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "payrolla@1", "name": "main", "mode": "test",
@@ -311,6 +313,12 @@ func TestPayrollaKeyConnectionAndReconnect(t *testing.T) {
 	page := owner.must(200, "GET", "/v1/payroll", nil)
 	if page["connected"] != true || page["auth"] != "key" || page["is_owner"] != true {
 		t.Fatalf("key connection: %v", page)
+	}
+	// payrolla-tell-staff keeps sending a key connection's linked staff
+	// Payrolla's payslip link: Taskiem hears no payslip.issued of its own.
+	tenant := uuid.MustParse(tenantOf(t, owner))
+	if got := w.templateEmployee(t, tenant, "main"); got["taskiem_payslips"] != false {
+		t.Fatalf("a key connection's employee: %v", got)
 	}
 	got := owner.must(200, "GET", "/v1/payroll/connection", nil)
 	if got["connection"].(map[string]any)["auth"] != "key" {
@@ -333,13 +341,50 @@ func TestPayrollaKeyConnectionAndReconnect(t *testing.T) {
 		t.Fatalf("webhooks on the new tokens: %v", hooks)
 	}
 	owner.must(200, "GET", "/v1/payroll/approvers", nil)
+	// Connected in one step, Taskiem gives linked staff its own payslip
+	// card (payslip.issued), and the template no longer sends them the link.
+	if got := w.templateEmployee(t, tenant, "main"); got["taskiem_payslips"] != true {
+		t.Fatalf("a one-step connection's employee: %v", got)
+	}
 	// The owner removes the old key in Payrolla, as Taskiem asks: the old
 	// key's last event names it, not this connection.
-	tenant := uuid.MustParse(tenantOf(t, owner))
 	body, _ := json.Marshal(map[string]any{"id": "evt_old", "type": "company.disconnected", "data": map[string]any{"key_id": "some-old-key", "reason": "revoked_by_owner"}})
 	api.PayrollaHeard(w.env.DB.App, w.env.Vault, slog.New(slog.DiscardHandler))(context.Background(),
 		ingest.HeardEvent{Tenant: tenant, Environment: "prod", Connector: "payrolla", Trigger: "connection_event", Connection: "main", Event: "company.disconnected", Body: body})
 	if got := owner.must(200, "GET", "/v1/payroll/connection", nil); got["connected"] != true {
 		t.Fatalf("the old key's end ended the new connection: %v", got)
 	}
+}
+
+// templateEmployee runs the Payrolla connector's get_employee on the
+// business's stored connection, as a template's step does
+// (payrolla-tell-staff's "Find the employee"), for Zainab Bello.
+func (w *payrollaWorld) templateEmployee(t *testing.T, tenant uuid.UUID, name string) map[string]any {
+	t.Helper()
+	ctx := context.Background()
+	var c *connector.Connector
+	for _, x := range w.env.Registry.List() {
+		if x.Manifest.ID == "payrolla" {
+			c = x
+		}
+	}
+	if c == nil {
+		t.Fatal("no payrolla connector")
+	}
+	creds, err := w.env.Vault.Credentials(ctx, tenant, "prod", "payrolla", name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := c.Actions["get_employee"].Execute(ctx, connector.Request{Input: map[string]any{"employee_id": zainabE}, Credentials: creds, HTTP: http.DefaultClient,
+		Rotate: func(ctx context.Context, fn connector.RotateFunc) (map[string]string, error) {
+			return w.env.Vault.RotateCredentials(ctx, tenant, "prod", "payrolla", name, fn)
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := res.Output.(map[string]any)
+	if emp, _ := out["employee"].(map[string]any); emp == nil || emp["id"] != zainabE {
+		t.Fatalf("employee: %v", out)
+	}
+	return out
 }
