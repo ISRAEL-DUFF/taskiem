@@ -482,3 +482,11 @@ startPayrollRunCode
 approvePayrollRun
 lockPayrollRun
 rejectPayrollRun
+# Payroll settings and the tax and pension schedules (P4b-5): the setup
+# read-only, each payroll's schedules with a line per person, pension PINs
+# shown with a passkey, a spreadsheet when asked (docs/spec/chat-pay-people.md)
+getPayrollSettings
+listPayrollSchedules
+getPayrollSchedule
+revealPayrollSchedule
+downloadPayrollSchedule

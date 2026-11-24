@@ -850,6 +850,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if done, err := s.waPayroll(ctx, c, text, cmd); done || err != nil {
 		return err
 	}
+	// Its settings and schedules (payroll_reports_chat.go; P4b-5).
+	if done, err := s.waPayrollReports(ctx, c, text); done || err != nil {
+		return err
+	}
 	if cmd == "cancel" || cmd == "stop" {
 		if c.state == stateIdle {
 			return c.say(ctx, s, c.t("wa.nothing_to_cancel"))

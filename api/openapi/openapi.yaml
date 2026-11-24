@@ -21242,6 +21242,188 @@ paths:
                   words: {type: string}
         default:
           $ref: '#/components/responses/Error'
+  /v1/payroll/settings:
+    get:
+      operationId: getPayrollSettings
+      tags:
+      - Payments
+      summary: How the payroll is set up in Payrolla
+      description: 'Read from Payrolla when asked (P4b-5), in plain words: how often people are paid, the state tax is paid to, whether someone else must approve (separation of duties), how payroll is paid for, whether a PAYE tax number is on file, and the deductions in force (PAYE, pension rates, NHF, NHIS). Read-only: `change_url` is Payrolla''s settings page. 409 `reconnect` when Payrolla is not connected.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
+      responses:
+        '200':
+          description: The setup
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [settings, is_owner]
+                properties:
+                  is_owner: {type: boolean}
+                  settings:
+                    type: object
+                    additionalProperties: false
+                    required: [company, rows, deductions, separation_of_duties]
+                    properties:
+                      company:
+                        type: object
+                        additionalProperties: {type: string}
+                      rows:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PayrollSettingRow'
+                      deductions:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PayrollSettingRow'
+                      not_set_up: {type: string, description: 'Payrolla has no deductions set up yet.'}
+                      since: {type: string, description: 'Since when the deductions are in force ("1 Jan 2026").'}
+                      change_url: {type: string, description: 'Payrolla''s settings page, where it is changed.'}
+                      separation_of_duties: {type: boolean}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/schedules:
+    get:
+      operationId: listPayrollSchedules
+      tags:
+      - Payments
+      summary: The tax and pension schedules
+      description: 'The PAYE, pension (one a PFA), NHF and NHIS schedules of each locked payroll, newest first, each with its total, people and whether it is to pay or paid (P4b-5). Read from Payrolla when asked, never kept. Needs Payrolla''s `reports:read`: 409 `scope_required` otherwise, in words (an owner is asked to reconnect and allow Read statutory reports).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
+      responses:
+        '200':
+          description: The schedules
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [schedules]
+                properties:
+                  schedules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PayrollSchedule'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/schedules/{id}:
+    get:
+      operationId: getPayrollSchedule
+      tags:
+      - Payments
+      summary: One schedule, a line per person
+      description: 'Each person''s amount; on a pension schedule each PFA and pension PIN masked to its last four (`masked`). Treated like a payslip: behind sign-in, never in a message, never kept. 404 for one Payrolla does not have; 409 `scope_required` as for the list.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollScheduleDetail'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/schedules/{id}/reveal:
+    post:
+      operationId: revealPayrollSchedule
+      tags:
+      - Payments
+      summary: See a pension schedule's PINs and PFAs in full
+      description: 'For `passkey`, a challenge asked for `payroll.reveal` on the schedule (403 `step_up` otherwise); recorded in the audit, with no PIN. 400 for a schedule with nothing hidden.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                passkey:
+                  $ref: '#/components/schemas/PasskeyCredential'
+      responses:
+        '200':
+          description: The schedule in full
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollScheduleDetail'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/schedules/{id}/download:
+    post:
+      operationId: downloadPayrollSchedule
+      tags:
+      - Payments
+      summary: A schedule as a spreadsheet
+      description: 'A CSV made now and kept nowhere: name and amount, and on a pension schedule the PFA and pension PIN, for which it needs a passkey asked for `payroll.reveal` on it (403 `step_up` otherwise). Each is recorded in the audit.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                passkey:
+                  $ref: '#/components/schemas/PasskeyCredential'
+      responses:
+        '200':
+          description: The spreadsheet
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [filename, csv]
+                properties:
+                  filename: {type: string}
+                  csv: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
   /v1/payroll/bank-changes:
     get:
       operationId: getPayrollBankChanges
@@ -48547,6 +48729,54 @@ components:
             - created_at
             - last_used_at
       additionalProperties: false
+    PayrollSettingRow:
+      type: object
+      additionalProperties: false
+      required: [key, label, value]
+      properties:
+        key: {type: string}
+        label: {type: string}
+        value: {type: string}
+        warn: {type: boolean}
+        'on': {type: boolean}
+    PayrollSchedule:
+      type: object
+      additionalProperties: false
+      required: [id, run_id, kind, title, to, period, period_words, total_kobo, people, state, state_words]
+      properties:
+        id: {type: string}
+        run_id: {type: string}
+        kind: {type: string, enum: [paye, pension, nhf, nhis]}
+        title: {type: string, description: '"Tax (PAYE)", "Pension", "Housing fund (NHF)", "Health insurance (NHIS)"'}
+        to: {type: string, description: 'Who it is paid to; a pension PFA masked to its last four.'}
+        period: {type: string, description: '2026-11'}
+        period_words: {type: string}
+        total_kobo: {type: integer}
+        people: {type: integer}
+        state: {type: string, enum: [to_pay, paid, preparing]}
+        state_words: {type: string}
+        when: {type: string, description: '"Due 10 Dec" or "Paid 1 Dec"'}
+        reference: {type: string}
+    PayrollScheduleDetail:
+      type: object
+      additionalProperties: false
+      required: [schedule, lines, masked]
+      properties:
+        schedule:
+          $ref: '#/components/schemas/PayrollSchedule'
+        masked: {type: boolean, description: 'PINs and PFAs are masked to their last four.'}
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [employee_id, name, amount_kobo]
+            properties:
+              employee_id: {type: string}
+              name: {type: string}
+              amount_kobo: {type: integer}
+              pfa: {type: string}
+              pin: {type: string}
     StepUpRequest:
       type: object
       required:
@@ -48568,6 +48798,7 @@ components:
           - money.pay.approve
           - money.pay.batch
           - staff.account
+          - payroll.reveal
         target:
           type: string
           maxLength: 200

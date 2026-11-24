@@ -2256,6 +2256,36 @@ class TaskiemApi {
     final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/reject', body: body.toJson());
     return RejectPayrollRunResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// How the payroll is set up in Payrolla (`GET /v1/payroll/settings`)
+  Future<GetPayrollSettingsResponse> getPayrollSettings() async {
+    final j = await _t.send('GET', '/v1/payroll/settings');
+    return GetPayrollSettingsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The tax and pension schedules (`GET /v1/payroll/schedules`)
+  Future<ListPayrollSchedulesResponse> listPayrollSchedules() async {
+    final j = await _t.send('GET', '/v1/payroll/schedules');
+    return ListPayrollSchedulesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One schedule, a line per person (`GET /v1/payroll/schedules/{id}`)
+  Future<PayrollScheduleDetail> getPayrollSchedule({required String id}) async {
+    final j = await _t.send('GET', '/v1/payroll/schedules/${Uri.encodeComponent(id)}');
+    return PayrollScheduleDetail.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// See a pension schedule's PINs and PFAs in full (`POST /v1/payroll/schedules/{id}/reveal`)
+  Future<PayrollScheduleDetail> revealPayrollSchedule({required RevealPayrollScheduleRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payroll/schedules/${Uri.encodeComponent(id)}/reveal', body: body.toJson());
+    return PayrollScheduleDetail.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A schedule as a spreadsheet (`POST /v1/payroll/schedules/{id}/download`)
+  Future<DownloadPayrollScheduleResponse> downloadPayrollSchedule({required DownloadPayrollScheduleRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payroll/schedules/${Uri.encodeComponent(id)}/download', body: body.toJson());
+    return DownloadPayrollScheduleResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -20468,5 +20498,243 @@ class RejectPayrollRunResponse {
   Map<String, dynamic> toJson() => {
         'run': run.toJson(),
         'words': words,
+      };
+}
+
+class GetPayrollSettingsResponse {
+  const GetPayrollSettingsResponse({required this.isOwner, required this.settings});
+
+  final bool isOwner;
+  final GetPayrollSettingsResponseSettings settings;
+
+  factory GetPayrollSettingsResponse.fromJson(Map<String, dynamic> j) => GetPayrollSettingsResponse(
+        isOwner: j['is_owner'] as bool,
+        settings: GetPayrollSettingsResponseSettings.fromJson(j['settings'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'is_owner': isOwner,
+        'settings': settings.toJson(),
+      };
+}
+
+class GetPayrollSettingsResponseSettings {
+  const GetPayrollSettingsResponseSettings({this.changeUrl, required this.company, required this.deductions, this.notSetUp, required this.rows, required this.separationOfDuties, this.since});
+
+  /// Payrolla's settings page, where it is changed.
+  final String? changeUrl;
+  final Map<String, dynamic> company;
+  final List<PayrollSettingRow> deductions;
+  /// Payrolla has no deductions set up yet.
+  final String? notSetUp;
+  final List<PayrollSettingRow> rows;
+  final bool separationOfDuties;
+  /// Since when the deductions are in force ("1 Jan 2026").
+  final String? since;
+
+  factory GetPayrollSettingsResponseSettings.fromJson(Map<String, dynamic> j) => GetPayrollSettingsResponseSettings(
+        changeUrl: j['change_url'] == null ? null : j['change_url'] as String,
+        company: j['company'] as Map<String, dynamic>,
+        deductions: (j['deductions'] as List).map((e) => PayrollSettingRow.fromJson(e as Map<String, dynamic>)).toList(),
+        notSetUp: j['not_set_up'] == null ? null : j['not_set_up'] as String,
+        rows: (j['rows'] as List).map((e) => PayrollSettingRow.fromJson(e as Map<String, dynamic>)).toList(),
+        separationOfDuties: j['separation_of_duties'] as bool,
+        since: j['since'] == null ? null : j['since'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'change_url': ?changeUrl,
+        'company': company,
+        'deductions': deductions.map((e) => e.toJson()).toList(),
+        'not_set_up': ?notSetUp,
+        'rows': rows.map((e) => e.toJson()).toList(),
+        'separation_of_duties': separationOfDuties,
+        'since': ?since,
+      };
+}
+
+class PayrollSettingRow {
+  const PayrollSettingRow({required this.key, required this.label, this.on, required this.value, this.warn});
+
+  final String key;
+  final String label;
+  final bool? on;
+  final String value;
+  final bool? warn;
+
+  factory PayrollSettingRow.fromJson(Map<String, dynamic> j) => PayrollSettingRow(
+        key: j['key'] as String,
+        label: j['label'] as String,
+        on: j['on'] == null ? null : j['on'] as bool,
+        value: j['value'] as String,
+        warn: j['warn'] == null ? null : j['warn'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'label': label,
+        'on': ?on,
+        'value': value,
+        'warn': ?warn,
+      };
+}
+
+class ListPayrollSchedulesResponse {
+  const ListPayrollSchedulesResponse({required this.schedules});
+
+  final List<PayrollSchedule> schedules;
+
+  factory ListPayrollSchedulesResponse.fromJson(Map<String, dynamic> j) => ListPayrollSchedulesResponse(
+        schedules: (j['schedules'] as List).map((e) => PayrollSchedule.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'schedules': schedules.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PayrollSchedule {
+  const PayrollSchedule({required this.id, required this.kind, required this.people, required this.period, required this.periodWords, this.reference, required this.runId, required this.state, required this.stateWords, required this.title, required this.to, required this.totalKobo, this.when});
+
+  final String id;
+  final String kind;
+  final int people;
+  /// 2026-11
+  final String period;
+  final String periodWords;
+  final String? reference;
+  final String runId;
+  final String state;
+  final String stateWords;
+  /// "Tax (PAYE)", "Pension", "Housing fund (NHF)", "Health insurance (NHIS)"
+  final String title;
+  /// Who it is paid to; a pension PFA masked to its last four.
+  final String to;
+  final int totalKobo;
+  /// "Due 10 Dec" or "Paid 1 Dec"
+  final String? when;
+
+  factory PayrollSchedule.fromJson(Map<String, dynamic> j) => PayrollSchedule(
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        people: (j['people'] as num).toInt(),
+        period: j['period'] as String,
+        periodWords: j['period_words'] as String,
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        runId: j['run_id'] as String,
+        state: j['state'] as String,
+        stateWords: j['state_words'] as String,
+        title: j['title'] as String,
+        to: j['to'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        when: j['when'] == null ? null : j['when'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind,
+        'people': people,
+        'period': period,
+        'period_words': periodWords,
+        'reference': ?reference,
+        'run_id': runId,
+        'state': state,
+        'state_words': stateWords,
+        'title': title,
+        'to': to,
+        'total_kobo': totalKobo,
+        'when': ?when,
+      };
+}
+
+class PayrollScheduleDetail {
+  const PayrollScheduleDetail({required this.lines, required this.masked, required this.schedule});
+
+  final List<PayrollScheduleDetailLinesItem> lines;
+  /// PINs and PFAs are masked to their last four.
+  final bool masked;
+  final PayrollSchedule schedule;
+
+  factory PayrollScheduleDetail.fromJson(Map<String, dynamic> j) => PayrollScheduleDetail(
+        lines: (j['lines'] as List).map((e) => PayrollScheduleDetailLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        masked: j['masked'] as bool,
+        schedule: PayrollSchedule.fromJson(j['schedule'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'masked': masked,
+        'schedule': schedule.toJson(),
+      };
+}
+
+class PayrollScheduleDetailLinesItem {
+  const PayrollScheduleDetailLinesItem({required this.amountKobo, required this.employeeId, required this.name, this.pfa, this.pin});
+
+  final int amountKobo;
+  final String employeeId;
+  final String name;
+  final String? pfa;
+  final String? pin;
+
+  factory PayrollScheduleDetailLinesItem.fromJson(Map<String, dynamic> j) => PayrollScheduleDetailLinesItem(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        employeeId: j['employee_id'] as String,
+        name: j['name'] as String,
+        pfa: j['pfa'] == null ? null : j['pfa'] as String,
+        pin: j['pin'] == null ? null : j['pin'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'employee_id': employeeId,
+        'name': name,
+        'pfa': ?pfa,
+        'pin': ?pin,
+      };
+}
+
+class RevealPayrollScheduleRequest {
+  const RevealPayrollScheduleRequest({this.passkey});
+
+  final PasskeyCredential? passkey;
+
+  factory RevealPayrollScheduleRequest.fromJson(Map<String, dynamic> j) => RevealPayrollScheduleRequest(
+        passkey: j['passkey'] == null ? null : PasskeyCredential.fromJson(j['passkey'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'passkey': ?passkey?.toJson(),
+      };
+}
+
+class DownloadPayrollScheduleRequest {
+  const DownloadPayrollScheduleRequest({this.passkey});
+
+  final PasskeyCredential? passkey;
+
+  factory DownloadPayrollScheduleRequest.fromJson(Map<String, dynamic> j) => DownloadPayrollScheduleRequest(
+        passkey: j['passkey'] == null ? null : PasskeyCredential.fromJson(j['passkey'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'passkey': ?passkey?.toJson(),
+      };
+}
+
+class DownloadPayrollScheduleResponse {
+  const DownloadPayrollScheduleResponse({required this.csv, required this.filename});
+
+  final String csv;
+  final String filename;
+
+  factory DownloadPayrollScheduleResponse.fromJson(Map<String, dynamic> j) => DownloadPayrollScheduleResponse(
+        csv: j['csv'] as String,
+        filename: j['filename'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'csv': csv,
+        'filename': filename,
       };
 }

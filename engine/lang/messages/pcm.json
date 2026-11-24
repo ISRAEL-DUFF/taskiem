@@ -8209,6 +8209,51 @@
       "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
       "reviewed": false
     },
+    "payroll.settings.chat": {
+      "text": "How your payroll is set up in Payrolla:\n{lines}\n\nChange any of it in Payrolla. See it here: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): the payroll's setup in words ({lines}: one line each) and a link"
+    },
+    "payroll.schedule.card": {
+      "text": "Your {kind} schedule for {period}: {amount} for {people}. {state}\nEach person's line is behind sign-in: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a tax or pension schedule's total, never each person's line, and a link behind sign-in ({kind}: PAYE, pension, NHF or NHIS)"
+    },
+    "payroll.schedule.none": {
+      "text": "There's no {kind} schedule for {period} yet. Schedules are ready once that month's payroll is locked.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): no schedule of that kind for that month"
+    },
+    "payroll.schedule.none_any": {
+      "text": "There's no {kind} schedule yet. Schedules are ready once a payroll is locked.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): no schedule of that kind at all"
+    },
+    "payroll.schedule.to_pay": {
+      "text": "To pay.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule still to pay"
+    },
+    "payroll.schedule.due": {
+      "text": "To pay by {when}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule still to pay, and its due date ({when}: 10 Dec)"
+    },
+    "payroll.schedule.paid": {
+      "text": "Paid.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule that is paid"
+    },
+    "payroll.schedule.scope_owner": {
+      "text": "Payrolla hasn't allowed Taskiem to read your tax and pension schedules. Reconnect Payrolla and allow Read statutory reports.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): Payrolla's SCOPE_REQUIRED for reports:read, to an owner (Read statutory reports is the scope in Payrolla's own words)"
+    },
+    "payroll.schedule.scope_other": {
+      "text": "Ask the owner to allow Read statutory reports in Payrolla.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): Payrolla's SCOPE_REQUIRED for reports:read, to others"
+    },
     "payroll.people": {
       "text": "{n} people",
       "reviewed": false,
