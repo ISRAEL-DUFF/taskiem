@@ -73,6 +73,13 @@ func (s *Server) payrollaConnection(ctx context.Context, tenant uuid.UUID) (*pay
 // payrollaClient is a Connect API client on the business's active
 // Payrolla connection, refreshing its tokens under the connection's lock.
 func (s *Server) payrollaClient(ctx context.Context, p *Principal, purpose string) (*payrolla.Client, *payrollaConn, error) {
+	return s.payrollaClientAs(ctx, p.TenantID, p.Actor(), purpose)
+}
+
+// payrollaClientAs is a business's Payrolla client, its connection's
+// credentials read for actor ("platform" for Taskiem's own checks).
+func (s *Server) payrollaClientAs(ctx context.Context, tenant uuid.UUID, actor, purpose string) (*payrolla.Client, *payrollaConn, error) {
+	p := &Principal{TenantID: tenant}
 	conn, err := s.payrollaConnection(ctx, p.TenantID)
 	if err != nil {
 		return nil, nil, err
@@ -88,7 +95,7 @@ func (s *Server) payrollaClient(ctx context.Context, p *Principal, purpose strin
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: Payrolla is not available here", errBadRequest)
 	}
-	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: purpose, Actor: p.Actor()})
+	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: purpose, Actor: actor})
 	creds, err := s.Vault.Credentials(use, p.TenantID, "prod", payrollaID, conn.Name)
 	if err != nil {
 		return nil, nil, err
@@ -613,8 +620,9 @@ func PayrollaHeard(pool *pgxpool.Pool, vault *secrets.Vault, log *slog.Logger) f
 		if e.Connector != payrollaID {
 			return
 		}
-		// A run's event tells people of it (payroll_runs_chat.go).
-		if payrollaRunHeard(ctx, pool, log, e) {
+		// A run's event tells people of it (payroll_runs_chat.go); a
+		// payment's and a payslip's (payroll_payment.go).
+		if payrollaRunHeard(ctx, pool, log, e) || payrollaPaymentHeard(ctx, pool, log, e) {
 			return
 		}
 		keyID, reason, ok := payrolla.Disconnected(e.Body)

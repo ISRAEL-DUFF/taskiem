@@ -137,6 +137,9 @@ func (s *Server) runSays(ctx context.Context, l lang.Tag, p *Principal, conn *pa
 		return refuse(http.StatusConflict, "scope_required", "payroll.refused.scope_other")
 	case "REASON_REQUIRED":
 		return refuse(http.StatusUnprocessableEntity, "reason_required", "payroll.refused.reason")
+	case "AWAITING_FUNDS", "ALREADY_PAYING", "NOTHING_TO_RETRY", "PAYSLIP_NOT_FINAL", "PAYSLIP_LINKS_DISABLED":
+		// After locking (payroll_payment.go).
+		return s.paymentSays(ctx, l, cl, run, code)
 	}
 	return s.payrollaSays(ctx, p, conn, err)
 }
@@ -489,6 +492,9 @@ func (s *Server) runMore(ctx context.Context, p *Principal, run string, out map[
 	if r.Status == "LOCKED" || r.Status == "DISBURSING" {
 		out["pays_on"] = tr(lang.EN, "payroll.pays_on", "date", dayWords(r.PayDate))
 	}
+	// After locking (payroll_payment.go): the payment, Pay now, paying the
+	// failed ones again, and payslips.
+	s.paymentMore(ctx, p, cl, r, pic, out)
 }
 
 // runChange is what a run's writes take: the form's own id for the
@@ -764,7 +770,7 @@ func (s *Server) startPayrollRunCode(w http.ResponseWriter, r *http.Request) {
 		Action string `json:"action"`
 		Key    string `json:"key"`
 	}
-	if err := decodeBody(r, &in); err != nil || !ok || (in.Action != payrolla.ActionApprove && in.Action != payrolla.ActionLock) {
+	if err := decodeBody(r, &in); err != nil || !ok || !slices.Contains([]string{payrolla.ActionApprove, payrolla.ActionLock, payrolla.ActionPayNow, payrolla.ActionRetryFailed}, in.Action) {
 		s.fail(w, r, errBadRequest)
 		return
 	}
@@ -778,6 +784,7 @@ func (s *Server) startPayrollRunCode(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusAccepted, map[string]any{"challenge": ch, "sent_to": codeWhere(lang.EN, ch), "safer": ch.Channel == "SMS"})
 			return
 		}
+		err = retryNothing(in.Action, err)
 	}
 	s.runFail(w, r, s.runSays(ctx, lang.EN, p, conn, cl, run, err))
 }
@@ -865,6 +872,7 @@ func (s *Server) decideRunCode(ctx context.Context, p *Principal, run, action, c
 		if d, err = cl.Decide(ctx, run, action, challenge, code, wr); err == nil {
 			return d, nil
 		}
+		err = retryNothing(action, err)
 	}
 	return payrolla.Decided{}, s.runSays(ctx, l, p, conn, cl, run, err)
 }
@@ -873,6 +881,11 @@ func (s *Server) decideRunCode(ctx context.Context, p *Principal, run, action, c
 // and pay?", or "Locked. Payrolla pays 48 people ₦9,200,000 on 28 Nov."
 func decidedOut(l lang.Tag, action string, d payrolla.Decided) map[string]any {
 	out := map[string]any{"run": runOf(runMap(d.Run)), "payment": d.Payment}
+	switch action {
+	case payrolla.ActionPayNow, payrolla.ActionRetryFailed:
+		out["words"] = paidNowWords(l, action, d)
+		return out
+	}
 	if action == payrolla.ActionLock {
 		date := d.Payment.ScheduledFor
 		if date == "" {

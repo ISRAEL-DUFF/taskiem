@@ -164,12 +164,19 @@ func (f *Fake) ServeRuns() {
 	}
 	f.Handle(http.MethodGet, "/connect/funding", f.fundingRoute)
 	f.Handle(http.MethodGet, "/connect/employees/", f.employeeRoute)
+	f.servePayment() // after locking (payment.go)
 }
 
 // employeeRoute is GET /connect/employees/{id}, the one handler for it
 // whether the fake serves runs (ServeRuns), staff and pay (NewTeam) or
 // both: a run's worker first, then the Team's employee.
 func (f *Fake) employeeRoute(w http.ResponseWriter, req *http.Request, c *Conn) {
+	if emp, ok := strings.CutSuffix(strings.TrimPrefix(req.URL.Path, "/api/v1/connect/employees/"), "/payslips"); ok {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.employeePayslips(w, c, emp)
+		return
+	}
 	if f.workerRoute(w, req, c) {
 		return
 	}
@@ -379,7 +386,7 @@ func (f *Fake) runsRoute(w http.ResponseWriter, req *http.Request, c *Conn) {
 	scope := "payroll:read"
 	if req.Method != http.MethodGet {
 		scope = "payroll:write"
-		if len(parts) >= 4 && slices.Contains([]string{"confirmations", "approve", "lock", "reject"}, parts[3]) {
+		if len(parts) >= 4 && slices.Contains([]string{"confirmations", "approve", "lock", "reject", "pay-now", "retry-failed"}, parts[3]) {
 			scope = "payroll:approve"
 		}
 	}
@@ -469,6 +476,10 @@ func (f *Fake) runsRoute(w http.ResponseWriter, req *http.Request, c *Conn) {
 		f.startRunCode(w, r, acting, in)
 	case req.Method == http.MethodPost && (rest == "approve" || rest == "lock"):
 		f.decide(w, c, r, rest, acting, req.Header.Get("X-Acting-User-Name"), in)
+	case req.Method == http.MethodGet && rest == "payment":
+		writeData(w, http.StatusOK, map[string]any{"payment": f.paymentOf(r)})
+	case req.Method == http.MethodPost && (rest == "pay-now" || rest == "retry-failed"):
+		f.decidePay(w, c, r, strings.ReplaceAll(rest, "-", "_"), acting, in)
 	case req.Method == http.MethodPost && rest == "reject":
 		a := f.linked(acting)
 		switch {
@@ -620,6 +631,9 @@ func (f *Fake) refuse(w http.ResponseWriter, r *fakeRun, action, acting string) 
 		writeErr(w, status, code, msg)
 		return true
 	}
+	if action == "pay_now" || action == "retry_failed" {
+		return f.payRefuse(w, r, action, acting)
+	}
 	switch {
 	case action != "approve" && action != "lock":
 		return refuse(http.StatusBadRequest, "INVALID_BODY", "this fake confirms approve and lock")
@@ -720,6 +734,9 @@ func (f *Fake) decide(w http.ResponseWriter, c *Conn, r *fakeRun, action, acting
 		f.emit(c, "approval.recorded", map[string]any{"subject": "run", "subject_id": r.id, "action": "approved", "by": by, "via": "connect", "app_name": "Taskiem", "run": r.summary()})
 	} else {
 		r.status, r.locked, r.updated = "LOCKED", f.Now(), f.Now()
+		statesMu.Lock()
+		runConn[r] = c
+		statesMu.Unlock()
 		f.emit(c, "run.locked", map[string]any{"run": r.summary()})
 		f.emit(c, "approval.recorded", map[string]any{"subject": "run", "subject_id": r.id, "action": "locked", "by": by, "via": "connect", "app_name": "Taskiem", "run": r.summary()})
 		f.emit(c, "run.payment_scheduled", map[string]any{"run": r.summary(), "scheduled_for": r.payDate, "total_net_kobo": r.net})
@@ -745,5 +762,6 @@ func RunRoutes() []string {
 func RunErrorCodes() []string {
 	return []string{"INVALID_STATE", "DUPLICATE_RUN", "INVALID_PERIOD", "INVALID_BODY", "REASON_REQUIRED", "UNKNOWN_FIELD", "ALREADY_EXCLUDED",
 		"APPROVER_NOT_LINKED", "NOT_AN_APPROVER", "PAYMENT_CONFIRMATION_NOT_SET_UP", "SOD_VIOLATION", "NO_PAYOUT_DESTINATION",
-		"TOO_MANY_CODES", "CODE_INVALID", "CODE_USED", "CODE_EXPIRED", "CODE_LOCKED", "SCOPE_REQUIRED", "NOT_FOUND"}
+		"TOO_MANY_CODES", "CODE_INVALID", "CODE_USED", "CODE_EXPIRED", "CODE_LOCKED", "SCOPE_REQUIRED", "NOT_FOUND",
+		"CANNOT_PAY", "AWAITING_FUNDS", "ALREADY_PAYING"}
 }

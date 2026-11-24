@@ -306,14 +306,16 @@ func (cl *Client) StartRunConfirmation(ctx context.Context, run, action string, 
 	return out.Challenge, err
 }
 
-// Decide approves or locks a run with the code the person typed. The code
+// Decide approves or locks a run, pays it now or sends its failed
+// payments again (payment.go), with the code the person typed. The code
 // is sent once and kept nowhere. Locking schedules the payment.
 func (cl *Client) Decide(ctx context.Context, run, action, challenge, code string, w Write) (Decided, error) {
-	if action != ActionApprove && action != ActionLock {
-		return Decided{}, errors.New("payrolla: approve or lock")
+	route := decidePath(action)
+	if route == "" {
+		return Decided{}, errors.New("payrolla: approve, lock, pay_now or retry_failed")
 	}
 	var out Decided
-	err := cl.write(ctx, http.MethodPost, runPath(run, action), w, map[string]any{"challenge_id": challenge, "code": code}, &out)
+	err := cl.write(ctx, http.MethodPost, runPath(run, route), w, map[string]any{"challenge_id": challenge, "code": code}, &out)
 	return out, err
 }
 

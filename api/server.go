@@ -959,6 +959,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermPayrollPeople), s.tenantWide).Delete("/payroll/approvers/{user}/link", s.unlinkPayroll)
 			// Staff and pay from Taskiem (payroll_team.go; P4b-2).
 			r.Group(s.payrollTeamRoutes)
+			// After locking: paying, and payslips (payroll_payment.go; P4b-4).
+			r.Group(s.payrollPaymentRoutes)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)

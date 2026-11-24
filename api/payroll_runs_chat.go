@@ -149,8 +149,18 @@ func (s *Server) waPayroll(ctx context.Context, c *chat, text, cmd string) (bool
 			return true, s.payrollAskCode(ctx, c, run, payrolla.ActionLock)
 		case "r":
 			return true, c.say(ctx, s, c.t("payroll.reject.how"))
+		case "p":
+			return true, s.payrollAskCode(ctx, c, run, payrolla.ActionPayNow)
+		case "f":
+			return true, s.payrollAskCode(ctx, c, run, payrolla.ActionRetryFailed)
 		}
 		return true, c.say(ctx, s, c.t("payroll.none"))
+	}
+	// "my payslip": a linked employee's own (payroll_payment_chat.go).
+	if c.state == stateIdle && c.in.Reply == "" {
+		if m := payslipWords.FindStringSubmatch(text); m != nil {
+			return true, s.myPayslipChat(ctx, c, m[1] != "")
+		}
 	}
 	if c.state != stateIdle || c.in.Reply != "" || !c.p.Can(PermPayrollSee) {
 		return false, nil
@@ -162,6 +172,10 @@ func (s *Server) waPayroll(ctx context.Context, c *chat, text, cmd string) (bool
 		return true, s.payrollPick(ctx, c, "COMPUTED", payrolla.ActionApprove)
 	case payrollLockWords.MatchString(text):
 		return true, s.payrollPick(ctx, c, "APPROVED", payrolla.ActionLock)
+	case payrollPayNowWords.MatchString(text):
+		return true, s.payrollPayPick(ctx, c, payrolla.ActionPayNow)
+	case payrollRetryWords.MatchString(text):
+		return true, s.payrollPayPick(ctx, c, payrolla.ActionRetryFailed)
 	}
 	if m := payrollRejectWords.FindStringSubmatch(text); m != nil {
 		return true, s.payrollReject(ctx, c, m[1])
@@ -267,7 +281,7 @@ func (s *Server) payrollAskCode(ctx context.Context, c *chat, run, action string
 	}
 	ch, err := cl.StartRunConfirmation(ctx, run, action, wr)
 	if err != nil {
-		_, err = s.sayRefused(ctx, c, s.runSays(ctx, c.lang.Tag, c.p, conn, cl, run, err))
+		_, err = s.sayRefused(ctx, c, s.runSays(ctx, c.lang.Tag, c.p, conn, cl, run, retryNothing(action, err)))
 		return err
 	}
 	period := periodWords(r.PeriodStart, r.PeriodEnd)
@@ -280,9 +294,14 @@ func (s *Server) payrollAskCode(ctx context.Context, c *chat, run, action string
 	}
 	s.payrollChatAudit(ctx, c, "payroll.run_code", run, map[string]any{"action": action, "channel": ch.Channel, "via": c.ch.Name()})
 	words := codeWhere(c.lang.Tag, ch) + " "
-	if action == payrolla.ActionLock {
+	switch action {
+	case payrolla.ActionLock:
 		words += c.t("payroll.code.type_lock", "period", period, "date", dayWords(r.PayDate))
-	} else {
+	case payrolla.ActionPayNow:
+		words += c.t("payroll.code.type_pay_now", "period", period)
+	case payrolla.ActionRetryFailed:
+		words += c.t("payroll.code.type_retry", "period", period)
+	default:
 		words += c.t("payroll.code.type_approve", "period", period)
 	}
 	if ch.Channel == "SMS" {
@@ -308,9 +327,9 @@ func (s *Server) payrollCodeTyped(ctx context.Context, c *chat, w *payrollWait, 
 				if derr := s.dropPayrollWait(ctx, c); derr != nil {
 					return derr
 				}
-				b := "a"
-				if w.Action == payrolla.ActionLock {
-					b = "l"
+				b := map[string]string{payrolla.ActionLock: "l", payrolla.ActionPayNow: "p", payrolla.ActionRetryFailed: "f"}[w.Action]
+				if b == "" {
+					b = "a"
 				}
 				return c.say(ctx, s, rr.msg, whatsapp.Button{ID: payrollPrefix + b + ":" + w.Run, Title: c.t("payroll.button.new_code")})
 			}
@@ -541,6 +560,12 @@ func (s *Server) payrollCardWords(ctx context.Context, l lang.Tag, p *Principal,
 			buttons = []whatsapp.Button{{ID: payrollPrefix + "l:" + r.ID, Title: tr(l, "payroll.button.lock")}}
 		}
 	}
+	// After locking: the payment's state, and paying the failed ones
+	// again (payroll_payment.go).
+	if line, more := s.paymentCardWords(ctx, l, p, cl, r, channel); line != "" {
+		b.WriteString("\n" + line)
+		buttons = append(buttons, more...)
+	}
 	return b.String(), buttons, s.payrollRunURL(r.ID)
 }
 
@@ -558,6 +583,11 @@ type payrollNews struct {
 	Event  string `json:"event"` // card, rejected, approved, rejected_there, locked, scheduled
 	Note   string `json:"note,omitempty"`
 	By     string `json:"by,omitempty"`
+	// After locking (payroll_payment.go): how short the wallet was, a
+	// payslip and its employee. Never one person's pay.
+	ShortKobo int64  `json:"short_kobo,omitempty"`
+	Payslip   string `json:"payslip,omitempty"`
+	Employee  string `json:"employee,omitempty"`
 }
 
 // payrollaRunHeard queues what a run's event tells people (Taskiem's own
@@ -649,6 +679,11 @@ func (s *Server) sendPayrollItem(ctx context.Context, it whatsapp.OutboxItem) er
 	if it.Reference == nil || json.Unmarshal([]byte(*it.Reference), &news) != nil || news.Run == "" {
 		return fmt.Errorf("%w: unreadable", whatsapp.ErrNothingToSend)
 	}
+	if news.Event == "payslip" {
+		// To the employee themselves, who may see no payroll
+		// (payroll_payment.go).
+		return s.sendPayslipItem(ctx, it, news)
+	}
 	p, err := s.principalOf(ctx, it.Tenant, it.User)
 	if err != nil || !p.Can(PermPayrollSee) {
 		return fmt.Errorf("%w: no longer sees the payroll", whatsapp.ErrNothingToSend)
@@ -701,6 +736,11 @@ func (s *Server) sendPayrollItem(ctx context.Context, it whatsapp.OutboxItem) er
 		title = tr(l, "payroll.told.rejected_there", "period", period, "by", news.By)
 	case "locked":
 		title = tr(l, "payroll.told.locked", "period", period, "by", news.By)
+	case "short", "warn3", "warn1", "paid":
+		var ok bool
+		if title, buttons, ok = s.paymentNewsWords(ctx, l, p, cl, r, news, it.Channel); !ok {
+			return fmt.Errorf("%w: no longer so", whatsapp.ErrNothingToSend)
+		}
 	case "scheduled":
 		title = tr(l, "payroll.told.scheduled", "period", period, "people", peopleWords(l, r.EmployeeCount), "amount", invoicing.Naira(r.TotalNetKobo), "date", dayWords(r.PayDate))
 	default:

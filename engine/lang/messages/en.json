@@ -10213,6 +10213,176 @@
       "text": "Open",
       "reviewed": true,
       "context": "This month's payroll (P4b-3, api/payroll_runs.go): a link button on the payroll's card on Telegram"
+    },
+    "payroll.pay.awaiting": {
+      "text": "Waiting for money: short by {short}",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a locked payroll's payment, waiting for the wallet"
+    },
+    "payroll.pay.awaiting_any": {
+      "text": "Waiting for money",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a locked payroll's payment, waiting for the wallet, by how much not known"
+    },
+    "payroll.pay.paying": {
+      "text": "Paying",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a payroll's payment under way"
+    },
+    "payroll.pay.paid": {
+      "text": "Paid",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a payroll paid to everyone"
+    },
+    "payroll.pay.paid_some": {
+      "text": "Paid, {n} not paid",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a payroll paid to some, with how many were not"
+    },
+    "payroll.pay.failed": {
+      "text": "Not paid",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a payroll's payment that failed"
+    },
+    "payroll.pay.none_now": {
+      "text": "There is no locked payroll waiting for its pay day.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): \"pay payroll now\" with nothing to pay now"
+    },
+    "payroll.paid_now": {
+      "text": "Paying now. Payrolla pays {people} {amount}.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): after Pay now with the code"
+    },
+    "payroll.retried": {
+      "text": "Sent again. Payrolla pays each of them into their current account.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): after Pay the failed ones again with the code"
+    },
+    "payroll.refused.awaiting_funds": {
+      "text": "Your Payrolla wallet is short by {short}. Add money, and Payrolla pays as soon as it's in.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): Payrolla's AWAITING_FUNDS"
+    },
+    "payroll.refused.awaiting_funds_some": {
+      "text": "Your Payrolla wallet is short. Add money, and Payrolla pays as soon as it's in.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): Payrolla's AWAITING_FUNDS, by how much not known"
+    },
+    "payroll.refused.already_paying": {
+      "text": "Payrolla is already paying this payroll.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): Payrolla's ALREADY_PAYING"
+    },
+    "payroll.refused.nothing_to_retry": {
+      "text": "There are no failed payments to send again.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): Payrolla's NOTHING_TO_RETRY"
+    },
+    "payroll.refused.payslip_not_final": {
+      "text": "This payslip is ready once the payroll is locked.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): Payrolla's PAYSLIP_NOT_FINAL"
+    },
+    "payroll.refused.payslip_links_off": {
+      "text": "Payslip links are off. Turn them on in Payrolla, Settings, Connected apps.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): Payrolla's PAYSLIP_LINKS_DISABLED"
+    },
+    "payroll.code.type_pay_now": {
+      "text": "Type it here to pay {period} payroll now.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): in the chat thread: type the code to pay now"
+    },
+    "payroll.code.type_retry": {
+      "text": "Type it here to send {period} payroll's failed payments again.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): in the chat thread: type the code to pay the failed ones again"
+    },
+    "payroll.button.retry": {
+      "text": "Pay them again",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a button (at most 20 characters): pay the failed ones again"
+    },
+    "payroll.told.short": {
+      "text": "{period} payroll is waiting for money: short by {short}. Add money to your Payrolla wallet; Payrolla pays as soon as it's in.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): told on the pay day when the wallet is short"
+    },
+    "payroll.told.warn3": {
+      "text": "{period} payroll pays on {date}, in 3 days. Your Payrolla wallet has {available}; it needs {needed}: short by {short}. Add money before then.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): the morning warning three days before the pay day"
+    },
+    "payroll.told.warn1": {
+      "text": "{period} payroll pays tomorrow, {date}. Your Payrolla wallet has {available}; it needs {needed}: short by {short}. Add money today.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): the morning warning the day before the pay day"
+    },
+    "payroll.told.paid_all": {
+      "text": "{period} payroll is paid: all {people}.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): told when everyone was paid"
+    },
+    "payroll.told.paid_some": {
+      "text": "{period} payroll: paid {paid} of {total} people. {n} not paid: {who}.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): told when some were not paid, with who and why"
+    },
+    "payroll.slip.paid": {
+      "text": "Paid",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a payslip's payment"
+    },
+    "payroll.slip.sent": {
+      "text": "On its way",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a payslip's payment sent, not yet arrived"
+    },
+    "payroll.slip.failed": {
+      "text": "Not paid",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a payslip's payment that failed"
+    },
+    "payroll.slip.returned": {
+      "text": "Returned by the bank",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a payslip's payment the bank returned"
+    },
+    "payroll.slip.waiting": {
+      "text": "Not paid yet",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): a payslip's payment not sent yet"
+    },
+    "payroll.payslip.ready": {
+      "text": "Your payslip for {month} is ready",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): the only words an employee is sent about their payslip"
+    },
+    "payroll.payslip.open": {
+      "text": "Open it in Taskiem. You'll sign in first.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): under the payslip notice on a chat app, with its link"
+    },
+    "payroll.payslip.not_linked": {
+      "text": "You're not linked to payroll here yet. Ask your employer.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): \"my payslip\" from someone not linked to a Payrolla employee"
+    },
+    "payroll.payslip.none": {
+      "text": "You have no payslips yet. They come once a payroll is locked.",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): \"my payslip\" with none yet"
+    },
+    "payroll.payslip.links": {
+      "text": "Your payslips open in Taskiem after you sign in:",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): \"my payslips\" on a chat app, before the links"
+    },
+    "payroll.payslip.link_line": {
+      "text": "{period}: {url}",
+      "reviewed": true,
+      "context": "After locking (P4b-4, api/payroll_payment.go): \"my payslips\" on a chat app: one payslip's link"
     }
   }
 }
