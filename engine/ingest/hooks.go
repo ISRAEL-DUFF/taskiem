@@ -93,7 +93,10 @@ type Handler struct {
 	// (registration: connection), once it is verified and recorded, for
 	// Taskiem's own reactions to it (Payrolla's company.disconnected ends
 	// the connection: api.PayrollaHeard). It is told again when the
-	// provider sends the event again, so it must be idempotent. Nil: none.
+	// provider sends the event again, so it must be idempotent. It is told
+	// on the delivery's request, before the provider is answered: a
+	// reaction that calls out (the provider's API) does so off the request
+	// (api.TeamHeard). Nil: none.
 	Heard func(ctx context.Context, e HeardEvent)
 
 	apps    appGate

@@ -145,9 +145,14 @@ func TestPayrollTeam(t *testing.T) {
 	// Payrolla's event: the linked approvers other than the owner are told.
 	tenant := uuid.MustParse(tenantOf(t, owner))
 	heard := api.PayrollaTeamHeard(w.env.DB.App, w.env.Vault, w.env.Registry, w.srv.Egress, slog.New(slog.DiscardHandler))
+	// What reads Payrolla happens after the delivery is answered (its
+	// request's context ended), and is waited for here.
 	hear := func(typ string, extra map[string]any) {
-		heard(context.Background(), ingest.HeardEvent{Tenant: tenant, Environment: "prod", Connector: "payrolla", Trigger: "connection_event", Connection: connName,
+		ctx, answered := context.WithCancel(context.Background())
+		heard.Heard(ctx, ingest.HeardEvent{Tenant: tenant, Environment: "prod", Connector: "payrolla", Trigger: "connection_event", Connection: connName,
 			Event: typ, Body: team.EventBody(typ, emp, extra)})
+		answered()
+		heard.Wait()
 	}
 	hear("employee.bank_change_requested", map[string]any{"change_id": change, "requested_via": "connect"})
 	hear("employee.bank_change_requested", map[string]any{"change_id": change, "requested_via": "connect"})

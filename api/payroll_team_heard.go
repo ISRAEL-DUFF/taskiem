@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,21 +50,56 @@ func HeardAll(fns ...func(context.Context, ingest.HeardEvent)) func(context.Cont
 
 // PayrollaTeamHeard reacts to Payrolla's employee events. It reads
 // Payrolla on the connection the event came on (reg, vault and guard as a
-// connector's call uses them).
-func PayrollaTeamHeard(pool *pgxpool.Pool, vault *secrets.Vault, reg *connector.Registry, guard *egress.Guard, log *slog.Logger) func(context.Context, ingest.HeardEvent) {
-	h := &teamHeard{pool: pool, vault: vault, reg: reg, guard: guard, log: log}
-	return h.heard
+// connector's call uses them), after the delivery is answered: Heard is
+// told on the webhook's request, which Payrolla waits on.
+func PayrollaTeamHeard(pool *pgxpool.Pool, vault *secrets.Vault, reg *connector.Registry, guard *egress.Guard, log *slog.Logger) *TeamHeard {
+	return &TeamHeard{pool: pool, vault: vault, reg: reg, guard: guard, log: log, slots: make(chan struct{}, teamHeardAtOnce)}
 }
 
-type teamHeard struct {
+// teamHeardAtOnce is how many employee events read Payrolla at once;
+// teamHeardFor is how long one may take, waiting for its turn included.
+const (
+	teamHeardAtOnce = 4
+	teamHeardFor    = 2 * time.Minute
+)
+
+// TeamHeard is PayrollaTeamHeard's reaction: Heard is ingest's Heard;
+// Wait waits for the reactions reading Payrolla to finish.
+type TeamHeard struct {
 	pool  *pgxpool.Pool
 	vault *secrets.Vault
 	reg   *connector.Registry
 	guard *egress.Guard
 	log   *slog.Logger
+	slots chan struct{}
+	wg    sync.WaitGroup
 }
 
-func (h *teamHeard) heard(ctx context.Context, e ingest.HeardEvent) {
+// Wait waits until every reaction started so far is done.
+func (h *TeamHeard) Wait() { h.wg.Wait() }
+
+// later runs fn off the delivery's request: past its end (the reaction is
+// idempotent, its alert told once a change), within teamHeardFor, at most
+// teamHeardAtOnce at once.
+func (h *TeamHeard) later(ctx context.Context, what string, fn func(context.Context) error) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), teamHeardFor)
+	h.wg.Go(func() {
+		defer cancel()
+		select {
+		case h.slots <- struct{}{}:
+			defer func() { <-h.slots }()
+		case <-ctx.Done():
+			h.log.Warn("payrolla: an employee event waited too long", "type", what)
+			return
+		}
+		if err := fn(ctx); err != nil {
+			h.log.Warn("payrolla: an employee event", "type", what, "err", err)
+		}
+	})
+}
+
+// Heard reacts to one event; what needs Payrolla is done later.
+func (h *TeamHeard) Heard(ctx context.Context, e ingest.HeardEvent) {
 	if e.Connector != payrollaID {
 		return
 	}
@@ -82,7 +118,7 @@ func (h *teamHeard) heard(ctx context.Context, e ingest.HeardEvent) {
 			})
 		}
 	case "employee.bank_change_requested":
-		err = h.requested(ctx, e, ev)
+		h.later(ctx, ev.Type, func(ctx context.Context) error { return h.requested(ctx, e, ev) })
 	case "employee.bank_change_approved", "employee.bank_change_rejected":
 		err = h.decided(ctx, e, ev)
 	}
@@ -92,7 +128,7 @@ func (h *teamHeard) heard(ctx context.Context, e ingest.HeardEvent) {
 }
 
 // client reads Payrolla on the event's connection, as Taskiem.
-func (h *teamHeard) client(ctx context.Context, e ingest.HeardEvent) (*payrolla.Client, error) {
+func (h *TeamHeard) client(ctx context.Context, e ingest.HeardEvent) (*payrolla.Client, error) {
 	lookup, err := h.reg.For(ctx, e.Tenant.String())
 	if err != nil {
 		return nil, err
@@ -124,7 +160,7 @@ func linkedStaffTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, employee st
 	return u, err
 }
 
-func (h *teamHeard) requested(ctx context.Context, e ingest.HeardEvent, ev payrolla.EmployeeEvent) error {
+func (h *TeamHeard) requested(ctx context.Context, e ingest.HeardEvent, ev payrolla.EmployeeEvent) error {
 	cl, err := h.client(ctx, e)
 	if err != nil {
 		return err
@@ -181,7 +217,7 @@ func firstName(n string) string {
 	return n
 }
 
-func (h *teamHeard) decided(ctx context.Context, e ingest.HeardEvent, ev payrolla.EmployeeEvent) error {
+func (h *TeamHeard) decided(ctx context.Context, e ingest.HeardEvent, ev payrolla.EmployeeEvent) error {
 	approved := ev.Type == "employee.bank_change_approved"
 	return db.InTenantTx(ctx, h.pool, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
 		asked := map[string]payrollStaffRef{}

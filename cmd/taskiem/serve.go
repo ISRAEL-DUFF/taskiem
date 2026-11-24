@@ -1077,7 +1077,7 @@ func (e *engine) hooks() *ingest.Handler {
 		// company.disconnected ends a Payrolla connection made in one step
 		// (P4b-1); employee events tell the right people (P4b-2).
 		Heard: api.HeardAll(api.PayrollaHeard(e.pool, e.vault, e.log),
-			api.PayrollaTeamHeard(e.pool, e.vault, e.registry, &egress.Guard{Logger: e.log}, e.log))}
+			api.PayrollaTeamHeard(e.pool, e.vault, e.registry, &egress.Guard{Logger: e.log}, e.log).Heard)}
 }
 
 // platformClient is Taskiem's own client at a provider (decision 0052),
