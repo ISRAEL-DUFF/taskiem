@@ -4,15 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -65,34 +62,13 @@ type answerWait struct {
 	Request string `json:"request,omitempty"`
 }
 
-type answerState struct {
-	Text string `json:"text"`
-	Tone string `json:"tone,omitempty"`
-}
-
-type answerLine struct {
-	Label string `json:"label"`
-	Value string `json:"value"`
-}
-
-type answerBtn struct {
-	Label  string         `json:"label"`
-	Tool   string         `json:"tool"`
-	Inputs map[string]any `json:"inputs,omitempty"`
-	Once   bool           `json:"once,omitempty"`
-	// Token presses it (POST /v1/tools/buttons/{token}); a button whose
-	// tool is not there is left out of the answer.
-	Token string `json:"token,omitempty"`
-}
-
-type answerRow struct {
-	Title   string       `json:"title"`
-	Sub     string       `json:"sub,omitempty"`
-	State   *answerState `json:"state,omitempty"`
-	Actions []answerBtn  `json:"actions,omitempty"`
-}
-
-var answerEngine = expr.MustNewWithRoots("outputs", "item")
+// The answer's parts, drawn by wd.DrawAnswer (as wd-test/v1 draws them).
+type (
+	answerState = wd.DrawnState
+	answerLine  = wd.DrawnLine
+	answerBtn   = wd.DrawnButton
+	answerRow   = wd.DrawnRow
+)
 
 // runAnswer is GET /v1/runs/{run}/answer: the answer of a tool's run, for
 // whoever may read runs or started it.
@@ -197,7 +173,7 @@ func (s *Server) answerAs(ctx context.Context, tenant, id uuid.UUID, may func(st
 	}
 	audience := wd.ToolForMembers
 	if customer {
-		outputs = publicOutputs(d, outputs)
+		outputs = wd.PublicOutputs(d, outputs)
 		audience = wd.ToolForCustomers
 	}
 	maskDeclared(d, outputs)
@@ -206,23 +182,6 @@ func (s *Server) answerAs(ctx context.Context, tenant, id uuid.UUID, may func(st
 		return a, err
 	}
 	return a, nil
-}
-
-// publicOutputs are the outputs a workflow marks public, and nothing
-// else: a customer's answer is drawn from them alone, so an output written
-// for staff never reaches a customer, at any depth, whatever the answer's
-// expressions name.
-func publicOutputs(d *wd.Definition, outputs map[string]any) map[string]any {
-	out := map[string]any{}
-	for _, o := range d.Outputs {
-		if !o.Public {
-			continue
-		}
-		if v, ok := outputs[o.Name]; ok {
-			out[o.Name] = v
-		}
-	}
-	return out
 }
 
 // maskDeclared masks the outputs declared personal data whatever their
@@ -253,111 +212,12 @@ func maskValue(v any) any {
 	return "•••"
 }
 
-// drawAnswer fills a from the tool's answer over outputs. A value that
-// cannot be worked out is left out rather than failing the answer.
+// drawAnswer fills a from the tool's answer over outputs (wd.DrawAnswer),
+// its words masked as messages are.
 func drawAnswer(a *madeAnswer, ans *wd.Answer, outputs map[string]any) {
-	a.Type = ans.Type
-	act := map[string]any{"outputs": outputs}
-	word := func(v string, act map[string]any) string { return maskWords(answerWord(v, act)) }
-	state := func(st *wd.AnswerState, act map[string]any) *answerState {
-		if st == nil {
-			return nil
-		}
-		return &answerState{Text: word(st.Text, act), Tone: st.Tone}
-	}
-	buttons := func(bs []wd.Button, act map[string]any) []answerBtn {
-		var out []answerBtn
-		for _, b := range bs {
-			in := map[string]any{}
-			for k, v := range b.Inputs {
-				if got, err := answerEngine.Resolve(v, act, false); err == nil {
-					if str, ok := got.(string); ok {
-						got = maskWords(str)
-					}
-					in[k] = got
-				}
-			}
-			out = append(out, answerBtn{Label: b.Label, Tool: b.Tool, Inputs: in, Once: b.Once})
-		}
-		return out
-	}
-	switch ans.Type {
-	case "text":
-		text := word(ans.Text, act)
-		if r := []rune(text); len(r) > wd.AnswerTextMax {
-			text = string(r[:wd.AnswerTextMax-1]) + "…"
-		}
-		a.Text = text
-	case "card":
-		a.Title, a.Ref, a.State = word(ans.Title, act), word(ans.Ref, act), state(ans.State, act)
-		for _, l := range ans.Lines {
-			a.Lines = append(a.Lines, answerLine{Label: l.Label, Value: word(l.Value, act)})
-		}
-		if ans.Amount != "" {
-			if v, err := answerEngine.Resolve(ans.Amount, act, false); err == nil {
-				if k, ok := toKobo(v); ok {
-					a.Amount = &k
-				}
-			}
-		}
-		a.Buttons = buttons(ans.Buttons, act)
-	case "list":
-		a.Title, a.Empty = word(ans.Title, act), ans.Empty
-		items, _ := outputs[ans.From].([]any)
-		a.Rows = []answerRow{}
-		for _, it := range items {
-			ia := map[string]any{"outputs": outputs, "item": it}
-			row := answerRow{Actions: buttons(ans.Actions, ia)}
-			if ans.Item != nil {
-				row.Title, row.Sub, row.State = word(ans.Item.Title, ia), word(ans.Item.Sub, ia), state(ans.Item.State, ia)
-			}
-			a.Rows = append(a.Rows, row)
-		}
-	}
-}
-
-// answerWord works out one of the answer's values as words: text as it
-// is, an expression's result written plainly.
-func answerWord(v string, act map[string]any) string {
-	if !strings.HasPrefix(v, "=") {
-		return v
-	}
-	got, err := answerEngine.Eval(v, act)
-	if err != nil {
-		return ""
-	}
-	switch x := got.(type) {
-	case nil:
-		return ""
-	case string:
-		return x
-	case float64:
-		if x == float64(int64(x)) {
-			return fmt.Sprintf("%d", int64(x))
-		}
-		return fmt.Sprintf("%g", x)
-	case int64:
-		return fmt.Sprintf("%d", x)
-	case bool:
-		if x {
-			return "yes"
-		}
-		return "no"
-	}
-	b, _ := json.Marshal(got)
-	return string(b)
-}
-
-func toKobo(v any) (int64, bool) {
-	switch x := v.(type) {
-	case int64:
-		return x, true
-	case float64:
-		return int64(x), true
-	case int:
-		return int64(x), true
-	}
-	return 0, false
+	d := wd.DrawAnswer(ans, outputs, maskWords)
+	a.Type, a.Text, a.Title, a.Ref, a.State, a.Lines = d.Type, d.Text, d.Title, d.Ref, d.State, d.Lines
+	a.Amount, a.Buttons, a.Rows, a.Empty = d.Amount, d.Buttons, d.Rows, d.Empty
 }
 
 func strOr(s *string) string {

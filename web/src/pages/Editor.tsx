@@ -453,6 +453,18 @@ export function Editor() {
 
       <div className="builder-notes">
         <ErrorBox error={act.error ?? testing.error} />
+        {current?.changes && current.changes.length > 0 && !dirty && (
+          <details className="notice version-changes" data-testid="version-changes">
+            <summary>
+              What changed in version {current.version} ({current.changes.length})
+            </summary>
+            <ul className="plain-list">
+              {current.changes.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </details>
+        )}
         {offer && !dirty && !readOnly && (
           <div className="notice" role="status" data-testid="kept-draft">
             <p>

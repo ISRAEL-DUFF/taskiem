@@ -6333,6 +6333,141 @@
       "text": "{list} da {last}",
       "reviewed": false
     },
+    "wd.change.name": {
+      "text": "Yanzu ana kiran sa {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its name; {name} is the business's"
+    },
+    "wd.change.tool_new": {
+      "text": "Yanzu kayan aiki ne: {command}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: it became a tool people call from the chat; {command} is like /expense"
+    },
+    "wd.change.tool_gone": {
+      "text": "Ba kayan aiki ba ne kuma ({command} ya tafi)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: it is no longer a tool; {command} is like /expense"
+    },
+    "wd.change.tool_name": {
+      "text": "Yanzu ana kiran kayan aikin {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's name; {name} is the business's"
+    },
+    "wd.change.tool_command": {
+      "text": "Umarnin sa yanzu {command} ne (a da {was} ne)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's command; {command} and {was} are like /expense"
+    },
+    "wd.change.tool_about": {
+      "text": "Yanzu yana cewa don: {about}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the line saying what the tool is for; {about} is the business's"
+    },
+    "wd.change.says_added": {
+      "text": "Yanzu yana kuma cewa '{phrase}'",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a phrase that finds the tool from a message was added; {phrase} is the business's, like spent"
+    },
+    "wd.change.says_removed": {
+      "text": "Ba ya cewa '{phrase}' kuma",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a phrase that found the tool was removed; {phrase} is the business's"
+    },
+    "wd.change.for_customers": {
+      "text": "Abokan ciniki za su iya amfani da shi yanzu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the business's customers may now use its tool"
+    },
+    "wd.change.for_members": {
+      "text": "Mutanen ku ne kaɗai za su iya amfani da shi yanzu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: only the business's own people may use its tool now"
+    },
+    "wd.change.for_linked": {
+      "text": "Kasuwancin da kuke haɗe da su za su iya amfani da shi yanzu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: businesses linked with this one may now use its tool"
+    },
+    "wd.change.tool_icon": {
+      "text": "Hotonsa ya canza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's picture"
+    },
+    "wd.change.answer_now": {
+      "text": "Yanzu yana amsawa da {kind}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what its tool answers with when it ends; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.change.answer_gone": {
+      "text": "Ba ya amsawa kuma: yana cewa ya fara ne kawai",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its tool no longer answers, it only says it started"
+    },
+    "wd.change.answer_changed": {
+      "text": "Abin da yake amsawa ya canza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what its tool's answer shows"
+    },
+    "wd.change.answer.text": {
+      "text": "kalmomi",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a few words"
+    },
+    "wd.change.answer.card": {
+      "text": "kati",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a card with lines"
+    },
+    "wd.change.answer.list": {
+      "text": "jerin abubuwa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a list of rows"
+    },
+    "wd.change.roles": {
+      "text": "Waɗannan matsayi ne kaɗai za su iya fara shi yanzu: {roles}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: who may start it by hand; {roles} are the business's role names"
+    },
+    "wd.change.roles_all": {
+      "text": "Duk wanda zai iya fara ayyuka zai iya fara shi yanzu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: anyone who may start workflows may start it again"
+    },
+    "wd.change.trigger": {
+      "text": "Yanzu yana farawa: {trigger}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: how it starts; {trigger} is a read-back line like Every Monday at 9:00"
+    },
+    "wd.change.inputs": {
+      "text": "Abin da yake tambaya ya canza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what it asks for when started"
+    },
+    "wd.change.outputs": {
+      "text": "Abin da yake bayarwa ya canza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what it gives back when it ends"
+    },
+    "wd.change.settings": {
+      "text": "Bayaninsa ko saitunansa sun canza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its description or settings"
+    },
+    "wd.change.step_added": {
+      "text": "An ƙara: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step added; {step} is a read-back line"
+    },
+    "wd.change.step_removed": {
+      "text": "An cire: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step removed; {step} is a read-back line"
+    },
+    "wd.change.step_changed": {
+      "text": "An canza: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step changed; {step} is a read-back line"
+    },
     "wd.approval": {
       "text": "Jira amincewa",
       "reviewed": false

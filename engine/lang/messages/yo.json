@@ -6333,6 +6333,141 @@
       "text": "{list} àti {last}",
       "reviewed": false
     },
+    "wd.change.name": {
+      "text": "{name} ni a ń pè é báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its name; {name} is the business's"
+    },
+    "wd.change.tool_new": {
+      "text": "Ó ti di irinṣẹ́ báyìí: {command}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: it became a tool people call from the chat; {command} is like /expense"
+    },
+    "wd.change.tool_gone": {
+      "text": "Kì í ṣe irinṣẹ́ mọ́ ({command} ti lọ)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: it is no longer a tool; {command} is like /expense"
+    },
+    "wd.change.tool_name": {
+      "text": "{name} ni a ń pe irinṣẹ́ náà báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's name; {name} is the business's"
+    },
+    "wd.change.tool_command": {
+      "text": "Àṣẹ rẹ̀ ni {command} báyìí (ó jẹ́ {was} tẹ́lẹ̀)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's command; {command} and {was} are like /expense"
+    },
+    "wd.change.tool_about": {
+      "text": "Ó ń sọ báyìí pé ó wà fún: {about}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the line saying what the tool is for; {about} is the business's"
+    },
+    "wd.change.says_added": {
+      "text": "Ó tún ń sọ '{phrase}' báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a phrase that finds the tool from a message was added; {phrase} is the business's, like spent"
+    },
+    "wd.change.says_removed": {
+      "text": "Kò sọ '{phrase}' mọ́",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a phrase that found the tool was removed; {phrase} is the business's"
+    },
+    "wd.change.for_customers": {
+      "text": "Àwọn oníbàárà lè lò ó báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the business's customers may now use its tool"
+    },
+    "wd.change.for_members": {
+      "text": "Àwọn ènìyàn yín nìkan ló lè lò ó báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: only the business's own people may use its tool now"
+    },
+    "wd.change.for_linked": {
+      "text": "Àwọn iṣẹ́ òwò tí ẹ so pọ̀ mọ́ lè lò ó báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: businesses linked with this one may now use its tool"
+    },
+    "wd.change.tool_icon": {
+      "text": "Àmì rẹ̀ ti yí padà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's picture"
+    },
+    "wd.change.answer_now": {
+      "text": "Ó ń dáhùn pẹ̀lú {kind} báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what its tool answers with when it ends; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.change.answer_gone": {
+      "text": "Kò dáhùn mọ́: ó kàn ń sọ pé ó ti bẹ̀rẹ̀",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its tool no longer answers, it only says it started"
+    },
+    "wd.change.answer_changed": {
+      "text": "Ohun tí ó ń dáhùn ti yí padà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what its tool's answer shows"
+    },
+    "wd.change.answer.text": {
+      "text": "ọ̀rọ̀",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a few words"
+    },
+    "wd.change.answer.card": {
+      "text": "káàdì kan",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a card with lines"
+    },
+    "wd.change.answer.list": {
+      "text": "àkójọ kan",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a list of rows"
+    },
+    "wd.change.roles": {
+      "text": "Àwọn ipa wọ̀nyí nìkan ló lè bẹ̀rẹ̀ rẹ̀ báyìí: {roles}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: who may start it by hand; {roles} are the business's role names"
+    },
+    "wd.change.roles_all": {
+      "text": "Ẹnikẹ́ni tí ó lè bẹ̀rẹ̀ àwọn iṣẹ́ lè bẹ̀rẹ̀ rẹ̀ báyìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: anyone who may start workflows may start it again"
+    },
+    "wd.change.trigger": {
+      "text": "Ó ń bẹ̀rẹ̀ báyìí: {trigger}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: how it starts; {trigger} is a read-back line like Every Monday at 9:00"
+    },
+    "wd.change.inputs": {
+      "text": "Ohun tí ó ń béèrè ti yí padà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what it asks for when started"
+    },
+    "wd.change.outputs": {
+      "text": "Ohun tí ó ń dá padà ti yí padà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what it gives back when it ends"
+    },
+    "wd.change.settings": {
+      "text": "Àpèjúwe tàbí ètò rẹ̀ ti yí padà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its description or settings"
+    },
+    "wd.change.step_added": {
+      "text": "A fi kún un: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step added; {step} is a read-back line"
+    },
+    "wd.change.step_removed": {
+      "text": "A yọ ọ́ kúrò: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step removed; {step} is a read-back line"
+    },
+    "wd.change.step_changed": {
+      "text": "A yí i padà: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step changed; {step} is a read-back line"
+    },
     "wd.approval": {
       "text": "Dúró de ìfọwọ́sí",
       "reviewed": false

@@ -338,11 +338,11 @@ A new block in the definition touches everything that reads one. None of it is h
 | Reader of a definition | What it must do |
 | --- | --- |
 | `engine/wd`, `engine/wdcheck`, `schemas/wd-v1.schema.json`, the contract page | Parse and validate it (§12) |
-| `engine/wddiff`, `engine/wdtext` | Say a change in plain words ("Customers can now use it", "It now answers without asking"), since these are what an approver reads |
+| `engine/wddiff`, `engine/wdtext` | Say a change in plain words ("Customers can now use it", "It now also says 'diesel'"), since these are what an approver reads. **Built 24 November 2026** (build plan H6): `wdtext.Changes`, in each version of the history (`GET /v1/workflows/{id}`, the editor's **What changed in version N**) and in a publish waiting for a second person (`GET /v1/publish-requests`, Approvals); its words are in every language (drafts beside English), the web showing English |
 | `engine/wdmerge` | Two people changing `tool` at once is a conflict for a person; it is not merged field by field |
 | The builder and the canvas | **Use it from chat** (§13); the canvas shows that a workflow is a tool |
 | The TypeScript SDK, its codegen, `engine/flowcode` | `flow.tool({...})`, round-tripping to the definition |
-| `wd-test/v1` | A workflow test can state the answer it expects for given inputs, so a tool is tested before it is published |
+| `wd-test/v1` | A workflow test can state the answer it expects for given inputs, so a tool is tested before it is published. **Built 24 November 2026** (build plan H6): `expect.answer` ([wd-test/v1](../contracts/wd-test-v1.md)), drawn by `wd.DrawAnswer` as the chat draws it. The template library's part is M6 |
 | Git-led deploys | The same validation and the same call-outs as publishing on the web |
 | The template library and its tests | Recipes with `tool`; a command taken at install |
 | The AI builder, its schema, its property rules and `evals/builder` | Drafts `tool`; a rule that a drafted tool for customers has only `public` outputs in its answer |

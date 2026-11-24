@@ -43519,6 +43519,11 @@ components:
           - 'null'
           format: uuid
           description: The AI build the version was saved from.
+        changes:
+          type: array
+          items:
+            type: string
+          description: What changed from the version before, in plain words (a tool's command, phrases, who it is for and its answer; who may start it; the steps). Left out for the first version, and for versions older than the latest thirty.
     Deployment:
       type: object
       required:
@@ -59343,6 +59348,11 @@ components:
                 type: string
                 enum:
                 - pending
+              changes:
+                type: array
+                items:
+                  type: string
+                description: What publishing it changes, in plain words, from the version live in prod (else the version before it). Left out when nothing is said.
             additionalProperties: false
       additionalProperties: false
     PublishDecided:

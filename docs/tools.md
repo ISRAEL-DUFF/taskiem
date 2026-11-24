@@ -12,6 +12,8 @@ A workflow you start by hand can be a **tool**: something your people call from 
 | **Who it is for** | Your members, or your customers (`for: "customers"`, [below](#customers-tools)). Who among your members may use it is the workflow's **Who can start it** (`roles`): the same rule holds on every way to start it |
 | **What it says back** | A sentence, a card or a list, drawn from what the run gives back (its outputs) |
 
+**Changing a tool.** Each version in the workflow's history says what changed from the one before in plain words (**What changed in version 3** in the editor: "It now also says 'diesel'", "Customers can now use it", "It now answers with a card", "Only these roles can start it now: manager", the steps added, removed or changed), and a version waiting for a second person to publish it says the same on **Approvals**, from the version that is live. A test of the workflow ([wd-test/v1](contracts/wd-test-v1.md)) can state the answer it expects (`expect.answer`: the text, a card's fields, a list's rows), so a change to the answer fails the test before it is published.
+
 ## How careful it is
 
 Worked out from its steps when it is published, never chosen by whoever made it:

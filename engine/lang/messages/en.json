@@ -7494,6 +7494,141 @@
       "reviewed": true,
       "context": "Read-back: the last of a list of days; {list} is comma-separated"
     },
+    "wd.change.name": {
+      "text": "It is now called {name}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: its name; {name} is the business's"
+    },
+    "wd.change.tool_new": {
+      "text": "It is now a tool: {command}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: it became a tool people call from the chat; {command} is like /expense"
+    },
+    "wd.change.tool_gone": {
+      "text": "It is no longer a tool ({command} is gone)",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: it is no longer a tool; {command} is like /expense"
+    },
+    "wd.change.tool_name": {
+      "text": "The tool is now called {name}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: the tool's name; {name} is the business's"
+    },
+    "wd.change.tool_command": {
+      "text": "Its command is now {command} (it was {was})",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: the tool's command; {command} and {was} are like /expense"
+    },
+    "wd.change.tool_about": {
+      "text": "It now says it is for: {about}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: the line saying what the tool is for; {about} is the business's"
+    },
+    "wd.change.says_added": {
+      "text": "It now also says '{phrase}'",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: a phrase that finds the tool from a message was added; {phrase} is the business's, like spent"
+    },
+    "wd.change.says_removed": {
+      "text": "It no longer says '{phrase}'",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: a phrase that found the tool was removed; {phrase} is the business's"
+    },
+    "wd.change.for_customers": {
+      "text": "Customers can now use it",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: the business's customers may now use its tool"
+    },
+    "wd.change.for_members": {
+      "text": "Only your own people can use it now",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: only the business's own people may use its tool now"
+    },
+    "wd.change.for_linked": {
+      "text": "Businesses you are linked with can now use it",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: businesses linked with this one may now use its tool"
+    },
+    "wd.change.tool_icon": {
+      "text": "Its icon changed",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: the tool's picture"
+    },
+    "wd.change.answer_now": {
+      "text": "It now answers with {kind}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: what its tool answers with when it ends; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.change.answer_gone": {
+      "text": "It no longer answers: it only says it started",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: its tool no longer answers, it only says it started"
+    },
+    "wd.change.answer_changed": {
+      "text": "What it answers has changed",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: what its tool's answer shows"
+    },
+    "wd.change.answer.text": {
+      "text": "words",
+      "reviewed": true,
+      "context": "Fills {kind} in wd.change.answer_now: an answer that is a few words"
+    },
+    "wd.change.answer.card": {
+      "text": "a card",
+      "reviewed": true,
+      "context": "Fills {kind} in wd.change.answer_now: an answer that is a card with lines"
+    },
+    "wd.change.answer.list": {
+      "text": "a list",
+      "reviewed": true,
+      "context": "Fills {kind} in wd.change.answer_now: an answer that is a list of rows"
+    },
+    "wd.change.roles": {
+      "text": "Only these roles can start it now: {roles}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: who may start it by hand; {roles} are the business's role names"
+    },
+    "wd.change.roles_all": {
+      "text": "Everyone who can start workflows can start it now",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: anyone who may start workflows may start it again"
+    },
+    "wd.change.trigger": {
+      "text": "It now starts: {trigger}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: how it starts; {trigger} is a read-back line like Every Monday at 9:00"
+    },
+    "wd.change.inputs": {
+      "text": "What it asks for changed",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: what it asks for when started"
+    },
+    "wd.change.outputs": {
+      "text": "What it gives back changed",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: what it gives back when it ends"
+    },
+    "wd.change.settings": {
+      "text": "Its description or settings changed",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: its description or settings"
+    },
+    "wd.change.step_added": {
+      "text": "Added: {step}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: a step added; {step} is a read-back line"
+    },
+    "wd.change.step_removed": {
+      "text": "Removed: {step}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: a step removed; {step} is a read-back line"
+    },
+    "wd.change.step_changed": {
+      "text": "Changed: {step}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: a step changed; {step} is a read-back line"
+    },
     "wd.approval": {
       "text": "Wait for approval",
       "reviewed": true,
