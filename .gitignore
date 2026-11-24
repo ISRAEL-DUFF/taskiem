@@ -8,6 +8,8 @@ bao
 bao.tgz
 bao.log
 web/dist/
+# Copied from node_modules before dev and build (web/scripts/ocr-assets.mjs).
+web/public/ocr/
 *.tsbuildinfo
 web/test-results/
 web/playwright-report/

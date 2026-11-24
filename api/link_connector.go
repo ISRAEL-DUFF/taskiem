@@ -25,7 +25,6 @@ import (
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/stock"
-	"github.com/israel-duff/taskiem/engine/variants"
 )
 
 // linkWrites are the actions that change something: made in prod only.
@@ -81,7 +80,8 @@ func linkFatal(err error) error {
 	case errors.As(err, &unlinked):
 		return fmt.Errorf("%s: %w", unlinked.Error(), effects.ErrFatal)
 	case errors.Is(err, links.ErrInvalid), errors.Is(err, links.ErrState), errors.Is(err, errConflict), errors.Is(err, errBadRequest),
-		errors.Is(err, stock.ErrPurchase), errors.Is(err, stock.ErrNoSupplier), errors.Is(err, stock.ErrNoItem), errors.Is(err, stock.ErrNotTracked):
+		errors.Is(err, stock.ErrPurchase), errors.Is(err, stock.ErrNoSupplier), errors.Is(err, stock.ErrNoItem), errors.Is(err, stock.ErrNotTracked),
+		errors.Is(err, stock.ErrTrackAsk), errors.Is(err, stock.ErrTrackTooMany):
 		return fmt.Errorf("%s: %w", plainRefusal(err), effects.ErrFatal)
 	}
 	return err
@@ -420,8 +420,9 @@ func (s *Server) linkOrderStep(ctx context.Context, p *Principal, c linkconn.Cal
 // --- prices and orders to linked suppliers ---
 
 // priceListed finds an item on a supplier's list: its item id, its name,
-// or the business's own item linked to it (by id or name).
-func priceListed(listed []links.PriceItem, linked []links.ItemLink, own map[string]stock.Item, want string) (links.PriceItem, bool) {
+// or one the business remembers adding to the stock item of its own item
+// named (by id or name: a product's stock item, or a material).
+func priceListed(listed []links.PriceItem, linked []stock.Remembered, own map[string]stock.Item, want string) (links.PriceItem, bool) {
 	items := orderable(listed)
 	w := strings.ToLower(strings.TrimSpace(want))
 	for _, it := range items {
@@ -430,8 +431,16 @@ func priceListed(listed []links.PriceItem, linked []links.ItemLink, own map[stri
 		}
 	}
 	for _, l := range linked {
-		o, ok := own[l.ItemID]
-		if l.ItemID != want && (!ok || strings.ToLower(o.Name) != w) {
+		if l.StockItemID == nil {
+			continue
+		}
+		named := false
+		for id, o := range own {
+			if o.StockItemID == l.StockItemID.String() && (id == want || strings.ToLower(o.Name) == w) {
+				named = true
+			}
+		}
+		if !named {
 			continue
 		}
 		for _, it := range items {
@@ -564,7 +573,7 @@ func (s *Server) linkPriceOf(ctx context.Context, p *Principal, c linkconn.Call)
 		if len(got) == 0 {
 			return fmt.Errorf("%w: %s shares no price list with you", links.ErrState, l.Name)
 		}
-		linked, err := links.ItemLinksTx(ctx, tx, p.TenantID, l.ID)
+		linked, err := stock.ItemLinksTx(ctx, tx, p.TenantID, l.ID)
 		if err != nil {
 			return err
 		}
@@ -598,12 +607,7 @@ func (s *Server) linkLowOrders(ctx context.Context, p *Principal, c linkconn.Cal
 			}
 			onlyLink = l.ID
 		}
-		rows, err := tx.Query(ctx, `SELECT l->>'item_id' FROM purchase_orders o, jsonb_array_elements(o.lines) l
-			WHERE o.tenant_id = $1 AND o.status IN ('drafted', 'sent', 'confirmed', 'part_received')`, p.TenantID)
-		if err != nil {
-			return err
-		}
-		ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		onOrder, err := stock.OnOrderTx(ctx, tx, p.TenantID)
 		if err != nil {
 			return err
 		}
@@ -617,32 +621,22 @@ func (s *Server) linkLowOrders(ctx context.Context, p *Principal, c linkconn.Cal
 		}
 		var sups []supplierList
 		for _, l := range lists {
-			linked, err := links.ItemLinksTx(ctx, tx, p.TenantID, l.LinkID)
+			linked, err := stock.ItemLinksTx(ctx, tx, p.TenantID, l.LinkID)
 			if err != nil {
 				return err
 			}
 			listed := links.Flat(l.Items)
 			sl := supplierList{list: l, byItem: map[string]links.PriceItem{}}
-			products := map[string]string{} // our product → their product sold in sizes
+			// Their items we remember adding to a stock item: each of our
+			// items counted by it (a product's, or a material).
 			for _, il := range linked {
-				if it, ok := listed[il.SellerItemID]; ok && it.Available {
-					sl.byItem[il.ItemID] = it
-				}
-				for _, it := range l.Items {
-					if it.ItemID == il.SellerItemID && len(it.Choices) > 0 {
-						products[il.ItemID] = it.ItemID
-					}
-				}
-			}
-			// One of our sizes not linked yet: their size of the same values,
-			// through the products' link.
-			for _, it := range items {
-				if _, ok := sl.byItem[it.ID]; ok || it.VariantOf == "" || products[it.VariantOf] == "" {
+				it, ok := listed[il.SellerItemID]
+				if !ok || !it.Available || il.StockItemID == nil {
 					continue
 				}
-				for _, x := range listed {
-					if x.VariantOf == products[it.VariantOf] && x.Available && variants.Key(x.Variant) == variants.Key(it.Variant) {
-						sl.byItem[it.ID] = x
+				for _, o := range items {
+					if _, had := sl.byItem[o.ID]; !had && o.StockItemID == il.StockItemID.String() {
+						sl.byItem[o.ID] = it
 					}
 				}
 			}
@@ -656,7 +650,7 @@ func (s *Server) linkLowOrders(ctx context.Context, p *Principal, c linkconn.Cal
 		var drafts []*draft
 		bySup := map[uuid.UUID]*draft{}
 		for _, it := range stock.Low(items) {
-			if slices.Contains(ids, it.ID) {
+			if it.OnOrder(onOrder) {
 				continue
 			}
 			pick := -1
@@ -744,7 +738,7 @@ func (s *Server) linkPlaceOrder(ctx context.Context, p *Principal, c linkconn.Ca
 		if len(got) == 0 {
 			return fmt.Errorf("%w: %s shares no price list with you", links.ErrState, l.Name)
 		}
-		linked, err := links.ItemLinksTx(ctx, tx, p.TenantID, l.ID)
+		linked, err := stock.ItemLinksTx(ctx, tx, p.TenantID, l.ID)
 		if err != nil {
 			return err
 		}

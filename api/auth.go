@@ -61,11 +61,17 @@ const (
 	PermOrders      = access.StorefrontManage + "|" + access.OrderHandle
 	// PermSavedManage is changing the business's saved things.
 	PermSavedManage = access.SavedManage
+	PermMoneyPay    = access.MoneyPay
+	// PermPayrollRead is seeing the payroll Payrolla keeps.
+	PermPayrollRead = access.PayrollRead
 	// PermTaskGive is giving staff tasks and seeing everyone's: those who
 	// run the business (staff_tasks.go).
 	PermTaskGive = access.MemberManage + "|" + access.InvoiceManage
 	// PermFormLinks mints one-time links to a link form (forms 8.4).
 	PermFormLinks = access.FormLinks
+	// PermPageEdit and PermPagePublish are the business's pages (pages.go).
+	PermPageEdit    = access.PageEdit
+	PermPagePublish = access.PagePublish
 )
 
 // allPermissions are every permission, in the role editor's order.
@@ -88,6 +94,10 @@ type Principal struct {
 	// KeyOwner is the person an API key belongs to: it acts within their
 	// current permissions, and counts as them for four-eyes.
 	KeyOwner uuid.UUID
+	// KeyOwnerRoles are the key owner's roles now: only who may start a
+	// workflow (decision 0073, mayStart) reads them; a key gains nothing
+	// else from them.
+	KeyOwnerRoles []string
 	// AuthMethod is how the session signed in: password, passkey, sso or
 	// chat (a code or link sent to a bound chat, chat_signin.go).
 	AuthMethod string
@@ -370,6 +380,7 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		if len(held.Roles) == 0 || !s.userActive(ctx, p.TenantID, p.KeyOwner) {
 			return nil, errors.New("api key owner is no longer a member")
 		}
+		p.KeyOwnerRoles = held.Roles
 		p.Permissions = map[string]bool{}
 		for _, x := range perms {
 			if held.Permissions[x] {

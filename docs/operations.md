@@ -254,6 +254,7 @@ Every tenant has plan limits (spec 8.3, 16): the platform defaults below, change
 | `embed_sites` | 10 | Websites that may embed the storefront and forms ([embed sites](embed-sites.md)). Plans: shop 1, shop plus 3 |
 | `link_messages_daily` | 0 (no limit) | Messages to linked businesses per UTC day ([business links](spec/business-links.md#13-security)), counted against the business that sent them (text, photos, files and voice notes; not the cards Taskiem writes): beyond it a send gets 429 `limit_exceeded`. Plans: shop 200, shop plus 500, starter 1,000, growth 2,000, business 5,000 |
 | `max_saved_objects` | 2000 | Saved things a business keeps ([saved objects](spec/saved-objects.md#15-settled-19-november-2026): accounts, people, places, texts, files, things of its own kinds); beyond it a save gets 409. A person's own are capped apart at 500. Plans: shop 2,000, shop plus 3,000, starter 5,000, growth 10,000, business 25,000, enterprise 100,000 |
+| `max_pages` | 10 | Pages a business makes ([pages](spec/pages.md#12-storage-and-api)), drafts counted; beyond it making another gets 429 `limit_exceeded`. A business over it after a move to a lower plan keeps its pages. Plans: shop, shop plus and starter 10, growth 50, business and enterprise no limit |
 
 ```sh
 taskiem tenants limits 0190f0c2-... --set runs_per_month=100000 --set max_running_runs=25

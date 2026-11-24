@@ -49,6 +49,8 @@ const stock = {
       supplier: "Dangote Depot",
       low: true,
       suggest: 46,
+      stock_item_id: "0192e2e0-0000-7000-8000-0000000000a1",
+      uses: 1,
     },
     {
       id: "2",
@@ -59,35 +61,104 @@ const stock = {
       price_kobo: 4500000,
       reorder_level: 5,
       low: false,
-      waiting: 1,
+      stock_item_id: "0192e2e0-0000-7000-8000-0000000000a2",
+      uses: 1,
     },
-  ],
-  stuck: [
     {
-      id: "m9",
-      item_id: "2",
-      item: "Rice",
-      reason: "sale",
-      status: "pending",
-      before: null,
-      after: null,
-      change: null,
-      by: "user:ada",
-      error: "cut off",
-      created_at: "2026-10-29T08:00:00Z",
-      done_at: null,
+      id: "0192e2e0-0000-7000-8000-0000000000a3",
+      name: "Ankara fabric",
+      material: true,
+      available: false,
+      stock: 20,
+      unit: "yard",
+      low: false,
     },
   ],
 };
+
+/** The same three as the Stock page lists them: stock items, each with
+ * what it is sold as (GET /v1/stock/stock-items). */
+const stockItem = (over: Record<string, unknown>) => ({
+  category: "",
+  cost_kobo: null,
+  low_level: null,
+  target_level: null,
+  supplier_id: null,
+  supplier: "",
+  group_of: "",
+  group_name: "",
+  low: false,
+  suggest: null,
+  value_kobo: 0,
+  retired: false,
+  sold_as: [],
+  ...over,
+});
+const soldAs = (id: string, name: string, uses = 1, price: number | null = null) => ({
+  product_id: id,
+  name,
+  uses,
+  price_kobo: price,
+  variant: null,
+  available: true,
+});
+const stockItems = [
+  stockItem({
+    id: "0192e2e0-0000-7000-8000-0000000000a3",
+    name: "Ankara fabric",
+    unit: "yard",
+    count: 20,
+    cost_kobo: 150000,
+    value_kobo: 3000000,
+  }),
+  stockItem({
+    id: "0192e2e0-0000-7000-8000-0000000000a1",
+    name: "Indomie",
+    unit: "carton",
+    count: 4,
+    cost_kobo: 850000,
+    low_level: 10,
+    target_level: 50,
+    supplier: "Dangote Depot",
+    low: true,
+    suggest: 46,
+    value_kobo: 3400000,
+    sold_as: [soldAs("1", "Indomie")],
+  }),
+  stockItem({
+    id: "0192e2e0-0000-7000-8000-0000000000a2",
+    name: "Rice",
+    unit: "bag",
+    count: 30,
+    low_level: 5,
+    sold_as: [soldAs("2", "Rice", 1, 4500000)],
+  }),
+];
+
+/** GET /v1/stock/stock-items, filtered as the server does, the totals
+ * following the filter. */
+function stockItemsFor(url: string, items = stockItems) {
+  const show = new URL(url).searchParams.get("show") ?? "all";
+  const list = items.filter(
+    (x) =>
+      show === "all" ||
+      (show === "sold") === (x.sold_as as unknown[]).length > 0,
+  );
+  return {
+    keeps_stock: true,
+    value_kobo: list.reduce((a, x) => a + (x.value_kobo as number), 0),
+    low: list.filter((x) => x.low).length,
+    items: list,
+  };
+}
 
 const movements = {
   movements: [
     {
       id: "m2",
-      item_id: "1",
+      item_id: "0192e2e0-0000-7000-8000-0000000000a1",
       item: "Indomie",
       reason: "adjustment",
-      status: "done",
       before: 50,
       after: 4,
       change: -46,
@@ -98,10 +169,9 @@ const movements = {
     },
     {
       id: "m1",
-      item_id: "1",
+      item_id: "0192e2e0-0000-7000-8000-0000000000a1",
       item: "Indomie",
       reason: "received",
-      status: "done",
       before: 0,
       after: 50,
       change: 50,
@@ -111,22 +181,21 @@ const movements = {
     },
     {
       id: "m0",
-      item_id: "2",
+      item_id: "0192e2e0-0000-7000-8000-0000000000a2",
       item: "Rice",
-      reason: "outside",
-      status: "done",
+      reason: "received",
       before: 0,
       after: 30,
       change: 30,
-      note: "First count seen in the table",
-      by: "table",
+      note: "First goods in",
+      by: "user:ada",
       created_at: "2026-10-28T08:00:00Z",
       done_at: "2026-10-28T08:00:00Z",
     },
   ],
 };
 
-test("the Stock page before stock is kept, and with items", async ({
+test("the Stock page before stock is kept, and with what it counts", async ({
   page,
 }) => {
   await signUp(page);
@@ -138,7 +207,7 @@ test("the Stock page before stock is kept, and with items", async ({
     page.getByRole("heading", { name: "Keep your stock here" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Taskiem makes a products table for your items"),
+    page.getByText("Taskiem makes a products table for what you sell"),
   ).toBeVisible();
   await axeBoth(page, "/storefront/stock, not kept");
   // No Xenibase here: refused as making a table is.
@@ -151,7 +220,7 @@ test("the Stock page before stock is kept, and with items", async ({
       .getByRole("alert"),
   ).toContainText("data tables are not available");
 
-  // With items (from fixtures).
+  // With stock items (from fixtures).
   await page.route("**/v1/stock", (route) =>
     route.fulfill({
       status: 200,
@@ -159,6 +228,15 @@ test("the Stock page before stock is kept, and with items", async ({
       body: JSON.stringify(stock),
     }),
   );
+  const shows: string[] = [];
+  await page.route("**/v1/stock/stock-items?**", (route) => {
+    shows.push(new URL(route.request().url()).searchParams.get("show") ?? "");
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(stockItemsFor(route.request().url())),
+    });
+  });
   await page.route("**/v1/stock/movements?**", (route) =>
     route.fulfill({
       status: 200,
@@ -174,15 +252,19 @@ test("the Stock page before stock is kept, and with items", async ({
   await expect(low).toContainText(
     "reorder at 10 · up to 50 · cost ₦8,500 · Dangote Depot · order 46 cartons",
   );
-  await expect(page.getByTestId("stock-item")).toHaveCount(2);
+  const rows = page.getByTestId("stock-row");
+  await expect(rows).toHaveCount(3);
+  // A material is counted and Not sold; a product's stock item says what
+  // it is sold as.
+  const fabric = rows.filter({ hasText: "Ankara fabric" });
+  await expect(fabric).toContainText("20 yards");
+  await expect(fabric.getByTestId("sold-as")).toHaveText("Not sold");
   await expect(
-    page.getByTestId("stock-item").filter({ hasText: "Rice" }),
-  ).toContainText("1 change on its way");
-  await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: "not reached your products table" }),
-  ).toBeVisible();
+    rows.filter({ hasText: "Rice" }).getByTestId("sold-as"),
+  ).toHaveText("Sold as Rice");
+  await expect(page.getByTestId("stock-worth")).toHaveText(
+    "3 counted · worth ₦64,000 at cost · 1 low",
+  );
   await expect(page.getByTestId("movement")).toHaveCount(3);
   await expect(page.getByTestId("movement").first()).toContainText(
     "Indomie: adjusted -46",
@@ -190,21 +272,122 @@ test("the Stock page before stock is kept, and with items", async ({
   await expect(page.getByTestId("movement").first()).toContainText(
     "water damage",
   );
-  await expect(page.getByTestId("movement").last()).toContainText(
-    "Changed in the table",
-  );
-  await axeBoth(page, "/storefront/stock, with items");
+  await axeBoth(page, "/storefront/stock, with stock items");
 
-  // Add an item.
-  await page.getByRole("button", { name: "Add items" }).click();
+  // The filter: Not sold, then Sold; the totals follow it, the low card stays.
+  const filter = page.getByRole("group", { name: "Show" });
+  await filter.getByRole("button", { name: "Not sold" }).click();
+  await expect(filter.getByRole("button", { name: "Not sold" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText("Ankara fabric");
+  await expect(page.getByTestId("stock-worth")).toHaveText(
+    "1 not sold · worth ₦30,000 at cost",
+  );
+  await expect(low).toHaveCount(1);
+  await filter.getByRole("button", { name: "Sold", exact: true }).click();
+  await expect(rows).toHaveCount(2);
+  await expect(rows.filter({ hasText: "Ankara fabric" })).toHaveCount(0);
+  expect(shows).toEqual(expect.arrayContaining(["all", "not_sold", "sold"]));
+  await filter.getByRole("button", { name: "All" }).click();
+  await expect(rows).toHaveCount(3);
+
+  // On a phone, nothing scrolls sideways, in either theme.
+  for (const width of [390, 360]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(rows).toHaveCount(3);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
+    await axeBoth(page, `/storefront/stock at ${width}px`);
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  // Add something to count: Do you sell it? must be answered.
+  const added: unknown[] = [];
+  await page.route("**/v1/stock/items", async (route) => {
+    expect(route.request().headers()["idempotency-key"]).toBeTruthy();
+    added.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ item: { id: "x", name: "x" } }),
+    });
+  });
+  await page.getByRole("button", { name: "Add something to count" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Name").fill("Garri");
+  await dialog.getByLabel("What is it").fill("Thread");
   await dialog.getByLabel("How many you have").fill("2.5");
   await expect(dialog).toContainText("whole number");
-  await dialog.getByLabel("How many you have").fill("20");
-  await dialog.getByLabel("Unit").fill("bag");
-  await axeBoth(page, "add an item");
-  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await dialog.getByLabel("How many you have").fill("12");
+  await dialog.getByLabel("Unit").fill("roll");
+  await expect(dialog).toContainText("Say whether you sell it.");
+  await expect(dialog.getByRole("button", { name: "Add it" })).toBeDisabled();
+  // No: a material, with no selling price asked.
+  await dialog.getByLabel("No, I don't").check();
+  await expect(dialog.getByLabel("Selling price (₦)")).toHaveCount(0);
+  await expect(dialog.getByTestId("sells-hint")).toContainText(
+    "not added to your products",
+  );
+  await axeBoth(page, "add something to count");
+  await dialog.getByRole("button", { name: "Add it" }).click();
+  await expect(dialog).toBeHidden();
+  expect(added[0]).toMatchObject({
+    name: "Thread",
+    quantity: 12,
+    unit: "roll",
+    material: true,
+  });
+  expect(added[0]).not.toHaveProperty("price_kobo");
+  // Yes: its product too, with its price.
+  await page.getByRole("button", { name: "Add something to count" }).click();
+  await dialog.getByLabel("What is it").fill("Zobo, 50cl");
+  await dialog.getByLabel("How many you have").fill("24");
+  await dialog.getByLabel("Yes, I sell it").check();
+  await dialog.getByLabel("Selling price (₦)").fill("500");
+  await dialog.getByRole("button", { name: "Add it" }).click();
+  await expect(dialog).toBeHidden();
+  expect(added[1]).toMatchObject({
+    name: "Zobo, 50cl",
+    quantity: 24,
+    price_kobo: 50000,
+  });
+  expect(added[1]).not.toHaveProperty("material");
+
+  // Change: a material by its own id; its name is its own.
+  const changed: { url: string; body: unknown }[] = [];
+  await page.route("**/v1/stock/items/*", async (route) => {
+    changed.push({
+      url: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON(),
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ item: {} }),
+    });
+  });
+  await page.getByRole("button", { name: "Change Ankara fabric" }).click();
+  await expect(dialog.getByLabel("Selling price (₦)")).toHaveCount(0);
+  await dialog.getByLabel("Reorder at").fill("10");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
+  expect(changed[0]).toEqual({
+    url: "/v1/stock/items/0192e2e0-0000-7000-8000-0000000000a3",
+    body: { reorder_level: 10 },
+  });
+  // A product's stock item through its product, with its price.
+  await page.getByRole("button", { name: "Change Rice" }).click();
+  await expect(dialog.getByLabel("Selling price (₦)")).toHaveValue("45000");
+  await dialog.getByLabel("Cost price (₦)").fill("40000");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
+  expect(changed[1]).toEqual({
+    url: "/v1/stock/items/2",
+    body: { cost_kobo: 4000000 },
+  });
 
   // Record stock: an adjustment needs a reason, and shows the count after.
   await page
@@ -230,12 +413,22 @@ test("the Stock page before stock is kept, and with items", async ({
   });
   await dialog.getByRole("button", { name: "Record" }).click();
   await expect(dialog).toBeHidden();
+  // The stock item itself, by its id.
   expect(sent).toEqual({
-    item_id: "1",
+    item_id: "0192e2e0-0000-7000-8000-0000000000a1",
     reason: "adjustment",
     note: "spoilt",
     change: -1,
   });
+  // Its history, by the same id.
+  const history = page.waitForRequest((r) =>
+    r.url().includes("item=0192e2e0-0000-7000-8000-0000000000a2"),
+  );
+  await page.getByRole("button", { name: "History of Rice" }).click();
+  await history;
+  await expect(
+    page.getByRole("heading", { name: "Rice: every change" }),
+  ).toBeVisible();
 });
 
 const sales = {
@@ -588,6 +781,42 @@ test("suppliers and orders to them", async ({ page }) => {
   });
 });
 
+test("paying an order: a new key for a different amount, the same one tried again", async ({ page }) => {
+  await signUp(page);
+  const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+  const pays: { body: unknown; key?: string }[] = [];
+  await page.route("**/v1/stock", (route) => route.fulfill(json(stock)));
+  await page.route("**/v1/stock/movements?**", (route) => route.fulfill(json(movements)));
+  await page.route("**/v1/stock/purchases**", async (route) => {
+    const r = route.request();
+    if (r.method() === "POST" && r.url().endsWith("/pay")) {
+      pays.push({ body: r.postDataJSON(), key: r.headers()["idempotency-key"] });
+      // The first two are refused; the third goes.
+      if (pays.length < 3) return route.fulfill(json({ error: "try again in a moment" }, 409));
+      return route.fulfill(json({ purchase: purchases.purchases[1] }));
+    }
+    await route.fulfill(json(purchases));
+  });
+  await page.goto("/storefront/stock");
+  await page.getByRole("button", { name: "Record a payment for P-K2M9PA" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Amount paid (₦)").fill("500,000");
+  const pay = dialog.getByRole("button", { name: "Record the payment" });
+  await pay.click();
+  await expect.poll(() => pays.length).toBe(1);
+  await expect(dialog.getByRole("alert")).toContainText("try again in a moment");
+  await pay.click();
+  await expect.poll(() => pays.length).toBe(2);
+  await dialog.getByLabel("Amount paid (₦)").fill("400,000");
+  await pay.click();
+  await expect(dialog).toBeHidden();
+  expect(pays.map((p) => (p.body as { amount_kobo: number }).amount_kobo)).toEqual([50_000_000, 50_000_000, 40_000_000]);
+  expect(pays[0]?.key).toBeTruthy();
+  expect(pays[1]?.key).toBe(pays[0]?.key);
+  expect(pays[2]?.key).toBeTruthy();
+  expect(pays[2]?.key).not.toBe(pays[0]?.key);
+});
+
 test("count the shelf: a sheet, a CSV, the month's losses", async ({
   page,
 }) => {
@@ -699,4 +928,182 @@ test("count the shelf: a sheet, a CSV, the month's losses", async ({
     ],
     reason: "spoilt",
   });
+});
+
+test("Counted by: a pack of 6 counted by the bottles, shown on the Stock page", async ({
+  page,
+}) => {
+  await signUp(page);
+  const r = await page.request.put("/v1/settings/chat-tools", {
+    headers: H,
+    data: { chat_tools: true },
+  });
+  expect(r.status(), await r.text()).toBe(200);
+  const json = (body: unknown) => ({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(body),
+  });
+  const bottlesId = "0192e2e0-0000-7000-8000-0000000000b1";
+  const packId = "0192e2e0-0000-7000-8000-0000000000b2";
+  // The pack counts its own stock item until it is counted by the bottles.
+  let counted: { stock_item_id: string; uses: number } = {
+    stock_item_id: packId,
+    uses: 1,
+  };
+  const byBottles = () => counted.stock_item_id === bottlesId;
+  const products = () => ({
+    keeps_stock: true,
+    catalogue: "products",
+    items: [
+      {
+        id: "8",
+        name: "Malt, pack of 6",
+        available: true,
+        stock: byBottles() ? 20 : 1,
+        unit: byBottles() ? "bottle" : "",
+        price_kobo: 210000,
+        ...counted,
+      },
+      {
+        id: bottlesId,
+        name: "Malt bottle",
+        material: !byBottles(),
+        available: false,
+        stock: 20,
+        unit: "bottle",
+      },
+    ],
+  });
+  const items = () => [
+    stockItem({
+      id: bottlesId,
+      name: "Malt bottle",
+      unit: "bottle",
+      count: 20,
+      cost_kobo: 25000,
+      value_kobo: 500000,
+      sold_as: byBottles()
+        ? [soldAs("8", "Malt, pack of 6", counted.uses, 210000)]
+        : [],
+    }),
+    stockItem({
+      id: packId,
+      name: "Malt, pack of 6",
+      unit: "",
+      count: 1,
+      sold_as: byBottles() ? [] : [soldAs("8", "Malt, pack of 6", 1, 210000)],
+    }),
+  ];
+  await page.route("**/v1/stock", (route) => route.fulfill(json(products())));
+  await page.route("**/v1/stock/stock-items?**", (route) =>
+    route.fulfill(json(stockItemsFor(route.request().url(), items()))),
+  );
+  await page.route("**/v1/stock/movements?**", (route) =>
+    route.fulfill(json({ movements: [] })),
+  );
+  let put: unknown = null;
+  await page.route("**/v1/stock/products/8/counted-by", async (route) => {
+    expect(route.request().method()).toBe("PUT");
+    put = route.request().postDataJSON();
+    counted = put as typeof counted;
+    await route.fulfill(json({ item: products().items[0] }));
+  });
+
+  // The pack's form, from the Products tool in the chat.
+  await page.goto("/chat?with=taskiem");
+  const sheet = page.getByTestId("tool-sheet");
+  const openPack = async () => {
+    await page.getByRole("button", { name: "Open tools" }).click();
+    await page
+      .getByRole("region", { name: "Tools" })
+      .getByRole("button", { name: /^Products/ })
+      .first()
+      .click();
+    await sheet.getByRole("button", { name: /Malt, pack of 6/ }).click();
+  };
+  await openPack();
+  await expect(page.getByTestId("counted-by")).toContainText(
+    "Malt, pack of 6 · 1 now",
+  );
+  await page
+    .getByRole("button", { name: "Change what it is counted by" })
+    .click();
+  const pick = sheet.getByTestId("counted-pick");
+  await expect(pick.getByLabel(/^Malt bottle/)).toBeVisible();
+  await sheet.getByLabel("Find it").fill("bottle");
+  // The one it is counted by now stays in view.
+  await expect(pick.getByLabel(/^Malt, pack of 6/)).toBeChecked();
+  await pick.getByLabel(/^Malt bottle/).check();
+  await sheet.getByRole("textbox", { name: "One sale uses" }).fill("6");
+  await expect(sheet).toContainText("6 bottles of Malt bottle");
+  await axeBoth(page, "counted by");
+  await sheet.getByRole("button", { name: "Save changes" }).click();
+  await expect(sheet).toHaveCount(0, { timeout: 5000 });
+  expect(put).toEqual({ stock_item_id: bottlesId, uses: 6 });
+
+  // The form says it now.
+  await openPack();
+  await expect(page.getByTestId("counted-by")).toContainText(
+    "Malt bottle · one sale uses 6 bottles · 20 bottles now",
+  );
+
+  // And the Stock page: the bottles are sold as the pack, 6 a sale.
+  await page.goto("/storefront/stock");
+  const row = page.getByTestId("stock-row").filter({ hasText: "Malt bottle" });
+  await expect(row.getByTestId("sold-as")).toHaveText(
+    "Sold as Malt, pack of 6 (uses 6 bottles)",
+  );
+  // Its name and price are the pack's: not changed from here.
+  await page.getByRole("button", { name: "Change Malt bottle" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("Name", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel("Selling price (₦)")).toHaveCount(0);
+});
+
+test("Counted by is not offered for a product sold in sizes and colours", async ({
+  page,
+}) => {
+  await signUp(page);
+  await page.request.put("/v1/settings/chat-tools", {
+    headers: H,
+    data: { chat_tools: true },
+  });
+  await page.route("**/v1/stock", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        keeps_stock: true,
+        catalogue: "products",
+        items: [
+          {
+            id: "9",
+            name: "Sneakers",
+            available: true,
+            stock: null,
+            price_kobo: 2500000,
+            choices: [{ name: "Size", values: ["42", "43"] }],
+          },
+        ],
+      }),
+    }),
+  );
+  await page.goto("/chat?with=taskiem");
+  await page.getByRole("button", { name: "Open tools" }).click();
+  await page
+    .getByRole("region", { name: "Tools" })
+    .getByRole("button", { name: /^Products/ })
+    .first()
+    .click();
+  await page
+    .getByTestId("tool-sheet")
+    .getByRole("button", { name: /Sneakers/ })
+    .click();
+  await expect(page.getByTestId("counted-by")).toContainText(
+    "Sold in sizes and colours: each is counted by its own",
+  );
+  await expect(
+    page.getByRole("button", { name: "Change what it is counted by" }),
+  ).toHaveCount(0);
 });

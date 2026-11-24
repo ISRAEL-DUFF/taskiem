@@ -15,7 +15,7 @@ func TestUnderstandSendsTheCommandsAndTheMessage(t *testing.T) {
 	fake := &ai.Fake{Script: []ai.Response{{Text: `{"kind":"command","command":"*sold* 3 bags of rice 45,000 cash","reply":""}`}}}
 	h := &understand.Helper{Provider: fake}
 	en, _ := lang.Lookup(lang.EN)
-	r, resp, err := h.Understand(context.Background(), "I just sold 3 bags of rice for 45k cash, call me 08031234567", "• *sold 3 bags of rice 45,000 cash*: record a sale", en)
+	r, resp, err := h.Understand(context.Background(), "I just sold 3 bags of rice for 45k cash, call me 08031234567", "• *sold 3 bags of rice 45,000 cash*: record a sale", nil, en)
 	if err != nil || resp == nil || r.Kind != understand.Command || r.Command != "sold 3 bags of rice 45,000 cash" {
 		t.Fatalf("%+v %v", r, err)
 	}

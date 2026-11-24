@@ -180,6 +180,7 @@ The riders platform connector acts on the run's own business:
 | `release` | Takes an order back from its rider |
 | `prepare_payouts` | A payout batch (`batch_id`): each rider's payout with their bank account, and those not paid for want of one |
 | `finish_payouts` | Records how each payout went (`results`), or `cancel` for a list not approved |
+| `record_proof` | Records on an order's delivery (`reference`) the proof a form step asked its rider for ([device fields](spec/device-fields.md) §6): `where`, the step's location answer, kept only at its masked point (about 100 m), and `photo`, its photo answer, kept beside the delivery's other photos with its source (`camera` or `sent`). Its `mark` is `confirmed_at_door` (read by the phone within 150 m of the customer's own pin), `far_from_address`, `said_by_rider` (a pin sent in a chat), `read_by_phone` (no customer pin to compare) or `no_location`. The Confirm card shows the pin, the photo and which was read by the phone and which was sent |
 
 The rider's taps are not steps. A workflow that goes on after Delivered waits for the signal `storefront.delivered` with the order's reference as its correlation. The AI builder knows `riders@1` ("hand my orders to my riders", "pay my riders weekly").
 

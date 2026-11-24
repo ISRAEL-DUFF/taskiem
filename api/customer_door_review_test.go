@@ -663,24 +663,15 @@ func TestCustomerDoorDeliveryCard(t *testing.T) {
 func TestCustomerDoorStockAcrossLines(t *testing.T) {
 	w := newDoorShopWorld(t)
 	owner := w.owner
-	sf := owner.must(200, "GET", "/v1/storefront", nil)
-	if inner, ok := sf["storefront"].(map[string]any); ok {
-		sf = inner
-	}
-	table := sf["catalogue_table"].(string)
-	if s, out := owner.do("POST", "/v1/tables/"+table+"/columns", map[string]any{"name": "stock", "type": "integer"}); s != 200 && s != 201 && s != 409 {
-		t.Fatalf("a stock column: %d %v", s, out)
-	}
-	cols := sf["catalogue_columns"].(map[string]any)
-	cols["stock"] = "stock"
-	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": sf["slug"], "draft": sf["draft"], "catalogue_table": table, "catalogue_columns": cols})
+	withStock(w.world)
 	var jollof string
 	for _, it := range owner.must(200, "POST", "/v1/storefront/catalogue/refresh", nil)["items"].([]any) {
 		if it := it.(map[string]any); it["name"] == "Jollof rice" {
 			jollof = it["id"].(string)
 		}
 	}
-	owner.must(200, "PATCH", "/v1/tables/"+table+"/rows/"+jollof, map[string]any{"set": map[string]any{"stock": 3}}, "Idempotency-Key", "st1")
+	// Counted by a stock item, at 3.
+	owner.must(200, "POST", "/v1/stock/movements", map[string]any{"item_id": jollof, "reason": "count", "count": 3}, "Idempotency-Key", "st1")
 	owner.must(200, "POST", "/v1/storefront/catalogue/refresh", nil)
 	owner.must(200, "POST", "/v1/storefront/publish", nil)
 	tolu, _ := w.personIn(t, "+2348031120101")

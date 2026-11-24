@@ -60,9 +60,22 @@ func TestMentionsOrderFromTwo(t *testing.T) {
 	sCement := share(dangote, "Cement", "bag", 950000)
 	share(cherry, "Blocks", "piece", 45000)
 
-	// Two businesses in one message: two orders, one yes.
+	// Two businesses in one message: two orders, one yes. Each line the
+	// buyer has not said how to treat is asked first, in turn (U2b), here
+	// typed: the stock item, then the label.
 	r := w.say(t, buyerOn, "Buy 400 bags of cement from @Dangote Stores and 20 pieces of blocks from @Cherry Blocks")
-	if !strings.Contains(r, "2 orders, one per business") || !strings.Contains(r, "*Dangote Stores*") || !strings.Contains(r, "₦3,800,000") ||
+	if !strings.Contains(r, "*Cement* (400 bags) from *Dangote Stores*: how should we treat it?") {
+		t.Fatalf("asked: %q", r)
+	}
+	if r := w.say(t, buyerOn, "add to stock, cement"); !strings.Contains(r, "Label for *Cement*?") {
+		t.Fatalf("the label: %q", r)
+	}
+	if r = w.say(t, buyerOn, "1"); !strings.Contains(r, "*Cement*: Add to stock (Cement) · Stock bought.") ||
+		!strings.Contains(r, "*Blocks* (20 pieces) from *Cherry Blocks*: how should we treat it?") {
+		t.Fatalf("the next: %q", r)
+	}
+	r = w.say(t, buyerOn, "add to stock, blocks, stock bought")
+	if !strings.Contains(r, "*Blocks*: Add to stock (Blocks) · Stock bought.") || !strings.Contains(r, "2 orders, one per business") || !strings.Contains(r, "*Dangote Stores*") || !strings.Contains(r, "₦3,800,000") ||
 		!strings.Contains(r, "*Cherry Blocks*") || !strings.Contains(r, "₦9,000") {
 		t.Fatalf("read back: %q", r)
 	}
@@ -95,6 +108,19 @@ func TestMentionsOrderFromTwo(t *testing.T) {
 	// Nothing to order.
 	if r := w.say(t, buyerOn, "hello @Dangote Stores"); !strings.Contains(r, "Say how many") {
 		t.Fatalf("nothing asked: %q", r)
+	}
+
+	// "…, deliver to @warehouse": a saved place, where the order goes; a
+	// saved name in the middle is said how.
+	buyer.must(201, "POST", "/v1/saved", map[string]any{"name": "warehouse", "title": "Warehouse", "kind": "place",
+		"details": map[string]any{"line": "4 Creek Road", "area": "Apapa", "phone": "0803 112 0077"}})
+	if r := w.say(t, buyerOn, "Buy 10 bags of cement from @Dangote Stores, deliver to @warehouse"); !strings.Contains(r, "₦95,000") ||
+		!strings.Contains(r, "Delivered to @warehouse: 4 Creek Road, Apapa.") {
+		t.Fatalf("delivered to a saved place: %q", r)
+	}
+	w.say(t, buyerOn, "no")
+	if r := w.say(t, buyerOn, "Buy 10 bags of cement for @warehouse from @Dangote Stores"); !strings.Contains(r, "end the order with \"deliver to @warehouse\"") {
+		t.Errorf("in the middle: %q", r)
 	}
 
 	// On the web: the same words, the same answer.

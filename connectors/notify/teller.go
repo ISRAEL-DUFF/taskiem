@@ -57,57 +57,66 @@ func (n *Notifier) Tell(ctx context.Context, m Message) (Result, error) {
 			return err
 		}
 		res.People = len(people)
-		ids := make([]uuid.UUID, 0, len(people))
-		for _, p := range people {
-			ids = append(ids, p.id)
-		}
-		linked := map[uuid.UUID]string{}
-		for _, ch := range n.Chat {
-			q := `SELECT user_id FROM taskiem_wa_numbers($1)`
-			if ch == "telegram" {
-				q = `SELECT user_id FROM taskiem_tg_accounts($1)`
-			}
-			rows, err := tx.Query(ctx, q, ids)
-			if err != nil {
-				return err
-			}
-			users, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-			if err != nil {
-				return err
-			}
-			for _, u := range users {
-				if _, ok := linked[u]; !ok {
-					linked[u] = ch
-				}
-			}
-		}
-		for _, p := range people {
-			if ch, ok := linked[p.id]; ok {
-				run, step := m.Run, m.Step
-				if _, err := whatsapp.Enqueue(ctx, tx, whatsapp.OutboxItem{Tenant: m.Tenant, Channel: ch, Kind: OutboxNotice, User: p.id, Run: &run, Step: &step},
-					"notice:"+m.Key+":"+p.id.String()); err != nil {
-					return err
-				}
-				res.Chat++
-				continue
-			}
-			if n.Messages == nil || p.email == "" {
-				continue
-			}
-			subject := m.Title
-			if subject == "" {
-				subject = "A message about " + business
-			}
-			if _, err := n.Messages.Enqueue(ctx, tx, sender.Message{Tenant: m.Tenant, Channel: sender.Email, Purpose: sender.PurposeNotice, To: p.email,
-				SenderName: business, Subject: subject, Text: text(m), Key: "notice:" + m.Key + ":" + p.id.String()}); err != nil {
-				return fmt.Errorf("telling %s by email: %w", maskEmail(p.email), err)
-			}
-			res.Email++
-		}
-		return nil
+		r, err := n.deliver(ctx, tx, business, m, people)
+		res.Chat, res.Email = r.Chat, r.Email
+		return err
 	})
 	if err != nil {
 		return res, fmt.Errorf("%w: %w", effects.ErrRetryable, err)
+	}
+	return res, nil
+}
+
+// deliver queues m to each of people: on the first chat channel they
+// linked (in Chat's order), else by email.
+func (n *Notifier) deliver(ctx context.Context, tx pgx.Tx, business string, m Message, people []person) (Result, error) {
+	var res Result
+	ids := make([]uuid.UUID, 0, len(people))
+	for _, p := range people {
+		ids = append(ids, p.id)
+	}
+	linked := map[uuid.UUID]string{}
+	for _, ch := range n.Chat {
+		q := `SELECT user_id FROM taskiem_wa_numbers($1)`
+		if ch == "telegram" {
+			q = `SELECT user_id FROM taskiem_tg_accounts($1)`
+		}
+		rows, err := tx.Query(ctx, q, ids)
+		if err != nil {
+			return res, err
+		}
+		users, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return res, err
+		}
+		for _, u := range users {
+			if _, ok := linked[u]; !ok {
+				linked[u] = ch
+			}
+		}
+	}
+	for _, p := range people {
+		if ch, ok := linked[p.id]; ok {
+			run, step := m.Run, m.Step
+			if _, err := whatsapp.Enqueue(ctx, tx, whatsapp.OutboxItem{Tenant: m.Tenant, Channel: ch, Kind: OutboxNotice, User: p.id, Run: &run, Step: &step},
+				"notice:"+m.Key+":"+p.id.String()); err != nil {
+				return res, err
+			}
+			res.Chat++
+			continue
+		}
+		if n.Messages == nil || p.email == "" || placeholderEmail(p.email) {
+			continue // an account made by phone or chat has no mailbox
+		}
+		subject := m.Title
+		if subject == "" {
+			subject = "A message about " + business
+		}
+		if _, err := n.Messages.Enqueue(ctx, tx, sender.Message{Tenant: m.Tenant, Channel: sender.Email, Purpose: sender.PurposeNotice, To: p.email,
+			SenderName: business, Subject: subject, Text: text(m), Key: "notice:" + m.Key + ":" + p.id.String()}); err != nil {
+			return res, fmt.Errorf("telling %s by email: %w", maskEmail(p.email), err)
+		}
+		res.Email++
 	}
 	return res, nil
 }
@@ -149,15 +158,44 @@ func (n *Notifier) Message(ctx context.Context, m Outside) (Delivery, error) {
 	var phone string
 	if m.Phone != "" {
 		p, err := sender.NormalisePhone(m.Phone, n.countries())
-		if err != nil && m.Email == "" {
+		if err != nil && m.Email == "" && m.PayrollaEmployee == "" {
 			return d, fmt.Errorf("%q is not a phone number Taskiem can reach: %w", m.Phone, effects.ErrFatal)
 		}
-		phone = p
+		if err == nil {
+			phone = p
+		}
 	}
 	err := db.InTenantTx(ctx, n.Pool, []uuid.UUID{m.Tenant}, func(tx pgx.Tx) error {
 		var business string
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, m.Tenant).Scan(&business); err != nil {
 			return err
+		}
+		// A staff member linked to the Payrolla employee the message is
+		// about hears it on their own chat with the business (or by email),
+		// not as someone outside it.
+		if m.PayrollaEmployee != "" {
+			people, err := payrollaStaff(ctx, tx, m.Tenant, m.PayrollaEmployee)
+			if err != nil {
+				return err
+			}
+			if len(people) > 0 {
+				r, err := n.deliver(ctx, tx, business, Message{Tenant: m.Tenant, Run: m.Run, Step: m.Step, Environment: m.Environment, Title: m.Title, Text: m.Text, Key: m.Key}, people)
+				switch {
+				case err != nil:
+					return err
+				case r.Chat > 0:
+					d.Via = "staff_chat"
+					return nil
+				case r.Email > 0:
+					d.Via = "email"
+					return nil
+				}
+				// No chat and no real email reaches them as staff: they
+				// are reached as the employee, on the phone Payrolla has.
+			}
+		}
+		if phone == "" && (m.Email == "" || placeholderEmail(m.Email)) {
+			return nil
 		}
 		if phone != "" && n.Reach.Ready() {
 			t, ok, err := n.Reach.FindTx(ctx, tx, m.Tenant, m.Run, phone, n.Chat)
@@ -203,7 +241,7 @@ func (n *Notifier) Message(ctx context.Context, m Outside) (Delivery, error) {
 				return nil
 			}
 		}
-		if m.Email != "" {
+		if m.Email != "" && !placeholderEmail(m.Email) {
 			subject := m.Title
 			if subject == "" {
 				subject = "A message from " + business
@@ -283,12 +321,34 @@ func recipients(ctx context.Context, tx pgx.Tx, m Message) ([]person, error) {
 	})
 }
 
+// payrollaStaff is the active staff member linked to a Payrolla employee
+// (staff_profiles.payrolla_employee_id, set by an owner), if any.
+func payrollaStaff(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, employee string) ([]person, error) {
+	rows, err := tx.Query(ctx, `SELECT u.id, u.email FROM staff_profiles sp JOIN users u ON u.id = sp.user_id
+		WHERE sp.tenant_id = $1 AND sp.payrolla_employee_id = $2 AND u.status = 'active'
+		  AND EXISTS (SELECT 1 FROM memberships ms WHERE ms.tenant_id = sp.tenant_id AND ms.user_id = sp.user_id) LIMIT 1`, tenant, employee)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (person, error) {
+		var p person
+		return p, r.Scan(&p.id, &p.email)
+	})
+}
+
 // text is the message as sent: its title, a blank line, then the message.
 func text(m Message) string {
 	if m.Title == "" {
 		return m.Text
 	}
 	return m.Title + "\n\n" + m.Text
+}
+
+// placeholderEmail reports whether e is the sign-in name of an account
+// made by phone or chat (users.email is required): .invalid receives no
+// mail. The api's emailPlaceholder is the same test.
+func placeholderEmail(e string) bool {
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(e)), ".taskiem.invalid")
 }
 
 func maskEmail(e string) string {

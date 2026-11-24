@@ -3,8 +3,10 @@
 // GET /v1/chat-links/{code}, GET /v1/me/storefront-orders), and the words
 // the screens build from it. Pure helpers, tested on their own.
 
+import { ApiError } from "../api";
 import type { SavedCard } from "./saved";
 import { formatPrice } from "./storefront";
+import { startErrorWords } from "./toolanswer";
 
 /** A delivery as its customer follows it, once a rider holds it (nothing
  * of the rider). */
@@ -574,4 +576,15 @@ export function withoutTool(state: unknown): Record<string, unknown> | null | un
   if (!state || typeof state !== "object" || !("tool" in state)) return undefined;
   const rest = Object.fromEntries(Object.entries(state).filter(([k]) => k !== "tool"));
   return Object.keys(rest).length ? rest : null;
+}
+
+/** What a customer's start of one of a business's tools, or their yes,
+ * ran into, in words (made tools T5): a tool not offered to customers (it
+ * moves money, or its form cannot be asked here), one gone, too many
+ * starts; else as any tool's start. */
+export function theirErrorWords(e: unknown): string {
+  if (e instanceof ApiError && e.status === 409 && e.body.not_offered) return "This can't be done from here. Ask them here in the chat.";
+  if (e instanceof ApiError && e.status === 404) return "This isn't available any more.";
+  if (e instanceof ApiError && e.status === 429) return "Too many tries just now. Try again in a while.";
+  return startErrorWords(e);
 }

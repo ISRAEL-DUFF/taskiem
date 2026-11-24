@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -72,6 +73,20 @@ func (s *Server) sendNoticeItem(ctx context.Context, it whatsapp.OutboxItem) err
 	m := whatsapp.AlertMessage(business, "notice", head, body, "", nil)
 	m.Text = strings.TrimRight(m.Text, "\n")
 	m.Tenant = it.Tenant
+	// Its buttons, each filling a tool's form (tools_buttons.go).
+	if bs, _ := in["buttons"].([]any); len(bs) > 0 {
+		// The buttons from the step's input as it was sealed: what a
+		// button carries never comes from personal data opened.
+		sealed, err := s.sealedStepButtons(ctx, it)
+		if err != nil {
+			return err
+		}
+		buttons, err := s.noticeButtons(ctx, it, sealed)
+		if err != nil {
+			return err
+		}
+		m.Buttons = buttons
+	}
 	if ch.OwnTenant() != uuid.Nil {
 		m.Text = strings.TrimPrefix(m.Text, "["+business+"] ")
 	}
@@ -99,4 +114,57 @@ func (s *Server) sendNoticeItem(ctx context.Context, it whatsapp.OutboxItem) err
 		return fmt.Errorf("to %s: %w", whatsapp.MaskNumber(addr), err)
 	}
 	return nil
+}
+
+// noticeButtons mints a Tell me message's buttons (a label, a tool's
+// command, values, once) for the run that sent it, in that run's
+// environment, as the chat's reply buttons; one whose tool is not there
+// is left out.
+func (s *Server) noticeButtons(ctx context.Context, it whatsapp.OutboxItem, bs []any) ([]whatsapp.Button, error) {
+	var drawn []answerBtn
+	err := db0(ctx, s, it.Tenant, func(tx pgx.Tx) error {
+		var env string
+		if err := tx.QueryRow(ctx, `SELECT environment FROM runs WHERE id = $1`, *it.Run).Scan(&env); err != nil {
+			return err
+		}
+		for i, raw := range bs {
+			b, _ := raw.(map[string]any)
+			label, _ := b["label"].(string)
+			tool, _ := b["tool"].(string)
+			once, _ := b["once"].(bool)
+			inputs, _ := b["inputs"].(map[string]any)
+			ab := answerBtn{Label: label, Tool: tool, Inputs: inputs, Once: once}
+			id, err := mintButton(ctx, tx, it.Tenant, env, *it.Run, "notice/"+*it.Step+"/"+strconv.Itoa(i), ab)
+			if err != nil {
+				return err
+			}
+			if id != uuid.Nil {
+				ab.Token = id.String()
+				drawn = append(drawn, ab)
+			}
+		}
+		return nil
+	})
+	return chatButtons(drawn), err
+}
+
+// sealedStepButtons are a Tell me step's buttons from its input as the run
+// sealed it: personal values stay envelopes, masked when minted.
+func (s *Server) sealedStepButtons(ctx context.Context, it whatsapp.OutboxItem) ([]any, error) {
+	var bs []any
+	err := db0(ctx, s, it.Tenant, func(tx pgx.Tx) error {
+		var raw []byte
+		if err := tx.QueryRow(ctx, `SELECT payload FROM run_events WHERE run_id = $1 AND step_id = $2 AND type = 'StepScheduled' ORDER BY seq DESC LIMIT 1`, *it.Run, *it.Step).Scan(&raw); err != nil {
+			return err
+		}
+		var payload struct {
+			Input map[string]any `json:"input"`
+		}
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return err
+		}
+		bs, _ = payload.Input["buttons"].([]any)
+		return nil
+	})
+	return bs, err
 }

@@ -10,7 +10,6 @@ package api
 // kept in user_devices, and forgotten after 90 days unused.
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -156,25 +155,8 @@ func (s *Server) secondProofPin(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	var (
-		none, right, nowLocked bool
-		lockedUntil            *time.Time
-		failures               int
-	)
-	err := pgx.BeginFunc(ctx, s.Store.Pool, func(tx pgx.Tx) error {
-		var hash string
-		err := tx.QueryRow(ctx, `SELECT pin_hash, locked_until FROM taskiem_wa_pin_lock($1)`, p.UserID).Scan(&hash, &lockedUntil)
-		if errors.Is(err, pgx.ErrNoRows) {
-			none = true
-			return nil
-		}
-		if err != nil || lockedUntil != nil {
-			return err
-		}
-		right = validPin(req.Pin) && checkPassword(hash, req.Pin)
-		return tx.QueryRow(ctx, `SELECT failures, locked FROM taskiem_wa_pin_result($1, $2, $3, $4::interval)`, p.UserID, right, waPinMaxFailures, waPinWindow.String()).
-			Scan(&failures, &nowLocked)
-	})
+	t, err := s.tryPin(ctx, p.UserID, req.Pin)
+	none, right, nowLocked, lockedUntil, failures := t.None, t.Right, t.NowLocked, t.LockedUntil, t.Failures
 	switch {
 	case err != nil:
 		s.fail(w, r, err)

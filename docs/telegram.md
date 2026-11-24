@@ -33,7 +33,11 @@ Telegram delivers only to `https` URLs on ports 443, 80, 88 or 8443. A local ins
 
 **Approving.** A request comes with **Approve** and **Reject** buttons. A button works once, only from your account, for 24 hours or until the request times out; the web app's rules apply. When the policy needs step-up, Taskiem sends a link: open it signed in to Taskiem and confirm with your passkey or authenticator code within 10 minutes. (The WhatsApp PIN is entered in a WhatsApp form; on Telegram the link is used instead, which satisfies a PIN policy.) If you have linked both WhatsApp and Telegram, a request goes to both, and deciding on either closes it.
 
+**Your tools' answers** come back here when the run ends, as on WhatsApp, with buttons: a card's under it, and a list as one message, its first ten rows as lines and a button for each row's action (*Printer jam · Assign to me*); a button opens that tool filled in ([buttons](tools.md#buttons)).
+
 **Matching payments.** A payment Taskiem could not match to an invoice on its own comes with **Yes, match** and **No**, as on WhatsApp ([matching payments](whatsapp.md#matching-payments)), to members who manage invoices.
+
+**Form steps that ask where you are or for a photo** are answered with Telegram's own location and photo, as on WhatsApp ([form steps](whatsapp.md#for-people-using-taskiem-on-whatsapp)): each marked *sent*, a signature not available here.
 
 **What messages never show** is as on WhatsApp: no secrets, and personal data masked.
 
@@ -54,7 +58,7 @@ An alert channel of kind `telegram` names members by email; each alert goes to t
 | 24-hour window, approved templates outside it, template costs | None: the bot can write to a person at any time after they pressed Start |
 | A 6-digit code sent to the number | A one-time link opened from the account |
 | Forms (Flows) for inputs and the approval PIN | Inputs in chat; step-up by the web link |
-| Own numbers and public menus per organisation | One platform bot; not yet per organisation |
+| Own numbers and public menus per organisation, and so customers' tools | One platform bot; not yet per organisation. Customers' tools are on a business's own WhatsApp number and in the app ([tools](tools.md#customers-tools)) |
 | Phone number as identity | The Telegram user id (never the username, which can change) |
 | Photos (a product's, a logo) through the media API; images sent by link | Photos (the largest size, or an image sent as a file) through `getFile`; images sent with `sendPhoto` by link |
 

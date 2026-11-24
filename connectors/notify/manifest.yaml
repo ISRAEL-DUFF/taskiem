@@ -39,6 +39,18 @@ actions:
           type: object
           description: "With template: its variables (every one but the business's name, which Taskiem adds), each a line of text, such as day and summary for taskiem_daily_close"
           additionalProperties: { type: string }
+        buttons:
+          type: array
+          maxItems: 3
+          description: "Up to three buttons (decision 0073, made tools §10), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles: never running it by itself. once: the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them"
+          items:
+            type: object
+            required: [label, tool]
+            properties:
+              label:  { type: string, minLength: 1, maxLength: 20, description: "What the button says" }
+              tool:   { type: string, description: "The tool's command, such as clean-disk" }
+              inputs: { type: object, description: "Values for the tool's form, each a value or an expression" }
+              once:   { type: boolean, description: "The first run started from it spends it; the next person is told who took it" }
     output:
       type: object
       properties:
@@ -73,10 +85,11 @@ actions:
         message: { type: string, minLength: 1, maxLength: 1500, description: The message, in plain words }
         title:   { type: string, maxLength: 120, description: "A first line, and an email's subject" }
         about:   { type: string, maxLength: 60, description: "What it is about, in a few words (your leave request, order AD-12): a WhatsApp update names it" }
+        payrolla_employee: { type: string, maxLength: 64, description: "Payrolla's id of the employee it is about: a staff member an owner linked to that employee hears it on their own chat with the business (or by email) instead" }
     output:
       type: object
       properties:
-        via:            { type: string, enum: [whatsapp, telegram, sms, email, nobody], description: How it goes to them }
+        via:            { type: string, enum: [whatsapp, telegram, sms, email, staff_chat, nobody], description: "How it goes to them: staff_chat is their own chat with the business, as a staff member linked to the Payrolla employee" }
         over_allowance: { type: boolean, description: "This month's texts are used up, so it did not go by SMS" }
     pii:
       - { field: input.phone, category: phone }

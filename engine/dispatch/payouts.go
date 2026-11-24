@@ -144,6 +144,12 @@ func (d *Dispatch) sealBank(ctx context.Context, tx pgx.Tx, tenant, rider uuid.U
 	return d.Vault.SealUnderTx(ctx, tx, tenant, subject, "bank_account", b)
 }
 
+// BankOfTx is the rider's bank account, opened; false when none is kept
+// (or it was erased).
+func (d *Dispatch) BankOfTx(ctx context.Context, tx pgx.Tx, tenant, rider uuid.UUID) (Bank, bool, error) {
+	return d.bankOf(ctx, tx, tenant, rider)
+}
+
 func (d *Dispatch) bankOf(ctx context.Context, tx pgx.Tx, tenant, rider uuid.UUID) (Bank, bool, error) {
 	var raw []byte
 	if err := tx.QueryRow(ctx, `SELECT bank FROM riders WHERE tenant_id = $1 AND id = $2`, tenant, rider).Scan(&raw); err != nil || raw == nil {

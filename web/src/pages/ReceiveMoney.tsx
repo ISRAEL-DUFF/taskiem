@@ -36,6 +36,8 @@ import {
 import { plainly } from "./SchoolAccountParts";
 import { Icon } from "../icons";
 import { Copy } from "./Forms";
+import { SavedFill } from "./SavedFill";
+import { bankCodeFor } from "../lib/saved";
 import type { ConnectionName } from "../forms/ConnectionPicker";
 
 // Payments settings (decision 0052; docs/receive-money.md): receive money
@@ -531,6 +533,7 @@ function WithdrawTo({ r, onDone }: { r: ReceiveMoney; onDone: () => void }) {
   );
   const [code, setCode] = useState(r.withdraw_to?.bank_code ?? "");
   const [number, setNumber] = useState(r.withdraw_to?.account_number ?? "");
+  const [fillProblem, setFillProblem] = useState("");
   const [two, setTwo] = useState(
     r.two_approvers_above_kobo ? String(r.two_approvers_above_kobo / 100) : "",
   );
@@ -539,6 +542,22 @@ function WithdrawTo({ r, onDone }: { r: ReceiveMoney; onDone: () => void }) {
   return (
     <div data-testid="withdraw-to-form">
       <ErrorBox error={banks.error} />
+      <div className="saved-fill-line">
+        <SavedFill
+          kind="bank_account"
+          label="the account withdrawals go to"
+          onPick={(x, n, why) => {
+            setCode(bankCodeFor(list, x.details));
+            setNumber(n.replace(/\D/g, "").slice(0, 10));
+            setFillProblem(why ?? "");
+          }}
+        />
+      </div>
+      {fillProblem && (
+        <p className="error-text saved-fill-note" role="alert" data-testid="saved-fill-note">
+          {fillProblem}
+        </p>
+      )}
       <Field label="Your bank">
         <select value={code} onChange={(e) => setCode(e.target.value)}>
           <option value="">Choose your bank</option>

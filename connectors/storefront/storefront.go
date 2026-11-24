@@ -9,6 +9,7 @@ package storefront
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -32,6 +33,8 @@ type Ops interface {
 	PaymentLink(ctx context.Context, tenant uuid.UUID, reference string, amountKobo int64) (map[string]any, error)
 	NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference, text, subject, key string) (map[string]any, error)
 	GetBooking(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
+	// RecentCustomers are those who ordered in the last days, each once.
+	RecentCustomers(ctx context.Context, tenant uuid.UUID, days int) ([]map[string]any, bool, error)
 	Refund(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error)
 	MarkReturned(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Returned, error)
 	IssueTickets(ctx context.Context, tenant uuid.UUID, reference string) ([]sf.Ticket, sf.Order, error)
@@ -46,14 +49,15 @@ func New(ops Ops) *connector.Connector {
 	m := connector.MustParse(manifest)
 	a := &actions{ops: ops}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
-		"decide":          connector.ActionFunc(a.decide),
-		"payment_link":    connector.ActionFunc(a.paymentLink),
-		"notify_customer": connector.ActionFunc(a.notify),
-		"get_booking":     connector.ActionFunc(a.getBooking),
-		"refund":          connector.ActionFunc(a.refund),
-		"mark_returned":   connector.ActionFunc(a.markReturned),
-		"issue_tickets":   connector.ActionFunc(a.issueTickets),
-		"offer_place":     connector.ActionFunc(a.offerPlace),
+		"decide":           connector.ActionFunc(a.decide),
+		"payment_link":     connector.ActionFunc(a.paymentLink),
+		"notify_customer":  connector.ActionFunc(a.notify),
+		"get_booking":      connector.ActionFunc(a.getBooking),
+		"recent_customers": connector.ActionFunc(a.recentCustomers),
+		"refund":           connector.ActionFunc(a.refund),
+		"mark_returned":    connector.ActionFunc(a.markReturned),
+		"issue_tickets":    connector.ActionFunc(a.issueTickets),
+		"offer_place":      connector.ActionFunc(a.offerPlace),
 	}}
 }
 
@@ -147,6 +151,48 @@ func (a *actions) getBooking(ctx context.Context, req connector.Request) (connec
 	}
 	out, err := a.ops.GetBooking(ctx, c.Tenant, ref)
 	return connector.Response{Output: out}, classify(err)
+}
+
+// recentCustomers are the customers who ordered in the last days (7 by
+// default, up to 31), each once: to send them something, such as the
+// business's saved @price-list (saved objects S3).
+func (a *actions) recentCustomers(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, ok := connector.CallerFrom(ctx)
+	if !ok {
+		return connector.Response{}, fmt.Errorf("storefront actions run only in a workflow run: %w", effects.ErrFatal)
+	}
+	if a.ops == nil {
+		return connector.Response{}, fmt.Errorf("storefront orders are not available on this deployment: %w", effects.ErrFatal)
+	}
+	days := 7
+	if v, ok := req.Input["days"]; ok && v != nil {
+		var f float64
+		switch n := v.(type) {
+		case float64:
+			f = n
+		case int64:
+			f = float64(n)
+		case int:
+			f = float64(n)
+		case json.Number:
+			f, _ = n.Float64()
+		default:
+			return connector.Response{}, fmt.Errorf("days is a whole number of days, 1 to 31: %w", effects.ErrFatal)
+		}
+		if f != float64(int(f)) || f < 1 || f > 31 {
+			return connector.Response{}, fmt.Errorf("days is a whole number of days, 1 to 31: %w", effects.ErrFatal)
+		}
+		days = int(f)
+	}
+	list, truncated, err := a.ops.RecentCustomers(ctx, c.Tenant, days)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	customers := make([]any, len(list))
+	for i, x := range list {
+		customers[i] = x
+	}
+	return connector.Response{Output: map[string]any{"customers": customers, "count": len(list), "truncated": truncated}}, nil
 }
 
 // markReturned ends a hire: its items are back (fronts F5). A late return
@@ -288,6 +334,14 @@ func (l *Late) GetBooking(ctx context.Context, tenant uuid.UUID, reference strin
 		return nil, err
 	}
 	return ops.GetBooking(ctx, tenant, reference)
+}
+
+func (l *Late) RecentCustomers(ctx context.Context, tenant uuid.UUID, days int) ([]map[string]any, bool, error) {
+	ops, err := l.get()
+	if err != nil {
+		return nil, false, err
+	}
+	return ops.RecentCustomers(ctx, tenant, days)
 }
 
 func (l *Late) MarkReturned(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Returned, error) {

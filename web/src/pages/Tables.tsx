@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { Help } from "../onboarding";
 import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad, Item, Items } from "../ui";
 import { Icon } from "../icons";
+import { ShowAsPage } from "./Pages";
 import {
   COLUMN_TYPES,
   TYPE_HELP,
@@ -313,6 +314,7 @@ export function TablePage() {
         actions={
           <>
             <Link to="/tables">All tables</Link>
+            {can("page.edit") && !isKept(t) && <ShowAsPage table={t} />}
             {controls.columns && (
               <button onClick={() => setAdding(true)}>
                 <Icon name="plus" />

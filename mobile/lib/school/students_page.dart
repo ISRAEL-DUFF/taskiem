@@ -14,6 +14,7 @@ import '../app/auth.dart';
 import '../chat/approve.dart' show TkTextBox;
 import '../chat/give_task.dart' show TkPillChoice;
 import '../chat/invoices_page.dart' show openInvoice;
+import '../chat/saved_fill.dart' show SavedButton, pickSavedPhone;
 import '../chat/words.dart' show naira;
 import '../kit/forms.dart' show errorWords, nairaKobo;
 import '../kit/kit.dart';
@@ -238,6 +239,20 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
     super.dispose();
   }
 
+  /// A saved person's or place's phone as the guardian's (saved objects
+  /// §6.4): the phone only, one picker at a time.
+  bool _picking = false;
+  Future<void> _phoneFromSaved() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final v = await pickSavedPhone(context, widget.auth);
+      if (v != null && mounted) _gPhone.text = v;
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   bool get _ready => _name.text.trim().isNotEmpty && _adm.text.trim().isNotEmpty && _classId.isNotEmpty;
 
   Future<void> _save() async {
@@ -312,7 +327,17 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
           title: 'Guardian',
           children: [
             TkKitField(label: 'Name', child: TkTextBox(controller: _gName, max: 120, size: 15, height: 46)),
-            TkKitField(label: 'Phone', hint: 'A family is the guardians with one phone.', child: TkTextBox(controller: _gPhone, phone: true, size: 15, height: 46)),
+            TkKitField(
+              label: 'Phone',
+              hint: 'A family is the guardians with one phone.',
+              child: Row(
+                children: [
+                  Expanded(child: TkTextBox(controller: _gPhone, phone: true, size: 15, height: 46)),
+                  const SizedBox(width: 8),
+                  SavedButton(semantics: 'Pick a saved phone number for the guardian', picking: _picking, busy: _busy, onPressed: _phoneFromSaved),
+                ],
+              ),
+            ),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

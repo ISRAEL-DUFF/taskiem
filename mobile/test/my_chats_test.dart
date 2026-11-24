@@ -643,7 +643,12 @@ void main() {
     expect(find.text('On its way to you'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('Picked up: step 2 of 4')), findsOneWidget);
 
+    // Pay offers its ways (the payments flow, part 1): by transfer first,
+    // the invoice's page under it.
     await press(t, find.text('Pay'));
+    await t.pumpAndSettle();
+    expect(find.text('Pay by transfer'), findsOneWidget);
+    await press(t, find.text('Pay on the invoice’s page'));
     expect(opened, [Uri.parse('https://app.taskiem.com/i/xyz')]);
 
     await press(t, find.text('View delivery'));

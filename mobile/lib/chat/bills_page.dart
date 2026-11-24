@@ -7,6 +7,7 @@
 
 import 'package:flutter/widgets.dart';
 
+import '../api/api.g.dart' show SpendLabel;
 import '../app/auth.dart';
 import '../app/openers.dart';
 import '../app/links.dart';
@@ -24,6 +25,9 @@ import 'approve.dart' show TkTextBox;
 import 'doc_thread.dart' show DocThread;
 import 'invoices_page.dart' show fmtTime, shortDay;
 import 'money_sheets.dart' show billHero, billStatus, canPay, sentLine;
+import 'pay_transfer.dart' show BillTransferSource, TransferLive, payBill, payWayWords;
+import 'things_page.dart' show ThingsPage;
+import 'treat_line.dart' show LineMark;
 import 'words.dart' show naira;
 import '../kit/mobile.dart' show TkCountUp, TkHeadButton, TkListRow, TkRoute, TkSection, TkSkeleton, tkInitials;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -274,6 +278,12 @@ class _BillPageState extends State<BillPage> with Polling {
   bool _busy = false;
   String? _actError;
 
+  // Each line's treatment and label (what a business buys §8, §9): by the
+  // order line of the same seller item, on the order it was raised from;
+  // read once, for the buyer's eyes only.
+  final Map<String, Map<String, dynamic>> _orders = {};
+  List<SpendLabel>? _labels;
+
   Auth get _auth => widget.auth;
 
   @override
@@ -283,10 +293,41 @@ class _BillPageState extends State<BillPage> with Polling {
     if (widget.follow) startPolling(const Duration(seconds: 30), _load);
   }
 
+  Future<void> _loadMarks(Map<String, dynamic> b) async {
+    if (!_auth.can('table.read')) return;
+    final ids = {for (final l in _maps(b['lines'])) _str(l['purchase_id'])}.where((x) => x.isNotEmpty && !_orders.containsKey(x)).toList();
+    if (ids.isEmpty && _labels != null) return;
+    try {
+      _labels ??= (await _auth.api.listSpendLabels()).labels;
+      for (final id in ids) {
+        final r = (await _auth.transport.send('GET', '/v1/stock/purchases/${Uri.encodeComponent(id)}') as Map).cast<String, dynamic>();
+        _orders[id] = (r['purchase'] as Map).cast<String, dynamic>();
+      }
+      if (mounted) setState(() {});
+    } on Object {
+      // The marks are a help; the bill is there without them.
+    }
+  }
+
+  /// A bill line's order line: same order, same seller item.
+  Map<String, dynamic>? _lineOf(Map<String, dynamic> l) =>
+      _maps(_orders[_str(l['purchase_id'])]?['lines']).where((x) => _str(x['seller_item_id']).isNotEmpty && x['seller_item_id'] == l['seller_item_id']).firstOrNull;
+
+  Widget? _mark(Map<String, dynamic> l) {
+    if (_labels == null) return null;
+    final o = _lineOf(l);
+    // Not matched to an order line (no seller item, or not on it): nothing
+    // is known of how it is treated, so no mark, not "Not labelled".
+    if (o == null) return null;
+    final label = _labels!.where((x) => x.id == o['label_id']).map((x) => x.name).firstOrNull ?? '';
+    return LineMark(how: _str(o['treatment']), label: label);
+  }
+
   Future<void> _load() async {
     try {
       final b = (await _auth.transport.send('GET', billPath(widget.id)) as Map).cast<String, dynamic>();
       if (mounted) setState(() => (_bill = b, _error = null));
+      await _loadMarks(b);
       if (_pay == null && _auth.can('invoice.manage') && canPay(b)) await _loadPay();
     } on Object catch (e) {
       if (mounted) setState(() => _error = errorWords(e));
@@ -340,8 +381,25 @@ class _BillPageState extends State<BillPage> with Polling {
     final manage = _auth.can('invoice.manage');
     final sent = sentLine(b);
     final lines = _maps(b['lines']);
+    final transfer = b['transfer'] is Map ? _str((b['transfer'] as Map)['state']) : '';
     return [
       _top(context, b, h, manage),
+      // Paying by transfer: the number asked for, kept up to date (the
+      // card the chat shows).
+      if (manage && transfer.isNotEmpty && transfer != 'paid')
+        TkSection(
+          title: 'By transfer',
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: TransferLive(
+                key: ValueKey('transfer ${b['id']}'),
+                source: BillTransferSource(_auth, _str(b['id']), number: _str(b['reference'])),
+                onNext: (next) => openBill(context, _auth, next),
+              ),
+            ),
+          ],
+        ),
       if (_int(b['paying_kobo']) > 0)
         _box(t, 'A payment of ${naira(_int(b['paying_kobo']))} from Taskiem is under way: it waits for approval, then for the bank.'),
       if (sent.isNotEmpty) Text(sent, style: tkHint(t)),
@@ -415,7 +473,7 @@ class _BillPageState extends State<BillPage> with Polling {
                 (
                   name: '${_str(l['description'])}${(l['quantity'] as num? ?? 1) != 1 ? ' × ${(l['quantity'] as num).toInt() == l['quantity'] ? (l['quantity'] as num).toInt() : l['quantity']}' : ''}',
                   sub: '',
-                  under: null,
+                  under: _mark(l),
                   amount: naira(((l['quantity'] as num? ?? 1) * _int(l['unit_kobo'])).round()),
                 ),
             ],
@@ -427,6 +485,27 @@ class _BillPageState extends State<BillPage> with Polling {
           ),
         ],
       ),
+      // Lines kept track of on the orders it bills: their rows on Things
+      // we have (what a business buys §9), for someone who may see them.
+      if (_auth.can('table.read'))
+        for (final o in {for (final l in lines) _str(l['purchase_id'])}.where((id) => _maps(_orders[id]?['lines']).any((x) => x['treatment'] == 'track' && _int(x['received']) > 0)))
+        TkSection(
+          inset: 56,
+          children: [
+            TkListRow(
+              title: 'On Things we have',
+              sub: 'From ${_str(_orders[o]?['reference']).isEmpty ? 'its order' : _str(_orders[o]?['reference'])}',
+              icon: 'b-hash',
+              square: TkLook.of(context).violet,
+              onTap: () => Navigator.of(context).push(
+                TkRoute<void>(
+                  pageBuilder: (_, _, _) =>
+                      ThingsPage(auth: _auth, order: o, orderReference: _str(_orders[o]?['reference']).isEmpty ? null : _str(_orders[o]?['reference']), backLabel: 'Back to the bill'),
+                ),
+              ),
+            ),
+          ],
+        ),
       if (manage && b['status'] != 'void' && b['status'] != 'paid')
         TkSection(
           inset: 56,
@@ -463,6 +542,7 @@ class _BillPageState extends State<BillPage> with Polling {
     final s = _pay;
     final ready = s != null && _str(s['workflow_id']).isNotEmpty;
     final pays = manage && canPay(b);
+    final ways = [for (final w in (b['ways_to_pay'] as List? ?? const [])) if (w is String) w];
     return TkTopCard(
       semanticsLabel: 'What is left to pay',
       child: Column(
@@ -476,8 +556,37 @@ class _BillPageState extends State<BillPage> with Polling {
             const SizedBox(height: 12),
             TkProgress(h.paid, color: look.lime, semanticsLabel: '${(h.paid * 100).round()}% paid'),
           ],
-          if (pays && s == null && _payError != null) ...[const SizedBox(height: 12), TkErrorBox(_payError!)],
-          if (pays && s != null) ...[
+          // The ways it can be paid now (the payments flow, part 1): Pay
+          // opens them in a small sheet, by transfer first.
+          if (manage && ways.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: TkSmallButton(
+                    label: 'Pay ${naira(_int(b['due_kobo']))}',
+                    primary: true,
+                    onPressed: _busy
+                        ? null
+                        : () => payBill(
+                            context,
+                            auth: _auth,
+                            bill: _str(b['id']),
+                            onSent: _load,
+                            onHowToPay: (_, _) {},
+                          ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              ways.length == 1 ? payWayWords(ways.first).title : '${payWayWords(ways.first).title}, or ${ways.length == 2 ? 'one other way' : '${ways.length - 1} other ways'}.',
+              style: tkText(size: 12.5, lineHeight: 1.4, color: t.muted),
+            ),
+          ],
+          if (pays && ways.isEmpty && s == null && _payError != null) ...[const SizedBox(height: 12), TkErrorBox(_payError!)],
+          if (pays && ways.isEmpty && s != null) ...[
             const SizedBox(height: 14),
             Row(
               children: [

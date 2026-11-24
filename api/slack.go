@@ -600,7 +600,9 @@ func (s *Server) slackReplace(ctx context.Context, pl slackPayload, note string)
 // slackAddrsTx are the Slack addresses of users who linked Slack in the
 // tenant tx is scoped to.
 func slackAddrsTx(ctx context.Context, tx pgx.Tx, users []uuid.UUID) (map[uuid.UUID]string, error) {
-	rows, err := tx.Query(ctx, `SELECT user_id, 'sl:' || team_id || ':' || slack_user_id FROM slack_bindings WHERE verified_at IS NOT NULL AND user_id = ANY ($1)`, users)
+	rows, err := tx.Query(ctx, `SELECT b.user_id, 'sl:' || b.team_id || ':' || b.slack_user_id FROM slack_bindings b
+		WHERE b.verified_at IS NOT NULL AND b.user_id = ANY ($1)
+		  AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = b.user_id AND m.tenant_id = b.tenant_id)`, users)
 	if err != nil {
 		return nil, err
 	}

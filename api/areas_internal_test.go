@@ -71,6 +71,9 @@ func init() {
 	alwaysOn["GET /v1/me/storefront-orders"] = "a person's own orders across businesses, found by their phone, not a business's storefront"
 	alwaysOn["POST /v1/me/storefront-orders/confirm"] = "a person's own orders across businesses, found by their phone, not a business's storefront"
 	alwaysOn["POST /v1/me/chat-link"] = "links a person's own chat account"
+	for _, m := range []string{"GET", "POST"} {
+		alwaysOn[m+" /v1/me/chats/{id}/invoices/{invoice}/transfer"] = "a person's own invoice from a business, through the customer door, which checks the business's parts itself (customer.pay)"
+	}
 	alwaysOn["POST /v1/me/chat-link/preview"] = "links a person's own chat account"
 	alwaysOn["POST /v1/me/chat-link/refuse"] = "links a person's own chat account"
 	alwaysOn["POST /v1/auth/chat/link"] = "a sign-in link sent in chat (chat_signin.go), not business links"

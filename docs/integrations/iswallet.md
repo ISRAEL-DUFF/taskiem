@@ -94,11 +94,10 @@ iswallet's replay cache lasts 24 hours, after which a repeated key returns a 500
 - **`IDEMPOTENCY_KEY_REUSED`** parks the step too: the key was used before, so the payment may have happened.
 - A write whose retries run out after any unknown outcome **parks rather than fails**, because "failed" would invite someone to pay again (engine-wide since this integration).
 - `RATE_LIMITED`, `CUSTODY_UNAVAILABLE`, `SUBACCOUNT_SYNCING`, `LIQUIDITY_EXHAUSTED` and 503 are retried; on a 429 the next attempt waits until `X-RateLimit-Reset` (iswallet sends no `Retry-After`, Xenibase item 27); limits, insufficient funds, `OUTFLOW_REJECTED` and other 4xx fail the step with iswallet's code and request id.
-- A payout iswallet marks `unresolved` sends no event; the wait times out (72 hours in Run payroll's `await_settlement`), and the payment is reported as not confirmed. `reversed` can arrive days after `confirmed`; the ops alert workflow listens for it, and Run payroll's `await_reversal` watches each confirmed payout for 35 days and records a reversal.
+- A payout iswallet marks `unresolved` sends no event; the wait times out (72 hours in Pay a list's `await_settlement`), and the payment is reported as not confirmed. `reversed` can arrive days after `confirmed`; the ops alert workflow listens for it, and Run payroll's `await_reversal` watches each confirmed payout for 35 days and records a reversal.
 
 ## Workflows using it
 
-- `templates/library/run-payroll.json` on iswallet: bank payouts by capability, waiting on `outflow_event`'s normalised payout events for confirmation and then for reversals.
 - `flows/dogfood/ops-payout-failure-alert.wd.json`: `outflow_event` (failed, reversed).
 - `flows/dogfood/ispend-credit-exceptions.wd.json`: `credit_event` (rejected, reversed).
 

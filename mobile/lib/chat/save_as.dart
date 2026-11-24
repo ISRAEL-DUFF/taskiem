@@ -17,6 +17,9 @@ import 'attachments.dart' show PickedFile;
 import 'groups.dart' show pickOneOf;
 import 'menu.dart' show MenuItem;
 import 'my_chat.dart' show sayFailure;
+import 'pay_chip.dart' show collectFromChatPhoto, mayPayFromMessages, payFromChatPhoto;
+import 'pay_collect.dart' show MessageFrom;
+import 'photo_text.dart' show PhotoAI, noWordsInPhoto, readChatPhoto;
 import 'saved_files.dart' show SavedFileSheet, uploadSavedFile;
 import 'saved_accounts.dart';
 import 'saved_kinds.dart' show SavedCustomSheet;
@@ -66,10 +69,7 @@ Future<void> saveNamed(BuildContext context, Auth auth, String name, {bool busin
   final kind = await pickOneOf(
     context,
     title: 'Save @$name',
-    choices: [
-      for (final m in made) ('k:${m.id}', 'A ${m.name.toLowerCase()}', ''),
-      for (final e in savedKinds.entries) (e.key, e.value.one, ''),
-    ],
+    choices: [for (final m in made) ('k:${m.id}', 'A ${m.name.toLowerCase()}', ''), for (final e in savedKinds.entries) (e.key, e.value.one, '')],
   );
   if (kind == null || !context.mounted) return;
   if (kind.startsWith('k:')) {
@@ -120,15 +120,77 @@ Future<void> saveFromChatFile(BuildContext context, Auth auth, String path, Stri
   }
 }
 
+/// Save the account on a photo in a chat (reading account details from
+/// photos, I1): the photo read on the phone, its words read by Taskiem
+/// (POST /v1/me/saved/read, `from: "photo"`), and Save as…'s sheet for an
+/// account opened with them. No account in it: said, or, where the
+/// business allows it, "Read it with AI" offered (I3), and its words read
+/// the same way.
+Future<void> saveAccountFromChatPhoto(BuildContext context, Auth auth, String path, {bool business = false}) async {
+  final photo = await readChatPhoto(context, auth, path);
+  if (photo == null || !context.mounted) return;
+  if (await _saveFromPhotoWords(context, auth, photo.words, business) || !context.mounted) return;
+  final words = await PhotoAI(auth).offer(
+    context,
+    photo,
+    title: photo.words.isEmpty ? 'This phone read no words in it' : 'This phone found no account number',
+    said: photo.words.isEmpty ? noWordsInPhoto : 'No account number in that photo.',
+  );
+  if (words == null || !context.mounted) return;
+  if (!await _saveFromPhotoWords(context, auth, words, business) && context.mounted) showTkToast(context, 'No account number in that photo.');
+}
+
+/// A photo's words read by Taskiem and the account's sheet opened: false
+/// when they hold no account (nothing said), true when done or said.
+Future<bool> _saveFromPhotoWords(BuildContext context, Auth auth, String words, bool business) async {
+  if (words.isEmpty) return false;
+  final ReadSavedWordsResponse r;
+  try {
+    r = await auth.api.readSavedWords(
+      body: ReadSavedWordsRequest(text: words, from: 'photo'),
+    );
+  } on Object catch (e) {
+    if (context.mounted) showTkToast(context, sayFailure(e), error: true);
+    return true;
+  }
+  if (!context.mounted) return true;
+  if (r.kind != 'bank_account' || '${r.details['account_number'] ?? ''}'.isEmpty) return false;
+  await _open(context, _savedFor(auth, business), readingCard(r.kind, r.title, r.details));
+  return true;
+}
+
+/// A photo's Pay this account (for those who may pay, as the chip under a
+/// message) and Save the account, each read from the photo on the phone
+/// first; [filePath] is where the chat fetches it. With [from] (the
+/// message), "Add to the list" beside Pay this account.
+List<MenuItem> photoAccountItems(BuildContext context, Auth auth, String filePath, {bool business = false, MessageFrom? from}) => [
+  if (mayPayFromMessages(auth)) MenuItem('money', 'Pay this account', () => payFromChatPhoto(context, auth, filePath)),
+  if (mayPayFromMessages(auth) && from != null) MenuItem('plus', 'Add to the list', () => collectFromChatPhoto(context, auth, filePath, from)),
+  MenuItem('card', 'Save the account', () => saveAccountFromChatPhoto(context, auth, filePath, business: business)),
+];
+
 /// A customer chat message's menu (saved objects S1): Copy and Save as… on
 /// its words, and on a photo or document Save as… ("Save the words as…" and
 /// "Save the file as…" when it has both). [filePath] is where its
-/// file is fetched; empty when it has none to save.
-List<MenuItem> saveAsItems(BuildContext context, Auth auth, {required String words, required String filePath, required String fileName, required String fileType, bool business = false}) {
+/// file is fetched; empty when it has none to save. A photo also has
+/// [photoAccountItems].
+List<MenuItem> saveAsItems(
+  BuildContext context,
+  Auth auth, {
+  required String words,
+  required String filePath,
+  required String fileName,
+  required String fileType,
+  bool business = false,
+  MessageFrom? from,
+}) {
   final both = words.isNotEmpty && filePath.isNotEmpty;
+  final photo = filePath.isNotEmpty && fileType.startsWith('image/');
   return [
     if (words.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: words)), done: 'Copied'),
     if (words.isNotEmpty) MenuItem('note', both ? 'Save the words as…' : 'Save as…', () => saveFromWords(context, auth, words, business: business)),
-    if (filePath.isNotEmpty) MenuItem('note', both ? 'Save the file as…' : 'Save as…', () => saveFromChatFile(context, auth, filePath, fileName, fileType, business: business)),
+    if (filePath.isNotEmpty)
+      MenuItem('note', both ? 'Save the file as…' : 'Save as…', () => saveFromChatFile(context, auth, filePath, fileName, fileType, business: business)),
+    if (photo) ...photoAccountItems(context, auth, filePath, business: business, from: from),
   ];
 }

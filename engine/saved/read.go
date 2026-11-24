@@ -265,3 +265,7 @@ func streetLine(l string) bool {
 	}
 	return false
 }
+
+// BankNamed is the bank the words name ("gtb", "first bank"), by its full
+// name, or "".
+func BankNamed(text string) string { return readBank(text) }

@@ -105,6 +105,23 @@ export async function api<T = unknown>(
   );
 }
 
+// The server's clock, from its answers' Date header: a countdown follows
+// the server's time, not the phone's (a phone set wrong by minutes would
+// say a number is good when it is not). Seconds apart is the header's
+// own rounding, and ignored.
+let skewMs = 0;
+
+function noteServerDate(date: string | null | undefined) {
+  if (!date) return;
+  const at = Date.parse(date);
+  if (Number.isNaN(at)) return;
+  const d = at - Date.now();
+  skewMs = Math.abs(d) > 5_000 ? d : 0;
+}
+
+/** Now, by the server's clock as far as its answers tell. */
+export const serverNow = () => Date.now() + skewMs;
+
 /** POSTs a multipart form (file uploads); the browser sets its boundary. */
 export function upload<T = unknown>(path: string, form: FormData, method: "POST" | "PUT" = "POST"): Promise<T> {
   return request<T>(method, path, form, {});
@@ -171,6 +188,7 @@ async function request<T>(
   } catch {
     throw new ApiError(0, OFFLINE);
   }
+  noteServerDate(res.headers?.get?.("Date"));
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   let data: Record<string, unknown>;

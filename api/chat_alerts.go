@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/matching"
@@ -44,7 +45,7 @@ const maxChatAlerts = 20
 type chatAlert struct {
 	// Key names the alert for Later: its kind and what it is about.
 	Key  string    `json:"key"`
-	Kind string    `json:"kind"` // low_stock | overdue | new_order | rider | confirm | unmatched | approval | school_approval | deal | order_draft
+	Kind string    `json:"kind"` // low_stock | overdue | new_order | rider | confirm | unmatched | approval | school_approval | deal | order_draft | page
 	At   time.Time `json:"at"`
 	// Title and Line are the card's words.
 	Title      string `json:"title"`
@@ -68,6 +69,26 @@ type chatAlert struct {
 	// the desk, a discount), as the school's Payments page has it, the
 	// student's name masked.
 	School *schools.Posting `json:"school,omitempty"`
+	// Proof is a Confirm card's proof of delivery (device fields §6): the
+	// pin at its masked point, the photo, and how each was got.
+	Proof *alertProof `json:"proof,omitempty"`
+}
+
+// alertProof is what a delivery's Confirm card shows of its proof: never
+// the exact place, which only someone who may open the run sees.
+type alertProof struct {
+	Where *dispatch.ProofWhere `json:"where,omitempty"`
+	// Mark is confirmed_at_door, far_from_address, said_by_rider,
+	// read_by_phone or no_location.
+	Mark string `json:"mark,omitempty"`
+	// PhotoURL is a short-lived link to the latest photo; PhotoSource is
+	// camera (taken in the app at the tap) or sent.
+	PhotoURL    string `json:"photo_url,omitempty"`
+	PhotoSource string `json:"photo_source,omitempty"`
+	// Signed is true when the customer signed on the rider's phone (D2);
+	// SignatureURL a short-lived link to what they drew.
+	Signed       bool   `json:"signed,omitempty"`
+	SignatureURL string `json:"signature_url,omitempty"`
 }
 
 type alertReorder struct {
@@ -120,7 +141,7 @@ func (s *Server) getChatAlerts(w http.ResponseWriter, r *http.Request) {
 	// Each kind on its own: one that cannot be read leaves the others.
 	for _, kind := range []func(context.Context, *Principal) ([]chatAlert, error){
 		s.lowStockAlerts, s.overdueAlerts, s.newOrderAlerts, s.riderAlerts, s.confirmAlerts, s.unmatchedAlerts, s.approvalAlerts, s.schoolApprovalAlerts, s.dealAlerts, s.orderDraftAlerts,
-		s.customerWaitingAlerts,
+		s.customerWaitingAlerts, s.pageAlerts,
 	} {
 		got, err := kind(ctx, p)
 		if err != nil {
@@ -214,19 +235,10 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 		return nil, err
 	}
 	// An item already on an open order is dealt with: no card.
-	onOrder := map[string]bool{}
+	var onOrder map[string]bool
 	if err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT l->>'item_id' FROM purchase_orders o, jsonb_array_elements(o.lines) l
-			WHERE o.tenant_id = $1 AND o.status IN ('drafted', 'sent', 'confirmed', 'part_received')`, p.TenantID)
-		if err != nil {
-			return err
-		}
-		ids, err := pgx.CollectRows(rows, pgx.RowTo[*string])
-		for _, id := range ids {
-			if id != nil {
-				onOrder[*id] = true
-			}
-		}
+		var err error
+		onOrder, err = stock.OnOrderTx(ctx, tx, p.TenantID)
 		return err
 	}); err != nil {
 		return nil, err
@@ -237,7 +249,7 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 	byProduct := map[string][]stock.Item{}
 	var products []string
 	for _, it := range items {
-		if !it.Low() || onOrder[it.ID] || !it.Available && it.VariantOf != "" {
+		if !it.Low() || it.OnOrder(onOrder) || !it.Available && it.VariantOf != "" {
 			continue
 		}
 		if it.VariantOf != "" {
@@ -266,21 +278,34 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 				return err
 			}
 			for _, l := range lists {
-				ls, err := links.ItemLinksTx(ctx, tx, p.TenantID, l.LinkID)
+				// Their items the business remembers adding to a stock item:
+				// each of ours counted by it; a size of theirs, its product
+				// for our product's sizes.
+				ls, err := stock.ItemLinksTx(ctx, tx, p.TenantID, l.LinkID)
 				if err != nil {
 					return err
 				}
 				flat := links.Flat(l.Items)
 				for _, il := range ls {
-					if pi, ok := flat[il.SellerItemID]; ok && pi.Available {
-						if _, ok := from[il.ItemID]; !ok {
-							from[il.ItemID] = sells{supplier: l, item: pi}
-						}
+					pi, ok := flat[il.SellerItemID]
+					if !ok || !pi.Available || il.StockItemID == nil {
+						continue
 					}
-					for _, pi := range l.Items {
-						if pi.ItemID == il.SellerItemID && len(pi.Sizes) > 0 && pi.Available {
-							if _, ok := sized[il.ItemID]; !ok {
-								sized[il.ItemID] = sells{supplier: l, item: pi}
+					for _, it := range items {
+						if it.StockItemID != il.StockItemID.String() {
+							continue
+						}
+						if _, ok := from[it.ID]; !ok {
+							from[it.ID] = sells{supplier: l, item: pi}
+						}
+						if it.VariantOf == "" || pi.VariantOf == "" {
+							continue
+						}
+						for _, theirs := range l.Items {
+							if theirs.ItemID == pi.VariantOf && len(theirs.Sizes) > 0 && theirs.Available {
+								if _, ok := sized[it.VariantOf]; !ok {
+									sized[it.VariantOf] = sells{supplier: l, item: theirs}
+								}
 							}
 						}
 					}

@@ -399,9 +399,12 @@ function world() {
     if (path === "/v1/me/chats/c1/messages") return route.fulfill(json({ id: `m${messages.length + 1}`, mine: true, kind: "text", body: (body as { text: string }).text, read_at: null, created_at: new Date().toISOString() }, 201));
     if (path.endsWith("/read") || path.endsWith("/typing")) return route.fulfill({ status: 204 });
     if (path === "/v1/me/chats/c1/shop") return route.fulfill(json(shop));
+    // Their tools (made tools T5): this business offers none.
+    if (path === "/v1/me/chats/c1/tools") return route.fulfill(json({ tools: [] }));
     if (path === "/v1/me/chats/c1/orders" && method === "GET") return route.fulfill(json({ orders: [order] }));
     if (path === "/v1/me/chats/c1/orders") return route.fulfill(json({ order: { ...order, reference: "MK-9", status: "sent", summary: "2 × Jollof rice, 1 × Ankara shirt", total_kobo: 1_400_000, due_kobo: 1_400_000 } }, 201));
     if (/\/orders\/MK-\d\/pay$/.test(path)) return route.fulfill(json({ reference: "MK-9", url: "https://pay.example.test/MK-9", due_kobo: 1_400_000 }));
+    if (path === "/v1/me/chats/c1/invoices/f1/transfer") return route.fulfill(json({ invoice: "f1", reference: "INV-0007", due_kobo: 2_000_000, state: "none" }));
     if (path === "/v1/me/chats/c1/services") return route.fulfill(json({ services: [{ id: "s1", name: "Catering tasting", minutes: 30, price_kobo: 500_000 }], open: true }));
     if (path.startsWith("/v1/me/chats/c1/services/s1/times"))
       return route.fulfill(json({ service: { id: "s1", name: "Catering tasting", minutes: 30 }, days: ["2026-11-20", "2026-11-21"], day: "2026-11-20", times: ["2026-11-20T09:00:00Z", "2026-11-20T10:00:00Z"] }));
@@ -468,7 +471,13 @@ for (const width of [390, 360])
     await expect(deliveryCard).toContainText("On its way to you");
     await expect(deliveryCard).toContainText("On the way");
     await expect(deliveryCard.getByTestId("delivery-steps")).toHaveAttribute("aria-label", "On the way: step 2 of 4");
-    await expect(page.getByTestId("app-card").filter({ hasText: "Invoice INV-0007" }).getByRole("link", { name: /^Pay/ })).toHaveAttribute("href", "https://pay.example.test/INV-0007");
+    // Pay on an invoice offers transfer first, the invoice's own page below it (the payments flow, part 1).
+    await page.getByTestId("app-card").filter({ hasText: "Invoice INV-0007" }).getByRole("button", { name: /^Pay/ }).click();
+    const ways = page.getByTestId("pay-sheet").getByTestId("pay-ways");
+    await expect(ways.getByRole("listitem").first()).toContainText("Pay by transfer");
+    await expect(ways.getByRole("link", { name: /Pay on their checkout/ })).toHaveAttribute("href", "https://pay.example.test/INV-0007");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("pay-sheet")).toHaveCount(0);
     // Tell me when they answer, where the browser can take a push.
     await expect(page.getByTestId("tell-me")).toHaveText("Tell me when they answer");
     await check(page, "a conversation", width);

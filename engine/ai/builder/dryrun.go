@@ -207,7 +207,7 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 				answers := map[string]any{}
 				if st.Form != nil {
 					// Through JSON, so numbers are float64 as sample reads them.
-					raw, _ := json.Marshal(st.Form.Schema)
+					raw, _ := json.Marshal(wd.AnswerSchema(st.Form.Schema))
 					if a, ok := sample(rawAny(raw), types, nil, 0).(map[string]any); ok {
 						answers = a
 					}

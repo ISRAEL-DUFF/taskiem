@@ -310,6 +310,8 @@ Every template here is written once with capability steps, tested on every rail 
 
 ### 5.1 Run payroll
 
+**Deleted 22 November 2026:** payroll in Taskiem is Payrolla's ([decision 0044](../decisions/0044-rails-and-products.md), its note). Kept below as the record of what was built.
+
 The dogfood flow, rebuilt for any business and any rail. File: `templates/library/run-payroll.json` (flow code: `templates/library/run-payroll.flow.ts` if the library takes flow code by then).
 
 **For:** a business paying staff monthly, with or without a payroll product. A business that uses Payrolla does not use this template; it uses the Payrolla templates (§6.4).
@@ -550,6 +552,8 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 
 ### R3: Run payroll (M)
 
+**Deleted 22 November 2026** (see §5.1).
+
 **Problem.** Taskiem's best payroll code is wired to one partner's payload and one rail.
 
 **Build:**
@@ -603,6 +607,8 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 - **The embed launch token waits for R6**, where the view that uses it is built.
 
 ### R6: App views (L; needs R0-3)
+
+**Not to be built for Payrolla (22 November 2026):** Taskiem runs payroll in its own screens over Payrolla's API rather than embedding Payrolla's ([the request](../integrations/payrolla-api-requests.md); build plan P4). What follows stays as written for other products.
 
 **Build:** the `views` manifest block and rule 17; the per-tenant `frame-src` (§6.3); the view panel on the connection page, "Open in …" on run pages and the approval inbox, the `view` step or action field; postMessage handling (declared origins and events only, able to complete a waiting step); the new-tab fallback; chat links; Payrolla's views.
 

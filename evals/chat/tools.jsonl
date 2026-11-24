@@ -1,0 +1,15 @@
+// Synthetic seeds pending review by people (needs-people AI2): written by engineering; every message outside English is a draft until a native speaker reviews it. Made tools M3: the reader given a business's tools.
+{"id": "en-tool-fuel-spent", "kind": "tool", "language": "en", "message": "spent 4,500 on diesel", "tools": "shop", "expect": {"tool": "fuel-log", "values": {"amount": "4500", "what": "diesel"}}, "tags": ["tool", "en"]}
+{"id": "en-tool-fuel-bought", "kind": "tool", "language": "en", "message": "bought diesel for the generator, 12k", "tools": "shop", "expect": {"tool": "fuel-log", "values": {"amount": "12000"}}, "tags": ["tool", "en"]}
+{"id": "en-tool-rider-saved", "kind": "tool", "language": "en", "message": "how much will a rider charge to deliver to @warehouse?", "tools": "shop", "expect": {"tool": "rider-fee", "values": {"to": "@warehouse"}}, "tags": ["tool", "saved", "en"]}
+{"id": "en-tool-leave", "kind": "tool", "language": "en", "message": "how many days of leave does Musa have left", "tools": "shop", "expect": {"tool": "leave-left", "values": {"who": "musa"}}, "tags": ["tool", "en"]}
+{"id": "pcm-tool-fuel", "kind": "tool", "language": "pcm", "message": "I don spend 4500 for diesel today", "tools": "shop", "expect": {"tool": "fuel-log", "values": {"amount": "4500", "what": "diesel"}}, "tags": ["tool", "pcm"]}
+{"id": "pcm-tool-rider-saved", "kind": "tool", "language": "pcm", "message": "how much rider go collect to deliver reach @warehouse?", "tools": "shop", "expect": {"tool": "rider-fee", "values": {"to": "@warehouse"}}, "tags": ["tool", "saved", "pcm"]}
+{"id": "pcm-tool-leave", "kind": "tool", "language": "pcm", "message": "how many leave days Musa get remain?", "tools": "shop", "expect": {"tool": "leave-left", "values": {"who": "musa"}}, "tags": ["tool", "pcm"]}
+{"id": "en-own-send", "kind": "tool", "language": "en", "message": "send 20k to @bayo", "tools": "shop", "expect": {"tool": "taskiem"}, "tags": ["tool", "own", "en"]}
+{"id": "en-own-owes", "kind": "tool", "language": "en", "message": "Ada owes me 5000 for rice", "tools": "shop", "expect": {"tool": "taskiem"}, "tags": ["tool", "own", "en"]}
+{"id": "en-own-invoice", "kind": "tool", "language": "en", "message": "invoice Ada 25k for the rice", "tools": "shop", "expect": {"tool": "taskiem"}, "tags": ["tool", "own", "en"]}
+{"id": "en-own-help", "kind": "tool", "language": "en", "message": "help", "tools": "shop", "expect": {"tool": "taskiem"}, "tags": ["tool", "own", "en"]}
+{"id": "pcm-own-send", "kind": "tool", "language": "pcm", "message": "abeg send 20k give @bayo", "tools": "shop", "expect": {"tool": "taskiem"}, "tags": ["tool", "own", "pcm"]}
+{"id": "pcm-own-owes", "kind": "tool", "language": "pcm", "message": "Ada dey owe me 5000 for rice", "tools": "shop", "expect": {"tool": "taskiem"}, "tags": ["tool", "own", "pcm"]}
+{"id": "pcm-own-status", "kind": "tool", "language": "pcm", "message": "wetin happen for status today", "tools": "shop", "expect": {"tool": "taskiem"}, "tags": ["tool", "own", "pcm"]}

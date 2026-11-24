@@ -69,6 +69,9 @@ type Store struct {
 	// the base of callback steps' addresses. Empty, a workflow with
 	// callback steps cannot start.
 	HooksURL string
+	// Saved reads the business's saved things a run's workflow names, when
+	// it starts (saved.go); nil reads none.
+	Saved SavedResolver
 	// WakeInterval is the least time between two wake-ups this process
 	// sends for one queue (TASKIEM_WAKE_INTERVAL); zero is
 	// DefaultWakeInterval. WakeInTx leaves wake-ups to the task trigger,
@@ -237,6 +240,9 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 				req.Env = map[string]any{}
 			}
 		}
+		if fork == nil {
+			req.Trigger = withScanRead(def, req.Trigger)
+		}
 		// Capability steps run as the rails the environment's connections
 		// are, pinned now so the run never changes rail; a fork keeps the
 		// failed run's.
@@ -334,6 +340,18 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			Trigger: req.Trigger, Env: req.Env, Connectors: pins, Policies: policies,
 		}
 		paths := triggerPaths(def)
+		var saved map[string]any
+		var savedPaths []pii.Path
+		if fork != nil && fork.saved != nil {
+			saved, savedPaths, err = s.forkSaved(ctx, tx, req.TenantID, def, fork.saved)
+		} else {
+			saved, savedPaths, err = s.savedInputs(ctx, tx, req.TenantID, def)
+		}
+		if err != nil {
+			return err
+		}
+		payload.Saved = saved
+		paths = append(paths, savedPaths...)
 		for _, p := range req.TriggerPII {
 			paths = append(paths, pii.Path{Segments: append([]string{"trigger"}, p.Segments...), Category: p.Category})
 		}
@@ -837,6 +855,8 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			`DELETE FROM timers WHERE run_id = $1 AND step_id = $2 AND fired_at IS NULL`,
 			`UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
 			`UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND step_id = $2 AND status = 'pending'`,
+			// What a chat held towards it (a sealed location) goes with it.
+			`DELETE FROM form_chat_answers c USING form_requests r WHERE r.id = c.request_id AND r.run_id = $1 AND r.step_id = $2`,
 		} {
 			if _, err := tx.Exec(ctx, q, run.ref.ID, ev.StepID); err != nil {
 				return nil, err
@@ -1043,6 +1063,10 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 	if _, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND status = 'pending'`, run); err != nil {
 		return err
 	}
+	// And what a chat held towards one of them (device fields D1).
+	if _, err := tx.Exec(ctx, `DELETE FROM form_chat_answers c USING form_requests r WHERE r.id = c.request_id AND r.run_id = $1`, run); err != nil {
+		return err
+	}
 	// Subflows (subflows.go): the step that started this run hears how it
 	// ended, and the children this run was waiting for are cancelled.
 	if err := s.cancelChildren(ctx, tx, r); err != nil {
@@ -1164,6 +1188,55 @@ func (s *Store) DeliverSignal(ctx context.Context, tenant uuid.UUID, env, event,
 // it was new.
 func (s *Store) DeliverSignalOnce(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
 	return s.deliverSignal(ctx, tenant, env, event, correlation, dedupKey, payload)
+}
+
+// DeliverSignalToRun hands a signal to one run, waiting for it at step (a
+// page's button, docs/spec/pages.md §7): never to another run waiting
+// under the same correlation, and never buffered for later. It reports
+// whether the run took it (false: it was not waiting there any more).
+func (s *Store) DeliverSignalToRun(ctx context.Context, tenant, run uuid.UUID, step, event string, payload any) (bool, error) {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return false, err
+	}
+	var took bool
+	err = db.InTenantTxRetry(ctx, s.Pool, []uuid.UUID{tenant}, false, func(tx pgx.Tx) error {
+		took = false
+		var env, correlation string
+		err := tx.QueryRow(ctx, `SELECT environment, correlation FROM signal_waits WHERE tenant_id = $1 AND run_id = $2 AND step_id = $3 AND event = $4`,
+			tenant, run, step, event).Scan(&env, &correlation)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := signalLock(ctx, tx, tenant, env, event, correlation); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE tenant_id = $1 AND run_id = $2 AND step_id = $3 AND event = $4`, tenant, run, step, event)
+		if err != nil || tag.RowsAffected() == 0 {
+			return err
+		}
+		if _, err := lockRun(ctx, tx, run); err != nil {
+			return err
+		}
+		stale, err := waitSettled(ctx, tx, run, step)
+		if err != nil || stale {
+			return err
+		}
+		if _, err := appendEvent(ctx, tx, run, history.SignalReceived, step, 0, signalPayload(event, raw), history.OriginSignal); err != nil {
+			return err
+		}
+		if !deciding(ctx, run) {
+			if err := s.decideInline(ctx, tx, RunRef{ID: run, TenantID: tenant}); err != nil {
+				return err
+			}
+		}
+		took = true
+		return nil
+	})
+	return took, err
 }
 
 func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
@@ -1469,4 +1542,35 @@ func (s *Store) HistoryAfter(ctx context.Context, ref RunRef, after int64, limit
 
 func dbTx(ctx context.Context, s *Store, tenant uuid.UUID, fn func(pgx.Tx) error) error {
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, fn)
+}
+
+// withScanRead is a manual start's trigger with its scan input as the run
+// keeps it (device fields §7, D2): {state, source, text, format}, its
+// source set here from whether the phone gave a format, never from the
+// body. The caller's maps are left as they were.
+func withScanRead(def *wd.Definition, raw any) any {
+	trigger, ok := raw.(map[string]any)
+	if !ok {
+		return raw
+	}
+	if t, _ := trigger["type"].(string); t != "manual" {
+		return trigger
+	}
+	body, ok := trigger["body"].(map[string]any)
+	if !ok {
+		return trigger
+	}
+	b := make(map[string]any, len(body))
+	for k, v := range body {
+		b[k] = v
+	}
+	if !def.ReadScanInput(b) {
+		return trigger
+	}
+	out := make(map[string]any, len(trigger))
+	for k, v := range trigger {
+		out[k] = v
+	}
+	out["body"] = b
+	return out
 }

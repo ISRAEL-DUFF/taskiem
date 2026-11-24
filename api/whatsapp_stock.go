@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -11,7 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -52,6 +55,9 @@ type stockChat struct {
 	// Received: goods that came in ("received 12 air max 90"), received
 	// against the item's supplier's open order once it is chosen.
 	Received bool `json:"received,omitempty"`
+	// Material: something new counted in was answered No to "Do you sell
+	// it?" (stock_new): a stock item with no product.
+	Material bool `json:"material,omitempty"`
 }
 
 // waStockCommand acts on a stock command; false when cmd is not one (or
@@ -68,7 +74,9 @@ func (s *Server) waStockCommand(ctx context.Context, c *chat, text, cmd string) 
 	if done, err := s.waPurchaseCommand(ctx, c, text, cmd); done || err != nil {
 		return done, err
 	}
-	if a, ok := stock.ParseAdd(text); ok {
+	// "add 20 yards of ankara fabric", "stock in 5 cartons of Indomie":
+	// counting in; something new asks Do you sell it? (stockAskAdd).
+	if a, ok := stock.ParseCountIn(text); ok {
 		return true, s.waStockAdd(ctx, c, a)
 	}
 	switch {
@@ -533,7 +541,9 @@ func (s *Server) waStockAddFrom(ctx context.Context, c *chat, a stock.Added, rec
 	return s.stockAskAdd(ctx, c, sh, nil)
 }
 
-// stockAskAdd shows an add: a new item (it nil) or goods received on it.
+// stockAskAdd shows an add: goods received on an item, or something new
+// (it nil), which asks one question, Do you sell it? (what-a-business-buys
+// §4.5): yes adds a product counted by a new stock item, no a material.
 func (s *Server) stockAskAdd(ctx context.Context, c *chat, sh *chatShop, it *stock.Item) error {
 	in := sh.StockChat
 	cost := ""
@@ -542,15 +552,23 @@ func (s *Server) stockAskAdd(ctx context.Context, c *chat, sh *chatShop, it *sto
 	}
 	if it == nil {
 		qty := whatsapp.SafeText((stock.Item{Unit: in.Unit}).Quantity(in.Quantity))
-		key := "wa.stock.confirm_new"
+		key := "wa.stock.ask_sell"
 		if in.Setup {
-			key = "wa.stock.confirm_first"
+			key = "wa.stock.ask_sell_first"
 		}
-		sh.Row = ""
-		return s.shopAsk(ctx, c, sh, c.t(key, "name", whatsapp.SafeText(sh.Name), "qty", qty, "cost", cost))
+		sh.Row, sh.Action, sh.Nonce = "", "stock_new", uuid.NewString()
+		if err := s.saveSession(ctx, c, stateConfirming, chatData{Shop: sh}, waPendingTTL); err != nil {
+			return err
+		}
+		return c.say(ctx, s, c.t(key, "name", whatsapp.SafeText(sh.Name), "qty", qty, "cost", cost)+"\n\n"+c.t("wa.stock.sell_how"), sellButtons(c)...)
 	}
 	sh.Row, sh.Name = it.ID, it.Name
-	if in.Unit == "" || it.Unit != "" {
+	// A product using more than one of its stock item ("Rice 1kg" uses
+	// 1000 g) is counted in as a purchase line of it is (stock.ReceiveTx):
+	// its stock item moves by the quantity times the uses, in the stock
+	// item's own unit, which the pack's word ("bags") does not change.
+	uses := max(it.Uses, 1)
+	if in.Unit == "" || it.Unit != "" || uses > 1 {
 		in.Unit = ""
 	}
 	unitItem := *it
@@ -558,12 +576,36 @@ func (s *Server) stockAskAdd(ctx context.Context, c *chat, sh *chatShop, it *sto
 		unitItem.Unit = in.Unit
 	}
 	in.Shown = unitItem.Unit
+	qty := unitItem.Quantity(in.Quantity)
+	if uses > 1 {
+		qty = strconv.FormatInt(in.Quantity, 10) + " × " + unitItem.Quantity(uses)
+	}
 	from, to := "?", "?"
 	if it.Stock != nil {
-		from, to = unitItem.Quantity(*it.Stock), unitItem.Quantity(*it.Stock+in.Quantity)
+		from, to = unitItem.Quantity(*it.Stock), unitItem.Quantity(*it.Stock+in.Quantity*uses)
 	}
-	return s.shopAsk(ctx, c, sh, c.t("wa.stock.confirm_topup", "name", whatsapp.SafeText(it.Name), "qty", whatsapp.SafeText(unitItem.Quantity(in.Quantity)),
+	return s.shopAsk(ctx, c, sh, c.t("wa.stock.confirm_topup", "name", whatsapp.SafeText(it.Name), "qty", whatsapp.SafeText(qty),
 		"from", whatsapp.SafeText(from), "to", whatsapp.SafeText(to), "cost", cost))
+}
+
+// sellButtons answer Do you sell it?
+func sellButtons(c *chat) []whatsapp.Button {
+	return []whatsapp.Button{{ID: "yes", Title: c.t("button.yes_sell")}, {ID: "no", Title: c.t("button.no_sell")}, {ID: "cancel", Title: c.t("button.cancel")}}
+}
+
+// waStockSellReply takes the answer to Do you sell it?: yes a product, no
+// a material, each counted in on the answer; anything else asks again.
+func (s *Server) waStockSellReply(ctx context.Context, c *chat, cmd string) error {
+	sh := c.data.Shop
+	switch cmd {
+	case "yes", "y":
+		sh.StockChat.Material = false
+	case "no", "n":
+		sh.StockChat.Material = true
+	default:
+		return c.say(ctx, s, c.t("wa.stock.sell_reminder", "name", whatsapp.SafeText(sh.Name)), sellButtons(c)...)
+	}
+	return s.waStockApply(ctx, c)
 }
 
 // waStockAdjust answers "adjust rice -2 spoilt".
@@ -658,36 +700,76 @@ func (s *Server) waStockApply(ctx context.Context, c *chat) error {
 	}
 	var msg string
 	switch sh.Action {
-	case "stock_add":
-		if sh.Row == "" {
-			it, _, err := s.stockAdd(tctx, c.tenant.ID, c.p.Actor(), key, stockNew{Name: sh.Name, Quantity: in.Quantity, Unit: in.Unit, CostKobo: in.CostKobo}, audit)
-			if errors.Is(err, errItemExists) {
-				if serr := s.saveSession(ctx, c, stateIdle, chatData{}, 0); serr != nil {
-					return serr
-				}
-				return c.say(ctx, s, c.t("wa.stock.exists", "name", whatsapp.SafeText(it.Name)))
+	case "stock_new":
+		// Do you sell it? Yes: a product, as the Stock page adds one, counted
+		// by a new stock item; no: a material. Either holds the quantity as
+		// received, a movement with its reason.
+		it, _, err := s.stockAdd(tctx, c.tenant.ID, c.p.Actor(), key, stockNew{Name: sh.Name, Quantity: in.Quantity, Unit: in.Unit, CostKobo: in.CostKobo,
+			Material: in.Material}, audit)
+		if errors.Is(err, errItemExists) {
+			if serr := s.saveSession(ctx, c, stateIdle, chatData{}, 0); serr != nil {
+				return serr
 			}
-			if err != nil {
-				s.Logger.Warn("chat: adding an item", "tenant", c.tenant.ID, "err", err)
-				return c.say(ctx, s, c.t("wa.shop.add_failed", "reason", tablesChatReason(err)))
-			}
-			msg = c.t("wa.stock.added", "name", whatsapp.SafeText(it.Name), "count", whatsapp.SafeText(it.Quantity(stockOf(it))))
-			if it.PriceKobo == nil {
-				msg += " " + c.t("wa.stock.no_price", "name", whatsapp.SafeText(it.Name))
-			}
-			break
+			return c.say(ctx, s, c.t("wa.stock.exists", "name", whatsapp.SafeText(it.Name)))
 		}
+		if err != nil {
+			s.Logger.Warn("chat: adding an item", "tenant", c.tenant.ID, "err", err)
+			return c.say(ctx, s, c.t("wa.shop.add_failed", "reason", tablesChatReason(err)))
+		}
+		msg = c.t("wa.stock.added", "name", whatsapp.SafeText(it.Name), "count", whatsapp.SafeText(it.Quantity(stockOf(it))))
+		switch {
+		case in.Material:
+			msg += " " + c.t("wa.stock.added_material")
+		case it.PriceKobo == nil:
+			msg += " " + c.t("wa.stock.no_price", "name", whatsapp.SafeText(it.Name))
+		}
+	case "stock_add":
 		shop, err := s.stockShopOf(tctx, c.tenant.ID)
 		if err != nil {
 			return s.stockChatFail(ctx, c, err)
 		}
-		set := stockCells(shop.cols(), in.Unit, in.CostKobo, nil, nil, "")
-		if err := s.stockSetCells(tctx, c.tenant.ID, shop, sh.Row, key+"-cells", set); err != nil {
+		// A product using more than one of its stock item is counted in as
+		// a purchase line of it is (stock.ReceiveTx): the stock item moves
+		// by the quantity times the uses, at the price paid over the uses
+		// (whole kobo), and keeps its unit.
+		var uses int64 = 1
+		if err := db.InTenantTx(tctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+			x, ok, err := productstock.ItemOfTx(tctx, tx, c.tenant.ID, sh.Row)
+			if ok {
+				uses = max(x.Uses, 1)
+			}
+			return err
+		}); err != nil {
 			return s.stockChatFail(ctx, c, err)
 		}
+		cost := in.CostKobo
+		if cost != nil && uses > 1 {
+			unit := *cost / uses
+			cost = &unit
+			if unit <= 0 {
+				cost = nil
+			}
+		}
+		// Its unit and the price paid go on its stock item.
+		if (in.Unit != "" && uses == 1) || cost != nil {
+			it, err := s.stockItem(tctx, c.tenant.ID, shop, sh.Row)
+			if err != nil {
+				return s.stockChatFail(ctx, c, err)
+			}
+			d := stockDetails{CostKobo: cost}
+			if u := in.Unit; u != "" && uses == 1 {
+				d.Unit = &u
+			}
+			if err := db.InTenantTx(tctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+				_, err := stockSetDetailsTx(tctx, tx, c.tenant.ID, it, d, c.p.Actor())
+				return err
+			}); err != nil {
+				return s.stockChatFail(ctx, c, err)
+			}
+		}
 		q := in.Quantity
-		m, err := s.stockMove(tctx, c.tenant.ID, stock.Move{ItemID: sh.Row, Item: sh.Name, Reason: stock.Received, Delta: &q, Actor: c.p.Actor(),
-			Key: key, CostKobo: in.CostKobo}, audit)
+		m, err := s.stockMove(tctx, c.tenant.ID, stock.Move{ItemID: sh.Row, Item: sh.Name, Reason: stock.Received, Delta: &q, Uses: uses, Actor: c.p.Actor(),
+			Key: key, CostKobo: cost}, audit)
 		if err != nil {
 			return s.stockChatFail(ctx, c, err)
 		}
@@ -714,12 +796,8 @@ func stockOf(it stock.Item) int64 {
 	return *it.Stock
 }
 
-// stockDone says a movement landed (the count now), or that it is on its
-// way to the table.
+// stockDone says a movement was made: the count now.
 func stockDone(c *chat, sh *chatShop, m stock.Movement) string {
-	if m.Status != "done" {
-		return c.t("wa.stock.waiting", "name", whatsapp.SafeText(sh.Name))
-	}
 	it := stock.Item{Unit: sh.StockChat.Shown}
 	return c.t("wa.stock.now", "name", whatsapp.SafeText(sh.Name), "count", whatsapp.SafeText(it.Quantity(*m.After)))
 }
@@ -748,7 +826,7 @@ func (s *Server) stockChatFail(ctx context.Context, c *chat, err error) error {
 func (s *Server) shopCountItem(ctx context.Context, c *chat, sf storefront.Storefront) error {
 	sh := c.data.Shop
 	n := *sh.Stock
-	m, err := s.stockMove(s.waTablesCtx(ctx, c), c.tenant.ID, stock.Move{ItemID: sh.Row, Item: sh.Name, Reason: stock.Count, SetTo: &n,
+	_, err := s.stockMove(s.waTablesCtx(ctx, c), c.tenant.ID, stock.Move{ItemID: sh.Row, Item: sh.Name, Reason: stock.Count, SetTo: &n,
 		Actor: c.p.Actor(), Key: "wa-" + sh.Nonce}, func(tx pgx.Tx, action, target string, detail map[string]any) error {
 		return waAudit(ctx, tx, c.ch.Name(), c.p, action, target, detail)
 	})
@@ -757,9 +835,6 @@ func (s *Server) shopCountItem(ctx context.Context, c *chat, sf storefront.Store
 	}
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return err
-	}
-	if m.Status != "done" {
-		return c.say(ctx, s, c.t("wa.stock.waiting", "name", whatsapp.SafeText(sh.Name)))
 	}
 	return c.say(ctx, s, c.t("wa.shop.changed", "name", whatsapp.SafeText(sh.Name))+" "+s.shopPublishedNote(c, sf))
 }
@@ -825,12 +900,24 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 	if !ok || err != nil {
 		return err
 	}
+	items = sold(items)
 	paid := said.PaidHow
 	if said, ok = saleSaid(args, items); !ok {
 		return c.say(ctx, s, c.t("wa.sale.how"))
 	}
 	said.PaidHow = paid // on credit, as found above
 	return s.saleFrom(ctx, c, &saleAsk{Said: said, Customer: customer, CustomerKey: customerKey, CustomerID: customerID})
+}
+
+// sold is the items that can be sold: the products, not the materials.
+func sold(items []stock.Item) []stock.Item {
+	out := make([]stock.Item, 0, len(items))
+	for _, it := range items {
+		if !it.Material {
+			out = append(out, it)
+		}
+	}
+	return out
 }
 
 // saleSaid reads a sale's words as the catalogue has its items: a size
@@ -869,6 +956,32 @@ func saleSaid(args string, items []stock.Item) (stock.Sold, bool) {
 	return said, ok
 }
 
+// beyondTogether names the items of a sale's lines (items[i] is lines[i]'s)
+// sold beyond the stock there is, each stock item's lines taken together:
+// "4 Malt bottle and 1 Malt pack of 6" are 10 bottles of the one stock
+// item, beyond 8 though neither line is alone.
+func beyondTogether(items []stock.Item, lines []stock.SaleLine) []string {
+	key := func(it stock.Item) string {
+		if it.StockItemID != "" {
+			return it.StockItemID
+		}
+		return it.ID
+	}
+	need := map[string]int64{}
+	for i, it := range items {
+		if it.Stock != nil {
+			need[key(it)] += lines[i].Quantity * max(it.Uses, 1)
+		}
+	}
+	var out []string
+	for _, it := range items {
+		if it.Stock != nil && need[key(it)] > *it.Stock && !slices.Contains(out, it.Name) {
+			out = append(out, it.Name)
+		}
+	}
+	return out
+}
+
 // saleFrom shows a sale for yes: its items found as the other stock words
 // find them, a product's size asked one choice at a time (the sale waits,
 // then goes on). One that matches several others, or none, is said, and
@@ -879,6 +992,7 @@ func (s *Server) saleFrom(ctx context.Context, c *chat, ask *saleAsk) error {
 	if !ok || err != nil {
 		return err
 	}
+	items = sold(items)
 	byID := map[string]stock.Item{}
 	for _, it := range items {
 		byID[it.ID] = it
@@ -888,6 +1002,7 @@ func (s *Server) saleFrom(ctx context.Context, c *chat, ask *saleAsk) error {
 		sale.PaidHow = stock.Cash
 	}
 	var total int64
+	var soldItems []stock.Item // each line's item, in the lines' order
 	for i, x := range said.Items {
 		var match []stock.Item
 		if id, chosen := ask.Chosen[i]; chosen {
@@ -938,14 +1053,13 @@ func (s *Server) saleFrom(ctx context.Context, c *chat, ask *saleAsk) error {
 		} else if said.AmountKobo == nil {
 			return c.say(ctx, s, c.t("wa.sale.no_price", "name", whatsapp.SafeText(it.Name)))
 		}
-		unit := it.Unit
+		unit := it.SaleUnit()
 		sale.Lines = append(sale.Lines, stock.SaleLine{ItemID: it.ID, Item: it.Name, Quantity: x.Quantity, Unit: unit, PriceKobo: price, LineKobo: price * x.Quantity,
 			CostKobo: it.CostKobo})
 		total += price * x.Quantity
-		if it.Stock != nil && *it.Stock < x.Quantity {
-			sale.Beyond = append(sale.Beyond, it.Name)
-		}
+		soldItems = append(soldItems, it)
 	}
+	sale.Beyond = beyondTogether(soldItems, sale.Lines)
 	if sale.AmountKobo == nil {
 		sale.AmountKobo = &total
 	}

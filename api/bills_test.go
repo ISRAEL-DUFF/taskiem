@@ -99,6 +99,12 @@ func TestBillsMirrored(t *testing.T) {
 	if r := w.say(t, buyerOn, "bill INV-9999"); !strings.Contains(r, "No bill INV-9999") {
 		t.Errorf("no bill: %q", r)
 	}
+	// "paid 425,000 Dangote" shows the bill owed, which is paid from
+	// Bills, instead of an expense of its own that the bill's payment
+	// would count again (PR review fix).
+	if r := w.say(t, buyerOn, "paid 425,000 Dangote"); !strings.Contains(r, "*"+x["number"].(string)+"* from *Dangote Stores*: to pay") || strings.Contains(r, "Record ₦") {
+		t.Errorf("paid the supplier of a bill: %q", r)
+	}
 	// The seller sees nothing of it: bills are the buyer's.
 	if got := seller.must(200, "GET", "/v1/bills", nil)["bills"].([]any); len(got) != 0 {
 		t.Errorf("the seller's bills: %v", got)

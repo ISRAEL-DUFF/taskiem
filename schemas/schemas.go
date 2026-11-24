@@ -15,3 +15,9 @@ var ConnectorV1 []byte
 //
 //go:embed capabilities-v1.json
 var CapabilitiesV1 []byte
+
+// PageV1 is a page's document (docs/contracts/page-v1.md): a screen a
+// business makes for itself from parts Taskiem draws.
+//
+//go:embed page-v1.schema.json
+var PageV1 []byte

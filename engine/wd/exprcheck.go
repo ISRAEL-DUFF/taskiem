@@ -30,6 +30,23 @@ func checkExpressions(d *Definition) []Problem {
 	for _, id := range ids {
 		c.step(d.byID[id])
 	}
+	// Saved things are read for steps and outputs when a run starts (saved
+	// objects S3): a trigger's config and the concurrency key are read
+	// before, without them.
+	noSaved := func(where string, v any) {
+		walkExprs(v, func(src string) {
+			if refs, err := engine.References(src); err == nil && refs.Roots["saved"] {
+				c.problems = append(c.problems, Problem{Path: where, Message: "saved things are read by steps, not here: " + src})
+			}
+		})
+	}
+	if len(d.Trigger.RawCfg) > 0 {
+		raw, _ := expr.DecodeJSON(d.Trigger.RawCfg)
+		noSaved("trigger.config", raw)
+	}
+	if d.Settings.ConcurrencyKey != "" {
+		noSaved("settings.concurrency_key", d.Settings.ConcurrencyKey)
+	}
 	return c.problems
 }
 
@@ -115,6 +132,9 @@ func (c *exprChecker) step(s *Step) {
 			}
 			if refs.Roots["secrets"] && len(refs.Roots) > 1 {
 				c.add(s, where, "an expression that reads secrets may not read anything else: %s", src)
+			}
+			if refs.SavedUnnamed {
+				c.add(s, where, "a saved thing is read by its name, as saved.price_list or saved[\"price-list\"], so it can be read when the run starts: %s", src)
 			}
 			if (refs.Roots["item"] || refs.Roots["index"]) && !c.inForeach(s) {
 				c.add(s, where, "item and index are only available inside a foreach: %s", src)

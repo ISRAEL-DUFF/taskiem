@@ -223,7 +223,7 @@ void main() {
     await t.pumpAndSettle();
   });
 
-  testWidgets('S4, S2: WhatsApp linked by a code, with the authenticator code; then its approval PIN', (t) async {
+  testWidgets('S4, S2: WhatsApp linked by a code, with the authenticator code; then its PIN, on the PIN page', (t) async {
     var linked = false;
     var pinSet = false;
     final o = await open(
@@ -242,10 +242,7 @@ void main() {
           linked = true;
           return _json({'number': '+2348031239001'});
         },
-        'PUT /v1/me/whatsapp/pin': (_) {
-          pinSet = true;
-          return _json({'set': true});
-        },
+        'GET /v1/me/pin': (_) => _json({'set': pinSet, 'change_without': true}),
       },      page: 'WhatsApp',
     );
     await field(t, 'Your WhatsApp number', '+2348031239001');
@@ -257,15 +254,12 @@ void main() {
     await press(t, 'Link');
     expect(o.asked.where((a) => a.$2 == '/v1/me/whatsapp/verify').single.$3, {'code': '654321'});
     expect(find.text('+2348031239001'), findsOneWidget, reason: 'the number linked, large on the top card');
-    expect(find.text('Approval PIN'), findsOneWidget);
-    await t.tap(find.text('Set a PIN'));
+    // The PIN for approving here is the person's one PIN, on its own page.
+    expect(find.text('Your PIN'), findsOneWidget);
+    await t.tap(find.text('Set your PIN'));
     await settle(t);
-    await field(t, 'PIN', '480211');
-    await field(t, 'Authenticator code, to set the PIN', '111222');
-    await press(t, 'Set PIN');
-    expect((o.asked.lastWhere((a) => a.$1 != 'GET').$1, o.asked.lastWhere((a) => a.$1 != 'GET').$2), ('PUT', '/v1/me/whatsapp/pin'));
-    expect(o.asked.lastWhere((a) => a.$1 != 'GET').$3, {'pin': '480211', 'totp': '111222'});
-    expect(find.textContaining('PIN set'), findsOneWidget);
+    expect(o.asked.any((a) => a.$1 == 'GET' && a.$2 == '/v1/me/pin'), isTrue);
+    expect(o.asked.any((a) => a.$2 == '/v1/me/whatsapp/pin'), isFalse);
     await t.pump(const Duration(seconds: 5));
     await t.pumpAndSettle();
   });

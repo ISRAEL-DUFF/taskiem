@@ -107,6 +107,16 @@ type Server struct {
 	// liveGate caps the open live connections of You (people_live.go), per
 	// person and per server.
 	liveGate chatStreamGate
+	// pageGate caps the open pages kept up to date (pages_live.go).
+	pageGate chatStreamGate
+	// pageActorGate caps them per person or API key.
+	pageActorGate chatStreamGate
+	// PageLiveRecheck is how often an open page signs its viewer in again
+	// (zero: thirty seconds; tests set it shorter).
+	PageLiveRecheck time.Duration
+	// PageLiveEvery is how often an open page asks what changed (zero: two
+	// seconds; tests set it shorter).
+	PageLiveEvery time.Duration
 	// ChatStreamPing is how often an open chat stream says something when it
 	// has nothing to say (zero: ten seconds).
 	ChatStreamPing time.Duration
@@ -146,6 +156,9 @@ type Server struct {
 	// termsAsked are the people asked about, or agreed to, the current
 	// terms since start: chat does not look them up again.
 	termsAsked sync.Map
+	// oldColumnsChecked are the businesses whose workflows were checked
+	// for the catalogue's old stock columns since start (stock_oldcolumns.go).
+	oldColumnsChecked sync.Map
 	// DocsURL is where the web app's help links point (TASKIEM_DOCS_URL);
 	// empty shows the in-product help only.
 	DocsURL string
@@ -380,7 +393,10 @@ func (s *Server) Handler() http.Handler {
 		s.Logger = slog.Default()
 	}
 	s.initCodeLeases() // the per-tenant code share across replicas (codegate.go)
-	s.chatHooks()      // what the channels send is kept in the history (chat_history.go)
+	if s.Store != nil && s.Store.Saved == nil {
+		s.Store.Saved = s.savedForRuns // saved things a run reads (saved_runs.go)
+	}
+	s.chatHooks() // what the channels send is kept in the history (chat_history.go)
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, s.securityHeaders, s.hsts, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
@@ -501,6 +517,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/auth/second-proof/passkey", s.secondProofPasskey)
 			r.Post("/me/start", s.startSomething)                // a business or workflows (start.go)
 			s.customerDoorRoutes(r)                              // a person's chats with businesses (customer_door.go)
+			s.customerToolRoutes(r)                              // a business's tools for its customers (tools_customers_door.go)
 			s.discoverRoutes(r)                                  // the public finding businesses (discover.go)
 			r.Get("/me/storefront-orders", s.myStorefrontOrders) // a person's own orders, by their phone (customer_links.go)
 			r.Post("/me/storefront-orders/confirm", s.confirmStorefrontOrders)
@@ -527,6 +544,10 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/me/whatsapp/verify", s.verifyWhatsAppBinding)
 			r.Delete("/me/whatsapp", s.unbindWhatsApp)
 			r.Put("/me/whatsapp/pin", s.setWhatsAppPin)
+			// The person's PIN, set at sign-up and reset with a passkey (pin_me.go).
+			r.Get("/me/pin", s.getMePin)
+			r.Put("/me/pin", s.putMePin)
+			r.Delete("/me/pin", s.removeWhatsAppPin)
 			r.Delete("/me/whatsapp/pin", s.removeWhatsAppPin)
 			r.Get("/me/telegram", s.getTelegram)
 			r.Post("/me/telegram", s.startTelegramLink)
@@ -653,6 +674,8 @@ func (s *Server) Handler() http.Handler {
 			s.profileRoutes(r)      // a business's profile and gallery (business_profile.go)
 			s.exploreRoutes(r)      // finding a business by browsing (explore.go)
 			s.billRoutes(r)         // their bills (bills.go)
+			s.paymentRoutes(r)      // paying people (payments.go)
+			s.paymentBatchRoutes(r) // paying several (payment_batches.go)
 			s.linkOrderRoutes(r)    // their orders (link_orders.go)
 			s.tradeDealRoutes(r)    // their price deliberation (trade_deals.go)
 			s.linkChatRoutes(r)     // their conversations (link_chat.go)
@@ -665,6 +688,7 @@ func (s *Server) Handler() http.Handler {
 			s.schoolRoutes(r)       // the Schools area (schools.go)
 			r.With(s.need(PermOrders)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermOrders)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
+			r.With(s.need(PermOrders), s.need(PermSavedManage), s.need(PermPIIReveal), s.tenantWide).Post("/storefront/orders/{reference}/save-customer", s.saveOrderCustomer)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refunded", s.markStorefrontRefunded)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/quote", s.quoteStorefrontOrder)
@@ -683,10 +707,14 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/remit", s.riderRemit)
 			// Stock by chat's web and API door (stock.go, docs/spec/stock.md).
 			r.With(s.need(PermTableRead)).Get("/stock", s.getStock)
+			r.With(s.need(PermTableRead)).Get("/stock/stock-items", s.getStockItems)
 			r.With(s.need(PermTableRead)).Get("/stock/movements", s.listStockMovements)
+			r.With(s.need(PermWorkflowRead)).Get("/stock/old-columns", s.getStockOldColumns)
 			r.With(s.need(PermStorefrontManage), s.need(PermTableEdit), s.tenantWide).Post("/stock/setup", s.setupStock)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/items", s.addStockItem)
 			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/items/{id}", s.patchStockItem)
+			r.With(s.need(PermTableEdit), s.tenantWide).Put("/stock/products/{id}/counted-by", s.putCountedBy)
+			r.With(s.need(PermTableEdit), s.tenantWide).Delete("/stock/products/{id}/counted-by", s.deleteCountedBy)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements", s.moveStock)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements/grid", s.moveStockGrid)
 			r.With(s.need(PermTableEdit), s.tenantWide).Put("/stock/items/{id}/variants", s.setStockVariants)
@@ -716,6 +744,16 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/cancel", s.cancelPurchase)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/{id}/receive", s.receivePurchase)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/pay", s.payPurchase)
+			// What a business buys, U1 (stock_purchases_u1.go): a line's
+			// treatment, the memory of a supplier's items, Things we have.
+			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/purchases/{id}/lines/{position}", s.setPurchaseLine)
+			r.With(s.need(PermTableRead)).Get("/stock/suppliers/{id}/items", s.listSupplierItems)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/stock/suppliers/{id}/items", s.putSupplierItem)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/stock/suppliers/{id}/items", s.deleteSupplierItem)
+			r.With(s.need(PermTableRead)).Get("/things", s.listThings)
+			r.With(s.need(PermTableRead)).Get("/things/{id}", s.getThing)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/things", s.addThing)
+			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/things/{id}", s.patchThing)
 			// Deliveries with riders (dispatch.go, D2 to D4).
 			r.With(s.need(PermOrders)).Get("/deliveries", s.listDeliveries)
 			r.With(s.need(PermOrders)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)
@@ -780,6 +818,16 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/code/compile", s.compileCode)
 
 			r.With(s.need(PermRunStart)).Post("/workflows/{wf}/runs", s.startRun)
+			// Your tools (decision 0073, made tools M1).
+			r.With(s.need(PermRunStart)).Get("/tools", s.listTools)
+			// A code scanned from the phone's home screen (device fields D2).
+			r.With(s.need(PermRunStart)).Get("/scan/offers", s.scanOffers)
+			r.With(s.need(PermRunStart)).Post("/tools/{command}/read", s.readToolRoute)
+			r.With(s.need(PermRunStart)).Post("/tools/{command}/start", s.startToolRoute)
+			r.With(s.need(PermRunStart)).Post("/tools/{command}/confirm", s.confirmToolRoute)
+			r.With(s.need(PermRunStart)).Put("/tools/{command}/settings", s.setToolSettings)
+			r.With(s.need(PermRunStart)).Post("/tools/buttons/{button}", s.pressButtonRoute)
+			r.Get("/runs/{run}/answer", s.runAnswer)
 			r.With(s.need(PermRunRead)).Get("/runs", s.listRuns)
 			r.With(s.need(PermRunRead)).Get("/dashboard", s.dashboard)
 			r.With(s.need(PermRunRead)).Get("/runs/{run}", s.getRun)
@@ -809,6 +857,10 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/advanced", s.putAdvanced)
 			r.Get("/settings/chat-tools", s.getChatTools) // chat tools (chat_tools.go)
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/chat-tools", s.putChatTools)
+			// Reading photos with AI, where an owner turned it on (photo_ai.go).
+			r.Get("/settings/ai-photo-reading", s.getAIPhotoReading)
+			r.With(s.tenantWide).Put("/settings/ai-photo-reading", s.putAIPhotoReading)
+			r.Post("/photo-text", s.readPhotoAI)
 			r.Post("/chat-diary", s.postChatDiary)
 			r.Get("/chat-alerts", s.getChatAlerts)
 			r.Post("/chat-alerts/later", s.postChatAlertLater)
@@ -837,6 +889,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermConnectionManage)).Put("/connections/{id}/credentials", s.mergeConnectionCredentials)
 			r.With(s.need(PermConnectionManage)).Delete("/connections/{id}", s.deleteConnection)
 			r.Group(s.tablesRoutes) // data tables (datatables.go)
+			r.Group(s.pageRoutes)   // the business's own pages (pages.go)
 			r.With(s.need(PermSecretManage)).Get("/secrets", s.listSecrets)
 			r.With(s.need(PermAuditRead)).Get("/secrets/reads", s.listSecretReads)
 			r.With(s.need(PermSecretManage)).Put("/secrets/{env}/{name}", s.putSecret)
@@ -874,6 +927,13 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/staff/{user}/figures", s.getStaffFigures)
 			r.With(s.need(PermMemberManage)).Get("/staff/{user}", s.getStaff)
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/profile", s.putStaffProfile)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/pay-account", s.putStaffAccount)
+			// Payroll is Payrolla's (payroll.go): its runs in Taskiem's screens,
+			// and staff linked to its employees.
+			r.With(s.need(PermPayrollRead)).Get("/payroll", s.getPayroll)
+			r.With(s.need(PermPayrollRead)).Get("/payroll/runs/{run}", s.getPayrollRun)
+			r.With(s.need(PermPayrollRead)).Get("/payroll/staff", s.getPayrollStaff)
+			r.With(s.need(PermPayrollRead), s.tenantWide).Put("/staff/{user}/payrolla", s.putStaffPayrolla)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)

@@ -34,7 +34,6 @@ func withLinkedOrders(w *world) {
 		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)},
 		Start:    w.env.Store.Start, Signal: w.env.Store.DeliverSignalOnce, Cancel: w.env.Store.CancelRun}
 	if w.srv.Stock != nil {
-		w.srv.Orders.Stock, _ = w.srv.Stock.Table.(storefront.Stock)
 		w.srv.Orders.Moves = w.srv.Stock
 	}
 	w.srv.Orders.TradeNotify = w.srv.TradeNotify
@@ -548,7 +547,7 @@ func TestLinkedOrdersMatchedAndPlaced(t *testing.T) {
 	buyer.must(400, "POST", "/v1/stock/purchases/"+po3+"/send", nil)
 	buyer.must(400, "POST", "/v1/stock/purchases/"+po3+"/confirm-proposed", map[string]any{"items": []string{"nope"}})
 	if p := buyer.must(200, "POST", "/v1/stock/purchases/"+po3+"/confirm-proposed", map[string]any{"items": []string{rice}})["purchase"].(map[string]any); p["status"] != "confirmed" ||
-		p["lines"].([]any)[0].(map[string]any)["item_id"] != rice || p["lines"].([]any)[0].(map[string]any)["item"] != "Rice" {
+		p["lines"].([]any)[0].(map[string]any)["treatment"] != "stock" || p["lines"].([]any)[0].(map[string]any)["stock_item_id"] == nil {
 		t.Fatalf("confirmed: %v", p)
 	}
 	buyer.must(409, "POST", "/v1/stock/purchases/"+po3+"/confirm-proposed", map[string]any{"items": []string{rice}})
@@ -734,4 +733,69 @@ func TestLinkedOrderLikeAnyOrder(t *testing.T) {
 	if p := buyer.must(200, "POST", "/v1/stock/purchases/"+po+"/all-came", nil)["purchase"].(map[string]any); p["status"] != "received" {
 		t.Errorf("all came: %v", p)
 	}
+}
+
+// "send order P-… to @warehouse" (saved objects S2): a saved place is
+// where a purchase from a linked supplier is delivered, its phone the
+// rider's; the supplier's copy carries it, not the business's default;
+// once the supplier has it, it is not changed; not a place, said.
+func TestLinkedPurchaseDeliveredToSaved(t *testing.T) {
+	w := shopWorld(t)
+	withStock(w.world)
+	withPurchases(w.world)
+	withLinkedOrders(w.world)
+	seller, buyer, _, _ := linkedPair(t, w.waWorld)
+	const buyerOn = "+2348010000392"
+	w.bind(t, buyer, buyerOn)
+	buyer.must(200, "PUT", "/v1/stock/deliver-to", map[string]any{"address": "12 Admiralty Way, Lekki", "phone": "0803 123 4599"})
+	buyer.must(200, "POST", "/v1/stock/setup", nil)
+	rice := buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 3, "unit": "bag", "cost_kobo": 4000000},
+		"Idempotency-Key", "r")["item"].(map[string]any)["id"].(string)
+	sup := buyer.must(201, "POST", "/v1/stock/suppliers", map[string]any{"name": "Dangote", "phone": "0803 123 4503"})["supplier"].(map[string]any)["id"].(string)
+	link := buyer.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+	buyer.must(200, "PUT", "/v1/stock/suppliers/"+sup+"/link", map[string]any{"link_id": link})
+	po := buyer.must(201, "POST", "/v1/stock/purchases", map[string]any{"supplier_id": sup, "lines": []any{map[string]any{"item_id": rice, "quantity": 6}}},
+		"Idempotency-Key", "po")["purchase"].(map[string]any)
+	ref := po["reference"].(string)
+	buyer.must(201, "POST", "/v1/saved", map[string]any{"name": "warehouse", "title": "Warehouse", "kind": "place",
+		"details": map[string]any{"line": "4 Creek Road", "area": "Apapa", "landmark": "by the port gate", "phone": "0803 112 0077"}})
+	buyer.must(201, "POST", "/v1/saved", map[string]any{"name": "mum", "title": "Mum", "kind": "person", "details": map[string]any{"phone": "0803 112 0011"}})
+
+	// The API: the default until it has its own, then its own.
+	path := "/v1/stock/purchases/" + po["id"].(string) + "/deliver-to"
+	if d := buyer.must(200, "GET", path, nil); d["own"] != false || d["phone"] != "+2348031234599" {
+		t.Fatalf("the default: %v", d)
+	}
+	buyer.must(400, "PUT", path, map[string]any{"address": "1 Wharf Road", "phone": "not a phone"})
+	if d := buyer.must(200, "PUT", path, map[string]any{"address": "1 Wharf Road, Apapa", "phone": "0803 112 0055"}); d["own"] != true || d["address"] != "1 Wharf Road, Apapa" {
+		t.Fatalf("its own: %v", d)
+	}
+	buyer.must(404, "GET", "/v1/stock/purchases/01a1f840-0000-7000-8000-000000000000/deliver-to", nil)
+	if r := w.say(t, buyerOn, "deliver "+ref+" to @mum"); !strings.Contains(r, "@mum is a person") {
+		t.Errorf("a person: %q", r)
+	}
+	// Not sent, and whether or not the business keeps stock here.
+	buyer.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"stock": false}, "confirm": true})
+	if r := w.say(t, buyerOn, "deliver "+ref+" to @warehouse"); !strings.Contains(r, ref+" will be delivered to @warehouse") || strings.Contains(r, "Sent ") {
+		t.Fatalf("deliver alone: %q", r)
+	}
+	buyer.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"stock": true}, "confirm": true})
+	r := w.say(t, buyerOn, "send order "+ref+" to @warehouse")
+	if !strings.Contains(r, "Sent "+ref) || !strings.Contains(r, ref+" will be delivered to @warehouse: 4 Creek Road, Apapa (by the port gate).") {
+		t.Fatalf("sent: %q", r)
+	}
+	drainLinked(t, w.world)
+	got := seller.must(200, "GET", "/v1/storefront/orders/"+ref, nil)
+	order := got
+	if v, ok := got["order"].(map[string]any); ok {
+		order = v
+	}
+	if c := order["customer"].(map[string]any); c["phone"] != "•••0077" {
+		t.Fatalf("the supplier's copy: %v", c)
+	}
+	// It reached the supplier: not changed.
+	if r := w.say(t, buyerOn, "deliver "+ref+" to @warehouse"); !strings.Contains(r, "has reached the supplier already") {
+		t.Errorf("after: %q", r)
+	}
+	buyer.must(409, "PUT", path, map[string]any{"address": "1 Wharf Road, Apapa", "phone": "0803 112 0055"})
 }

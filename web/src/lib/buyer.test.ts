@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bagOf, flatItems, orderLine, priceLine, purchaseState, quoteText, reorderQty, sizesTaken, soldInSizes, stepQty } from "./buyer";
-import type { PriceItem } from "./pricelists";
+import type { ItemLink, PriceItem } from "./pricelists";
 
 const item = (id: string, name: string, price: number, min = 1, available = true): PriceItem => ({
   item_id: id,
@@ -9,6 +9,18 @@ const item = (id: string, name: string, price: number, min = 1, available = true
   price_kobo: price,
   min_quantity: min,
   available,
+});
+
+/** What the business remembers of a supplier's item, added to stock. */
+const remembered = (seller: string, name: string): ItemLink => ({
+  link_id: "l",
+  seller_item_id: seller,
+  name,
+  treatment: "stock",
+  stock_item_id: "si-" + seller,
+  uses: 1,
+  updated_by: "user:ada",
+  updated_at: "2026-11-22T00:00:00Z",
 });
 
 describe("the buyer's tools", () => {
@@ -37,10 +49,10 @@ describe("the buyer's tools", () => {
   });
   it("reorders what is still on the price list, at least its minimum", () => {
     const items = [item("s1", "Rice, 50kg bag", 1, 2), item("s2", "Beans", 1, 1, false)];
-    const links = [{ link: "l", item_id: "own1", seller_item_id: "s1", seller_item: "Rice, 50kg bag" }];
+    const links = [remembered("s1", "Rice, 50kg bag")];
     const last = {
       lines: [
-        { item_id: "own1", item: "Rice", quantity: 1, cost_kobo: 1, received: 0 },
+        { item_id: "s1", seller_item_id: "s1", item: "Rice", quantity: 1, cost_kobo: 1, received: 0 },
         { item_id: "own2", item: "Beans", quantity: 3, cost_kobo: 1, received: 0 },
       ],
     };
@@ -107,12 +119,12 @@ describe("sizes and colours after the phase 4 review", () => {
   it("orders the last order again by each size", () => {
     const last = {
       lines: [
-        { item_id: "o42", item: "Air Max 90 – 42", quantity: 4, cost_kobo: 0, received: 0 },
+        { item_id: "t42", seller_item_id: "t42", item: "Air Max 90 – 42", quantity: 4, cost_kobo: 0, received: 0 },
         { item_id: "o43", item: "Air Max 90 – 43", quantity: 2, cost_kobo: 0, received: 0 },
       ],
     };
-    const links = [{ link: "l", item_id: "o42", seller_item_id: "t42", seller_item: "Air Max 90 – 42" }];
-    // 42 by its link, 43 by its full name; each at its own count.
+    const links = [remembered("t42", "Air Max 90 – 42")];
+    // 42 by its supplier's item, 43 by its full name; each at its own count.
     expect(reorderQty(last, links, [product])).toEqual({ t42: 4, t43: 2 });
   });
 });

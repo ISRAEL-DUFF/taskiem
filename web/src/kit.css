@@ -435,6 +435,11 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
 .tk-alert-words { display: grid; gap: 2px; min-width: 0; }
 .tk-alert-title { font-weight: 700; font-size: 16px; color: var(--text); }
 .tk-alert-line { font-size: 14px; color: var(--muted); }
+.tk-alert-proof { display: flex; gap: 12px; align-items: center; }
+.tk-alert-proof-photo { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border); flex: none; }
+.tk-alert-proof-words { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--muted); }
+.tk-alert-proof-words a { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; color: var(--text); }
+.tk-alert-proof-words svg { width: 16px; height: 16px; }
 .tk-alert-acts, .tk-approve-acts { display: flex; flex-wrap: wrap; gap: 10px; }
 .tk-alert-go { min-width: min(100%, 180px); }
 .tk-alert-go, .tk-alert-soft, .tk-approve-go { min-height: 52px; padding: 0 18px; border: 0; box-shadow: none; border-radius: 999px; font-weight: 700; font-size: 15px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
@@ -553,6 +558,7 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 .tk-x-sec h3 span { font-size: 14px; font-weight: 500; color: var(--muted); }
 .tk-x .explore-more, .tk-x .explore-more:hover:not(:disabled) { flex: none; margin: 0; min-height: 36px; padding: 0; border: 0; background: none; box-shadow: none; font-size: 14px; font-weight: 600; color: var(--brand); }
 :root[data-theme="dark"] .tk-x .explore-more { color: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-x .explore-more { color: var(--brand-dark); } }
 .tk-x section + section { margin-top: 24px; }
 .tk-x .explore-list { gap: 16px; }
 /* Explore's start page (docs/spec/mobile-app-explore-and-offline.md §2.1):
@@ -576,6 +582,7 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 
 .tk-x-card.explore-card { margin: 0; padding: 12px; border: 0; border-radius: 24px; overflow: visible; background: var(--panel); box-shadow: 0 1px 2px rgba(14, 26, 20, 0.06), 0 12px 28px -18px rgba(14, 26, 20, 0.25); }
 :root[data-theme="dark"] .tk-x-card.explore-card { box-shadow: 0 0 0 1px var(--border); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-x-card.explore-card { box-shadow: 0 0 0 1px var(--border); } }
 .tk-x-card .explore-head { padding: 4px 4px 12px; gap: 12px; }
 .tk-x-card .explore-head .chat-avatar, .tk-x-card .tk-x-logo { flex: none; width: 48px; height: 48px; font-size: 16px; font-weight: 800; }
 .tk-x-card .explore-who strong { font-size: 16px; font-weight: 700; }
@@ -585,7 +592,9 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 .tk-x-connect:active:not(:disabled) { transform: scale(0.96); }
 .tk-x-connect.soft, .tk-x-connect.soft:hover:not(:disabled) { background: var(--tk-soft); color: var(--brand); }
 :root[data-theme="dark"] .tk-x-connect:not(.soft) { background: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-x-connect:not(.soft) { background: var(--brand-dark); color: var(--brand-dark-text); } }
 :root[data-theme="dark"] .tk-x-connect.soft { color: var(--text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-x-connect.soft { color: var(--text); } }
 .tk-x-asked { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .tk-x-withdraw, .tk-x-withdraw:hover:not(:disabled) { min-height: 24px; padding: 0; border: 0; background: none; box-shadow: none; font-size: 12px; font-weight: 500; color: var(--muted); text-decoration: underline; }
 .tk-x-card .carousel { background: none; }
@@ -598,6 +607,7 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 .tk-x-card .carousel-dot::after { background: var(--border-strong); box-shadow: none; transition: width 0.3s var(--ease-spring, cubic-bezier(0.2, 0.9, 0.25, 1.2)), background-color 0.3s; }
 .tk-x-card .carousel-dot[aria-current="true"]::after { width: 22px; background: var(--brand); }
 :root[data-theme="dark"] .tk-x-card .carousel-dot[aria-current="true"]::after { background: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-x-card .carousel-dot[aria-current="true"]::after { background: var(--brand-dark); } }
 .tk-x-card .explore-about { margin: 6px 4px 4px; padding: 0; font-size: 14px; line-height: 1.5; color: color-mix(in srgb, var(--text) 82%, var(--muted)); -webkit-line-clamp: 4; }
 .tk-x-sheet .tk-x-card .explore-about { display: block; -webkit-line-clamp: unset; overflow: visible; white-space: pre-line; }
 .tk-x-card .tk-x-note { margin: 8px 4px 2px; }
@@ -649,7 +659,9 @@ input.tk-switch::before { content: ""; position: absolute; top: 3px; left: 3px; 
 input.tk-switch:checked { background: var(--brand); }
 input.tk-switch:checked::before { left: 23px; }
 :root[data-theme="dark"] input.tk-switch:checked { background: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] input.tk-switch:checked { background: var(--brand-dark); } }
 :root[data-theme="dark"] input.tk-switch:checked::before { background: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] input.tk-switch:checked::before { background: var(--brand-dark-text); } }
 input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 
 /* ---------- Your business in Explore (design 11) ---------- */
@@ -667,16 +679,19 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-p-found.on input.tk-switch:focus-visible { box-shadow: 0 0 0 3px var(--brand-dark); }
 .tk-p-card { background: var(--panel); border-radius: 24px; padding: 12px; box-shadow: 0 1px 2px rgba(14, 26, 20, 0.06), 0 12px 28px -18px rgba(14, 26, 20, 0.25); }
 :root[data-theme="dark"] .tk-p-card { box-shadow: 0 0 0 1px var(--border); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-p-card { box-shadow: 0 0 0 1px var(--border); } }
 .tk-p-card > .tk-kicker { padding: 2px 4px 10px; }
 .tk-p-who { display: flex; align-items: center; gap: 12px; padding: 0 4px 12px; }
 .tk-p-logo { flex: none; width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
 .tk-p-letter, .tk-p-logo-pick > span:first-child { display: grid; place-items: center; background: var(--tk-lime-soft); color: var(--brand); font-weight: 800; }
 :root[data-theme="dark"] .tk-p-letter, :root[data-theme="dark"] .tk-p-logo-pick > span:first-child { color: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-p-letter, :root[data-theme="system"] .tk-p-logo-pick > span:first-child { color: var(--brand-dark); } }
 .tk-p-words { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .tk-p-words strong { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
 .tk-p-words span { font-size: 13px; color: var(--muted); }
 .tk-p-connect { flex: none; display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; background: var(--brand); color: var(--tk-on-pine); font-weight: 700; font-size: 13px; }
 :root[data-theme="dark"] .tk-p-connect { background: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-p-connect { background: var(--brand-dark); color: var(--brand-dark-text); } }
 .tk-p-mosaic { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; height: 150px; }
 .tk-p-stack { display: grid; grid-template-rows: 1fr 1fr; gap: 6px; min-height: 0; }
 .tk-p-tile { position: relative; overflow: hidden; border-radius: 14px; background: var(--tk-soft); display: grid; place-items: center; min-height: 0; }
@@ -741,6 +756,7 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-p-wait { display: grid; place-items: center; font-size: 13px; color: var(--muted); }
 .tk-p-add, .tk-p-add:hover:not(:disabled) { height: 120px; width: 100%; border-radius: 16px; border: 1.5px dashed var(--border-strong); background: var(--tk-tile); box-shadow: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--brand); font-weight: 700; font-size: 14px; }
 :root[data-theme="dark"] .tk-p-add { color: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-p-add { color: var(--brand-dark); } }
 .tk-p-add svg { width: 24px; height: 24px; }
 .tk-p-add:disabled { opacity: 0.55; }
 .tk-p-note { margin: 12px 4px 0; font-size: 13px; color: var(--muted); }
@@ -888,3 +904,42 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-start-findable { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
 .tk-x-empty-acts { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .tk-x-area { margin: 0 16px 12px; }
+
+/* ---------- Pay by transfer (the payments flow, part 1) ---------- */
+.xfer { display: flex; flex-direction: column; gap: 10px; padding: 14px; margin: 8px 0; border-radius: 16px; background: var(--panel); color: var(--text); box-shadow: 0 0 0 1px var(--border); max-width: 420px; width: 100%; box-sizing: border-box; }
+.xfer-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.xfer-head { margin: 0; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.xfer-head.ok { color: var(--ok); }
+.xfer-head svg { width: 20px; height: 20px; flex: none; }
+.xfer-account { margin: 0; display: grid; gap: 2px; border-radius: 12px; background: var(--tk-tile); padding: 4px 12px; }
+.xfer-line { display: flex; flex-direction: column; padding: 8px 0; border-top: 1px solid var(--border); }
+.xfer-line:first-child { border-top: 0; }
+.xfer-line dt { font-size: 12px; color: var(--muted); }
+.xfer-line dd { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; min-width: 0; }
+.xfer-line dd > span { min-width: 0; overflow-wrap: anywhere; }
+.xfer-number { font-size: 20px; font-weight: 800; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.xfer-copy { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 0; background: var(--tk-soft); color: var(--tk-pine-ink); font-weight: 700; font-size: 13px; cursor: pointer; box-shadow: none; }
+.xfer-copy svg { width: 16px; height: 16px; }
+.xfer-copy:focus-visible { box-shadow: var(--ring); }
+.xfer-time { margin: 0; display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--tk-soft); color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.xfer-time svg { width: 16px; height: 16px; }
+.xfer-time.warn { background: var(--tk-warn-bg); color: var(--tk-warn-ink); }
+.xfer-next { margin: 0; font-size: 14px; color: var(--muted); }
+.xfer-wait { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.xfer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .xfer-dot { animation: xfer-breathe 1.6s ease-in-out infinite; }
+}
+@keyframes xfer-breathe { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.1); } }
+.xfer-longer { align-self: flex-start; }
+.xfer-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.xfer-acts .xfer-ways { flex-basis: 100%; }
+.xfer-ways { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.xfer-way { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--panel); color: var(--text); text-align: left; text-decoration: none; cursor: pointer; box-shadow: none; font: inherit; box-sizing: border-box; }
+.xfer-way:hover { background: var(--panel-2); text-decoration: none; }
+.xfer-way.first { border-color: var(--accent); }
+.xfer-way:focus-visible { box-shadow: var(--ring); }
+.xfer-way .tk-row-tile { width: 40px; height: 40px; border-radius: 12px; }
+.xfer-way > svg:last-of-type { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.xfer-way-words { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.xfer-way-name { font-weight: 700; }

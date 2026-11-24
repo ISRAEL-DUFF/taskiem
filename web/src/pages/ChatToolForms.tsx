@@ -36,7 +36,20 @@ import {
 } from "../lib/pricelists";
 import type { BusinessLink } from "../lib/links";
 import { useAuth } from "../auth";
-import { quantity, type StockItem, type StockView } from "../lib/stock";
+import {
+  addRequest,
+  countedByLine,
+  emptyItem,
+  itemProblem,
+  quantity,
+  rowCount,
+  soldAsLine,
+  usesWords,
+  type StockItem,
+  type StockItemRow,
+  type StockItemsView,
+  type StockView,
+} from "../lib/stock";
 import { categoriesOf } from "../lib/mentions";
 import { formatPrice, type Storefront } from "../lib/storefront";
 import { cellText, cellValue, type Row, type Table } from "../lib/tables";
@@ -241,6 +254,9 @@ export function ProductForm({
   const [sizesOpen, setSizesOpen] = useState(false);
   // The sizes over the product's form: Back comes back to the form.
   useSheetStep(sizesOpen, () => setSizesOpen(false));
+  // What it is counted by, chosen in place of the form, as its sizes are.
+  const [countedOpen, setCountedOpen] = useState(false);
+  useSheetStep(countedOpen, () => setCountedOpen(false));
   const [name, setName] = useState(item.name);
   // Its price on a price list, and who the list is shared with (the
   // DeskSeller board): for those who keep the storefront's prices.
@@ -366,6 +382,14 @@ export function ProductForm({
         item={item}
         onSaved={onSaved}
         onCancel={() => setSizesOpen(false)}
+      />
+    );
+  if (countedOpen)
+    return (
+      <CountedByForm
+        item={item}
+        onSaved={onSaved}
+        onCancel={() => setCountedOpen(false)}
       />
     );
   return (
@@ -496,6 +520,11 @@ export function ProductForm({
           <Stepper label="In stock" value={count ?? 0} onChange={setCount} />
         </div>
       )}
+      <CountedByRow
+        item={item}
+        canEdit={canEdit}
+        onOpen={() => setCountedOpen(true)}
+      />
       <SizesRow
         item={item}
         canEdit={canEdit}
@@ -556,6 +585,251 @@ function SizesRow({
         </button>
       )}
     </div>
+  );
+}
+
+/** The stock items a business counts, for Counted by (all, not those
+ * retired). */
+const stockItems = () =>
+  get<StockItemsView>("/v1/stock/stock-items?show=all").then((r) => r.items);
+
+/** Counted by (what a business buys §4.5), in a product's form: its stock
+ * item, how many one sale uses, and the count; or why it has none of its
+ * own (sold in sizes and colours: each is counted by its own). */
+function CountedByRow({
+  item,
+  canEdit,
+  onOpen,
+}: {
+  item: StockItem;
+  canEdit: boolean;
+  onOpen: () => void;
+}) {
+  const rows = useLoad(
+    () =>
+      item.stock_item_id ? stockItems() : Promise.resolve([] as StockItemRow[]),
+    [item.stock_item_id],
+  );
+  const sizes = hasSizes(item);
+  return (
+    <div className="tk-form-row" data-testid="counted-by">
+      <span>
+        <span className="tk-form-row-title">Counted by</span>
+        <span className="tk-form-row-sub">
+          {rows.error ? "Could not be loaded" : countedByLine(item, rows.data)}
+        </span>
+      </span>
+      {canEdit && !sizes && (
+        <button type="button" className="tk-btn soft" onClick={onOpen}>
+          Change<span className="sr-only"> what it is counted by</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Choose what a product is counted by: one of the stock items, and how
+ * many of it one sale uses (a pack of 6 uses 6), or none. */
+function CountedByForm({
+  item,
+  onSaved,
+  onCancel,
+}: {
+  item: StockItem;
+  onSaved: (line: string | null) => void;
+  onCancel: () => void;
+}) {
+  const rows = useLoad(stockItems, []);
+  const [chosen, setChosen] = useState<string>(item.stock_item_id ?? "");
+  const [uses, setUses] = useState(item.uses ?? 1);
+  const [find, setFind] = useState("");
+  const q = find.trim().toLowerCase();
+  const shown = (rows.data ?? []).filter(
+    (r) => r.id === chosen || q === "" || r.name.toLowerCase().includes(q),
+  );
+  const picked = rows.data?.find((r) => r.id === chosen);
+  const path = `/v1/stock/products/${encodeURIComponent(item.id)}/counted-by`;
+  const save: Saver = async () => {
+    if (!chosen) {
+      if (!item.stock_item_id) return null;
+      await del(path);
+      return `${item.name}: not counted`;
+    }
+    if (chosen === item.stock_item_id && uses === (item.uses ?? 1)) return null;
+    await put(path, { stock_item_id: chosen, uses });
+    return `${item.name}: counted by ${picked?.name ?? "a stock item"}${uses > 1 ? `, ${usesWords(uses, picked?.unit)} a sale` : ""}`;
+  };
+  return (
+    <FormFrame
+      save={save}
+      onSaved={onSaved}
+      onCancel={onCancel}
+      ready={!!rows.data && uses >= 1 && uses <= 1_000_000}
+    >
+      <p className="tk-form-now">
+        What selling one {item.name} lowers, and by how many.
+      </p>
+      <KitField label="Find it">
+        <input
+          type="search"
+          value={find}
+          placeholder="Malt bottle"
+          onChange={(e) => setFind(e.target.value)}
+        />
+      </KitField>
+      {rows.error ? (
+        <ErrorBox error={rows.error} />
+      ) : !rows.data ? (
+        <KitLoading label="Loading what you count…" />
+      ) : (
+        <fieldset className="tk-share-pick" data-testid="counted-pick">
+          <legend className="sr-only">Counted by</legend>
+          <label className="tk-share-row">
+            <input
+              type="radio"
+              name="counted-by"
+              checked={chosen === ""}
+              onChange={() => setChosen("")}
+            />
+            <span>
+              <span className="tk-form-row-title">None</span>
+              <span className="tk-form-row-sub">
+                Not counted: selling it changes no count
+              </span>
+            </span>
+          </label>
+          {shown.map((r) => (
+            <label key={r.id} className="tk-share-row">
+              <input
+                type="radio"
+                name="counted-by"
+                checked={chosen === r.id}
+                onChange={() => setChosen(r.id)}
+              />
+              <span>
+                <span className="tk-form-row-title">{r.name}</span>
+                <span className="tk-form-row-sub">
+                  {rowCount(r)} · {soldAsLine(r)}
+                </span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+      {chosen && (
+        <div className="tk-form-row">
+          <span>
+            <span className="tk-form-row-title">One sale uses</span>
+            <span className="tk-form-row-sub">
+              {picked
+                ? `${quantity(uses, picked.unit)} of ${picked.name}. A pack of 6 uses 6.`
+                : "A pack of 6 uses 6."}
+            </span>
+          </span>
+          <Stepper
+            label="One sale uses"
+            value={uses}
+            onChange={(n) => setUses(Math.max(1, n))}
+          />
+        </div>
+      )}
+    </FormFrame>
+  );
+}
+
+/** Add something to count, from the Stock tool (what a business buys
+ * §4.5): its name and how many, then Do you sell it? Yes adds its product
+ * too, with its price; No, a material only. */
+export function CountAdd({
+  onSaved,
+  onCancel,
+}: {
+  onSaved: (line: string | null) => void;
+  onCancel?: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [unit, setUnit] = useState("");
+  const [count, setCount] = useState(0);
+  const [sells, setSells] = useState<boolean | null>(null);
+  const [price, setPrice] = useState("");
+  const kobo = nairaKobo(price);
+  const f = { ...emptyItem(), name, unit, quantity: String(count) };
+  const ok =
+    sells !== null &&
+    itemProblem(f, true) === null &&
+    (!sells || price.trim() === "" || (!Number.isNaN(kobo) && kobo > 0));
+  const save: Saver = async () => {
+    await postOnce("/v1/stock/items", key(), {
+      ...addRequest(f, !!sells),
+      ...(sells && price.trim() !== "" ? { price_kobo: kobo } : {}),
+    });
+    const what = `${quantity(count, unit.trim() || undefined)} of ${name.trim()}`;
+    return sells
+      ? `New product: ${name.trim()}, counting ${what}`
+      : `Now counting ${what}`;
+  };
+  return (
+    <FormFrame
+      save={save}
+      onSaved={onSaved}
+      onCancel={onCancel}
+      saveWords="Add it"
+      ready={ok}
+    >
+      <KitField label="What is it">
+        <input
+          value={name}
+          maxLength={120}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Ankara fabric"
+        />
+      </KitField>
+      <KitField label="Counted in" hint="yard, bag, carton… Empty for pieces.">
+        <input
+          value={unit}
+          maxLength={30}
+          onChange={(e) => setUnit(e.target.value)}
+        />
+      </KitField>
+      <div className="tk-form-row">
+        <span className="tk-form-row-title">How many you have</span>
+        <Stepper label="How many you have" value={count} onChange={setCount} />
+      </div>
+      <fieldset className="tk-share-pick">
+        <legend className="tk-form-row-title">Do you sell it?</legend>
+        <label className="tk-share-row">
+          <input
+            type="radio"
+            name="sells"
+            checked={sells === true}
+            onChange={() => setSells(true)}
+          />
+          Yes, I sell it
+        </label>
+        <label className="tk-share-row">
+          <input
+            type="radio"
+            name="sells"
+            checked={sells === false}
+            onChange={() => setSells(false)}
+          />
+          No, I don't
+        </label>
+      </fieldset>
+      {sells === true && (
+        <Money
+          label="Price"
+          value={price}
+          onChange={setPrice}
+          hint="Without one, it is not shown on your page."
+        />
+      )}
+      {sells === false && (
+        <p className="tk-form-now">
+          Only counted: it is not added to your products.
+        </p>
+      )}
+    </FormFrame>
   );
 }
 

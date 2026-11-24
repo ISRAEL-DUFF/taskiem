@@ -210,7 +210,8 @@ func num(v any) (float64, bool) {
 	return 0, false
 }
 
-// HasFileFields reports whether a schema asks for files.
+// HasFileFields reports whether a schema asks for files: file fields, and
+// photos and signatures, which are kept as files.
 func HasFileFields(schema map[string]any) bool {
 	props, _ := schema["properties"].(map[string]any)
 	for _, v := range props {
@@ -218,12 +219,15 @@ func HasFileFields(schema map[string]any) bool {
 		if f, _ := p["format"].(string); f == "file" {
 			return true
 		}
+		if k := DeviceKind(p); k == DevicePhoto || k == DeviceSignature {
+			return true
+		}
 	}
 	return false
 }
 
 func checkForms(d *Definition) []Problem {
-	var out []Problem
+	out := deviceFieldsOutsideSteps(d)
 	if d.Trigger.Type == "form" {
 		out = append(out, checkFormTrigger(d)...)
 	}
@@ -322,22 +326,30 @@ func checkFormStep(f *FormConfig, path string) []Problem {
 	if strings.TrimSpace(f.Title) == "" {
 		add("/title", "a form step needs a title")
 	}
-	n := 0
-	for _, v := range []string{f.To.Phone, f.To.Email, f.To.Role} {
-		if v != "" {
-			n++
+	switch f.To.Kind() {
+	case "", "several":
+		add("/to", `to is exactly one of phone, email, role, member or link, or "starter"`)
+	case "starter":
+		// The person who started the run (made tools M4): asked in the chat
+		// they started it from, else in the app. A run nobody started by
+		// hand (a schedule, an event) has nobody to ask: the request says
+		// so and the step waits for its timeout.
+	case "link":
+		if l := strings.TrimSpace(f.To.Link); !strings.HasPrefix(l, "=") && !uuidRe.MatchString(l) {
+			add("/to/link", "link is a business link's id, or the linked business's, or an expression giving one (=trigger.body.rider)")
 		}
-	}
-	if n != 1 {
-		add("/to", "to is exactly one of phone, email or role")
+	case "member":
+		if m := strings.TrimSpace(f.To.Member); !strings.HasPrefix(m, "=") && !uuidRe.MatchString(m) {
+			add("/to/member", "member is a member's id, or an expression giving one (=trigger.form.respondent.member_id)")
+		}
 	}
 	for _, v := range f.Via {
 		if !slices.Contains(FormVia, v) {
 			add("/via", "via is sms and email")
 		}
 	}
-	if f.Verify && f.To.Role != "" {
-		add("/verify", "members are signed in: verify is for a phone or email")
+	if f.Verify && (f.To.Role != "" || f.To.Member != "" || f.To.Link != "") {
+		add("/verify", "members and linked businesses are signed in: verify is for a phone or email")
 	}
 	if f.OnTimeout != "" && f.OnTimeout != "fail" && f.OnTimeout != "continue" {
 		add("/on_timeout", "on_timeout is fail or continue")
@@ -359,5 +371,8 @@ func checkFormStep(f *FormConfig, path string) []Problem {
 	}
 	// A one-time link to a person named in the run's data: not anonymous.
 	out = append(out, FormFieldProblems(f.Schema, false, path+"/schema")...)
+	out = append(out, DeviceFieldProblems(f.Schema, f.To, path+"/schema")...)
 	return out
 }
+
+var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)

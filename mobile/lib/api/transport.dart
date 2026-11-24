@@ -293,11 +293,16 @@ class Transport {
   /// Sends a file as a multipart form (`file`, and the [fields] beside it)
   /// and answers the JSON, as [send] does; [method] PUT where a file takes
   /// another's place (the person's photo).
-  Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}, String field = 'file', String method = 'POST'}) async {
+  Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}, String field = 'file', String method = 'POST'}) =>
+      uploadFiles(path, files: [(field: field, bytes: bytes, filename: filename, type: type)], fields: fields, method: method);
+
+  /// Several files in one multipart form (a form step's photo and its
+  /// signature), each its own part, and the [fields] beside them.
+  Future<Object?> uploadFiles(String path, {required List<({String field, List<int> bytes, String filename, String type})> files, Map<String, String> fields = const {}, String method = 'POST'}) async {
     final req = http.MultipartRequest(method, _uri(path))
       ..headers['Accept'] = 'application/json'
       ..fields.addAll(fields)
-      ..files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename, contentType: MediaType.parse(type)));
+      ..files.addAll([for (final f in files) http.MultipartFile.fromBytes(f.field, f.bytes, filename: f.filename, contentType: MediaType.parse(f.type))]);
     final t = _sign(req);
     // A file takes longer than a message: twice the time.
     final res = await _reach(() async => http.Response.fromStream(await _client.send(req)), timeout * 2);

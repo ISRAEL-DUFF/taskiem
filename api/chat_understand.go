@@ -117,12 +117,15 @@ func (s *Server) waUnderstand(ctx context.Context, c *chat, text string) (bool, 
 		info, _ = lang.Lookup(lang.EN)
 	}
 	commands := s.modelCatalogue(ctx, c)
-	release, err := s.reserveAI(ctx, c.tenant.ID, "understand", understand.Request(text, commands, info, 0).Estimate(), chatAIReservation)
+	// The business's own tools, after Taskiem's commands and the saved
+	// things' names (made tools M3, tools_read.go).
+	tools := s.modelTools(ctx, c)
+	release, err := s.reserveAI(ctx, c.tenant.ID, "understand", understand.Request(text, commands, tools, info, 0).Estimate(), chatAIReservation)
 	if err != nil {
 		return false, nil //nolint:nilerr // over the budget: the short answer follows
 	}
 	defer release()
-	res, resp, err := (&understand.Helper{Provider: model}).Understand(ctx, text, commands, info)
+	res, resp, err := (&understand.Helper{Provider: model}).Understand(ctx, text, commands, tools, info)
 	outcome, errText := "valid", ""
 	switch {
 	case errors.Is(err, understand.ErrUnusable):
@@ -132,6 +135,8 @@ func (s *Server) waUnderstand(ctx context.Context, c *chat, text string) (bool, 
 	case res.Kind == understand.Command && understoodRefused(c, res.Command):
 		outcome = "refused"
 	case (res.Kind == understand.Action || res.Kind == understand.Topic) && !s.knownToModel(ctx, c, res):
+		outcome = "refused"
+	case res.Kind == understand.Tool && !s.knownTool(ctx, c, res):
 		outcome = "refused"
 	}
 	s.recordModelCall(ctx, c, "understand", "understand", model, resp, outcome, errText)
@@ -147,6 +152,13 @@ func (s *Server) waUnderstand(ctx context.Context, c *chat, text string) (bool, 
 			return false, nil
 		}
 		return true, s.modelPicked(ctx, c, res)
+	case understand.Tool:
+		// One of the business's own tools: its values shown before
+		// anything runs, or two to pick from (tools_read.go).
+		if outcome == "refused" {
+			return false, nil
+		}
+		return true, s.waToolProposed(ctx, c, res)
 	case understand.Ask:
 		// The answer comes next, read with this message.
 		if err := s.saveSession(ctx, c, stateCollecting, chatData{Understand: &chatUnderstand{Said: text}}, waPendingTTL); err != nil {
@@ -240,6 +252,10 @@ func (s *Server) modelCatalogue(ctx context.Context, c *chat) string {
 		}
 	}
 	b.WriteString("\nOther commands:\n" + s.waHelp(c))
+	// The person's saved things, by name and kind only (saved objects).
+	if line := s.savedNamesLine(ctx, c); line != "" {
+		b.WriteString("\n" + line + "\n")
+	}
 	return b.String()
 }
 

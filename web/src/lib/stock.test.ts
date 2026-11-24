@@ -3,9 +3,17 @@ import {
   addRequest,
   changeRequest,
   emptyItem,
-  itemForm,
   itemProblem,
-  itemSub,
+  countedByLine,
+  rowCount,
+  rowCounted,
+  rowEdit,
+  rowForm,
+  rowSub,
+  soldAsLine,
+  stockList,
+  worthLine,
+  type StockItemRow,
   movePreview,
   moveProblem,
   moveRequest,
@@ -47,6 +55,135 @@ const indomie: StockItem = {
   suggest: 46,
 };
 
+const fabric: StockItemRow = {
+  id: "0192e2e0-0000-7000-8000-00000000000a",
+  name: "Ankara fabric",
+  unit: "yard",
+  category: "",
+  count: 4,
+  cost_kobo: 150000,
+  low_level: 10,
+  target_level: 40,
+  supplier_id: null,
+  supplier: "Balogun Market",
+  group_of: "",
+  group_name: "",
+  low: true,
+  suggest: 36,
+  value_kobo: 600000,
+  retired: false,
+  sold_as: [],
+};
+
+const malt = (uses: number, name = "Malt, pack of 6") => ({
+  product_id: uses === 1 ? "7" : "8",
+  name,
+  uses,
+  price_kobo: uses * 40000,
+  variant: null,
+  available: true,
+});
+
+const bottles: StockItemRow = {
+  ...fabric,
+  id: "0192e2e0-0000-7000-8000-00000000000b",
+  name: "Malt bottle",
+  unit: "bottle",
+  count: 20,
+  cost_kobo: 25000,
+  low_level: null,
+  target_level: null,
+  supplier: "",
+  low: false,
+  suggest: null,
+  value_kobo: 500000,
+  sold_as: [malt(6)],
+};
+
+describe("stock items", () => {
+  it("says what a stock item is sold as, in plain words", () => {
+    expect(soldAsLine(fabric)).toBe("Not sold");
+    expect(soldAsLine(bottles)).toBe(
+      "Sold as Malt, pack of 6 (uses 6 bottles)",
+    );
+    expect(
+      soldAsLine({ ...bottles, sold_as: [malt(6), malt(1, "Malt bottle")] }),
+    ).toBe("Sold as Malt, pack of 6 (uses 6 bottles) and Malt bottle");
+    expect(soldAsLine({ ...bottles, unit: "", sold_as: [malt(6)] })).toBe(
+      "Sold as Malt, pack of 6 (uses 6)",
+    );
+    expect(rowCount(fabric)).toBe("4 yards");
+    expect(rowSub(fabric)).toBe(
+      "reorder at 10 · up to 40 · cost ₦1,500 · Balogun Market · order 36 yards",
+    );
+    expect(rowSub(bottles)).toBe("cost ₦250");
+    expect(rowSub({ ...bottles, cost_kobo: null })).toBe("No levels yet");
+  });
+
+  it("says what the list is worth", () => {
+    const v = { keeps_stock: true, value_kobo: 1100000, low: 1, items: [fabric, bottles] };
+    expect(worthLine(v, "all")).toBe("2 counted · worth ₦11,000 at cost · 1 low");
+    expect(worthLine({ ...v, items: [fabric], low: 0, value_kobo: 600000 }, "not_sold")).toBe(
+      "1 not sold · worth ₦6,000 at cost",
+    );
+  });
+
+  it("groups the stock items of a product's sizes and colours under it", () => {
+    const size = (id: string, name: string, count: number, low = false): StockItemRow => ({
+      ...bottles,
+      id,
+      name,
+      count,
+      low,
+      group_of: "p1",
+      group_name: "Sneakers",
+      sold_as: [{ ...malt(1, name), product_id: `${id}-row` }],
+    });
+    const list = stockList([
+      fabric,
+      size("a", "Sneakers (42, Black)", 3, true),
+      size("b", "Sneakers (43, Black)", 5),
+      bottles,
+    ]);
+    expect(list.map((x) => (x.kind === "group" ? `group ${x.name}` : x.row.name))).toEqual([
+      "Ankara fabric",
+      "group Sneakers",
+      "Sneakers (42, Black)",
+      "Sneakers (43, Black)",
+      "Malt bottle",
+    ]);
+    expect(list[1]).toEqual({ kind: "group", id: "p1", name: "Sneakers", count: 8, sizes: 2, low: 1 });
+    expect(list[2]).toMatchObject({ kind: "item", group: "Sneakers" });
+  });
+
+  it("changes a material by its own id, a product's stock item through its product", () => {
+    expect(rowEdit(fabric)).toEqual({ id: fabric.id, name: true, price: false });
+    // Sold as a pack of 6: its name and price are the pack's, not here.
+    expect(rowEdit(bottles)).toEqual({ id: "8", name: false, price: false });
+    // One for one: the product's name and price too.
+    const one = { ...bottles, sold_as: [malt(1, "Malt bottle")] };
+    expect(rowEdit(one)).toEqual({ id: "7", name: true, price: true });
+    expect(rowForm(one).price).toBe("400");
+    expect(rowForm(bottles).price).toBe("");
+    expect(rowEdit({ ...one, group_of: "p1" })).toEqual({ id: "7", name: false, price: false });
+    // Stock in, counts and history name the stock item itself.
+    expect(rowCounted(bottles)).toEqual({ id: bottles.id, stock: 20, unit: "bottle" });
+  });
+
+  it("says what a product is counted by", () => {
+    expect(countedByLine({ stock_item_id: bottles.id, uses: 6 }, [fabric, bottles])).toBe(
+      "Malt bottle · one sale uses 6 bottles · 20 bottles now",
+    );
+    expect(countedByLine({ stock_item_id: bottles.id, uses: 1 }, [bottles])).toBe(
+      "Malt bottle · 20 bottles now",
+    );
+    expect(countedByLine({}, [])).toBe("Not counted: selling it changes no count");
+    expect(countedByLine({ choices: [{ name: "Size", values: ["42"] }] }, [])).toContain(
+      "sizes and colours",
+    );
+  });
+});
+
 describe("stock", () => {
   it("says quantities in their units", () => {
     expect(plural("bag")).toBe("bags");
@@ -60,25 +197,12 @@ describe("stock", () => {
     expect(stockLine({ ...indomie, stock: null })).toBe("No count");
   });
 
-  it("says an item's levels, cost, supplier and what to order", () => {
-    expect(itemSub(indomie)).toBe(
-      "reorder at 10 · up to 50 · cost ₦8,500 · Dangote Depot · order 46 cartons",
-    );
-    expect(
-      itemSub({ id: "2", name: "Rice", available: true, stock: 3, waiting: 2 }),
-    ).toBe("2 changes on their way");
-    expect(itemSub({ id: "2", name: "Rice", available: true, stock: 3 })).toBe(
-      "No levels yet",
-    );
-  });
-
   it("says a movement", () => {
     const m: Movement = {
       id: "m1",
       item_id: "1",
       item: "Indomie",
       reason: "received",
-      status: "done",
       before: 0,
       after: 50,
       change: 50,
@@ -98,16 +222,6 @@ describe("stock", () => {
     expect(
       movementSub({ ...m, reason: "order", reference: "AK-7QX4KD", short: 1 }),
     ).toContain("1 more asked for than there was · order AK-7QX4KD");
-    expect(
-      movementSub({
-        ...m,
-        status: "pending",
-        before: null,
-        after: null,
-        change: null,
-        error: "cut off",
-      }),
-    ).toContain("not in the table yet");
   });
 
   it("checks the item form", () => {
@@ -145,13 +259,27 @@ describe("stock", () => {
         quantity: "20",
         unit: "bag",
         cost: "45,000",
-      }),
+        price: "50,000",
+      }, true),
     ).toEqual({
       name: "Rice",
       quantity: 20,
       unit: "bag",
       cost_kobo: 4500000,
-      price_kobo: undefined,
+      price_kobo: 5000000,
+      reorder_level: undefined,
+      target_level: undefined,
+      supplier: "",
+    });
+    // Not sold: a material, with no price whatever was typed.
+    expect(
+      addRequest({ ...emptyItem(), name: "Ankara fabric", quantity: "20", unit: "yard", price: "9" }, false),
+    ).toEqual({
+      name: "Ankara fabric",
+      quantity: 20,
+      unit: "yard",
+      cost_kobo: undefined,
+      material: true,
       reorder_level: undefined,
       target_level: undefined,
       supplier: "",
@@ -159,11 +287,14 @@ describe("stock", () => {
   });
 
   it("sends only what changed", () => {
-    const f = itemForm(indomie);
-    expect(changeRequest(indomie, f)).toEqual({});
+    const f = rowForm(bottles);
+    expect(changeRequest(f, f)).toEqual({});
     expect(
-      changeRequest(indomie, { ...f, reorder: "12", supplier: "Ada Stores" }),
+      changeRequest(f, { ...f, reorder: "12", supplier: "Ada Stores" }),
     ).toEqual({ reorder_level: 12, supplier: "Ada Stores" });
+    expect(changeRequest(f, { ...f, name: "Malt bottles" })).toEqual({
+      name: "Malt bottles",
+    });
   });
 
   it("checks and previews a stock change", () => {

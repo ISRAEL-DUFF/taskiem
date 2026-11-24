@@ -66,6 +66,8 @@ func (s *Server) customerDoorRoutes(r chi.Router) {
 	r.Post("/me/chats/{id}/orders", s.doorPlaceOrder)
 	r.Post("/me/chats/{id}/bookings", s.doorBook)
 	r.Get("/me/chats/{id}/orders/{reference}/pay", s.doorPay)
+	r.Get("/me/chats/{id}/invoices/{invoice}/transfer", s.getCustomerTransfer)
+	r.Post("/me/chats/{id}/invoices/{invoice}/transfer", s.askCustomerTransfer)
 }
 
 // The door's refusals, in plain words.

@@ -1,25 +1,14 @@
 package matching_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/stock"
 )
-
-// shelf is a catalogue's stock that takes every change (engine/stock
-// tests the stock side).
-type shelf struct{}
-
-func (shelf) Read(context.Context, uuid.UUID, string) (int64, bool, error) { return 100, true, nil }
-func (shelf) Change(context.Context, uuid.UUID, string, int64, int64, string) (bool, error) {
-	return true, nil
-}
 
 // A counter sale's money is the sale's: its cash takings are never
 // offered for an invoice nor matched to one by hand; a transfer the
@@ -27,7 +16,7 @@ func (shelf) Change(context.Context, uuid.UUID, string, int64, int64, string) (b
 // more, and the old offer cannot be confirmed.
 func TestSalesMoneyIsNotAnInvoices(t *testing.T) {
 	w := newWorld(t)
-	st := &stock.Stock{Pool: w.env.DB.App, Table: shelf{}}
+	st := &stock.Stock{Pool: w.env.DB.App}
 	x := w.invoice("Ada Obi", 4500000)
 	line := []stock.SaleLine{{ItemID: "rice", Item: "Rice", Quantity: 1, PriceKobo: 4500000}}
 

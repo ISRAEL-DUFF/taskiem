@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/product_form.dart';
+import 'package:taskiem/chat/stock_items.dart' show CountedBySheet;
 import 'package:taskiem/api/transport.dart' show ApiError, Offline;
 import 'package:taskiem/chat/attachments.dart' show PickedFile;
 import 'package:taskiem/kit/forms.dart';
@@ -17,6 +18,8 @@ import 'package:taskiem/kit/sheet.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'guidelines.dart';
+import 'stock_items_fixture.dart';
 import 'support.dart';
 
 void main() {
@@ -94,11 +97,13 @@ void main() {
               ],
             }),
             '/v1/storefront/catalogue' => ok({'items': <Object>[], 'synced_at': null, 'error': null}),
+            '/v1/stock/stock-items' => ok(stockItems),
             _ => null,
           };
         }
         sent.add('${req.method} $p ${req.body}');
         if (p == '/v1/stock/items') return ok({'item': {'id': 'new1'}});
+        if (p.endsWith('/counted-by')) return ok({'item': {'id': 'rice', 'name': 'Rice', 'available': true}});
         return ok({});
       }),
       now: () => f.at,
@@ -170,5 +175,57 @@ void main() {
     expect(find.text('You can see this. Changing it needs someone who may edit it.'), findsOneWidget);
     expect(find.bySemanticsLabel('Save'), findsNothing);
     expect(find.byType(TkStepper), findsOneWidget);
+    expect(find.bySemanticsLabel('Change what counts Rice'), findsNothing, reason: 'Counted by shown, not changed');
+    expect(find.text('Rice · 1 bag a sale · 20 bags now'), findsOneWidget);
+  });
+
+  Future<void> sheetUp(WidgetTester t) async {
+    for (var i = 0; i < 6; i++) {
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
+      await t.pump();
+    }
+    await t.pumpAndSettle();
+  }
+
+  testWidgets('Counted by: its stock item, the uses and count; another chosen, with how many a sale uses', (t) async {
+    final r = await open(t, (chats, said) => ProductForm(auth: chats.auth, item: rice, onSaved: said.add, onCancel: () {}));
+    expect(find.text('Counted by'), findsOneWidget);
+    expect(find.text('Rice · 1 bag a sale · 20 bags now'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Change what counts Rice'));
+    await t.pumpAndSettle();
+    await expectPressable(t);
+    final sheet = find.byType(CountedBySheet);
+    final pick = find.descendant(of: sheet, matching: find.byType(TkPickBox));
+    expect(find.descendant(of: pick, matching: find.text('Rice')), findsOneWidget, reason: 'the one counting it now');
+    await t.tap(pick);
+    await t.pumpAndSettle();
+    // The choices: not a size's stock item.
+    expect(find.text('Ankara shirt (L)'), findsNothing);
+    expect(find.text('200 bags · Not sold'), findsOneWidget);
+    await t.tap(find.text('Malt'));
+    await t.pumpAndSettle();
+    await t.enterText(find.descendant(of: sheet, matching: find.byType(EditableText)), '2');
+    await t.pump();
+    expect(find.text('One sale of Rice uses 2 bottles'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Save'));
+    await sheetUp(t);
+    expect(r.sent, ['PUT /v1/stock/products/rice/counted-by {"stock_item_id":"si-malt","uses":2}']);
+    expect(find.byType(CountedBySheet), findsNothing);
+  });
+
+  testWidgets('Counted by: none, its stock item kept', (t) async {
+    final r = await open(t, (chats, said) => ProductForm(auth: chats.auth, item: rice, onSaved: said.add, onCancel: () {}));
+    await t.tap(find.bySemanticsLabel('Change what counts Rice'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Count by none'));
+    await sheetUp(t);
+    expect(r.sent, ['DELETE /v1/stock/products/rice/counted-by ']);
+  });
+
+  testWidgets('Counted by, for a product in sizes and colours: said why it cannot be chosen', (t) async {
+    final shirt = {...rice, 'id': 'shirt', 'name': 'Ankara shirt', 'choices': [{'name': 'Size', 'values': ['M', 'L']}]};
+    await open(t, (chats, said) => ProductForm(auth: chats.auth, item: shirt, onSaved: said.add, onCancel: () {}));
+    expect(find.text('Each size and colour is counted by its own stock item, so it cannot be chosen here'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('what counts')), findsNothing);
   });
 }

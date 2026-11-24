@@ -7,6 +7,7 @@ import { assert } from "../passkeys";
 import { EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
 import { useConfirm } from "./ConfirmSheet";
 import { CustomSheet, FileSheet, KindSheet } from "./SavedKinds";
+import { ImportSheet } from "./SavedImport";
 import {
   BANK_SEARCH_FROM,
   bankFields,
@@ -120,6 +121,7 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
   const [thingOf, setThingOf] = useState<{ kind: MadeKind; thing?: SavedThing }>();
   const [kindEditing, setKindEditing] = useState<MadeKind | "new">();
   const [news, setNews] = useState("");
+  const [importing, setImporting] = useState(false);
   const act = useAction();
   const sure = useConfirm();
   const every = list.data?.saved ?? [];
@@ -177,9 +179,17 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
           {title}
         </h2>
         {list.data && manage && every.length < list.data.limit && (
-          <button type="button" className="small" onClick={() => setEditing("choose")} data-testid="saved-add">
-            <Icon name="plus" /> Save something
-          </button>
+          <span className="toolbar">
+            {/* A business's things from a spreadsheet; a person's own are saved one by one. */}
+            {!mine && (
+              <button type="button" className="small" onClick={() => setImporting(true)} data-testid="saved-import-open">
+                Import from a file
+              </button>
+            )}
+            <button type="button" className="small" onClick={() => setEditing("choose")} data-testid="saved-add">
+              <Icon name="plus" /> Save something
+            </button>
+          </span>
         )}
       </div>
       <p className="hint">
@@ -339,6 +349,7 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
           }}
         />
       )}
+      {importing && <ImportSheet onClose={() => setImporting(false)} onSaved={() => list.reload()} />}
       {thingOf && (
         <CustomSheet
           mine={mine}
