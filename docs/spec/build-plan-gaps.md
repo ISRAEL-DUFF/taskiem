@@ -59,18 +59,18 @@ The spec is [what a business buys](what-a-business-buys.md). Five of these are a
 
 Built: every task above, on the web, in the app and in chat; migration 00600. What was built and its tests are in [what a business buys](what-a-business-buys.md), "As built: H2".
 
-## 5. Phase H3: device fields
+## 5. Phase H3: device fields — done 24 November 2026
 
-The spec is [device fields](device-fields.md). Two of these are against the spec.
+The spec is [device fields](device-fields.md). Two of these are against the spec. All six are built: [as built (H3)](device-fields.md#17-as-built-h3). Migration 00610.
 
 | Task | Item | Details |
 | --- | --- | --- |
-| **The app's Confirm card shows the pin, the photo and who signed** | `g-dev-confirm` | The web has it (`ChatAlerts.tsx` 395 `ProofOf`). Add it to the app's Confirm card in `mobile/lib/chat/alerts.dart`: the masked map pin, the photo, "signed by the customer", and which value the phone read and which was sent. Pictures in light and dark. |
-| **The one-time page (by text or email) asks the device** | `g-dev-link` | `engine/publicweb/formfields.go` and `hostedforms.go` (`/r/{token}`) draw no device fields. Add location (the browser's prompt, an answer of refused or unavailable), photo (camera or file), signature (a pad), and scan (camera where the browser has `BarcodeDetector`, else typed). Same checks and audit as the app's answers, and the same content-security policy tests. |
-| **Scanning by camera on the web** | `g-scan-web` | Where `BarcodeDetector` exists, scan with the camera in the web's form step and tool sheet; elsewhere typed, as today. Shared with `g-dev-link`. |
-| **A scan typed on WhatsApp and Telegram** | `g-scan-wa` | Today a scan field is unavailable there. Ask for the code as typed words, and take only the next message in that chat as its answer, never a command word and never a bare number that a menu is waiting on (the rule M4 uses for typed answers). |
-| **Location, photo and signature as a tool's inputs** | `g-scan-tool` | `engine/wd/devicefields.go` 227 refuses them. Allow them as a members' tool's top-level inputs: the validator, the tool sheet on the web and the app, the chat (WhatsApp location and photo as a form step does), care stays as worked out. Customers' tools keep refusing them unless the founder says otherwise. |
-| **Erasing a person erases where they were** | `g-scan-erase` | `engine/pii` taint maps a value to a category only. Seal a location (and the copies taint makes of it) under the respondent's own subject, so erasing the person erases it. Needs a migration of how taint is stored and a test through a run that copies the location. |
+| **The app's Confirm card shows the pin, the photo and who signed** — done | `g-dev-confirm` | The web has it (`ChatAlerts.tsx` 395 `ProofOf`). Add it to the app's Confirm card in `mobile/lib/chat/alerts.dart`: the masked map pin, the photo, "signed by the customer", and which value the phone read and which was sent. Pictures in light and dark. |
+| **The one-time page (by text or email) asks the device** — done | `g-dev-link` | `engine/publicweb/formfields.go` and `hostedforms.go` (`/r/{token}`) draw no device fields. Add location (the browser's prompt, an answer of refused or unavailable), photo (camera or file), signature (a pad), and scan (camera where the browser has `BarcodeDetector`, else typed). Same checks and audit as the app's answers, and the same content-security policy tests. |
+| **Scanning by camera on the web** — done | `g-scan-web` | Where `BarcodeDetector` exists, scan with the camera in the web's form step and tool sheet; elsewhere typed, as today. Shared with `g-dev-link`. |
+| **A scan typed on WhatsApp and Telegram** — done | `g-scan-wa` | Today a scan field is unavailable there. Ask for the code as typed words, and take only the next message in that chat as its answer, never a command word and never a bare number that a menu is waiting on (the rule M4 uses for typed answers). |
+| **Location, photo and signature as a tool's inputs** — done | `g-scan-tool` | `engine/wd/devicefields.go` 227 refuses them. Allow them as a members' tool's top-level inputs: the validator, the tool sheet on the web and the app, the chat (WhatsApp location and photo as a form step does), care stays as worked out. Customers' tools keep refusing them unless the founder says otherwise. |
+| **Erasing a person erases where they were** — done | `g-scan-erase` | `engine/pii` taint maps a value to a category only. Seal a location (and the copies taint makes of it) under the respondent's own subject, so erasing the person erases it. Needs a migration of how taint is stored and a test through a run that copies the location. |
 
 **Done when:** a delivery confirmed on a rider's phone shows the pin, the photo and the signature on the app's Confirm card; a customer answers a location and a signature on the one-time page from a text; a stock code is typed on WhatsApp; an "Add a site visit" tool takes a location from the app's sheet; and erasing the respondent leaves no readable location in the run.
 
@@ -237,8 +237,8 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-things-menu | H2 (done 24 November 2026) |
 | g-label-pre | H2 (done 24 November 2026) |
 | g-label-merge | H2 (done 24 November 2026) |
-| g-dev-link | H3 |
-| g-dev-confirm | H3 |
+| g-dev-link | H3, done |
+| g-dev-confirm | H3, done |
 | g-menu-used | H4 (built) |
 | g-menu-words | H4 (built) |
 | g-menu-nocmd | Built; H1 fixes the doc |
@@ -284,10 +284,10 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-ct-webkeep | H6 |
 | g-ct-chip | Chip built (H1 fixes the doc); optional inputs H6 |
 | g-ct-waform | §12 |
-| g-scan-web | H3 |
-| g-scan-wa | H3 |
-| g-scan-tool | H3 |
-| g-scan-erase | H3 |
+| g-scan-web | H3, done |
+| g-scan-wa | H3, done |
+| g-scan-tool | H3, done |
+| g-scan-erase | H3, done |
 | g-scan-sense | §12 |
 | g-scan-echo | Built; H1 fixes the doc |
 | g-menu-lang | H8 |
