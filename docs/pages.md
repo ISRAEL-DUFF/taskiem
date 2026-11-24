@@ -6,6 +6,14 @@ A **page** is a screen your business makes for itself: "Tickets" with how many a
 
 On a table's page, **Show as a page** makes a page from it in one tap: a figure of how many rows there are, one of how many were added this week beside last week, the rows as a list (grouped by a status column when the table has one, each row opening as a card of its columns), and a search. It is a draft until you publish it.
 
+## From a starter
+
+On **Pages**, **From a starter** offers seven pages ready to add, each with the table and the tools it needs, made with it: **Tickets desk** (Open, Doing and Done, **New ticket**, and the tickets on a board whose cards move through **Move a ticket**), **Expenses this month** (what was spent this month beside last month, a chart by week, every expense, and **Log an expense**, the ready-made tool [Add a record](templates.md#recipes-tools-for-the-chat)), **Leave** (what waits for a decision, the requests in groups with **Approve** and **Decline**, for admins and owners, and **Ask for leave**), **Stock count**, **Deliveries today** (**On the way** and **Delivered** on each), **Waiting list** (**Seen** and **Left** on each) and **Service log**. Each says what it brings before you add it ("The table Tickets: Title, Customer, Email, Priority, Status", "/new-ticket (New ticket): adds a row to Tickets, asking for Title, Customer, Email and Priority"). **Add** makes the table, the tools and the page together and, if you may publish, puts them to use at once. A name your business already uses is given the next free one (tickets_2, /new-ticket-2, tickets-2) and Taskiem says so; if you may not publish, they are saved as drafts and it says who can. Making the table needs the right to change tables, and the tools the right to change workflows. In the phone app, **Pages › Add a page › From a starter** does the same.
+
+## Describe it
+
+On **Pages**, **Describe it** takes one sentence ("a page of open tickets with how many are waiting, and a button to add one") and drafts the page: what it shows, and what it would make for it, a table and the tools its buttons open, named before anything is made, beside what it uses that you have. **Make it** makes them and the page, as a starter is made. The draft is checked as a page is before it is published; what it cannot make is said. The AI is told your tables' and columns' names and types, your tools' names and what they ask and answer by type, your kinds of saved things by their fields' names and types, and your pages' names: never a row, a saved thing or a value. It counts against the month's AI budget as building a workflow does, and its model calls are kept with it.
+
 ## What a page is made of
 
 | Part | Shows |
@@ -38,6 +46,10 @@ They are counted, added up (Total, Paid, Owed, in naira), listed and narrowed as
 - **Who sees them:** besides the page's roles, a person needs what that screen needs: orders and deliveries `storefront.manage` or `order.handle`, invoices and customers `invoice.read`, staff `member.manage`. Others see "You cannot see orders." where the part would be; the rest of the page shows.
 - **The customer** (name, phone, email) is shown masked to everyone, as the Orders and Invoices lists show it (B•••, •••5678); to see a customer, open the order or invoice. So a page never searches, picks, groups, adds up or puts rows in order by the customer. A delivery's rider is shown by name, but never searched, picked or put in order by: it is kept sealed, and opened only for the rows shown.
 - **A part over an area you turned off** (Settings, areas) cannot be published, and shows that it is turned off until you turn the area back on.
+
+## Your saved things
+
+A list, a table or a count can show your business's [saved things](spec/saved-objects.md) of a kind you made, such as **Generators**: **Add a part › A list of saved things**, the kind, and **In the order a date comes** (Next service): the soonest first, those past it at the top, each saying when ("In 3 days", "2 days ago", red once it has passed, amber within a week). **Only those due within** some days keeps the near ones; a count of them makes a figure ("Due within a week"). A search on the page looks in their names and the fields that are not private. They are shown as your saved things list shows them to everyone in the business: your business's own (never anyone's own on You), a private field masked (••7766), never opened on a page, and never what they are put in order by, searched or grouped by. An API key sees none. A button on each can open a tool with the thing's name; a private value is asked, never filled in.
 
 ## A board and a chart
 
@@ -128,6 +140,9 @@ If a table or a column a page uses is gone, that part shows "This part needs fix
 | `POST /v1/pages/{name}/act` | A button pressed: `{"block", "row", "action", "yes"}`; gives the tool to open with its values (start it with the `button`), sends a signal after `yes`, or gives the approval to open. A board's card moved: `{"block", "row", "action": 0, "to": "doing"}` gives its move tool to open, the same way |
 | `POST /v1/pages/{name}/refresh` | What tools worked out on the page for you is let go, so it is worked out again |
 | `GET /v1/page-choices` | The tools you may use (whether each only reads, its answers and values) and the workflows (the signals a page may send them, their approvals; all of them if you read workflows, else those you may start) by name, for the editor (`page.edit`) |
+| `GET /v1/page-starters` | The starters, each with what it makes, in words, and its page's parts (`page.edit`) |
+| `POST /v1/page-starters/{id}/install` | `{"publish": true}`: its tables (`table.edit`), its tools (`workflow.edit`) and its page made, published where you may; says the names given and why anything is a draft |
+| `POST /v1/page-builds` | Describe it: `{"goal": "…"}`, drafted in the background; `GET /v1/page-builds/{id}` the draft, what it would make and use (`review`); `POST /v1/page-builds/{id}/make` makes it, once |
 | `GET /v1/page-records` | Your orders, invoices, deliveries, customers and staff as a page may show them: their columns, whether their area is on and whether you may see them (`page.edit`) |
 | `GET /v1/pages/{name}/versions` | Every published version, newest first: who, when, who it let open the page, what changed (`page.edit`) |
 | `POST /v1/pages/{name}/versions/{v}/bring-back` | That version becomes the draft (never published by this) |
@@ -140,4 +155,4 @@ In code, `@taskiem/sdk` (`sdk/src/page.ts`) writes a page: `page({ name, title }
 
 ## Not yet
 
-Starters, **Describe it** and saved things of one kind as a source come in a later phase (G5, [the plan](spec/pages.md#14-phases)). In the app pages are drawn, not made: making and changing them is on the web.
+In the app pages are drawn and added from a starter; Describe it and changing a page are on the web. Pages for customers and linked businesses are not in this plan.

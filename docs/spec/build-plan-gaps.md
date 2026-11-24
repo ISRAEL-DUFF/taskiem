@@ -202,14 +202,18 @@ A finding to decide, **resolved 24 November 2026**: text a tool read from a data
 
 **Built 24 November 2026**, both, on the server, the web (drag and keyboard), the app (a card's menu) and the chat's short form; page definitions checked by the server, the editor on the web: [pages.md, As built (G4)](pages.md#18c-as-built-board-and-chart-g4). No migration. Tests: `TestPagesBoardAndChart` (the Done when, with the database), the engine's, vitest `pages_g4.test.ts`, Playwright `pages-g4.spec.ts`, Flutter `page_g4_test.dart` with pictures `page-board`, `page-board-menu`, `page-chart`.
 
-### G5: starters, Describe it and saved things as a source (`g-pages-g5`)
+### G5: starters, Describe it and saved things as a source (`g-pages-g5`) — done 24 November 2026
 
 Needs M6.
 
-- **Starters:** Tickets desk, Expenses this month, Leave, Stock count, Deliveries today, Waiting list, Service log; each brings its table and tools with it.
-- **Describe it** for pages: drafts the page and names what it would create; the AI sees table and tool names and types only.
-- **Saved things of one kind as a source:** a list of a made-up kind ("Generators") with dates coming up.
-- **Done when:** Describe it makes a working page from one sentence.
+- **Starters** (done)**:** Tickets desk, Expenses this month, Leave, Stock count, Deliveries today, Waiting list, Service log; each brings its table and tools with it.
+- **Describe it** for pages (done)**:** drafts the page and names what it would create; the AI sees table and tool names and types only.
+- **Saved things of one kind as a source** (done)**:** a list of a made-up kind ("Generators") with dates coming up.
+- **Done when:** Describe it makes a working page from one sentence. **Checked 24 November 2026:** `TestDescribeItMakesAWorkingPage`, on the stand-in model the builder's tests use: "A page of open tickets with how many are waiting, and a button to add one" is drafted (corrected once: its first tool's word was one of Taskiem's own), named with what it would make (the table Tickets, the tool /new-ticket) before anything is made, made and published; its New ticket opens the tool it made, and the ticket shows on the page. Every prompt is read: no row, saved thing or value reaches the model.
+
+**Built 24 November 2026**, every task, on the server, the web and the app: [pages.md, As built (G5)](pages.md#18d-as-built-starters-describe-it-and-saved-things-g5). Migration 00710 (`ai_builds.kind`, `page_name`). Each starter's tools are made tools of two plain kinds over its own table (add a row; change a row, the board's move and the rows' buttons), and Expenses this month's Log an expense is M6's recipe `tool-add-a-record` itself. Tests: Go `TestStarters`, `TestToolSpecRefusals`, `TestSavedSource` (engine), `TestPageStartersInstallAndWork` (every starter installed, published and pressed, with the database), `TestDescribeItMakesAWorkingPage`, `TestPagesSavedThings`, `TestPagesSavedThingsShortForm`; vitest `pages_g5.test.ts`; Playwright `pages-g5.spec.ts` (axe in both themes, 390 px); Flutter `page_starters_test.dart` (pictures `page-starters`, `page-starters-add`, `page-starters-added`) and `pages_test.dart` (`page-saved`), light and dark, looked at.
+
+Where it differs from the plan: Describe it is on the web, where pages are made (the spec names no chat for it); the app adds pages from starters and draws every part, and changes them on the web, as before. A starter's figures count where things are (Open, Done) rather than "done this week": a row changed through a tool keeps its `updated_at` in Xenibase unless something sets it, so a figure by when a row changed would not be true.
 
 ## 12. Not built by this plan, and what each waits for
 
@@ -297,7 +301,7 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-pay-momo | §12 |
 | g-photo-phone | §12 |
 | g-pages-g4 | §11 G4 (built 24 November 2026) |
-| g-pages-g5 | §11 G5 |
+| g-pages-g5 | §11 G5 (built 24 November 2026) |
 | g-pages-editor | H5, done 24 November 2026 |
 | g-pages-notif | H5, done 24 November 2026 |
 | g-pages-rowstatus | H5, done 24 November 2026 |

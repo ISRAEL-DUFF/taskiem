@@ -60,6 +60,10 @@ export interface PageSource {
   tool?: string;
   inputs?: Record<string, unknown>;
   output?: string;
+  /** G5: the business's saved things of a kind it made (by name), in the order a date field of theirs comes (coming), only those within so many days. */
+  saved?: string;
+  coming?: string;
+  within?: number;
   filters?: Condition[];
   order?: { column: string; desc?: boolean }[];
   uses?: string[];
