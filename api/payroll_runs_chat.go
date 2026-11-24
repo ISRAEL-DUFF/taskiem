@@ -576,9 +576,12 @@ type payrollNews struct {
 	By     string `json:"by,omitempty"`
 	// After locking (payroll_payment.go): how short the wallet was, a
 	// payslip and its employee. Never one person's pay.
-	ShortKobo int64  `json:"short_kobo,omitempty"`
-	Payslip   string `json:"payslip,omitempty"`
-	Employee  string `json:"employee,omitempty"`
+	ShortKobo int64 `json:"short_kobo,omitempty"`
+	// NeededKobo is what a morning warning's payroll needs with those
+	// paying before it (payrolls' totals, never one person's).
+	NeededKobo int64  `json:"needed_kobo,omitempty"`
+	Payslip    string `json:"payslip,omitempty"`
+	Employee   string `json:"employee,omitempty"`
 }
 
 // payrollaRunHeard queues what a run's event tells people (Taskiem's own

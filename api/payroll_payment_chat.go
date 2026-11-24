@@ -182,7 +182,8 @@ func payrollaPaymentHeard(ctx context.Context, pool *pgxpool.Pool, log *slog.Log
 		} else if users, err = payrollTellWhoTx(ctx, tx, e.Tenant, ev.RunID); err != nil {
 			return err
 		}
-		return queuePayrollNewsTx(ctx, tx, e.Tenant, users, news, key)
+		_, err = queuePayrollNewsTx(ctx, tx, e.Tenant, users, news, key)
+		return err
 	}); err != nil {
 		log.Warn("payrolla: telling of a payment", "tenant", e.Tenant, "event", ev.Type, "err", err)
 	}
@@ -210,12 +211,13 @@ func payrollTellWhoTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, run stri
 
 // queuePayrollNewsTx queues news to each of users on the web conversation
 // and their first chat app, once per key.
-func queuePayrollNewsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users []uuid.UUID, news payrollNews, key string) error {
+func queuePayrollNewsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users []uuid.UUID, news payrollNews, key string) (bool, error) {
 	ref, _ := json.Marshal(news)
+	queued := false
 	for _, u := range users {
 		first, err := firstChatTx(ctx, tx, u)
 		if err != nil {
-			return err
+			return queued, err
 		}
 		for _, ch := range []string{"web", first} {
 			if ch == "" {
@@ -223,12 +225,14 @@ func queuePayrollNewsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users 
 			}
 			r := string(ref)
 			it := whatsapp.OutboxItem{Tenant: tenant, Channel: ch, Kind: outboxPayroll, User: u, Reference: &r}
-			if _, err := whatsapp.Enqueue(ctx, tx, it, "payroll:"+key+":"+u.String()+":"+ch); err != nil {
-				return err
+			added, err := whatsapp.Enqueue(ctx, tx, it, "payroll:"+key+":"+u.String()+":"+ch)
+			if err != nil {
+				return queued, err
 			}
+			queued = queued || added
 		}
 	}
-	return nil
+	return queued, nil
 }
 
 // lowerFirst is "account closed" from Payrolla's "Account closed".
@@ -258,12 +262,14 @@ func (s *Server) paymentNewsWords(ctx context.Context, l lang.Tag, p *Principal,
 		}
 		return tr(l, "payroll.told.short", "period", period, "short", invoicing.Naira(short)), nil, true
 	case "warn3", "warn1":
+		// Needed: this payroll and those paying before it, together.
+		needed := max(r.TotalNetKobo, news.NeededKobo)
 		f, err := cl.Funding(ctx)
-		if err != nil || r.Status != "APPROVED" && r.Status != "LOCKED" || f.HasWallet && f.AvailableKobo >= r.TotalNetKobo {
+		if err != nil || r.Status != "APPROVED" && r.Status != "LOCKED" || f.HasWallet && f.AvailableKobo >= needed {
 			return "", nil, false
 		}
 		return tr(l, "payroll.told."+news.Event, "period", period, "date", dayWords(r.PayDate), "available", invoicing.Naira(f.AvailableKobo),
-			"needed", invoicing.Naira(r.TotalNetKobo), "short", invoicing.Naira(r.TotalNetKobo-f.AvailableKobo)), nil, true
+			"needed", invoicing.Naira(needed), "short", invoicing.Naira(needed-f.AvailableKobo)), nil, true
 	case "paid":
 		lines, err := cl.Lines(ctx, r.ID)
 		if err != nil {
@@ -383,7 +389,8 @@ func (s *Server) runPayrollFunds(ctx context.Context) {
 // 7am in Lagos, an approved or locked payroll paying in three days or in
 // one day that the wallet does not cover is told, once each, to those who
 // may approve and whoever prepared it (GET /connect/funding against its
-// total). It replaces the payrolla-payday-check template's comparison
+// total and those of the payrolls paying on or before its date, together).
+// Only connections made in one step are checked. It replaces the payrolla-payday-check template's comparison
 // with another connection's balance for businesses on this connection.
 // It answers how many warnings it queued.
 func (s *Server) PayrollFundsCheck(ctx context.Context, now time.Time) (int, error) {
@@ -415,29 +422,44 @@ func (s *Server) PayrollFundsCheck(ctx context.Context, now time.Time) (int, err
 }
 
 func (s *Server) payrollFundsFor(ctx context.Context, tenant uuid.UUID, today time.Time) (int, error) {
-	cl, _, err := s.payrollaClientAs(ctx, tenant, "platform", "payroll.funds_check")
+	// Only a connection made in one step: a key connection's business
+	// runs the payrolla-payday-check template, which warns already, and
+	// its key may not read the wallet.
+	conn, err := s.payrollaConnection(ctx, tenant)
+	if err != nil || conn == nil || !conn.oauth() {
+		return 0, err
+	}
+	cl, conn, err := s.payrollaClientAs(ctx, tenant, "platform", "payroll.funds_check")
 	if errors.Is(err, errPayrollaNotConnected) {
 		return 0, nil
 	}
 	if err != nil {
 		return 0, err
 	}
+	if !conn.oauth() {
+		return 0, nil
+	}
 	runs, err := cl.Runs(ctx, "APPROVED,LOCKED", 20)
 	if err != nil {
 		return 0, err
 	}
-	var funding *payrolla.Funding
-	queued := 0
+	// The payrolls still to be paid from the wallet, by pay date: each
+	// needs what it pays and what every payroll paying on or before its
+	// date pays, together.
+	type due struct {
+		run  payrolla.Run
+		pay  time.Time
+		days int
+	}
+	var dues []due
 	for _, r := range runs {
 		if r.Status != "APPROVED" && r.Status != "LOCKED" {
 			continue
 		}
 		pay, err := time.ParseInLocation("2006-01-02", r.PayDate, lagos())
-		if err != nil {
-			continue
-		}
 		days := int(pay.Sub(today).Hours()/24 + 0.5)
-		if days != 3 && days != 1 {
+		if err != nil || days < 0 || days > 3 {
+			// Past, or after any payroll warned of today.
 			continue
 		}
 		if r.Status == "LOCKED" {
@@ -445,28 +467,47 @@ func (s *Server) payrollFundsFor(ctx context.Context, tenant uuid.UUID, today ti
 				continue
 			}
 		}
-		if funding == nil {
-			f, err := cl.Funding(ctx)
-			if err != nil {
-				return queued, err
-			}
-			funding = &f
-		}
-		if funding.HasWallet && funding.AvailableKobo >= r.TotalNetKobo {
+		dues = append(dues, due{run: r, pay: pay, days: days})
+	}
+	if !slices.ContainsFunc(dues, func(d due) bool { return d.days == 3 || d.days == 1 }) {
+		return 0, nil
+	}
+	slices.SortStableFunc(dues, func(a, b due) int { return a.pay.Compare(b.pay) })
+	f, err := cl.Funding(ctx)
+	if err != nil {
+		return 0, err
+	}
+	queued := 0
+	for _, d := range dues {
+		if d.days != 3 && d.days != 1 {
 			continue
 		}
-		event := fmt.Sprintf("warn%d", days)
-		news := payrollNews{Run: r.ID, Period: periodWords(r.PeriodStart, r.PeriodEnd), Event: event, ShortKobo: r.TotalNetKobo - funding.AvailableKobo}
+		var needed int64
+		for _, x := range dues {
+			if !x.pay.After(d.pay) {
+				needed += x.run.TotalNetKobo
+			}
+		}
+		if f.HasWallet && f.AvailableKobo >= needed {
+			continue
+		}
+		r := d.run
+		event := fmt.Sprintf("warn%d", d.days)
+		news := payrollNews{Run: r.ID, Period: periodWords(r.PeriodStart, r.PeriodEnd), Event: event, ShortKobo: needed - f.AvailableKobo, NeededKobo: needed}
+		var told bool
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 			users, err := payrollTellWhoTx(ctx, tx, tenant, r.ID)
 			if err != nil {
 				return err
 			}
-			return queuePayrollNewsTx(ctx, tx, tenant, users, news, event+":"+r.ID)
+			told, err = queuePayrollNewsTx(ctx, tx, tenant, users, news, event+":"+r.ID)
+			return err
 		}); err != nil {
 			return queued, err
 		}
-		queued++
+		if told {
+			queued++
+		}
 	}
 	return queued, nil
 }

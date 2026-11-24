@@ -220,8 +220,9 @@ func TestPayrollAfterLocking(t *testing.T) {
 	if q, err := w.srv.PayrollFundsCheck(ctx, time.Date(2026, 12, 28, 6, 0, 0, 0, lagos)); err != nil || q != 0 {
 		t.Fatalf("before the morning: %d %v", q, err)
 	}
-	for range 2 {
-		if q, err := w.srv.PayrollFundsCheck(ctx, time.Date(2026, 12, 28, 9, 0, 0, 0, lagos)); err != nil || q != 1 {
+	for want := range []int{1, 0} {
+		// Counted only when queued: the second check of the morning adds nothing.
+		if q, err := w.srv.PayrollFundsCheck(ctx, time.Date(2026, 12, 28, 9, 0, 0, 0, lagos)); err != nil || q != 1-want {
 			t.Fatalf("three days before: %d %v", q, err)
 		}
 		w.tick(t)
@@ -269,5 +270,55 @@ func TestPayrollAfterLocking(t *testing.T) {
 		if wr.Key == "" || !strings.HasPrefix(wr.ActingUser, "tsk_user_") {
 			t.Fatalf("write %+v", wr)
 		}
+	}
+}
+
+// The morning check counts the payrolls paying before one with it: two
+// that each fit the wallet but not together are warned of. Only a
+// connection made in one step is checked; a key connection's business
+// has the payrolla-payday-check template.
+func TestPayrollFundsCheckTogether(t *testing.T) {
+	ctx := context.Background()
+	w := newPayrollaWorld(t)
+	f := w.fake
+	payrollWorkers(f)
+	owner := w.tenant(t, "Amara Foods", "ngozi@amara.test")
+	w.connect(t, owner, map[string]any{"mode": "test"})
+	owner.must(201, "PUT", "/v1/roles/payroll", map[string]any{"permissions": []string{"payroll.read", "payroll.approve"}})
+	musa := w.member(t, owner, "musa@amara.test", "payroll")
+	linkPayrolla(t, f, owner, ngoziPy)
+	linkPayrolla(t, f, musa, musaPy)
+	// October's, late, pays on 30 Dec; December's on 31 Dec.
+	oct := owner.must(201, "POST", "/v1/payroll/runs", map[string]any{"period": "2026-10", "pay_date": "2026-12-30", "key": "oct"})["run"].(map[string]any)
+	dec := owner.must(201, "POST", "/v1/payroll/runs", map[string]any{"period": "2026-12", "key": "dec"})["run"].(map[string]any)
+	approveAndLock(t, w, oct["run_id"].(string), musa, musaPy, owner, ngoziPy)
+	approveAndLock(t, w, dec["run_id"].(string), musa, musaPy, owner, ngoziPy)
+	octNet, decNet := int64(oct["total_net_kobo"].(float64)), int64(dec["total_net_kobo"].(float64))
+	f.Runs().WalletKobo = max(octNet, decNet) + 100
+	lagos, _ := time.LoadLocation("Africa/Lagos")
+
+	// 28 Dec: December's pays in three days, after October's.
+	if q, err := w.srv.PayrollFundsCheck(ctx, time.Date(2026, 12, 28, 9, 0, 0, 0, lagos)); err != nil || q != 1 {
+		t.Fatalf("together: %d %v", q, err)
+	}
+	var ref string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT reach_reference FROM whatsapp_outbox WHERE kind = 'payroll_run' AND reach_reference LIKE '%"warn3"%' LIMIT 1`).Scan(&ref); err != nil ||
+		!strings.Contains(ref, `"run":"`+dec["run_id"].(string)+`"`) || !strings.Contains(ref, fmt.Sprintf(`"short_kobo":%d`, octNet+decNet-f.Runs().WalletKobo)) ||
+		!strings.Contains(ref, fmt.Sprintf(`"needed_kobo":%d`, octNet+decNet)) {
+		t.Fatalf("warned: %s %v", ref, err)
+	}
+
+	// A key connection: not checked (it would warn of both a day before).
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE connections SET auth_type = 'api_key' WHERE connector = 'payrolla'`); err != nil {
+		t.Fatal(err)
+	}
+	if q, err := w.srv.PayrollFundsCheck(ctx, time.Date(2026, 12, 30, 9, 0, 0, 0, lagos)); err != nil || q != 0 {
+		t.Fatalf("a key connection: %d %v", q, err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE connections SET auth_type = 'oauth2' WHERE connector = 'payrolla'`); err != nil {
+		t.Fatal(err)
+	}
+	if q, err := w.srv.PayrollFundsCheck(ctx, time.Date(2026, 12, 30, 9, 0, 0, 0, lagos)); err != nil || q != 1 {
+		t.Fatalf("one step, a day before: %d %v", q, err)
 	}
 }
