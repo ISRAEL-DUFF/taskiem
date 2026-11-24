@@ -356,7 +356,7 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 		if fork != nil && fork.saved != nil {
 			saved, savedPaths, err = s.forkSaved(ctx, tx, req.TenantID, def, fork.saved)
 		} else {
-			saved, savedPaths, err = s.savedInputs(ctx, tx, req.TenantID, def)
+			saved, savedPaths, err = s.savedInputs(ctx, tx, req.TenantID, def, SavedRead{Run: ref.ID, Workflow: req.WorkflowID, Version: req.Version})
 		}
 		if err != nil {
 			return err

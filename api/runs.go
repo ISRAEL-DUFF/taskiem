@@ -333,8 +333,17 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	forks.Children, forks.Subflows = nonNil(forks.Children), nonNil(forks.Subflows)
+	// The business's saved things it read at its start (saved_uses.go).
+	var saved []runSavedRead
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		saved, err = runSavedReads(r.Context(), tx, ref.ID)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"run": sum, "events": nonNil(events), "revealed": reveal, "forks": forks,
-		"plain_errors": s.plainRunErrors(r, ref.ID, events)})
+		"plain_errors": s.plainRunErrors(r, ref.ID, events), "saved": saved})
 }
 
 // revealWindow is how long one audited reveal covers the same person

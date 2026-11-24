@@ -332,6 +332,7 @@ addSaved
 changeSaved
 removeSaved
 revealSaved
+listSavedRuns
 savedStepUpOptions
 checkAllSaved
 savedProvider

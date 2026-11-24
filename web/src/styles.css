@@ -2677,3 +2677,8 @@ a.treat-went { text-decoration: underline; text-underline-offset: 2px; }
 .spending-sum .hint { display: block; font-size: 12.5px; }
 .spending-profit { margin: 12px 0 0; }
 .spending-profit .hint { display: block; }
+
+/* Saved things and the runs that read them (build plan H6). */
+.run-saved { display: block; }
+.saved-runs { margin: 12px 0; }
+.saved-runs h3 { margin: 0 0 6px; font-size: 1rem; }

@@ -37324,6 +37324,48 @@ paths:
           description: Removed
         default:
           $ref: '#/components/responses/Error'
+  /v1/saved/{id}/runs:
+    get:
+      operationId: listSavedRuns
+      tags:
+      - Saved
+      summary: The runs that read a saved thing
+      description: 'The latest fifty runs of the business''s workflows that read this saved thing when they started (build plan H6, `saved_uses`), newest first: the workflow, its version, the name it was read by, the steps that read it and how the run stands now (empty once the run is no longer kept). A person''s own saved things are never read by runs.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The runs
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - runs
+                properties:
+                  runs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedUse'
+                additionalProperties: false
+        '404':
+          description: No such saved thing of the business.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/saved/{id}/reveal:
     post:
       operationId: revealSaved
@@ -44126,6 +44168,69 @@ components:
           $ref: '#/components/schemas/Timestamp'
         origin:
           type: string
+    SavedUse:
+      type: object
+      description: A run that read a saved thing at its start.
+      required:
+      - run_id
+      - workflow_id
+      - workflow
+      - version
+      - name
+      - steps
+      - read_at
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        workflow_id:
+          type: string
+          format: uuid
+        workflow:
+          type: string
+        version:
+          type: integer
+        name:
+          type: string
+          description: The saved thing's name as the run read it.
+        steps:
+          type: array
+          items:
+            type: string
+          description: The steps that read it, by id.
+        read_at:
+          $ref: '#/components/schemas/Timestamp'
+        status:
+          type: string
+          description: How the run stands now; left out once the run is no longer kept.
+      additionalProperties: false
+    RunSavedRead:
+      type: object
+      description: A business's saved thing a run read at its start.
+      required:
+      - id
+      - name
+      - title
+      - kind
+      - steps
+      - read_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        title:
+          type: string
+        kind:
+          type: string
+        steps:
+          type: array
+          items:
+            type: string
+        read_at:
+          $ref: '#/components/schemas/Timestamp'
+      additionalProperties: false
     RunDetail:
       type: object
       required:
@@ -44136,6 +44241,11 @@ components:
       properties:
         run:
           $ref: '#/components/schemas/RunSummary'
+        saved:
+          type: array
+          items:
+            $ref: '#/components/schemas/RunSavedRead'
+          description: The business's saved things the run read at its start, with the steps that read each (build plan H6).
         events:
           type: array
           items:

@@ -364,6 +364,7 @@ func (s *Server) sendReachItem(ctx context.Context, it whatsapp.OutboxItem) erro
 	}
 	title, _ := in["title"].(string)
 	message, _ := in["message"].(string)
+	message = notify.WithFile(message, in) // a saved file's name and link at its end
 	about, _ := in["about"].(string)
 	if strings.TrimSpace(message) == "" {
 		return fmt.Errorf("%w: no message", whatsapp.ErrNothingToSend)
@@ -460,6 +461,7 @@ func (s *Server) reachFallback(ctx context.Context, it whatsapp.OutboxItem, busi
 	phone, _ := in["phone"].(string)
 	title, _ := in["title"].(string)
 	message, _ := in["message"].(string)
+	message = notify.WithFile(message, in)
 	if s.Messages == nil || phone == "" {
 		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, why)
 	}

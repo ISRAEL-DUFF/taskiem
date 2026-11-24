@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -50,6 +51,7 @@ func (s *Server) sendNoticeItem(ctx context.Context, it whatsapp.OutboxItem) err
 	}
 	title, _ := in["title"].(string)
 	message, _ := in["message"].(string)
+	message = notify.WithFile(message, in) // a saved file's name and link at its end
 	if strings.TrimSpace(message) == "" {
 		return fmt.Errorf("%w: no message", whatsapp.ErrNothingToSend)
 	}

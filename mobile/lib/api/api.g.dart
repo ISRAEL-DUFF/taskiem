@@ -1533,6 +1533,12 @@ class TaskiemApi {
     return RevealSavedResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// The runs that read a saved thing (`GET /v1/saved/{id}/runs`)
+  Future<ListSavedRunsResponse> listSavedRuns({required String id}) async {
+    final j = await _t.send('GET', '/v1/saved/${Uri.encodeComponent(id)}/runs');
+    return ListSavedRunsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// A passkey challenge for one saved thing (`POST /v1/saved/step-up/options`)
   Future<SavedStepUpOptionsResponse> savedStepUpOptions({required SavedStepUpOptionsRequest body}) async {
     final j = await _t.send('POST', '/v1/saved/step-up/options', body: body.toJson());
@@ -14071,6 +14077,59 @@ class RevealSavedResponse {
   Map<String, dynamic> toJson() => {
         'account_number': ?accountNumber,
         'values': ?values,
+      };
+}
+
+class ListSavedRunsResponse {
+  const ListSavedRunsResponse({required this.runs});
+
+  final List<SavedUse> runs;
+
+  factory ListSavedRunsResponse.fromJson(Map<String, dynamic> j) => ListSavedRunsResponse(
+        runs: (j['runs'] as List).map((e) => SavedUse.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'runs': runs.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A run that read a saved thing at its start.
+class SavedUse {
+  const SavedUse({required this.name, required this.readAt, required this.runId, this.status, required this.steps, required this.version, required this.workflow, required this.workflowId});
+
+  /// The saved thing's name as the run read it.
+  final String name;
+  final DateTime readAt;
+  final String runId;
+  /// How the run stands now; left out once the run is no longer kept.
+  final String? status;
+  /// The steps that read it, by id; `outputs` for an output.
+  final List<String> steps;
+  final int version;
+  final String workflow;
+  final String workflowId;
+
+  factory SavedUse.fromJson(Map<String, dynamic> j) => SavedUse(
+        name: j['name'] as String,
+        readAt: DateTime.parse(j['read_at'] as String),
+        runId: j['run_id'] as String,
+        status: j['status'] == null ? null : j['status'] as String,
+        steps: (j['steps'] as List).map((e) => e as String).toList(),
+        version: (j['version'] as num).toInt(),
+        workflow: j['workflow'] as String,
+        workflowId: j['workflow_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'read_at': readAt.toUtc().toIso8601String(),
+        'run_id': runId,
+        'status': ?status,
+        'steps': steps.map((e) => e).toList(),
+        'version': version,
+        'workflow': workflow,
+        'workflow_id': workflowId,
       };
 }
 

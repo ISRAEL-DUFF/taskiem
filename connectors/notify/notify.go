@@ -225,10 +225,73 @@ func tellTemplateNames() []string {
 
 // checkInput is the connector's publish-time check (connector.CheckInput).
 func checkInput(action string, input map[string]any) []string {
-	if action != "tell" {
+	var out []string
+	if action == "tell" {
+		out = CheckTell(input)
+	}
+	if action == "tell" || action == "message" {
+		out = append(out, checkFile(input)...)
+	}
+	return out
+}
+
+// checkFile holds a message's file to a saved file, written as an
+// expression (=saved.price_list): a link written out is not one of the
+// business's saved files.
+func checkFile(input map[string]any) []string {
+	raw, has := input["file"]
+	if !has {
 		return nil
 	}
-	return CheckTell(input)
+	if s, ok := raw.(string); ok && strings.HasPrefix(s, "=") {
+		return nil
+	}
+	if m, ok := raw.(map[string]any); ok {
+		if s, ok := m["file"].(string); ok && strings.HasPrefix(s, "=") {
+			return nil
+		}
+	}
+	return []string{"file is one of the business's saved files, written =saved.price_list"}
+}
+
+// FileLine is the line a message's file adds at its end: the file's name
+// and its link, from the saved file the step was given (its file and
+// file_name, read when the run started); "" when it has none. A link that
+// is not a web address is no file.
+func FileLine(input map[string]any) (string, error) {
+	raw, has := input["file"]
+	if !has || raw == nil {
+		return "", nil
+	}
+	// The saved file (=saved.price_list), or its link alone
+	// (=saved.price_list.file).
+	m, _ := raw.(map[string]any)
+	link, _ := m["file"].(string)
+	if s, ok := raw.(string); ok {
+		link = s
+	}
+	link = strings.TrimSpace(link)
+	if link == "" {
+		return "", fmt.Errorf("the saved file could not be read for this run (is the business's storage set up?): %w", effects.ErrFatal)
+	}
+	if !strings.HasPrefix(link, "https://") && !strings.HasPrefix(link, "http://") {
+		return "", fmt.Errorf("file is one of the business's saved files, written =saved.price_list: %w", effects.ErrFatal)
+	}
+	name, _ := m["file_name"].(string)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "The file"
+	}
+	return name + ": " + link, nil
+}
+
+// WithFile is a message with its file's line at its end, if it has one.
+func WithFile(message string, input map[string]any) string {
+	line, err := FileLine(input)
+	if err != nil || line == "" {
+		return message
+	}
+	return strings.TrimRight(message, "\n") + "\n\n" + line
 }
 
 // New returns the connector; t nil makes it fail plainly.
@@ -271,6 +334,12 @@ func New(t Teller) *connector.Connector {
 			if msgs := CheckTell(req.Input); len(msgs) > 0 {
 				return connector.Response{}, fmt.Errorf("%s: %w", strings.Join(msgs, "; "), effects.ErrFatal)
 			}
+			// A saved file: its name and link at the end (by email here;
+			// the chat outbox renders it from this input too).
+			if _, err := FileLine(req.Input); err != nil {
+				return connector.Response{}, err
+			}
+			msg.Text = WithFile(msg.Text, req.Input)
 			res, err := t.Tell(ctx, msg)
 			if err != nil {
 				return connector.Response{}, err
@@ -299,6 +368,12 @@ func New(t Teller) *connector.Connector {
 			case m.Phone == "" && m.Email == "" && m.PayrollaEmployee == "":
 				return connector.Response{}, fmt.Errorf("their phone number or email is required: %w", effects.ErrFatal)
 			}
+			// A saved file: its name and link at the end (by SMS or email
+			// here; the chat outbox renders it from this input too).
+			if _, err := FileLine(req.Input); err != nil {
+				return connector.Response{}, err
+			}
+			m.Text = WithFile(m.Text, req.Input)
 			d, err := t.Message(ctx, m)
 			if err != nil {
 				return connector.Response{}, err

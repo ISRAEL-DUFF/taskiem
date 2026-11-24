@@ -43,6 +43,7 @@ import {
   type SavedProvider,
   type SavedThing,
 } from "../lib/saved";
+import { SavedRuns } from "./SavedRuns";
 
 // Saved things, S0 (docs/spec/saved-objects.md; build plan S0): saved bank
 // accounts, called up by @name. A business's are on Settings > Saved
@@ -705,6 +706,7 @@ export function ThingSheet({
         <Field label="Note" hint="Optional, for your own reference.">
           <input value={d.note ?? ""} maxLength={200} onChange={(e) => setD((cur) => ({ ...cur, note: e.target.value }))} />
         </Field>
+        {thing && !mine && <SavedRuns id={thing.id} />}
         {(problem || taken) && (
           <p className="error" role="alert">
             {problem ?? taken}

@@ -1124,7 +1124,7 @@ func caseSaved(def *wd.Definition, given map[string]any) map[string]any {
 func SampleSaved(name string) map[string]any {
 	out := map[string]any{"name": name, "title": "Sample " + name, "kind": "text"}
 	for _, f := range []string{"note", "body", "phone", "email", "address", "birthday", "line", "area", "landmark", "bank_name", "bank_code",
-		"account_name", "type", "provider", "number", "name_on_it", "file_name", "file_type"} {
+		"account_name", "type", "provider", "number", "name_on_it", "file_name", "file_type", "file"} {
 		out[f] = "sample-" + f
 	}
 	return out
