@@ -6,7 +6,7 @@
 //   python3 video/phone/compose.py --frames /tmp/films/today --out today.mp4
 //
 // A film writes a picture every 33 ms of the app's own clock (30 frames a
-// second, three pixels to a point) and `cues.json`, which says where and when
+// second, two pixels to a point) and `cues.json`, which says where and when
 // each tap, drag and caption was, so the phone, the status bar, the tap ring
 // and the captions are drawn afterwards (video/phone/compose.py). Without
 // VIDEO_DIR a film is skipped: it never slows the normal test run.
@@ -25,6 +25,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Films run only when VIDEO_DIR is set.
 final bool filming = (Platform.environment['VIDEO_DIR'] ?? '').isNotEmpty;
+
+/// VIDEO_DRY=1: play the script without writing pictures (to check it runs).
+final bool _dry = (Platform.environment['VIDEO_DRY'] ?? '').isNotEmpty;
 
 const double phoneWidth = 390;
 const double phoneHeight = 844;
@@ -112,9 +115,11 @@ class Film {
 
   /// The phone's keyboard slides up ([show]) or away: the app's layout moves
   /// with it as on a real phone, and compose.py draws the keys. [kind] is
-  /// 'number' for now.
-  Future<void> keyboard(bool show, {String kind = 'number', double height = 290}) async {
-    _cues.add({'kind': 'keyboard', 't': now, 'show': show, 'type': kind, 'height': height});
+  /// 'number' or 'text'. With [swap], the keyboard stays up and changes kind
+  /// at once (a person taps ?123).
+  Future<void> keyboard(bool show, {String kind = 'number', double height = 290, bool swap = false}) async {
+    _cues.add({'kind': 'keyboard', 't': now, 'show': show, 'type': kind, 'height': height, if (swap) 'instant': true});
+    if (swap) return;
     const frames = 8;
     for (var i = 1; i <= frames; i++) {
       final u = Curves.easeOutCubic.transform(i / frames);
@@ -124,7 +129,8 @@ class Film {
     if (!show) t.view.resetViewInsets();
   }
 
-  /// Types [text] into [field] a key at a time, each key lit on the keyboard.
+  /// Types [text] into [field] a key at a time, each key lit on the keyboard
+  /// (a capital lights its letter).
   Future<void> type(Finder field, String text, {double perKey = 0.2}) async {
     for (var i = 1; i <= text.length; i++) {
       _cues.add({'kind': 'key', 't': now, 'key': text[i - 1]});
@@ -163,13 +169,17 @@ class Film {
   }
 
   Future<void> _step() async {
-    await t.runAsync(() => Future<void>.delayed(Duration.zero));
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 2)));
     await t.pump(const Duration(milliseconds: 1000 ~/ fps));
+    if (_dry) {
+      _n++;
+      return;
+    }
     await t.runAsync(() async {
       final view = t.binding.renderViews.first;
       // ignore: invalid_use_of_protected_member
       final layer = view.debugLayer! as OffsetLayer;
-      final image = await layer.toImage(const Rect.fromLTWH(0, 0, phoneWidth, phoneHeight), pixelRatio: 3);
+      final image = await layer.toImage(const Rect.fromLTWH(0, 0, phoneWidth, phoneHeight), pixelRatio: 2);
       final png = await image.toByteData(format: ui.ImageByteFormat.png);
       File('$dir/f${(_n).toString().padLeft(5, '0')}.png').writeAsBytesSync(png!.buffer.asUint8List());
       image.dispose();

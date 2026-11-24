@@ -338,18 +338,18 @@ def keyboard_state(cues, t):
         if c["kind"] == "keyboard" and c["t"] <= t:
             state = c
     if not state:
-        return 0.0, 0, None
-    u = min((t - state["t"]) / (8 / 30), 1.0)
+        return 0.0, 0, None, "number"
+    u = 1.0 if state.get("instant") else min((t - state["t"]) / (8 / 30), 1.0)
     p = ease_out(u) if state["show"] else 1 - ease_out(u)
     pressed = None
     for c in cues:
         if c["kind"] == "key" and 0 <= t - c["t"] < 0.16:
             pressed = c["key"]
-    return p, state["height"], pressed
+    return p, state["height"], pressed, state.get("type", "number")
 
 
 def keyboard_layer(ph, cues, t, theme):
-    p, kh, pressed = keyboard_state(cues, t)
+    p, kh, pressed, kind = keyboard_state(cues, t)
     if p <= 0.001:
         return None
     S = 2
@@ -358,35 +358,65 @@ def keyboard_layer(ph, cues, t, theme):
     dark = theme == "dark"
     bg = (32, 34, 38, 255) if dark else (228, 231, 236, 255)
     key = (60, 63, 68, 255) if dark else (255, 255, 255, 255)
-    key_on = (96, 100, 108, 255) if dark else (196, 202, 212, 255)
+    key2 = (46, 48, 52, 255) if dark else (212, 217, 225, 255)   # the quieter keys (shift, delete, ?123)
+    key_on = (96, 100, 108, 255) if dark else (186, 193, 205, 255)
     accent = (154, 182, 255, 255) if dark else (168, 199, 250, 255)
     ink = (235, 236, 240, 255) if dark else (28, 30, 34, 255)
     u = lambda v: ph.px(v) * S
     top = SCREEN_H - kh * p
     d.rectangle((0, u(top), ph.sw * S, ph.sh * S), fill=bg)
-    rows = [["1", "2", "3", "\u232b"], ["4", "5", "6", "-"], ["7", "8", "9", "_"], [",", "0", ".", "\u2713"]]
     pad, gap = 8, 6
     usable = kh - GESTURE - pad - 4
-    kw = (SCREEN_W - 2 * pad - 3 * gap) / 4
-    kht = (usable - 3 * gap) / 4
-    f = font("Medium", u(24))
-    sf = sym_font(u(24))
+    # Rows of (label, width in keys, style). Style: k key, q quiet, a action, s space.
+    if kind == "text":
+        rows = [
+            [(c, 1, "k") for c in "qwertyuiop"],
+            [(" ", 0.5, "gap")] + [(c, 1, "k") for c in "asdfghjkl"] + [(" ", 0.5, "gap")],
+            [("\u21e7", 1.5, "q")] + [(c, 1, "k") for c in "zxcvbnm"] + [("\u232b", 1.5, "q")],
+            [("?123", 1.5, "q"), (",", 1, "k"), ("space", 5, "s"), (".", 1, "k"), ("\u2713", 1.5, "a")],
+        ]
+        cols = 10.0
+    else:
+        rows = [[("1", 1, "k"), ("2", 1, "k"), ("3", 1, "k"), ("\u232b", 1, "q")],
+                [("4", 1, "k"), ("5", 1, "k"), ("6", 1, "k"), ("+", 1, "k")],
+                [("7", 1, "k"), ("8", 1, "k"), ("9", 1, "k"), ("space", 1, "s")],
+                [(",", 1, "k"), ("0", 1, "k"), (".", 1, "k"), ("\u2713", 1, "a")]]
+        cols = 4.0
+    nrows = len(rows)
+    kht = (usable - (nrows - 1) * gap) / nrows
+    f = font("Medium", u(23))
+    sf = sym_font(u(22))
+    small = font("Medium", u(15))
     for ri, row in enumerate(rows):
-        for ci, label in enumerate(row):
-            x0 = pad + ci * (kw + gap)
+        total_w = sum(w for _, w, _ in row)
+        unit = (SCREEN_W - 2 * pad - (len(row) - 1) * gap) / total_w if kind != "text" or ri == 3 else (SCREEN_W - 2 * pad - (cols - 1) * gap) / cols
+        if kind == "text" and ri != 3:
+            unit = (SCREEN_W - 2 * pad - (cols - 1) * gap) / cols
+        x = pad
+        if kind == "text" and ri == 1:
+            x = pad + 0.5 * (unit + gap)
+        for label, w, style in row:
+            if style == "gap":
+                continue
+            kw = unit * w + (w - 1) * gap if kind == "text" and ri != 3 else unit * w + (w - 1) * gap * 0
+            if kind == "text" and ri == 3:
+                kw = unit * w
             y0 = top + pad + ri * (kht + gap)
-            on = (label == pressed)
-            fill = accent if label == "\u2713" else key
+            on = pressed is not None and (label == pressed or (label == "space" and pressed == " ") or (len(label) == 1 and label == pressed.lower()))
+            fill = accent if style == "a" else key2 if style == "q" else key
             if on:
                 fill = key_on
-            d.rounded_rectangle((u(x0), u(y0), u(x0 + kw), u(y0 + kht)), radius=u(16), fill=fill)
-            cx, cy = u(x0 + kw / 2), u(y0 + kht / 2)
-            if label == "_":
-                d.line([(cx - u(14), cy - u(3)), (cx - u(14), cy + u(4)), (cx + u(14), cy + u(4)), (cx + u(14), cy - u(3))], fill=ink[:3] + (190,), width=round(u(2)), joint="curve")
-            elif label in ("\u232b", "\u2713"):
+            d.rounded_rectangle((u(x), u(y0), u(x + kw), u(y0 + kht)), radius=u(16), fill=fill)
+            cx, cy = u(x + kw / 2), u(y0 + kht / 2)
+            if label == "space":
+                d.line([(cx - u(16), cy - u(3)), (cx - u(16), cy + u(4)), (cx + u(16), cy + u(4)), (cx + u(16), cy - u(3))], fill=ink[:3] + (190,), width=round(u(2)), joint="curve")
+            elif label in ("\u232b", "\u2713", "\u21e7"):
                 d.text((cx, cy), label, font=sf, fill=ink, anchor="mm")
+            elif label == "?123":
+                d.text((cx, cy), label, font=small, fill=ink, anchor="mm")
             else:
                 d.text((cx, cy), label, font=f, fill=ink, anchor="mm")
+            x += kw + gap
     return ov.resize((ph.sw, ph.sh), Image.LANCZOS)
 
 
@@ -471,6 +501,31 @@ def captions_layer(ph, cues, t, canvas):
     return layer
 
 
+_G = {}
+
+
+def _compose(i):
+    g = _G
+    t = i / g["fps"]
+    rings = []
+    for c in g["cues"]:
+        r = tap_ring(c, t) if c["kind"] == "tap" else drag_ring(c, t) if c["kind"] == "drag" else None
+        if r:
+            rings.append(r)
+    phone, a = g["phone"], g["args"]
+    img = phone.frame(g["folder"] / f"f{i:05d}.png", rings, under=[l for l in (keyboard_layer(phone, g["cues"], t, a.theme),) if l], over=[l for l in (system_layer(phone, g["cues"], t),) if l])
+    if a.captions:
+        cap = captions_layer(phone, g["cues"], t, g["canvas"])
+        if cap:
+            img = Image.alpha_composite(img.convert("RGBA"), cap).convert("RGB")
+    return img
+
+
+def _save(i):
+    _compose(i).save(_G["out_dir"] / f"c{i:05d}.png")
+    return i
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--frames", required=True, help="a film's folder (f00000.png ..., cues.json)")
@@ -496,7 +551,12 @@ def main():
     top = a.top if a.top >= 0 else int((ch - ph_h) * (0.30 if a.captions else 0.5))
     phone = Phone((cw, ch), ph_h, top, bg, a.theme, a.time)
 
+    _G.update(fps=fps, cues=cues, phone=phone, args=a, folder=folder, canvas=(cw, ch))
+
     def compose(i):
+        return _compose(i)
+
+    def _unused(i):
         t = i / fps
         rings = []
         for c in cues:
@@ -519,10 +579,12 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     for old in out_dir.glob("c*.png"):
         old.unlink()
-    for i in range(n):
-        compose(i).save(out_dir / f"c{i:05d}.png")
-        if i % 30 == 0:
-            print(f"{i}/{n}", file=sys.stderr)
+    _G.update(fps=fps, cues=cues, phone=phone, args=a, folder=folder, canvas=(cw, ch), out_dir=out_dir)
+    import multiprocessing as mp
+    with mp.get_context("fork").Pool(min(4, os.cpu_count() or 1)) as pool:
+        for k, _ in enumerate(pool.imap_unordered(_save, range(n), chunksize=8)):
+            if k % 60 == 0:
+                print(f"{k}/{n}", file=sys.stderr)
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-framerate", str(fps), "-i", str(out_dir / "c%05d.png"),
                     "-vf", "format=yuv420p", "-c:v", "libx264", "-crf", "17", "-preset", "medium", "-movflags", "+faststart", a.out],
                    check=True)
