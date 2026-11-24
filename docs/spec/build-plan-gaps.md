@@ -41,7 +41,7 @@ Small, first, and on its own, so the specs match the code before anything else i
 
 **Done when:** each of these specs' status lines matches the code, and the checklist's items above can be marked built.
 
-## 4. Phase H2: buying, labels and Things we have
+## 4. Phase H2: buying, labels and Things we have — done 24 November 2026
 
 The spec is [what a business buys](what-a-business-buys.md). Five of these are against the spec.
 
@@ -56,6 +56,8 @@ The spec is [what a business buys](what-a-business-buys.md). Five of these are a
 | **The old-columns warning reads expressions** | `g-old-cols` | `engine/stock/oldcolumns.go` 360–368 skips a select starting with `=`, and `set` is read from map keys only. Find column names inside CEL expressions (selects, filter values, `set`/`row` given as an expression, a column name passed as a string). Tests for each form. |
 
 **Done when:** a staff member with `table.read` and no invoice rights opens Things we have from the menu on the web and the app; a merged label shows as its kept label on an old order card; the second order of an item treated before asks nothing and pre-selects its label; a product counted in grams asks how many grams one bag is, once; and a workflow writing the old stock column through an expression is listed by the warning.
+
+Built: every task above, on the web, in the app and in chat; migration 00600. What was built and its tests are in [what a business buys](what-a-business-buys.md), "As built: H2".
 
 ## 5. Phase H3: device fields
 
@@ -230,9 +232,9 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | Item | Where |
 | --- | --- |
 | g-pay-core | H7 |
-| g-things-menu | H2 |
-| g-label-pre | H2 |
-| g-label-merge | H2 |
+| g-things-menu | H2 (done 24 November 2026) |
+| g-label-pre | H2 (done 24 November 2026) |
+| g-label-merge | H2 (done 24 November 2026) |
 | g-dev-link | H3 |
 | g-dev-confirm | H3 |
 | g-menu-used | H4 |
@@ -244,12 +246,12 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-pages-tick | H5 |
 | g-recipes | §12 |
 | g-own-purchase | §12 |
-| g-old-cols | H2 |
+| g-old-cols | H2 (done 24 November 2026) |
 | g-stock-lang | H8 |
-| g-uses-ask | H2 |
+| g-uses-ask | H2 (done 24 November 2026) |
 | g-deprec | §12 |
-| g-thing-suggest | H2 |
-| g-thing-extra | H2 |
+| g-thing-suggest | H2 (done 24 November 2026) |
+| g-thing-extra | H2 (done 24 November 2026) |
 | g-saved-wf | H6 |
 | g-saved-addr | H6 |
 | g-saved-personal | §12 |
