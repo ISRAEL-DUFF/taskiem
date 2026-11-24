@@ -1,6 +1,6 @@
 # Saved objects: things a person or a business keeps, and calls up by name
 
-Status: **plan, settled** (19 November 2026), written with the founder. Being built: S0's server (saved accounts: the store, the name check, `@name` resolved; [decision 0071](../decisions/0071-saved-objects.md)) is built; the rest is not. The founder took every recommendation in §15 the same day. It is built in the phases of [the build plan for saved objects, made tools and payments](build-plan-saved-tools-payments.md).
+Status: **plan, settled** (19 November 2026), written with the founder. **S0 to S3 built** (20 to 21 November 2026; [decision 0071](../decisions/0071-saved-objects.md)): saved accounts, the kinds and the picker, saved things in actions and in workflows (see the build plan's S0 to S3 status lines). What is left is planned in [build-plan-gaps.md](build-plan-gaps.md) (H6: a workflow sending a saved file, each run's use recorded, the SDK, an address on invoices). The founder took every recommendation in §15 the same day. It is built in the phases of [the build plan for saved objects, made tools and payments](build-plan-saved-tools-payments.md).
 
 Builds on: [chat tools](chat-tools.md) (tags), [paying people from the chat](chat-pay-people.md) (a plan, not built: its payees), [Taskiem for everyone](taskiem-for-everyone.md) (You, the person's own scope, saved addresses), [people chatting with people](people-chatting.md), [data tables](../data-tables.md), [Schools in the chat](schools-in-the-chat.md).
 

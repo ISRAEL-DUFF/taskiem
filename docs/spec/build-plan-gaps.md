@@ -26,7 +26,7 @@ The rules of the earlier plan's §2 hold (suggest, don't surprise; show it befor
 7. **Docs in the same pull request:** the spec's status line, its "As built" section, the guide in `docs/`, the earlier build plan's §6 tick, and this plan's §15 row.
 8. **Migrations** take the next free number when the phase starts (00590 is the last today). Phases built side by side are each given their own range when they start.
 
-## 3. Phase H1: put the record straight (docs only)
+## 3. Phase H1: put the record straight (docs only) — done 24 November 2026
 
 Small, first, and on its own, so the specs match the code before anything else is built.
 
@@ -137,6 +137,7 @@ The spec is [paying people from the chat](chat-pay-people.md). The first item is
 | **Pay on a refund** | `g-pay-staff` | Staff and riders are built. Add Pay on a refund (an order's or an invoice's refund), opening the Pay sheet filled in with "refund". |
 | **Paying several: fees, balance after, one diary line** | `g-pay-batch` | The batch's foot shows the total of fees and the balance after (short by how much, and which rows fit); one diary line for the batch (`api/payment_batches.go` 67 keeps its counts already). |
 | **Taskiem wallet to Taskiem wallet** | `g-pay-w2w` | Where both sides have a Taskiem wallet: that route, "Taskiem wallet · arrives at once" on the sheet, falling back to the bank. |
+| **A batch whose last row is refused at confirming still ends** | (found in H1: `chat-pay-people.md` "Not yet") | Today it stays prepared, so no message is sent until it ends. A row refused at confirming ends as refused, and the batch ends and is told when its other rows have. |
 | **Forward or reply "pay" on WhatsApp, Telegram and Slack** | `g-pay-fwd` | A forwarded message, or a reply of "pay" to one, is read for an account as a typed one is: "Pay Chidi Okeke (GTBank ••6789) how much, and for what?". |
 
 All of this is built and tested against the stand-in provider, as P1 to P4 were. Real money still waits for D6 (§12).
@@ -294,5 +295,6 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-doc-plan | H1 |
 | g-doc-device | H1 |
 | g-doc-pin | H1 |
+| (found in H1) a batch whose last row is refused never ends | H7 |
 
-66 items: 44 in phases H1 to H8, 3 in the later milestones, 17 waiting (§12), and 2 already built (their docs fixed in H1).
+66 items, and one found while doing H1: 44 (and the one found) in phases H1 to H8, 3 in the later milestones, 17 waiting (§12), and 2 already built (their docs fixed in H1).
