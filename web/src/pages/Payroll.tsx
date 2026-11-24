@@ -258,10 +258,17 @@ export function PayrollPage() {
               testid="payroll-staff-link"
             />
             <Item
+              to="/payroll/schedules"
+              icon="reports"
+              title="Tax and pension"
+              sub="PAYE, pension, NHF and NHIS to pay for each payroll"
+              testid="payroll-schedules-link"
+            />
+            <Item
               to="/payroll/settings"
               icon="settings"
               title="Payroll settings"
-              sub="Payrolla's connection, and who can approve"
+              sub="How your payroll is set up, and who can approve"
               testid="payroll-settings-link"
             />
           </Items>

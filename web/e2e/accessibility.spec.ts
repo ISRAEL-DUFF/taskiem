@@ -80,6 +80,7 @@ const PAGES = [
   "/payments/several/list",
   "/payroll",
   "/payroll/settings",
+  "/payroll/schedules",
   "/payroll/team",
   "/payroll/account-changes",
   "/payroll/me",

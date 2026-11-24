@@ -159,6 +159,7 @@ import { CollectedListPage } from "./pages/PayCollect";
 import { PayrollPage, PayrollStaffPage } from "./pages/Payroll";
 import { PayrollRunPage } from "./pages/PayrollRun";
 import { PayrollSettingsPage } from "./pages/PayrollSettings";
+import { PayrollSchedulePage, PayrollSchedulesPage } from "./pages/PayrollSchedules";
 import { MyPayPage, PayrollChangesPage, PayrollTeamPage } from "./pages/PayrollTeam";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
@@ -960,6 +961,8 @@ function SignedIn() {
                   <Route path="/payroll/runs/:run" element={<PayrollRunPage />} />
                   <Route path="/payroll/staff" element={<PayrollStaffPage />} />
                   <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
+                  <Route path="/payroll/schedules" element={<PayrollSchedulesPage />} />
+                  <Route path="/payroll/schedules/:id" element={<PayrollSchedulePage />} />
                   <Route path="/payroll/team" element={<PayrollTeamPage />} />
                   <Route path="/payroll/account-changes" element={<PayrollChangesPage />} />
                   <Route path="/payroll/me" element={<MyPayPage />} />

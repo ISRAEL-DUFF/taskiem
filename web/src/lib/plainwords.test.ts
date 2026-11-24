@@ -133,6 +133,8 @@ const OWNER_FILES = [
   "lib/payrollteam.ts",
   "pages/PayrollRun.tsx",
   "lib/payrollrun.ts",
+  "pages/PayrollSchedules.tsx",
+  "lib/payrollreports.ts",
   "pages/Tasks.tsx",
   "pages/ChatToolForms.tsx",
   "pages/ChatTools.tsx",
@@ -252,7 +254,7 @@ function allStrings(file: string, src: string): string[] {
 // "Send money", "Beneficiary", the words bank apps use; never "payout" or
 // "NUBAN" in the Pay sheet, the chip under a message, or their words.
 describe("paying people says Pay, never payout", () => {
-  const PAY_FILES = ["pages/PaySheet.tsx", "pages/PayChip.tsx", "pages/SaveAsSheet.tsx","pages/Payments.tsx", "lib/payments.ts", "lib/paymessage.ts", "pages/PayBatch.tsx", "lib/batches.ts", "pages/PayCollect.tsx", "lib/paycollect.ts", "pages/StaffPerson.tsx", "lib/team.ts", "pages/Payroll.tsx", "lib/payroll.ts", "pages/PayrollSettings.tsx", "pages/PayrollTeam.tsx", "lib/payrollteam.ts", "pages/PayrollRun.tsx", "lib/payrollrun.ts"];
+  const PAY_FILES = ["pages/PaySheet.tsx", "pages/PayChip.tsx", "pages/SaveAsSheet.tsx","pages/Payments.tsx", "lib/payments.ts", "lib/paymessage.ts", "pages/PayBatch.tsx", "lib/batches.ts", "pages/PayCollect.tsx", "lib/paycollect.ts", "pages/StaffPerson.tsx", "lib/team.ts", "pages/Payroll.tsx", "lib/payroll.ts", "pages/PayrollSettings.tsx", "pages/PayrollTeam.tsx", "lib/payrollteam.ts", "pages/PayrollRun.tsx", "lib/payrollrun.ts", "pages/PayrollSchedules.tsx", "lib/payrollreports.ts"];
   for (const f of PAY_FILES) {
     it(f, () => {
       const src = readFileSync(resolve(__dirname, "..", f), "utf8");

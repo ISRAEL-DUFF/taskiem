@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError, del, get, post } from "../api";
+import { PayrollSetupSection } from "./PayrollSchedules";
 import { ErrorBox, Field, Modal, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
 import {
   NEW_CODE_NEEDED,
@@ -371,7 +372,7 @@ export function PayrollSettingsPage() {
           Payroll
         </Link>
       </p>
-      <PageHeader title="Payroll settings" description="How Taskiem reaches your Payrolla, and who approves your payroll." />
+      <PageHeader title="Payroll settings" description="How Taskiem reaches your Payrolla, how your payroll is set up there, and who approves it." />
       {linkedNow && (
         <div className="notice" role="status" data-testid="payroll-connected-now">
           Payrolla is connected.
@@ -386,6 +387,7 @@ export function PayrollSettingsPage() {
       <ErrorBox error={conn.error} />
       {!c && !conn.error && <Skeleton rows={3} label="Loading…" />}
       {c && <ConnectionSection conn={c} onChanged={conn.reload} />}
+      {c?.connected && <PayrollSetupSection />}
       {c && canApproveHere(c) && <ApproversSection />}
     </>
   );
