@@ -158,6 +158,7 @@ Within a stage, phases that do not need each other may be built at once by separ
     - an employee's own salary account change from **My pay**;
     - `payroll.prepare` and `payroll.approve` added beside `payroll.read`.
     - Done when: a staff member is added to payroll with their bank checked, and a changed account asked by one person is approved, with a code, by another.
+    - **Status (24 November 2026): built** against the fake Payrolla, on Payrolla's OpenAPI file of that day ([as built](chat-pay-people.md#p4b-2-staff-and-pay-from-taskiem)): Payroll → Team, Add someone (from a staff member: `external_ref` and the staff link at once) with the bank's name shown before saving, pay from a date, a new account held, ending at once; Account changes approved with the approver's code or rejected with a note; My pay; `payroll.prepare`; the employee events telling the right people; on the web and in the app. The chat's words are not built yet.
   - **P4b-3. This month's run** (needs P4b-2):
     - prepare it, with every line's breakdown;
     - a bonus or a deduction (an advance repaid is one), leaving someone out and putting them back, recalculating, cancelling;

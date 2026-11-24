@@ -72,10 +72,10 @@ Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-
    - Taskiem people linked to Payrolla users with one code (`/v1/payroll/approvers`, `payroll.approve`).
 
    Payrolla registers Taskiem first, from [our answers](payrolla-reference/08-taskiem-answers.md), drafted for the founder to send. The deployment then sets `TASKIEM_OAUTH_PAYROLLA_CLIENT_ID`/`_SECRET` (live), `TASKIEM_OAUTH_PAYROLLA_SANDBOX_CLIENT_ID`/`_SECRET` (test) and `TASKIEM_PAYROLLA_APP_URL` (production's sign-in app; the sandbox's is `payroller.surge.sh`, `TASKIEM_PAYROLLA_TEST_APP_URL` moves it).
-2. **Staff and pay from Taskiem** (P4b-2):
-   - adding, changing and ending employees;
-   - bank changes held for a second approver;
-   - an employee's own salary account change.
+2. **Staff and pay from Taskiem** (P4b-2), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-2-staff-and-pay-from-taskiem)):
+   - adding, changing and ending employees (`/v1/payroll/team`, `payroll.prepare`);
+   - bank changes held for a second approver (`/v1/payroll/bank-changes`, approved with the approver's code);
+   - an employee's own salary account change (`/v1/payroll/me`, the code Payrolla texts them).
 3. **This month's run in Taskiem** (P4b-3):
    - prepare it, add a bonus or a deduction, leave someone out;
    - approve and **Lock and pay**, confirmed with **Payrolla's own one-time code**, typed into Taskiem.

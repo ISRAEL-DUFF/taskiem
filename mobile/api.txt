@@ -450,3 +450,21 @@ getThing
 addThing
 patchThing
 getMoneySpending
+
+# Staff and pay from Taskiem (P4b-2): Team, adding someone, changing pay and
+# details, ending employment, held account changes, My pay
+listPayrollBanks
+getPayrollTeam
+getPayrollEmployee
+addPayrollEmployee
+changePayrollEmployee
+askPayrollBankChange
+endPayrollEmployee
+payrollNameCheck
+getPayrollBankChanges
+startBankChangeCode
+approveBankChange
+rejectBankChange
+getMyPay
+startMyBankChange
+confirmMyBankChange

@@ -158,6 +158,7 @@ import { BatchPage, PayListPage } from "./pages/PayBatch";
 import { CollectedListPage } from "./pages/PayCollect";
 import { PayrollPage, PayrollRunPage, PayrollStaffPage } from "./pages/Payroll";
 import { PayrollSettingsPage } from "./pages/PayrollSettings";
+import { MyPayPage, PayrollChangesPage, PayrollTeamPage } from "./pages/PayrollTeam";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
 import { PasskeyNudge } from "./pages/PasskeyNudge";
@@ -520,6 +521,8 @@ function SignedIn() {
     ["/payments", "Pay people", "send", can("money.pay")],
     // Payroll, read from Payrolla (pages/Payroll.tsx).
     ["/payroll", "Payroll", "billing", can("payroll.read")],
+    // A staff member's own salary account in Payrolla (pages/PayrollTeam.tsx).
+    ["/payroll/me", "My pay", "billing", !can("payroll.read")],
     // Linked suppliers' invoices (business links, pages/Bills.tsx).
     [
       "/bills",
@@ -956,6 +959,9 @@ function SignedIn() {
                   <Route path="/payroll/runs/:run" element={<PayrollRunPage />} />
                   <Route path="/payroll/staff" element={<PayrollStaffPage />} />
                   <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
+                  <Route path="/payroll/team" element={<PayrollTeamPage />} />
+                  <Route path="/payroll/account-changes" element={<PayrollChangesPage />} />
+                  <Route path="/payroll/me" element={<MyPayPage />} />
                   <Route path="/money/labels" element={<MoneyLabels />} />
                   <Route path="/money/things" element={<ThingsPage />} />
                   <Route path="/money/things/:id" element={<ThingPage />} />

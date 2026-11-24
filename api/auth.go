@@ -67,6 +67,9 @@ const (
 	// PermPayrollApprove is approving the payroll as one's linked Payrolla
 	// user, and linking to it (P4b).
 	PermPayrollApprove = access.PayrollApprove
+	// PermPayrollPrepare is adding and changing staff and pay, and
+	// preparing runs, in Payrolla (P4b).
+	PermPayrollPrepare = access.PayrollPrepare
 	// PermPayrollPeople is seeing who may approve the payroll and how it is
 	// connected: either payroll permission.
 	PermPayrollPeople = access.PayrollRead + "|" + access.PayrollApprove

@@ -1075,8 +1075,9 @@ func (e *engine) hooks() *ingest.Handler {
 		Egress: &egress.Guard{Logger: e.log}, Apps: platformApps(e.registry),
 		Platform: map[string]ingest.Platform{"iswallet": {WebhookSecrets: e.cfg.ISWallet.WebhookSecrets}},
 		// company.disconnected ends a Payrolla connection made in one step
-		// (P4b-1).
-		Heard: api.PayrollaHeard(e.pool, e.vault, e.log)}
+		// (P4b-1); employee events tell the right people (P4b-2).
+		Heard: api.HeardAll(api.PayrollaHeard(e.pool, e.vault, e.log),
+			api.PayrollaTeamHeard(e.pool, e.vault, e.registry, &egress.Guard{Logger: e.log}, e.log))}
 }
 
 // platformClient is Taskiem's own client at a provider (decision 0052),

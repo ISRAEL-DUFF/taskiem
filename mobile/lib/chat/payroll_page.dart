@@ -31,6 +31,7 @@ import 'cards.dart' show CardPill;
 import 'groups.dart' show askSure, pickOneOf;
 import 'invoices_page.dart' show shortDay;
 import 'payroll_settings.dart' show PayrollSettingsPage;
+import 'payroll_team.dart' show openMyPay, openPayrollChanges, openPayrollTeam;
 import 'team_pages.dart' show StaffPersonPage;
 import 'words.dart' show CardTone, naira;
 
@@ -275,6 +276,30 @@ class _PayrollPageState extends State<PayrollPage> {
           TkSection(
             inset: 56,
             children: [
+              TkListRow(
+                title: 'Team',
+                sub: 'Everyone, their pay and account',
+                subLines: 1,
+                icon: 'b-people',
+                square: look.lime,
+                onTap: () => unawaited(openPayrollTeam(context, _auth)),
+              ),
+              TkListRow(
+                title: 'Account changes',
+                sub: 'New accounts waiting for approval',
+                subLines: 1,
+                icon: 'b-bank',
+                square: look.orange,
+                onTap: () => unawaited(openPayrollChanges(context, _auth)),
+              ),
+              TkListRow(
+                title: 'My pay',
+                sub: 'Your own salary account',
+                subLines: 1,
+                icon: 'b-cash',
+                square: look.blue,
+                onTap: () => unawaited(openMyPay(context, _auth, backLabel: 'Back to Payroll')),
+              ),
               TkListRow(
                 title: 'Staff in Payrolla',
                 sub: 'Who each of your staff is there',

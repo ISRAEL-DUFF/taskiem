@@ -2100,6 +2100,96 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/money/spending', query: {'from': ?from, 'to': ?to, 'month': ?month});
     return MoneySpending.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Banks a salary account can be at (`GET /v1/payroll/banks`)
+  Future<ListPayrollBanksResponse> listPayrollBanks() async {
+    final j = await _t.send('GET', '/v1/payroll/banks');
+    return ListPayrollBanksResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Payroll → Team (`GET /v1/payroll/team`)
+  Future<GetPayrollTeamResponse> getPayrollTeam() async {
+    final j = await _t.send('GET', '/v1/payroll/team');
+    return GetPayrollTeamResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One person on the payroll (`GET /v1/payroll/team/{employee}`)
+  Future<GetPayrollEmployeeResponse> getPayrollEmployee({required String employee}) async {
+    final j = await _t.send('GET', '/v1/payroll/team/${Uri.encodeComponent(employee)}');
+    return GetPayrollEmployeeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Add someone to payroll (`POST /v1/payroll/team`)
+  Future<AddPayrollEmployeeResponse> addPayrollEmployee({required AddPayrollEmployeeRequest body}) async {
+    final j = await _t.send('POST', '/v1/payroll/team', body: body.toJson());
+    return AddPayrollEmployeeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change someone's details or pay (`PATCH /v1/payroll/team/{employee}`)
+  Future<ChangePayrollEmployeeResponse> changePayrollEmployee({required ChangePayrollEmployeeRequest body, required String employee}) async {
+    final j = await _t.send('PATCH', '/v1/payroll/team/${Uri.encodeComponent(employee)}', body: body.toJson());
+    return ChangePayrollEmployeeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change someone's salary account (`POST /v1/payroll/team/{employee}/bank`)
+  Future<AskPayrollBankChangeResponse> askPayrollBankChange({required AskPayrollBankChangeRequest body, required String employee}) async {
+    final j = await _t.send('POST', '/v1/payroll/team/${Uri.encodeComponent(employee)}/bank', body: body.toJson());
+    return AskPayrollBankChangeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// End someone's employment (`POST /v1/payroll/team/{employee}/end`)
+  Future<EndPayrollEmployeeResponse> endPayrollEmployee({required EndPayrollEmployeeRequest body, required String employee}) async {
+    final j = await _t.send('POST', '/v1/payroll/team/${Uri.encodeComponent(employee)}/end', body: body.toJson());
+    return EndPayrollEmployeeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The bank's name for a salary account (`POST /v1/payroll/name-check`)
+  Future<PayrollNameCheckResponse> payrollNameCheck({required PayrollNameCheckRequest body}) async {
+    final j = await _t.send('POST', '/v1/payroll/name-check', body: body.toJson());
+    return PayrollNameCheckResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Payroll → Account changes (`GET /v1/payroll/bank-changes`)
+  Future<GetPayrollBankChangesResponse> getPayrollBankChanges() async {
+    final j = await _t.send('GET', '/v1/payroll/bank-changes');
+    return GetPayrollBankChangesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Approve an account change (send the code) (`POST /v1/payroll/bank-changes/{change}/code`)
+  Future<StartBankChangeCodeResponse> startBankChangeCode({required StartBankChangeCodeRequest body, required String change}) async {
+    final j = await _t.send('POST', '/v1/payroll/bank-changes/${Uri.encodeComponent(change)}/code', body: body.toJson());
+    return StartBankChangeCodeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Approve an account change (type the code) (`POST /v1/payroll/bank-changes/{change}/approve`)
+  Future<ApproveBankChangeResponse> approveBankChange({required ApproveBankChangeRequest body, required String change}) async {
+    final j = await _t.send('POST', '/v1/payroll/bank-changes/${Uri.encodeComponent(change)}/approve', body: body.toJson());
+    return ApproveBankChangeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Reject an account change (`POST /v1/payroll/bank-changes/{change}/reject`)
+  Future<RejectBankChangeResponse> rejectBankChange({required RejectBankChangeRequest body, required String change}) async {
+    final j = await _t.send('POST', '/v1/payroll/bank-changes/${Uri.encodeComponent(change)}/reject', body: body.toJson());
+    return RejectBankChangeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// My pay (`GET /v1/payroll/me`)
+  Future<GetMyPayResponse> getMyPay() async {
+    final j = await _t.send('GET', '/v1/payroll/me');
+    return GetMyPayResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change my salary account (send the code) (`POST /v1/payroll/me/bank-change`)
+  Future<StartMyBankChangeResponse> startMyBankChange({required StartMyBankChangeRequest body}) async {
+    final j = await _t.send('POST', '/v1/payroll/me/bank-change', body: body.toJson());
+    return StartMyBankChangeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change my salary account (type the code) (`POST /v1/payroll/me/bank-change/confirm`)
+  Future<ConfirmMyBankChangeResponse> confirmMyBankChange({required ConfirmMyBankChangeRequest body}) async {
+    final j = await _t.send('POST', '/v1/payroll/me/bank-change/confirm', body: body.toJson());
+    return ConfirmMyBankChangeResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -18798,5 +18888,809 @@ class MoneySpendingProfit {
         'fees_kobo': feesKobo,
         'in_kobo': inKobo,
         'profit_kobo': profitKobo,
+      };
+}
+
+class ListPayrollBanksResponse {
+  const ListPayrollBanksResponse({required this.banks});
+
+  final List<ListPayrollBanksResponseBanksItem> banks;
+
+  factory ListPayrollBanksResponse.fromJson(Map<String, dynamic> j) => ListPayrollBanksResponse(
+        banks: (j['banks'] as List).map((e) => ListPayrollBanksResponseBanksItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'banks': banks.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ListPayrollBanksResponseBanksItem {
+  const ListPayrollBanksResponseBanksItem({required this.code, required this.name});
+
+  final String code;
+  final String name;
+
+  factory ListPayrollBanksResponseBanksItem.fromJson(Map<String, dynamic> j) => ListPayrollBanksResponseBanksItem(
+        code: j['code'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'name': name,
+      };
+}
+
+class GetPayrollTeamResponse {
+  const GetPayrollTeamResponse({required this.connection, required this.may, required this.staff, required this.team});
+
+  final String connection;
+  final PayrollTeamMay may;
+  final List<GetPayrollTeamResponseStaffItem> staff;
+  final List<PayrollTeamMember> team;
+
+  factory GetPayrollTeamResponse.fromJson(Map<String, dynamic> j) => GetPayrollTeamResponse(
+        connection: j['connection'] as String,
+        may: PayrollTeamMay.fromJson(j['may'] as Map<String, dynamic>),
+        staff: (j['staff'] as List).map((e) => GetPayrollTeamResponseStaffItem.fromJson(e as Map<String, dynamic>)).toList(),
+        team: (j['team'] as List).map((e) => PayrollTeamMember.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'connection': connection,
+        'may': may.toJson(),
+        'staff': staff.map((e) => e.toJson()).toList(),
+        'team': team.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PayrollTeamMay {
+  const PayrollTeamMay({required this.approve, required this.prepare, required this.seePay});
+
+  final bool approve;
+  final bool prepare;
+  final bool seePay;
+
+  factory PayrollTeamMay.fromJson(Map<String, dynamic> j) => PayrollTeamMay(
+        approve: j['approve'] as bool,
+        prepare: j['prepare'] as bool,
+        seePay: j['see_pay'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approve': approve,
+        'prepare': prepare,
+        'see_pay': seePay,
+      };
+}
+
+class GetPayrollTeamResponseStaffItem {
+  const GetPayrollTeamResponseStaffItem({this.email, required this.name, this.phone, required this.userId});
+
+  final String? email;
+  final String name;
+  final String? phone;
+  final String userId;
+
+  factory GetPayrollTeamResponseStaffItem.fromJson(Map<String, dynamic> j) => GetPayrollTeamResponseStaffItem(
+        email: j['email'] == null ? null : j['email'] as String,
+        name: j['name'] as String,
+        phone: j['phone'] == null ? null : j['phone'] as String,
+        userId: j['user_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'email': ?email,
+        'name': name,
+        'phone': ?phone,
+        'user_id': userId,
+      };
+}
+
+class PayrollTeamMember {
+  const PayrollTeamMember({this.bank, this.department, this.email, required this.firstName, required this.id, required this.lastName, required this.name, this.pay, this.phone, this.staff, this.startDate, required this.status, this.waitingChange});
+
+  final Object? bank;
+  final String? department;
+  final String? email;
+  final String firstName;
+  final String id;
+  final String lastName;
+  final String name;
+  final PayrollTeamMemberPay? pay;
+  final String? phone;
+  final Object? staff;
+  final String? startDate;
+  final String status;
+  final Object? waitingChange;
+
+  factory PayrollTeamMember.fromJson(Map<String, dynamic> j) => PayrollTeamMember(
+        bank: j['bank'],
+        department: j['department'] == null ? null : j['department'] as String,
+        email: j['email'] == null ? null : j['email'] as String,
+        firstName: j['first_name'] as String,
+        id: j['id'] as String,
+        lastName: j['last_name'] as String,
+        name: j['name'] as String,
+        pay: j['pay'] == null ? null : PayrollTeamMemberPay.fromJson(j['pay'] as Map<String, dynamic>),
+        phone: j['phone'] == null ? null : j['phone'] as String,
+        staff: j['staff'],
+        startDate: j['start_date'] == null ? null : j['start_date'] as String,
+        status: j['status'] as String,
+        waitingChange: j['waiting_change'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'bank': ?bank,
+        'department': ?department,
+        'email': ?email,
+        'first_name': firstName,
+        'id': id,
+        'last_name': lastName,
+        'name': name,
+        'pay': ?pay?.toJson(),
+        'phone': ?phone,
+        'staff': ?staff,
+        'start_date': ?startDate,
+        'status': status,
+        'waiting_change': ?waitingChange,
+      };
+}
+
+class PayrollTeamMemberPay {
+  const PayrollTeamMemberPay({required this.basicKobo, required this.from, required this.grossKobo, required this.housingKobo, required this.pensionable, required this.transportKobo});
+
+  final int basicKobo;
+  final String from;
+  final int grossKobo;
+  final int housingKobo;
+  final bool pensionable;
+  final int transportKobo;
+
+  factory PayrollTeamMemberPay.fromJson(Map<String, dynamic> j) => PayrollTeamMemberPay(
+        basicKobo: (j['basic_kobo'] as num).toInt(),
+        from: j['from'] as String,
+        grossKobo: (j['gross_kobo'] as num).toInt(),
+        housingKobo: (j['housing_kobo'] as num).toInt(),
+        pensionable: j['pensionable'] as bool,
+        transportKobo: (j['transport_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'basic_kobo': basicKobo,
+        'from': from,
+        'gross_kobo': grossKobo,
+        'housing_kobo': housingKobo,
+        'pensionable': pensionable,
+        'transport_kobo': transportKobo,
+      };
+}
+
+class GetPayrollEmployeeResponse {
+  const GetPayrollEmployeeResponse({required this.employee, required this.may});
+
+  final PayrollTeamMember employee;
+  final PayrollTeamMay may;
+
+  factory GetPayrollEmployeeResponse.fromJson(Map<String, dynamic> j) => GetPayrollEmployeeResponse(
+        employee: PayrollTeamMember.fromJson(j['employee'] as Map<String, dynamic>),
+        may: PayrollTeamMay.fromJson(j['may'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'employee': employee.toJson(),
+        'may': may.toJson(),
+      };
+}
+
+class AddPayrollEmployeeRequest {
+  const AddPayrollEmployeeRequest({this.bank, this.costCenter, this.department, this.email, required this.firstName, required this.key, required this.lastName, required this.pay, this.phone, this.staffUser, required this.startDate});
+
+  final AddPayrollEmployeeRequestBank? bank;
+  final String? costCenter;
+  final String? department;
+  final String? email;
+  final String firstName;
+  final String key;
+  final String lastName;
+  final PayrollPayInput pay;
+  final String? phone;
+  final Object? staffUser;
+  final String startDate;
+
+  factory AddPayrollEmployeeRequest.fromJson(Map<String, dynamic> j) => AddPayrollEmployeeRequest(
+        bank: j['bank'] == null ? null : AddPayrollEmployeeRequestBank.fromJson(j['bank'] as Map<String, dynamic>),
+        costCenter: j['cost_center'] == null ? null : j['cost_center'] as String,
+        department: j['department'] == null ? null : j['department'] as String,
+        email: j['email'] == null ? null : j['email'] as String,
+        firstName: j['first_name'] as String,
+        key: j['key'] as String,
+        lastName: j['last_name'] as String,
+        pay: PayrollPayInput.fromJson(j['pay'] as Map<String, dynamic>),
+        phone: j['phone'] == null ? null : j['phone'] as String,
+        staffUser: j['staff_user'],
+        startDate: j['start_date'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'bank': ?bank?.toJson(),
+        'cost_center': ?costCenter,
+        'department': ?department,
+        'email': ?email,
+        'first_name': firstName,
+        'key': key,
+        'last_name': lastName,
+        'pay': pay.toJson(),
+        'phone': ?phone,
+        'staff_user': ?staffUser,
+        'start_date': startDate,
+      };
+}
+
+class AddPayrollEmployeeRequestBank {
+  const AddPayrollEmployeeRequestBank({required this.accountNumber, required this.bankCode});
+
+  final String accountNumber;
+  final String bankCode;
+
+  factory AddPayrollEmployeeRequestBank.fromJson(Map<String, dynamic> j) => AddPayrollEmployeeRequestBank(
+        accountNumber: j['account_number'] as String,
+        bankCode: j['bank_code'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': accountNumber,
+        'bank_code': bankCode,
+      };
+}
+
+class PayrollPayInput {
+  const PayrollPayInput({this.basicKobo, this.from, required this.grossKobo, this.housingKobo, this.pensionable, this.transportKobo});
+
+  final int? basicKobo;
+  /// On a change, the date the new pay starts; today when left out.
+  final String? from;
+  final int grossKobo;
+  final int? housingKobo;
+  final Object? pensionable;
+  final int? transportKobo;
+
+  factory PayrollPayInput.fromJson(Map<String, dynamic> j) => PayrollPayInput(
+        basicKobo: j['basic_kobo'] == null ? null : (j['basic_kobo'] as num).toInt(),
+        from: j['from'] == null ? null : j['from'] as String,
+        grossKobo: (j['gross_kobo'] as num).toInt(),
+        housingKobo: j['housing_kobo'] == null ? null : (j['housing_kobo'] as num).toInt(),
+        pensionable: j['pensionable'],
+        transportKobo: j['transport_kobo'] == null ? null : (j['transport_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'basic_kobo': ?basicKobo,
+        'from': ?from,
+        'gross_kobo': grossKobo,
+        'housing_kobo': ?housingKobo,
+        'pensionable': ?pensionable,
+        'transport_kobo': ?transportKobo,
+      };
+}
+
+class AddPayrollEmployeeResponse {
+  const AddPayrollEmployeeResponse({required this.employee});
+
+  final PayrollTeamMember employee;
+
+  factory AddPayrollEmployeeResponse.fromJson(Map<String, dynamic> j) => AddPayrollEmployeeResponse(
+        employee: PayrollTeamMember.fromJson(j['employee'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'employee': employee.toJson(),
+      };
+}
+
+class ChangePayrollEmployeeRequest {
+  const ChangePayrollEmployeeRequest({this.costCenter, this.department, this.email, this.firstName, this.jobTitle, required this.key, this.lastName, this.pay, this.phone});
+
+  final String? costCenter;
+  final String? department;
+  final String? email;
+  final String? firstName;
+  /// Refused in words: Payrolla keeps no job title.
+  final String? jobTitle;
+  final String key;
+  final String? lastName;
+  final PayrollPayInput? pay;
+  /// Refused in words: Payrolla's phone is changed in Payrolla.
+  final String? phone;
+
+  factory ChangePayrollEmployeeRequest.fromJson(Map<String, dynamic> j) => ChangePayrollEmployeeRequest(
+        costCenter: j['cost_center'] == null ? null : j['cost_center'] as String,
+        department: j['department'] == null ? null : j['department'] as String,
+        email: j['email'] == null ? null : j['email'] as String,
+        firstName: j['first_name'] == null ? null : j['first_name'] as String,
+        jobTitle: j['job_title'] == null ? null : j['job_title'] as String,
+        key: j['key'] as String,
+        lastName: j['last_name'] == null ? null : j['last_name'] as String,
+        pay: j['pay'] == null ? null : PayrollPayInput.fromJson(j['pay'] as Map<String, dynamic>),
+        phone: j['phone'] == null ? null : j['phone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'cost_center': ?costCenter,
+        'department': ?department,
+        'email': ?email,
+        'first_name': ?firstName,
+        'job_title': ?jobTitle,
+        'key': key,
+        'last_name': ?lastName,
+        'pay': ?pay?.toJson(),
+        'phone': ?phone,
+      };
+}
+
+class ChangePayrollEmployeeResponse {
+  const ChangePayrollEmployeeResponse({required this.employee, this.words});
+
+  final PayrollTeamMember employee;
+  final String? words;
+
+  factory ChangePayrollEmployeeResponse.fromJson(Map<String, dynamic> j) => ChangePayrollEmployeeResponse(
+        employee: PayrollTeamMember.fromJson(j['employee'] as Map<String, dynamic>),
+        words: j['words'] == null ? null : j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'employee': employee.toJson(),
+        'words': ?words,
+      };
+}
+
+class AskPayrollBankChangeRequest {
+  const AskPayrollBankChangeRequest({required this.accountNumber, required this.bankCode, required this.key});
+
+  final String accountNumber;
+  final String bankCode;
+  final String key;
+
+  factory AskPayrollBankChangeRequest.fromJson(Map<String, dynamic> j) => AskPayrollBankChangeRequest(
+        accountNumber: j['account_number'] as String,
+        bankCode: j['bank_code'] as String,
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': accountNumber,
+        'bank_code': bankCode,
+        'key': key,
+      };
+}
+
+class AskPayrollBankChangeResponse {
+  const AskPayrollBankChangeResponse({required this.employee, this.words});
+
+  final PayrollTeamMember employee;
+  final String? words;
+
+  factory AskPayrollBankChangeResponse.fromJson(Map<String, dynamic> j) => AskPayrollBankChangeResponse(
+        employee: PayrollTeamMember.fromJson(j['employee'] as Map<String, dynamic>),
+        words: j['words'] == null ? null : j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'employee': employee.toJson(),
+        'words': ?words,
+      };
+}
+
+class EndPayrollEmployeeRequest {
+  const EndPayrollEmployeeRequest({required this.confirm, required this.key});
+
+  final String confirm;
+  final String key;
+
+  factory EndPayrollEmployeeRequest.fromJson(Map<String, dynamic> j) => EndPayrollEmployeeRequest(
+        confirm: j['confirm'] as String,
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirm': confirm,
+        'key': key,
+      };
+}
+
+class EndPayrollEmployeeResponse {
+  const EndPayrollEmployeeResponse({required this.employee, this.words});
+
+  final PayrollTeamMember employee;
+  final String? words;
+
+  factory EndPayrollEmployeeResponse.fromJson(Map<String, dynamic> j) => EndPayrollEmployeeResponse(
+        employee: PayrollTeamMember.fromJson(j['employee'] as Map<String, dynamic>),
+        words: j['words'] == null ? null : j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'employee': employee.toJson(),
+        'words': ?words,
+      };
+}
+
+class PayrollNameCheckRequest {
+  const PayrollNameCheckRequest({required this.accountNumber, required this.bankCode});
+
+  final String accountNumber;
+  final String bankCode;
+
+  factory PayrollNameCheckRequest.fromJson(Map<String, dynamic> j) => PayrollNameCheckRequest(
+        accountNumber: j['account_number'] as String,
+        bankCode: j['bank_code'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': accountNumber,
+        'bank_code': bankCode,
+      };
+}
+
+class PayrollNameCheckResponse {
+  const PayrollNameCheckResponse({this.accountName, this.bank, required this.checked, this.last4, this.words});
+
+  final String? accountName;
+  final String? bank;
+  final bool checked;
+  final String? last4;
+  final String? words;
+
+  factory PayrollNameCheckResponse.fromJson(Map<String, dynamic> j) => PayrollNameCheckResponse(
+        accountName: j['account_name'] == null ? null : j['account_name'] as String,
+        bank: j['bank'] == null ? null : j['bank'] as String,
+        checked: j['checked'] as bool,
+        last4: j['last4'] == null ? null : j['last4'] as String,
+        words: j['words'] == null ? null : j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': ?accountName,
+        'bank': ?bank,
+        'checked': checked,
+        'last4': ?last4,
+        'words': ?words,
+      };
+}
+
+class GetPayrollBankChangesResponse {
+  const GetPayrollBankChangesResponse({required this.changes, required this.may});
+
+  final List<PayrollBankChange> changes;
+  final PayrollTeamMay may;
+
+  factory GetPayrollBankChangesResponse.fromJson(Map<String, dynamic> j) => GetPayrollBankChangesResponse(
+        changes: (j['changes'] as List).map((e) => PayrollBankChange.fromJson(e as Map<String, dynamic>)).toList(),
+        may: PayrollTeamMay.fromJson(j['may'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'changes': changes.map((e) => e.toJson()).toList(),
+        'may': may.toJson(),
+      };
+}
+
+class PayrollBankChange {
+  const PayrollBankChange({required this.accountName, this.askedBy, required this.bank, this.employee, required this.employeeId, required this.id, required this.last4, required this.mine, required this.requestedAt, required this.via});
+
+  final String accountName;
+  final String? askedBy;
+  final String bank;
+  final String? employee;
+  final String employeeId;
+  final String id;
+  final String last4;
+  final bool mine;
+  final String requestedAt;
+  final String via;
+
+  factory PayrollBankChange.fromJson(Map<String, dynamic> j) => PayrollBankChange(
+        accountName: j['account_name'] as String,
+        askedBy: j['asked_by'] == null ? null : j['asked_by'] as String,
+        bank: j['bank'] as String,
+        employee: j['employee'] == null ? null : j['employee'] as String,
+        employeeId: j['employee_id'] as String,
+        id: j['id'] as String,
+        last4: j['last4'] as String,
+        mine: j['mine'] as bool,
+        requestedAt: j['requested_at'] as String,
+        via: j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': accountName,
+        'asked_by': ?askedBy,
+        'bank': bank,
+        'employee': ?employee,
+        'employee_id': employeeId,
+        'id': id,
+        'last4': last4,
+        'mine': mine,
+        'requested_at': requestedAt,
+        'via': via,
+      };
+}
+
+class StartBankChangeCodeRequest {
+  const StartBankChangeCodeRequest({required this.key});
+
+  final String key;
+
+  factory StartBankChangeCodeRequest.fromJson(Map<String, dynamic> j) => StartBankChangeCodeRequest(
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+      };
+}
+
+class StartBankChangeCodeResponse {
+  const StartBankChangeCodeResponse({required this.challenge, required this.safer, required this.sentTo});
+
+  final StartBankChangeCodeResponseChallenge challenge;
+  final bool safer;
+  final String sentTo;
+
+  factory StartBankChangeCodeResponse.fromJson(Map<String, dynamic> j) => StartBankChangeCodeResponse(
+        challenge: StartBankChangeCodeResponseChallenge.fromJson(j['challenge'] as Map<String, dynamic>),
+        safer: j['safer'] as bool,
+        sentTo: j['sent_to'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge': challenge.toJson(),
+        'safer': safer,
+        'sent_to': sentTo,
+      };
+}
+
+class StartBankChangeCodeResponseChallenge {
+  const StartBankChangeCodeResponseChallenge({required this.challengeId, required this.channel, this.destinationHint, required this.expiresAt});
+
+  final String challengeId;
+  final String channel;
+  final String? destinationHint;
+  final String expiresAt;
+
+  factory StartBankChangeCodeResponseChallenge.fromJson(Map<String, dynamic> j) => StartBankChangeCodeResponseChallenge(
+        challengeId: j['challenge_id'] as String,
+        channel: j['channel'] as String,
+        destinationHint: j['destination_hint'] == null ? null : j['destination_hint'] as String,
+        expiresAt: j['expires_at'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'channel': channel,
+        'destination_hint': ?destinationHint,
+        'expires_at': expiresAt,
+      };
+}
+
+class ApproveBankChangeRequest {
+  const ApproveBankChangeRequest({required this.challengeId, required this.code, required this.key});
+
+  final String challengeId;
+  final String code;
+  final String key;
+
+  factory ApproveBankChangeRequest.fromJson(Map<String, dynamic> j) => ApproveBankChangeRequest(
+        challengeId: j['challenge_id'] as String,
+        code: j['code'] as String,
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'code': code,
+        'key': key,
+      };
+}
+
+class ApproveBankChangeResponse {
+  const ApproveBankChangeResponse({required this.change, required this.words});
+
+  final PayrollBankChange change;
+  final String words;
+
+  factory ApproveBankChangeResponse.fromJson(Map<String, dynamic> j) => ApproveBankChangeResponse(
+        change: PayrollBankChange.fromJson(j['change'] as Map<String, dynamic>),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'change': change.toJson(),
+        'words': words,
+      };
+}
+
+class RejectBankChangeRequest {
+  const RejectBankChangeRequest({required this.key, required this.note});
+
+  final String key;
+  final String note;
+
+  factory RejectBankChangeRequest.fromJson(Map<String, dynamic> j) => RejectBankChangeRequest(
+        key: j['key'] as String,
+        note: j['note'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'note': note,
+      };
+}
+
+class RejectBankChangeResponse {
+  const RejectBankChangeResponse({required this.change, required this.words});
+
+  final PayrollBankChange change;
+  final String words;
+
+  factory RejectBankChangeResponse.fromJson(Map<String, dynamic> j) => RejectBankChangeResponse(
+        change: PayrollBankChange.fromJson(j['change'] as Map<String, dynamic>),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'change': change.toJson(),
+        'words': words,
+      };
+}
+
+class GetMyPayResponse {
+  const GetMyPayResponse({required this.linked, this.me});
+
+  final bool linked;
+  final GetMyPayResponseMe? me;
+
+  factory GetMyPayResponse.fromJson(Map<String, dynamic> j) => GetMyPayResponse(
+        linked: j['linked'] as bool,
+        me: j['me'] == null ? null : GetMyPayResponseMe.fromJson(j['me'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'linked': linked,
+        'me': ?me?.toJson(),
+      };
+}
+
+class GetMyPayResponseMe {
+  const GetMyPayResponseMe({this.bank, required this.name, this.phone, required this.status, this.waitingChange});
+
+  final Object? bank;
+  final String name;
+  final String? phone;
+  final String status;
+  final Object? waitingChange;
+
+  factory GetMyPayResponseMe.fromJson(Map<String, dynamic> j) => GetMyPayResponseMe(
+        bank: j['bank'],
+        name: j['name'] as String,
+        phone: j['phone'] == null ? null : j['phone'] as String,
+        status: j['status'] as String,
+        waitingChange: j['waiting_change'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'bank': ?bank,
+        'name': name,
+        'phone': ?phone,
+        'status': status,
+        'waiting_change': ?waitingChange,
+      };
+}
+
+class StartMyBankChangeRequest {
+  const StartMyBankChangeRequest({required this.accountNumber, required this.bankCode, required this.key});
+
+  final String accountNumber;
+  final String bankCode;
+  final String key;
+
+  factory StartMyBankChangeRequest.fromJson(Map<String, dynamic> j) => StartMyBankChangeRequest(
+        accountNumber: j['account_number'] as String,
+        bankCode: j['bank_code'] as String,
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': accountNumber,
+        'bank_code': bankCode,
+        'key': key,
+      };
+}
+
+class StartMyBankChangeResponse {
+  const StartMyBankChangeResponse({required this.accountName, required this.bank, required this.challenge, required this.last4, required this.sentTo});
+
+  final String accountName;
+  final String bank;
+  final StartMyBankChangeResponseChallenge challenge;
+  final String last4;
+  final String sentTo;
+
+  factory StartMyBankChangeResponse.fromJson(Map<String, dynamic> j) => StartMyBankChangeResponse(
+        accountName: j['account_name'] as String,
+        bank: j['bank'] as String,
+        challenge: StartMyBankChangeResponseChallenge.fromJson(j['challenge'] as Map<String, dynamic>),
+        last4: j['last4'] as String,
+        sentTo: j['sent_to'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': accountName,
+        'bank': bank,
+        'challenge': challenge.toJson(),
+        'last4': last4,
+        'sent_to': sentTo,
+      };
+}
+
+class StartMyBankChangeResponseChallenge {
+  const StartMyBankChangeResponseChallenge({required this.challengeId, required this.channel, this.destinationHint, required this.expiresAt});
+
+  final String challengeId;
+  final String channel;
+  final String? destinationHint;
+  final String expiresAt;
+
+  factory StartMyBankChangeResponseChallenge.fromJson(Map<String, dynamic> j) => StartMyBankChangeResponseChallenge(
+        challengeId: j['challenge_id'] as String,
+        channel: j['channel'] as String,
+        destinationHint: j['destination_hint'] == null ? null : j['destination_hint'] as String,
+        expiresAt: j['expires_at'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'channel': channel,
+        'destination_hint': ?destinationHint,
+        'expires_at': expiresAt,
+      };
+}
+
+class ConfirmMyBankChangeRequest {
+  const ConfirmMyBankChangeRequest({required this.challengeId, required this.code, required this.key});
+
+  final String challengeId;
+  final String code;
+  final String key;
+
+  factory ConfirmMyBankChangeRequest.fromJson(Map<String, dynamic> j) => ConfirmMyBankChangeRequest(
+        challengeId: j['challenge_id'] as String,
+        code: j['code'] as String,
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'code': code,
+        'key': key,
+      };
+}
+
+class ConfirmMyBankChangeResponse {
+  const ConfirmMyBankChangeResponse({required this.change, required this.words});
+
+  final PayrollBankChange change;
+  final String words;
+
+  factory ConfirmMyBankChangeResponse.fromJson(Map<String, dynamic> j) => ConfirmMyBankChangeResponse(
+        change: PayrollBankChange.fromJson(j['change'] as Map<String, dynamic>),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'change': change.toJson(),
+        'words': words,
       };
 }

@@ -249,6 +249,9 @@ export function PayrollPage() {
             </section>
           )}
           <Items label="Staff in Payrolla">
+            <Item to="/payroll/team" icon="members" title="Team" sub="Everyone in Payrolla, their pay and their account" testid="payroll-team-link" />
+            <Item to="/payroll/account-changes" icon="billing" title="Account changes" sub="New salary accounts waiting for an approver" testid="payroll-changes-link" />
+            <Item to="/payroll/me" icon="billing" title="My pay" sub="Your own salary account" testid="payroll-me-link" />
             <Item
               to="/payroll/staff"
               icon="members"
