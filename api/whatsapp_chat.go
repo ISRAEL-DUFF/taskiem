@@ -320,6 +320,9 @@ type chatData struct {
 	// asking for its values (chat_menus.go).
 	Menu  *chatMenuState `json:"menu,omitempty"`
 	Steps *chatSteps     `json:"steps,omitempty"`
+	// Payroll is a change to the team or this month's payroll said in
+	// words, waiting for yes or its reason (payroll_chat_words.go).
+	Payroll *chatPayroll `json:"payroll,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a

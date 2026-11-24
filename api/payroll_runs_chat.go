@@ -153,8 +153,16 @@ func (s *Server) waPayroll(ctx context.Context, c *chat, text, cmd string) (bool
 			return true, s.payrollAskCode(ctx, c, run, payrolla.ActionPayNow)
 		case "f":
 			return true, s.payrollAskCode(ctx, c, run, payrolla.ActionRetryFailed)
+		case "b":
+			// Approve on an account change (payroll_chat_words.go).
+			return true, s.payrollChangeAskCode(ctx, c, "", run)
 		}
 		return true, c.say(ctx, s, c.t("payroll.none"))
+	}
+	// The team's and this month's changes in words, account changes, and
+	// a change waiting for yes (payroll_chat_words.go).
+	if done, err := s.waPayrollWords(ctx, c, text, cmd); done || err != nil {
+		return true, err
 	}
 	// "my payslip": a linked employee's own (payroll_payment_chat.go).
 	if c.state == stateIdle && c.in.Reply == "" {
@@ -316,29 +324,12 @@ func (s *Server) payrollCodeTyped(ctx context.Context, c *chat, w *payrollWait, 
 	// message itself is not kept: it is only digits).
 	s.keepHistory(ctx, c.tenant.ID, c.p.UserID, c.ch.Name(), true, "text", c.t("payroll.code.entered"), nil)
 	code := codeOf(typed)
+	if w.Action == actionBankChange {
+		return s.payrollChangeCodeTyped(ctx, c, w, code)
+	}
 	d, err := s.decideRunCode(ctx, c.p, w.Run, w.Action, w.Challenge, code, uuid.NewString(), c.lang.Tag)
 	if err != nil {
-		var rr runRefused
-		if errors.As(err, &rr) {
-			switch rr.code {
-			case "code_invalid":
-				return c.say(ctx, s, rr.msg+" "+c.t("payroll.code.again"))
-			case "code_expired", "code_locked", "code_used":
-				if derr := s.dropPayrollWait(ctx, c); derr != nil {
-					return derr
-				}
-				b := map[string]string{payrolla.ActionLock: "l", payrolla.ActionPayNow: "p", payrolla.ActionRetryFailed: "f"}[w.Action]
-				if b == "" {
-					b = "a"
-				}
-				return c.say(ctx, s, rr.msg, whatsapp.Button{ID: payrollPrefix + b + ":" + w.Run, Title: c.t("payroll.button.new_code")})
-			}
-		}
-		if derr := s.dropPayrollWait(ctx, c); derr != nil {
-			return derr
-		}
-		_, err = s.sayRefused(ctx, c, err)
-		return err
+		return s.payrollCodeRefused(ctx, c, w, err)
 	}
 	if err := s.dropPayrollWait(ctx, c); err != nil {
 		return err

@@ -8828,6 +8828,286 @@
       "text": "{period}: {url}",
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. After locking (P4b-4, api/payroll_payment.go): \"my payslips\" on a chat app: one payslip's link"
+    },
+    "payroll.button.approve_who": {
+      "text": "Approve {name}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): a button under the account changes waiting: approve this person's ({name}: their first name; 20 characters at most with it)"
+    },
+    "payroll.change.approved": {
+      "text": "Approved. Payrolla pays {name} into the new account from now on.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): after the code typed in the thread"
+    },
+    "payroll.change.approved_own": {
+      "text": "Approved by the person who asked. Payrolla pays {name} into the new account from now on.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): the company's only approver approved a change they asked for themselves, with their code"
+    },
+    "payroll.change.asked_employee": {
+      "text": "Asked by the employee.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): who asked for a change: the employee, with their own code"
+    },
+    "payroll.change.asked_payrolla": {
+      "text": "Asked in Payrolla.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Payrolla's own screens"
+    },
+    "payroll.change.asked_taskiem": {
+      "text": "Asked by {who} in Taskiem.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Taskiem ({who}: their name)"
+    },
+    "payroll.change.asked_taskiem_someone": {
+      "text": "Asked in Taskiem.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Taskiem whose name isn't known"
+    },
+    "payroll.change.decided": {
+      "text": "This account change was already decided.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): Payrolla's INVALID_STATE: approved or rejected already"
+    },
+    "payroll.change.gone": {
+      "text": "Payrolla has no such account change. It may have been decided.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): the change is not in Payrolla any more"
+    },
+    "payroll.change.how": {
+      "text": "To approve one, say: approve {name}'s account change.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): under the list, to those who may approve ({name}: a first name, in small letters)"
+    },
+    "payroll.change.line": {
+      "text": "{name}: {account}. {asked}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): one change waiting ({account}: the bank's name for the new account, the bank and its last four digits; {asked}: who asked)"
+    },
+    "payroll.change.none": {
+      "text": "No account changes are waiting.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): nothing waiting"
+    },
+    "payroll.change.none_for": {
+      "text": "No account change is waiting for {name}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): none waiting for the person named"
+    },
+    "payroll.change.open": {
+      "text": "See them all: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): a link to Account changes"
+    },
+    "payroll.change.open_page": {
+      "text": "Approve it where you type Payrolla's code: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): on the web, in the app and on Slack, a link to Account changes, whose sheet takes the code"
+    },
+    "payroll.change.reject_how": {
+      "text": "To turn it down, say: reject {whose} account change, and why.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): \"reject … account change\" without a note ({whose}: musa's, or the)"
+    },
+    "payroll.change.rejected": {
+      "text": "Rejected. {name} is still paid into their current account.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): after rejecting a change with a note"
+    },
+    "payroll.change.same_person": {
+      "text": "You asked for this account change, so someone else must approve it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): Payrolla's SAME_PERSON: whoever asked can't approve it, unless they are the only approver"
+    },
+    "payroll.change.title": {
+      "text": "Account changes waiting:",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): the title of the list"
+    },
+    "payroll.change.type": {
+      "text": "Type it here to approve {name}'s new salary account: {account}. It works once, for 5 minutes.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): in the WhatsApp or Telegram thread: type the code to approve a change ({account}: the bank's name for it, the bank and its last four digits)"
+    },
+    "payroll.change.which": {
+      "text": "Which one: {names}? Say it with their name, like: approve musa's account change.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Account changes by chat (api/payroll_chat_words.go): more than one change, and no name or a name of two people"
+    },
+    "payroll.staff.add_form": {
+      "text": "Add {name} to payroll in this form, with their pay and bank account. The bank's name for the account shows before you save: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): \"add musa to payroll\" for a staff member not yet in Payrolla: the Add someone form, filled in from them"
+    },
+    "payroll.staff.add_new": {
+      "text": "{name} isn't on your staff in Taskiem. Add them to payroll in this form, with their pay and bank account: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): \"add … to payroll\" for someone not on the staff: the empty Add someone form"
+    },
+    "payroll.staff.already": {
+      "text": "{name} is already on payroll. See them on Team: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): \"add … to payroll\" for someone already in Payrolla"
+    },
+    "payroll.staff.ask_end": {
+      "text": "End {name}'s employment? This takes effect today. Payrolla can't set a last day.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): asks yes before ending someone's employment"
+    },
+    "payroll.staff.ask_move": {
+      "text": "Move {name} to {department}?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's department"
+    },
+    "payroll.staff.ask_pay": {
+      "text": "Change {name}'s monthly pay from {before} to {amount}, starting {date}?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's pay (amounts before tax)"
+    },
+    "payroll.staff.ask_pay_new": {
+      "text": "Change {name}'s monthly pay to {amount}, starting {date}?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's pay when their pay now isn't known"
+    },
+    "payroll.staff.bank_form": {
+      "text": "A new salary account is typed only in a form, so the bank can check it. Open {name} on Team: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): \"change zainab's salary account\": the form, never the chat"
+    },
+    "payroll.staff.done_end": {
+      "text": "{name}'s employment ended today.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): after yes"
+    },
+    "payroll.staff.done_move": {
+      "text": "Done. {name} is in {department} now.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): after yes"
+    },
+    "payroll.staff.done_pay": {
+      "text": "Done. {name}'s new pay starts {date}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): after yes ({date}: 1 January 2027)"
+    },
+    "payroll.staff.from_bad": {
+      "text": "Say when the new pay starts, like: from january, or from 1 january.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): a start date that can't be read"
+    },
+    "payroll.staff.left": {
+      "text": "{name} has left already.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): someone whose employment ended"
+    },
+    "payroll.staff.my_account": {
+      "text": "Change your salary account on My pay. You type the code Payrolla texts you there: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): \"change my salary account\" from a linked employee"
+    },
+    "payroll.staff.parts_kept": {
+      "text": "Their basic, housing and transport stay as they are.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): after the question about a change of pay, when they have those parts"
+    },
+    "payroll.staff.pay_form": {
+      "text": "{name}'s basic, housing and transport add up to more than {amount}. Change their pay in the form on Team: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): a lower pay than the parts add up to: the form, not a guess"
+    },
+    "payroll.staff.today": {
+      "text": "today",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Staff by chat (api/payroll_chat_words.go): a change of pay starting today, in \"starting {date}\""
+    },
+    "payroll.words.amount": {
+      "text": "That amount doesn't look right. Say it like: 100k, or ₦100,000.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Chat words (api/payroll_chat_words.go): an amount that can't be read"
+    },
+    "payroll.words.ask_bonus": {
+      "text": "Add a {amount} bonus for {name} in {period} payroll, for {reason}? A bonus is taxed, so their take-home pay ({net} now) goes up by less than that.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): asks yes before adding a bonus ({net}: their take-home pay now, from Payrolla)"
+    },
+    "payroll.words.ask_deduction": {
+      "text": "Take {amount} off {name}'s pay in {period} payroll, for {reason}? Their take-home pay is {net} now.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): asks yes before a deduction"
+    },
+    "payroll.words.ask_leave_out": {
+      "text": "Leave {name} out of {period} payroll, for {reason}? They're paid nothing this month instead of {net}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): asks yes before leaving someone out this month"
+    },
+    "payroll.words.ask_put_back": {
+      "text": "Put {name} back in {period} payroll?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): asks yes before putting someone left out back"
+    },
+    "payroll.words.done": {
+      "text": "Done.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): after yes, when the person's pay can't be read"
+    },
+    "payroll.words.done_adjust": {
+      "text": "Done. {name} now takes home {net} this month (it was {before}).",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): after a bonus or a deduction, with their take-home pay from Payrolla"
+    },
+    "payroll.words.done_leave_out": {
+      "text": "Done. {name} is left out of {period} payroll. It now pays {people} {amount}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): after leaving someone out"
+    },
+    "payroll.words.done_put_back": {
+      "text": "Done. {name} is back in {period} payroll and takes home {net}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): after putting someone back"
+    },
+    "payroll.words.leave_reason": {
+      "text": "Why is {name} left out this month? Say it in a few words, like: unpaid leave.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): asks the reason for leaving someone out"
+    },
+    "payroll.words.no_open": {
+      "text": "There's no payroll open for changes. Say: prepare {month} payroll.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): no payroll prepared and not yet approved ({month}: this month, in small letters)"
+    },
+    "payroll.words.not_found": {
+      "text": "There's no one called {name} in Payrolla.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Chat words (api/payroll_chat_words.go): a name that matches no one on payroll"
+    },
+    "payroll.words.not_found_run": {
+      "text": "There's no one called {name} in {period} payroll.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): a name that matches no one in the payroll"
+    },
+    "payroll.words.not_left_out": {
+      "text": "{name} isn't left out of {period} payroll.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): \"put … back\" for someone not left out"
+    },
+    "payroll.words.nothing": {
+      "text": "Nothing changed.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Chat words (api/payroll_chat_words.go): no to a change waiting for yes"
+    },
+    "payroll.words.reason": {
+      "text": "What is it for? Say it in a few words, like: Q4 target.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's changes by chat (api/payroll_chat_words.go): asks the reason for a bonus or a deduction"
+    },
+    "payroll.words.reason_short": {
+      "text": "Say why in a few words (200 characters at most).",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Chat words (api/payroll_chat_words.go): an empty or too long reason"
+    },
+    "payroll.words.which": {
+      "text": "Which one: {names}? Say it again with their full name.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Chat words (api/payroll_chat_words.go): a name that matches more than one person"
     }
   }
 }

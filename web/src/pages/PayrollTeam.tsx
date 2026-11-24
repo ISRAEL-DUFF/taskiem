@@ -347,8 +347,10 @@ export function PayrollTeamPage() {
   const addFor = params.get("add");
   useEffect(() => {
     if (!d || !addFor) return;
+    // ?add=new opens an empty Add someone (the chat's "add … to payroll"
+    // for someone not on the staff); ?add=<staff> fills it in from them.
     const st = d.staff.find((s) => s.user_id === addFor);
-    if (st && d.may.prepare) setSheet({ kind: "add", from: st });
+    if (d.may.prepare && (st || addFor === "new")) setSheet({ kind: "add", from: st });
     setParams({}, { replace: true });
   }, [d, addFor, setParams]);
   const finish = (words?: string) => {

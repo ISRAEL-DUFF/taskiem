@@ -63,7 +63,7 @@ A refused key says what to do: `scope_required` (make a key with Read payroll an
 
 ## What is not here yet
 
-Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-requests.md); Payrolla's replies [A](payrolla-reference/05-phase-a-response.md), [B](payrolla-reference/06-phase-b-response.md) and [C](payrolla-reference/07-phase-c-response.md)). Taskiem builds on it as P4b, in five slices ([decision 0074](../decisions/0074-payroll-run-from-taskiem.md), accepted; [the plan](../spec/chat-pay-people.md#p4b-slice-by-slice)). Built so far: 1–4; 5 is next.
+Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-requests.md); Payrolla's replies [A](payrolla-reference/05-phase-a-response.md), [B](payrolla-reference/06-phase-b-response.md) and [C](payrolla-reference/07-phase-c-response.md)). Taskiem builds on it as P4b, in five slices ([decision 0074](../decisions/0074-payroll-run-from-taskiem.md), accepted; [the plan](../spec/chat-pay-people.md#p4b-slice-by-slice)). Built: 1–5, and the chat's words for staff, this month's changes and account changes.
 
 1. **Connecting in one step** (P4b-1), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-1-connect-in-one-step-keep-keys-reconnect-link-approvers)), live once Payrolla registers Taskiem:
    - OAuth 2.0 with PKCE, with sign-up in the same step (`POST /v1/payroll/connect`; Payrolla sends the browser back to `/v1/payrolla/callback`);
@@ -83,6 +83,8 @@ Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-
    Approving is no longer a link into Payrolla, and there is no Taskiem-signed approval: Payrolla chose its own code instead.
 4. **After locking** (P4b-4), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-4-after-locking-paid-short-again-and-payslips)): the payment's progress (`GET /connect/runs/{id}/payment`), the wallet's shortfall told on the day and warned before it, **Pay now** and **Pay the failed ones again** with Payrolla's code, and payslips as Taskiem's own cards (`/v1/payroll/payslips`, `/v1/payroll/me/payslips`). `payrolla-tell-staff` now sends the 7-day payslip link to a staff member linked in Taskiem only on a key connection (which hears no `payslip.issued`); connected in one step, they get Taskiem's card instead.
 5. **Settings and the tax and pension schedules** (P4b-5), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-5-settings-and-the-tax-and-pension-schedules); `/v1/payroll/settings` and `/v1/payroll/schedules`, Payrolla's `reports:read`): the setup read-only, and each payroll's schedules with pension PINs shown only with a passkey.
+
+6. **The chat's words** for the team, this month's changes and account changes, **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-slice-by-slice), "As built: chat words"), through the same calls as the screens: "add musa to payroll" (the Add someone form), "raise zainab's pay to 500k from january", "move zainab to sales", "end musa's employment", "bonus 100k to zainab for q4 target", "deduct 20k from musa, advance repaid", "leave out ada this month, unpaid leave", "put ada back" (each asked yes first), "account changes", "approve zainab's account change" with Payrolla's code typed in the WhatsApp or Telegram thread (`POST /connect/bank-changes/{id}/confirmations`, then `…/approve`; `payroll_code_waits` action `bank_change`, migration 00595), "reject zainab's account change, why", and "change my salary account" (My pay).
 
 **Also not here yet:**
 
