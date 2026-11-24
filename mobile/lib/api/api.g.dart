@@ -1722,6 +1722,30 @@ class TaskiemApi {
     return CancelPaymentResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// What people are paid from (`GET /v1/payments/balance`)
+  Future<GetPayBalanceResponse> getPayBalance() async {
+    final j = await _t.send('GET', '/v1/payments/balance');
+    return GetPayBalanceResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A paid payment's receipt (`GET /v1/payments/{id}/receipt`)
+  Future<GetPaymentReceiptResponse> getPaymentReceipt({required String id}) async {
+    final j = await _t.send('GET', '/v1/payments/${Uri.encodeComponent(id)}/receipt');
+    return GetPaymentReceiptResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Send a paid payment's receipt back into a chat (`POST /v1/payments/{id}/share`)
+  Future<SharePaymentReceiptResponse> sharePaymentReceipt({required SharePaymentReceiptRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payments/${Uri.encodeComponent(id)}/share', body: body.toJson());
+    return SharePaymentReceiptResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Try a payment again (`POST /v1/payments/{id}/again`)
+  Future<PayAgainResponse> payAgain({required String id}) async {
+    final j = await _t.send('POST', '/v1/payments/${Uri.encodeComponent(id)}/again');
+    return PayAgainResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// What each role may pay without the owner's OK (`GET /v1/pay-limits`)
   Future<GetPayLimitsResponse> getPayLimits() async {
     final j = await _t.send('GET', '/v1/pay-limits');
@@ -3429,13 +3453,15 @@ class LinkConversation {
 }
 
 class LinkMessage {
-  const LinkMessage({this.asked, this.attachment, this.body, this.card, required this.createdAt, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
+  const LinkMessage({this.asked, this.attachment, this.batch, this.body, this.card, required this.createdAt, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.payment, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
 
   /// On a taskiem note, the words asked of Taskiem
   final String? asked;
   /// A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id}
   /// streams it
   final LinkMessageAttachment? attachment;
+  /// The batch of payments a diary line on our side is about
+  final String? batch;
   final String? body;
   final LinkDocCard? card;
   final DateTime createdAt;
@@ -3451,6 +3477,8 @@ class LinkMessage {
   final List<LinkMention>? mentions;
   /// We sent it (a card, we acted)
   final bool mine;
+  /// The payment a diary line on our side is about (shown as it stands)
+  final String? payment;
   /// The first link's preview, fetched by the sender's side when it was sent
   final LinkMessagePreview? preview;
   final List<LinkReaction>? reactions;
@@ -3465,6 +3493,7 @@ class LinkMessage {
   factory LinkMessage.fromJson(Map<String, dynamic> j) => LinkMessage(
         asked: j['asked'] == null ? null : j['asked'] as String,
         attachment: j['attachment'] == null ? null : LinkMessageAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        batch: j['batch'] == null ? null : j['batch'] as String,
         body: j['body'] == null ? null : j['body'] as String,
         card: j['card'] == null ? null : LinkDocCard.fromJson(j['card'] as Map<String, dynamic>),
         createdAt: DateTime.parse(j['created_at'] as String),
@@ -3474,6 +3503,7 @@ class LinkMessage {
         link: j['link'] as String,
         mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => LinkMention.fromJson(e as Map<String, dynamic>)).toList(),
         mine: j['mine'] as bool,
+        payment: j['payment'] == null ? null : j['payment'] as String,
         preview: j['preview'] == null ? null : LinkMessagePreview.fromJson(j['preview'] as Map<String, dynamic>),
         reactions: j['reactions'] == null ? null : (j['reactions'] as List).map((e) => LinkReaction.fromJson(e as Map<String, dynamic>)).toList(),
         readAt: j['read_at'] == null ? null : DateTime.parse(j['read_at'] as String),
@@ -3485,6 +3515,7 @@ class LinkMessage {
   Map<String, dynamic> toJson() => {
         'asked': ?asked,
         'attachment': ?attachment?.toJson(),
+        'batch': ?batch,
         'body': ?body,
         'card': ?card?.toJson(),
         'created_at': createdAt.toUtc().toIso8601String(),
@@ -3494,6 +3525,7 @@ class LinkMessage {
         'link': link,
         'mentions': ?mentions?.map((e) => e.toJson()).toList(),
         'mine': mine,
+        'payment': ?payment,
         'preview': ?preview?.toJson(),
         'reactions': ?reactions?.map((e) => e.toJson()).toList(),
         'read_at': ?readAt?.toUtc().toIso8601String(),
@@ -4704,34 +4736,45 @@ class TaskiemChat {
 }
 
 class TaskiemMessage {
-  const TaskiemMessage({this.buttons, required this.channel, required this.createdAt, required this.id, required this.inbound, required this.kind, required this.text});
+  const TaskiemMessage({this.batch, this.buttons, required this.channel, required this.createdAt, required this.id, required this.inbound, required this.kind, this.payment, required this.text});
 
+  /// The batch of payments a diary line is about
+  final String? batch;
   final List<TaskiemMessageButtonsItem>? buttons;
   final String channel;
   final DateTime createdAt;
   final String id;
   /// The person said it (else Taskiem did)
   final bool inbound;
+  /// A diary line may name a payment or a batch it is about (shown as it
+  /// stands: paid, failed with Try again); receipt is a paid payment's receipt
+  /// sent into the chat; paid_you a payment to this person.
   final String kind;
+  /// The payment a diary line, receipt or paid_you card is about
+  final String? payment;
   final String text;
 
   factory TaskiemMessage.fromJson(Map<String, dynamic> j) => TaskiemMessage(
+        batch: j['batch'] == null ? null : j['batch'] as String,
         buttons: j['buttons'] == null ? null : (j['buttons'] as List).map((e) => TaskiemMessageButtonsItem.fromJson(e as Map<String, dynamic>)).toList(),
         channel: j['channel'] as String,
         createdAt: DateTime.parse(j['created_at'] as String),
         id: j['id'] as String,
         inbound: j['inbound'] as bool,
         kind: j['kind'] as String,
+        payment: j['payment'] == null ? null : j['payment'] as String,
         text: j['text'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'batch': ?batch,
         'buttons': ?buttons?.map((e) => e.toJson()).toList(),
         'channel': channel,
         'created_at': createdAt.toUtc().toIso8601String(),
         'id': id,
         'inbound': inbound,
         'kind': kind,
+        'payment': ?payment,
         'text': text,
       };
 }
@@ -14883,7 +14926,7 @@ class ListPaymentsResponse {
 }
 
 class Payment {
-  const Payment({required this.account, this.accountName, this.again, required this.amountKobo, this.awaitsYourOk, required this.bankName, this.batchId, this.changedAccount, this.confirmedAt, this.confirmedBy, required this.createdAt, this.feeKobo, this.finishedAt, this.firstPayment, required this.id, this.needsOk, this.note, required this.payee, required this.personal, required this.preparedBy, required this.purpose, this.purposeNote, this.reason, this.riderId, this.runId, this.savedId, this.staffId, required this.startedFrom, required this.status});
+  const Payment({required this.account, this.accountName, this.again, required this.amountKobo, this.awaitsYourOk, this.balanceKobo, required this.bankName, this.batchId, this.changedAccount, this.confirmedAt, this.confirmedBy, required this.createdAt, this.feeKobo, this.feeQuoteKobo, this.finishedAt, this.firstPayment, required this.id, this.mayTell, this.needsOk, this.note, required this.payee, required this.personal, required this.preparedBy, required this.purpose, this.purposeNote, this.reason, this.riderId, this.route, this.runId, this.savedId, this.sendReceipt, this.staffId, required this.startedFrom, required this.status, this.tellPayee});
 
   /// The account number masked (••6789).
   final String account;
@@ -14895,6 +14938,9 @@ class Payment {
   /// Confirmed by you, and its run still waits for your own OK, which did not
   /// reach it: confirm it again (POST /v1/payments/{id}/confirm) to give it.
   final bool? awaitsYourOk;
+  /// The balance when it was prepared, where the payments account says it (the
+  /// sheet shows the balance after).
+  final Object? balanceKobo;
   final String bankName;
   /// The list it was paid in, when it was
   final Object? batchId;
@@ -14903,9 +14949,17 @@ class Payment {
   final Object? confirmedBy;
   final DateTime createdAt;
   final Object? feeKobo;
+  /// The fee the payments account quoted before it was confirmed (the business
+  /// pays it); null when it quotes none: the fee then shows once paid
+  /// (`fee_kobo`).
+  final Object? feeQuoteKobo;
   final Object? finishedAt;
   final bool? firstPayment;
   final String id;
+  /// The person paid can be told in a chat of theirs (a rider, a staff member,
+  /// for anything but wages or a refund): the sheet offers Tell them in the
+  /// chat; else Send them a receipt.
+  final bool? mayTell;
   /// Why the owner's OK is asked, comma-separated; `limit` over the payer's
   /// limit, `changed` an account changed since it was last paid, `first` an
   /// account staff never paid before. Empty when none.
@@ -14920,12 +14974,17 @@ class Payment {
   final Object? reason;
   /// The rider paid, when it was one
   final Object? riderId;
+  /// How it goes: a bank transfer, or Taskiem wallet to Taskiem wallet (at
+  /// once, no fee) when the account is another business's Taskiem wallet.
+  final String? route;
   final Object? runId;
   final Object? savedId;
+  final bool? sendReceipt;
   /// The staff member paid, when it was one
   final Object? staffId;
   final String startedFrom;
   final String status;
+  final bool? tellPayee;
 
   factory Payment.fromJson(Map<String, dynamic> j) => Payment(
         account: j['account'] as String,
@@ -14933,6 +14992,7 @@ class Payment {
         again: j['again'] == null ? null : j['again'] as bool,
         amountKobo: (j['amount_kobo'] as num).toInt(),
         awaitsYourOk: j['awaits_your_ok'] == null ? null : j['awaits_your_ok'] as bool,
+        balanceKobo: j['balance_kobo'],
         bankName: j['bank_name'] as String,
         batchId: j['batch_id'],
         changedAccount: j['changed_account'] == null ? null : j['changed_account'] as bool,
@@ -14940,9 +15000,11 @@ class Payment {
         confirmedBy: j['confirmed_by'],
         createdAt: DateTime.parse(j['created_at'] as String),
         feeKobo: j['fee_kobo'],
+        feeQuoteKobo: j['fee_quote_kobo'],
         finishedAt: j['finished_at'],
         firstPayment: j['first_payment'] == null ? null : j['first_payment'] as bool,
         id: j['id'] as String,
+        mayTell: j['may_tell'] == null ? null : j['may_tell'] as bool,
         needsOk: j['needs_ok'] == null ? null : j['needs_ok'] as String,
         note: j['note'] == null ? null : j['note'] as String,
         payee: j['payee'] as String,
@@ -14952,11 +15014,14 @@ class Payment {
         purposeNote: j['purpose_note'] == null ? null : j['purpose_note'] as String,
         reason: j['reason'],
         riderId: j['rider_id'],
+        route: j['route'] == null ? null : j['route'] as String,
         runId: j['run_id'],
         savedId: j['saved_id'],
+        sendReceipt: j['send_receipt'] == null ? null : j['send_receipt'] as bool,
         staffId: j['staff_id'],
         startedFrom: j['started_from'] as String,
         status: j['status'] as String,
+        tellPayee: j['tell_payee'] == null ? null : j['tell_payee'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
@@ -14965,6 +15030,7 @@ class Payment {
         'again': ?again,
         'amount_kobo': amountKobo,
         'awaits_your_ok': ?awaitsYourOk,
+        'balance_kobo': ?balanceKobo,
         'bank_name': bankName,
         'batch_id': ?batchId,
         'changed_account': ?changedAccount,
@@ -14972,9 +15038,11 @@ class Payment {
         'confirmed_by': ?confirmedBy,
         'created_at': createdAt.toUtc().toIso8601String(),
         'fee_kobo': ?feeKobo,
+        'fee_quote_kobo': ?feeQuoteKobo,
         'finished_at': ?finishedAt,
         'first_payment': ?firstPayment,
         'id': id,
+        'may_tell': ?mayTell,
         'needs_ok': ?needsOk,
         'note': ?note,
         'payee': payee,
@@ -14984,11 +15052,14 @@ class Payment {
         'purpose_note': ?purposeNote,
         'reason': ?reason,
         'rider_id': ?riderId,
+        'route': ?route,
         'run_id': ?runId,
         'saved_id': ?savedId,
+        'send_receipt': ?sendReceipt,
         'staff_id': ?staffId,
         'started_from': startedFrom,
         'status': status,
+        'tell_payee': ?tellPayee,
       };
 }
 
@@ -15193,7 +15264,7 @@ class PayNameCheckResponseBanksItem {
 }
 
 class CreatePaymentRequest {
-  const CreatePaymentRequest({this.accountNumber, required this.amountKobo, this.bankName, this.from, this.mine, this.note, this.payee, this.purpose, this.purposeNote, this.riderId, this.savedId, this.staffId});
+  const CreatePaymentRequest({this.accountNumber, required this.amountKobo, this.bankName, this.from, this.mine, this.note, this.payee, this.purpose, this.purposeNote, this.riderId, this.savedId, this.sendReceipt, this.staffId, this.tellPayee, this.where});
 
   /// An account not saved (pay.account), with bank_name; its name is checked
   /// with the bank as it is prepared. 409 `name_not_checked` when the bank did
@@ -15211,9 +15282,19 @@ class CreatePaymentRequest {
   /// 409 `no_bank` when none is kept.
   final String? riderId;
   final String? savedId;
+  /// A receipt to send the person paid, for one not on Taskiem.
+  final bool? sendReceipt;
   /// A staff member, paid to the saved account linked to them (payments outside
   /// payroll). 409 `no_bank` when none is linked.
   final String? staffId;
+  /// Tell the person paid in their chat once the bank confirms (a rider, a
+  /// staff member; not for wages, an owner's own account or refunds). On by
+  /// default.
+  final bool? tellPayee;
+  /// The chat it was paid from, for its diary line: `taskiem` (the person's own
+  /// Taskiem chat) or a linked business's link id. 400 `where` for a chat that
+  /// is not theirs.
+  final String? where;
 
   factory CreatePaymentRequest.fromJson(Map<String, dynamic> j) => CreatePaymentRequest(
         accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
@@ -15227,7 +15308,10 @@ class CreatePaymentRequest {
         purposeNote: j['purpose_note'] == null ? null : j['purpose_note'] as String,
         riderId: j['rider_id'] == null ? null : j['rider_id'] as String,
         savedId: j['saved_id'] == null ? null : j['saved_id'] as String,
+        sendReceipt: j['send_receipt'] == null ? null : j['send_receipt'] as bool,
         staffId: j['staff_id'] == null ? null : j['staff_id'] as String,
+        tellPayee: j['tell_payee'] == null ? null : j['tell_payee'] as bool,
+        where: j['where'] == null ? null : j['where'] as String,
       );
 
   Map<String, dynamic> toJson() => {
@@ -15242,7 +15326,10 @@ class CreatePaymentRequest {
         'purpose_note': ?purposeNote,
         'rider_id': ?riderId,
         'saved_id': ?savedId,
+        'send_receipt': ?sendReceipt,
         'staff_id': ?staffId,
+        'tell_payee': ?tellPayee,
+        'where': ?where,
       };
 }
 
@@ -15275,19 +15362,25 @@ class GetPaymentResponse {
 }
 
 class ConfirmPaymentRequest {
-  const ConfirmPaymentRequest({this.again, this.passkey, this.pin, this.totp});
+  const ConfirmPaymentRequest({this.again, this.passkey, this.pin, this.sendReceipt, this.tellPayee, this.totp});
 
   final bool? again;
   final Map<String, dynamic>? passkey;
   /// The person's six-digit PIN, typed in the app's own pad (never sent in a
   /// message)
   final String? pin;
+  /// The sheet's Send them a receipt, as it is confirmed
+  final bool? sendReceipt;
+  /// The sheet's Tell them in the chat, as it is confirmed
+  final bool? tellPayee;
   final String? totp;
 
   factory ConfirmPaymentRequest.fromJson(Map<String, dynamic> j) => ConfirmPaymentRequest(
         again: j['again'] == null ? null : j['again'] as bool,
         passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
         pin: j['pin'] == null ? null : j['pin'] as String,
+        sendReceipt: j['send_receipt'] == null ? null : j['send_receipt'] as bool,
+        tellPayee: j['tell_payee'] == null ? null : j['tell_payee'] as bool,
         totp: j['totp'] == null ? null : j['totp'] as String,
       );
 
@@ -15295,6 +15388,8 @@ class ConfirmPaymentRequest {
         'again': ?again,
         'passkey': ?passkey,
         'pin': ?pin,
+        'send_receipt': ?sendReceipt,
+        'tell_payee': ?tellPayee,
         'totp': ?totp,
       };
 }
@@ -15319,6 +15414,158 @@ class CancelPaymentResponse {
   final Payment payment;
 
   factory CancelPaymentResponse.fromJson(Map<String, dynamic> j) => CancelPaymentResponse(
+        payment: Payment.fromJson(j['payment'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payment': payment.toJson(),
+      };
+}
+
+class GetPayBalanceResponse {
+  const GetPayBalanceResponse({this.addMoney, this.availableKobo, required this.from, required this.quotesFee, required this.wallet});
+
+  /// For a Taskiem wallet, the wallet's own account number, to add money to it;
+  /// left out otherwise
+  final GetPayBalanceResponseAddMoney? addMoney;
+  final Object? availableKobo;
+  final String from;
+  final bool quotesFee;
+  final bool wallet;
+
+  factory GetPayBalanceResponse.fromJson(Map<String, dynamic> j) => GetPayBalanceResponse(
+        addMoney: j['add_money'] == null ? null : GetPayBalanceResponseAddMoney.fromJson(j['add_money'] as Map<String, dynamic>),
+        availableKobo: j['available_kobo'],
+        from: j['from'] as String,
+        quotesFee: j['quotes_fee'] as bool,
+        wallet: j['wallet'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'add_money': ?addMoney?.toJson(),
+        'available_kobo': ?availableKobo,
+        'from': from,
+        'quotes_fee': quotesFee,
+        'wallet': wallet,
+      };
+}
+
+/// For a Taskiem wallet, the wallet's own account number, to add money to it;
+/// left out otherwise
+class GetPayBalanceResponseAddMoney {
+  const GetPayBalanceResponseAddMoney({required this.accountName, required this.accountNumber, required this.bankName});
+
+  final String accountName;
+  final String accountNumber;
+  final String bankName;
+
+  factory GetPayBalanceResponseAddMoney.fromJson(Map<String, dynamic> j) => GetPayBalanceResponseAddMoney(
+        accountName: j['account_name'] as String,
+        accountNumber: j['account_number'] as String,
+        bankName: j['bank_name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': accountName,
+        'account_number': accountNumber,
+        'bank_name': bankName,
+      };
+}
+
+class GetPaymentReceiptResponse {
+  const GetPaymentReceiptResponse({required this.receipt, required this.url});
+
+  final PayReceipt receipt;
+  final String url;
+
+  factory GetPaymentReceiptResponse.fromJson(Map<String, dynamic> j) => GetPaymentReceiptResponse(
+        receipt: PayReceipt.fromJson(j['receipt'] as Map<String, dynamic>),
+        url: j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'receipt': receipt.toJson(),
+        'url': url,
+      };
+}
+
+class PayReceipt {
+  const PayReceipt({required this.account, required this.amountKobo, required this.bankName, required this.business, required this.for_, required this.paidAt, required this.payee, required this.reference, required this.route});
+
+  /// The account number masked (••6789)
+  final String account;
+  final int amountKobo;
+  final String bankName;
+  final String business;
+  final String for_;
+  final DateTime paidAt;
+  final String payee;
+  final String reference;
+  /// Bank transfer
+  final String route;
+
+  factory PayReceipt.fromJson(Map<String, dynamic> j) => PayReceipt(
+        account: j['account'] as String,
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        bankName: j['bank_name'] as String,
+        business: j['business'] as String,
+        for_: j['for'] as String,
+        paidAt: DateTime.parse(j['paid_at'] as String),
+        payee: j['payee'] as String,
+        reference: j['reference'] as String,
+        route: j['route'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account': account,
+        'amount_kobo': amountKobo,
+        'bank_name': bankName,
+        'business': business,
+        'for': for_,
+        'paid_at': paidAt.toUtc().toIso8601String(),
+        'payee': payee,
+        'reference': reference,
+        'route': route,
+      };
+}
+
+class SharePaymentReceiptRequest {
+  const SharePaymentReceiptRequest({required this.where});
+
+  final String where;
+
+  factory SharePaymentReceiptRequest.fromJson(Map<String, dynamic> j) => SharePaymentReceiptRequest(
+        where: j['where'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'where': where,
+      };
+}
+
+class SharePaymentReceiptResponse {
+  const SharePaymentReceiptResponse({this.message, required this.shared});
+
+  final LinkMessage? message;
+  final String shared;
+
+  factory SharePaymentReceiptResponse.fromJson(Map<String, dynamic> j) => SharePaymentReceiptResponse(
+        message: j['message'] == null ? null : LinkMessage.fromJson(j['message'] as Map<String, dynamic>),
+        shared: j['shared'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'message': ?message?.toJson(),
+        'shared': shared,
+      };
+}
+
+class PayAgainResponse {
+  const PayAgainResponse({required this.payment});
+
+  final Payment payment;
+
+  factory PayAgainResponse.fromJson(Map<String, dynamic> j) => PayAgainResponse(
         payment: Payment.fromJson(j['payment'] as Map<String, dynamic>),
       );
 
@@ -15611,13 +15858,21 @@ class PayPayCollectionResponse {
 }
 
 class PaymentBatch {
-  const PaymentBatch({this.confirmedAt, required this.count, required this.createdAt, required this.createdBy, required this.failed, this.held, required this.id, required this.kind, required this.paidKobo, required this.payments, this.results, required this.status, required this.title, required this.totalKobo, required this.waiting});
+  const PaymentBatch({this.balanceKobo, this.confirmedAt, required this.count, required this.createdAt, required this.createdBy, required this.failed, this.feesKobo, this.feesUnknown, this.fit, this.held, required this.id, required this.kind, required this.paidKobo, required this.payments, this.results, this.shortKobo, required this.status, required this.title, required this.totalKobo, required this.waiting});
 
+  /// The balance, where the payments account says it
+  final Object? balanceKobo;
   final Object? confirmedAt;
   final int count;
   final DateTime createdAt;
   final String createdBy;
   final int failed;
+  /// The fees quoted for the rows (paid fees once paid)
+  final int? feesKobo;
+  /// Rows whose fee shows after paying
+  final int? feesUnknown;
+  /// The rows that fit the balance, in order, while it is short
+  final List<String>? fit;
   /// Rows held out when it was prepared, with why
   final List<PaymentBatchHeldItem>? held;
   final String id;
@@ -15626,23 +15881,31 @@ class PaymentBatch {
   final List<Payment> payments;
   /// What became of each row when it was sent or approved
   final List<PaymentBatchResultsItem>? results;
+  /// How much the balance is short of the rows and their fees, while the batch
+  /// waits to be confirmed
+  final int? shortKobo;
   final String status;
   final String title;
   final int totalKobo;
   final int waiting;
 
   factory PaymentBatch.fromJson(Map<String, dynamic> j) => PaymentBatch(
+        balanceKobo: j['balance_kobo'],
         confirmedAt: j['confirmed_at'],
         count: (j['count'] as num).toInt(),
         createdAt: DateTime.parse(j['created_at'] as String),
         createdBy: j['created_by'] as String,
         failed: (j['failed'] as num).toInt(),
+        feesKobo: j['fees_kobo'] == null ? null : (j['fees_kobo'] as num).toInt(),
+        feesUnknown: j['fees_unknown'] == null ? null : (j['fees_unknown'] as num).toInt(),
+        fit: j['fit'] == null ? null : (j['fit'] as List).map((e) => e as String).toList(),
         held: j['held'] == null ? null : (j['held'] as List).map((e) => PaymentBatchHeldItem.fromJson(e as Map<String, dynamic>)).toList(),
         id: j['id'] as String,
         kind: j['kind'] as String,
         paidKobo: (j['paid_kobo'] as num).toInt(),
         payments: (j['payments'] as List).map((e) => Payment.fromJson(e as Map<String, dynamic>)).toList(),
         results: j['results'] == null ? null : (j['results'] as List).map((e) => PaymentBatchResultsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        shortKobo: j['short_kobo'] == null ? null : (j['short_kobo'] as num).toInt(),
         status: j['status'] as String,
         title: j['title'] as String,
         totalKobo: (j['total_kobo'] as num).toInt(),
@@ -15650,17 +15913,22 @@ class PaymentBatch {
       );
 
   Map<String, dynamic> toJson() => {
+        'balance_kobo': ?balanceKobo,
         'confirmed_at': ?confirmedAt,
         'count': count,
         'created_at': createdAt.toUtc().toIso8601String(),
         'created_by': createdBy,
         'failed': failed,
+        'fees_kobo': ?feesKobo,
+        'fees_unknown': ?feesUnknown,
+        'fit': ?fit?.map((e) => e).toList(),
         'held': ?held?.map((e) => e.toJson()).toList(),
         'id': id,
         'kind': kind,
         'paid_kobo': paidKobo,
         'payments': payments.map((e) => e.toJson()).toList(),
         'results': ?results?.map((e) => e.toJson()).toList(),
+        'short_kobo': ?shortKobo,
         'status': status,
         'title': title,
         'total_kobo': totalKobo,
@@ -16049,7 +16317,7 @@ class ListPaymentBatchesResponse {
 }
 
 class CreatePaymentBatchRequest {
-  const CreatePaymentBatchRequest({this.copyOf, this.from, this.kind, this.rows, this.title});
+  const CreatePaymentBatchRequest({this.copyOf, this.from, this.kind, this.rows, this.title, this.where});
 
   /// Last time's batch, its rows again
   final String? copyOf;
@@ -16057,6 +16325,9 @@ class CreatePaymentBatchRequest {
   final String? kind;
   final List<Map<String, dynamic>>? rows;
   final String? title;
+  /// The chat its one diary line goes to: `taskiem` or a linked business's link
+  /// id.
+  final String? where;
 
   factory CreatePaymentBatchRequest.fromJson(Map<String, dynamic> j) => CreatePaymentBatchRequest(
         copyOf: j['copy_of'] == null ? null : j['copy_of'] as String,
@@ -16064,6 +16335,7 @@ class CreatePaymentBatchRequest {
         kind: j['kind'] == null ? null : j['kind'] as String,
         rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => e as Map<String, dynamic>).toList(),
         title: j['title'] == null ? null : j['title'] as String,
+        where: j['where'] == null ? null : j['where'] as String,
       );
 
   Map<String, dynamic> toJson() => {
@@ -16072,6 +16344,7 @@ class CreatePaymentBatchRequest {
         'kind': ?kind,
         'rows': ?rows?.map((e) => e).toList(),
         'title': ?title,
+        'where': ?where,
       };
 }
 

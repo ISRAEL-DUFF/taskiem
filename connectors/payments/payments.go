@@ -44,7 +44,7 @@ type Ops interface {
 	Check(ctx context.Context, tenant, run, payment uuid.UUID, in CheckIn) (map[string]any, error)
 	// Finish records how the payment of the run ended: only the run the
 	// payment was sent with may.
-	Finish(ctx context.Context, tenant, run, payment uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64) (map[string]any, error)
+	Finish(ctx context.Context, tenant, run, payment uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64, route string) (map[string]any, error)
 }
 
 // CheckIn is what the pay-person run is about to pay, as its input says.
@@ -125,7 +125,8 @@ func (a *actions) finish(ctx context.Context, req connector.Request) (connector.
 	case int64:
 		fee = &v
 	}
-	out, err := a.ops.Finish(ctx, c.Tenant, c.Run, id, status, name, payout, reason, fee)
+	route, _ := req.Input["route"].(string)
+	out, err := a.ops.Finish(ctx, c.Tenant, c.Run, id, status, name, payout, reason, fee, route)
 	if err != nil {
 		return connector.Response{}, fatal(err)
 	}
@@ -192,12 +193,12 @@ func (l *Late) Prepare(ctx context.Context, tenant, run uuid.UUID, in PrepareIn)
 }
 
 // Finish calls the bound operations.
-func (l *Late) Finish(ctx context.Context, tenant, run, payment uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64) (map[string]any, error) {
+func (l *Late) Finish(ctx context.Context, tenant, run, payment uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64, route string) (map[string]any, error) {
 	ops, err := l.get()
 	if err != nil {
 		return nil, err
 	}
-	return ops.Finish(ctx, tenant, run, payment, status, accountName, payoutID, reason, feeKobo)
+	return ops.Finish(ctx, tenant, run, payment, status, accountName, payoutID, reason, feeKobo, route)
 }
 
 // Check calls the bound operations.

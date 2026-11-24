@@ -6778,6 +6778,15 @@ paths:
                 from:
                   type: string
                   enum: [tools, chat, message, card, workflow]
+                tell_payee:
+                  type: boolean
+                  description: 'Tell the person paid in their chat once the bank confirms (a rider, a staff member; not for wages, an owner''s own account or refunds). On by default.'
+                send_receipt:
+                  type: boolean
+                  description: A receipt to send the person paid, for one not on Taskiem.
+                where:
+                  type: string
+                  description: 'The chat it was paid from, for its diary line: `taskiem` (the person''s own Taskiem chat) or a linked business''s link id. 400 `where` for a chat that is not theirs.'
       responses:
         '201':
           description: Prepared
@@ -6859,6 +6868,12 @@ paths:
                   description: The person's six-digit PIN, typed in the app's own pad (never sent in a message)
                 again:
                   type: boolean
+                tell_payee:
+                  type: boolean
+                  description: The sheet's Tell them in the chat, as it is confirmed
+                send_receipt:
+                  type: boolean
+                  description: The sheet's Send them a receipt, as it is confirmed
       responses:
         '202':
           description: Sent, or waiting for the owner's OK
@@ -6904,6 +6919,208 @@ paths:
                 properties:
                   payment:
                     $ref: '#/components/schemas/Payment'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/balance:
+    get:
+      operationId: getPayBalance
+      tags:
+      - Payments
+      summary: What people are paid from
+      description: 'The payments account people are paid from (`from`, as the owner knows it: "your Taskiem wallet", "Paystack"; empty with none), its balance when it says one, whether the fee is known before paying (`quotes_fee`; else "The fee shows after paying"), and for a Taskiem wallet the wallet''s own account number to add money to (paying people H7, Settled 2).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      responses:
+        '200':
+          description: The balance
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [from, available_kobo, wallet, quotes_fee]
+                properties:
+                  from: {type: string}
+                  available_kobo: {type: [integer, 'null']}
+                  wallet: {type: boolean}
+                  quotes_fee: {type: boolean}
+                  add_money:
+                    type: object
+                    description: For a Taskiem wallet, the wallet's own account number, to add money to it; left out otherwise
+                    additionalProperties: false
+                    required: [bank_name, account_number, account_name]
+                    properties:
+                      bank_name: {type: string}
+                      account_number: {type: string}
+                      account_name: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/receipt:
+    get:
+      operationId: getPaymentReceipt
+      tags:
+      - Payments
+      summary: A paid payment's receipt
+      description: 'Who paid whom, how much, what for, when, the bank and the account''s last four digits; never who approved, the balance or the fee. `url` is a signed link to its PDF, to send the person paid (empty without a public address). 409 `not_paid` for a payment the bank did not receive.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The receipt
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [receipt, url]
+                properties:
+                  receipt:
+                    $ref: '#/components/schemas/PayReceipt'
+                  url: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/receipt/pdf:
+    get:
+      operationId: getPaymentReceiptPDF
+      tags:
+      - Payments
+      summary: A paid payment's receipt, as a PDF
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/again:
+    post:
+      operationId: payAgain
+      tags:
+      - Payments
+      summary: Try a payment again
+      description: 'A payment that failed, or that the bank sent back, prepared again as it was asked for (the same payee, amount and what for; its diary line in the same chat), checked as any payment is. Nothing is sent: it is confirmed as any payment is. 409 `not_failed` for one that did not fail.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      responses:
+        '201':
+          description: Prepared again
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payment]
+                properties:
+                  payment:
+                    $ref: '#/components/schemas/Payment'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/share:
+    post:
+      operationId: sharePaymentReceipt
+      tags:
+      - Payments
+      summary: Send a paid payment's receipt back into a chat
+      description: '`where` `taskiem`: a receipt card in the person''s own Taskiem chat; a link id: a message from them, with the receipt''s link, in their conversation with that business (the person who sent the account details sees it was paid; needs chat.trade).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [where]
+              properties:
+                where: {type: string}
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [shared]
+                properties:
+                  shared:
+                    type: string
+                    enum: [taskiem, link]
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pay-receipts/{token}/pdf:
+    get:
+      operationId: openPayReceipt
+      tags:
+      - Payments
+      summary: A payment's receipt, by its link
+      description: 'For anyone, signed in or not: the PDF of a paid payment''s receipt at the signed link the payer sends the person paid (Send them a receipt). 404 for a link that is not signed or a payment no longer paid. Thirty a minute per address.'
+      security: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: No such receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/pay-limits:
@@ -7421,6 +7638,9 @@ paths:
                 from:
                   type: string
                   enum: [tools, chat, message, card, workflow]
+                where:
+                  type: string
+                  description: 'The chat its one diary line goes to: `taskiem` or a linked business''s link id.'
       responses:
         '201':
           description: Prepared
@@ -49328,7 +49548,7 @@ components:
           description: Why the owner's OK is asked, comma-separated; `limit` over the payer's limit, `changed` an account changed since it was last paid, `first` an account staff never paid before. Empty when none.
         status:
           type: string
-          enum: [prepared, sending, waiting_ok, paid, failed, rejected, unknown, cancelled]
+          enum: [prepared, sending, waiting_ok, paid, failed, rejected, unknown, cancelled, reversed]
         reason:
           type: [string, 'null']
         fee_kobo:
@@ -49357,6 +49577,37 @@ components:
         awaits_your_ok:
           type: boolean
           description: 'Confirmed by you, and its run still waits for your own OK, which did not reach it: confirm it again (POST /v1/payments/{id}/confirm) to give it.'
+        fee_quote_kobo:
+          type: [integer, 'null']
+          description: 'The fee the payments account quoted before it was confirmed (the business pays it); null when it quotes none: the fee then shows once paid (`fee_kobo`).'
+        route:
+          type: string
+          enum: [bank, wallet]
+          description: 'How it goes: a bank transfer, or Taskiem wallet to Taskiem wallet (at once, no fee) when the account is another business''s Taskiem wallet.'
+        tell_payee:
+          type: boolean
+        send_receipt:
+          type: boolean
+        may_tell:
+          type: boolean
+          description: 'The person paid can be told in a chat of theirs (a rider, a staff member, for anything but wages or a refund): the sheet offers Tell them in the chat; else Send them a receipt.'
+        balance_kobo:
+          type: [integer, 'null']
+          description: The balance when it was prepared, where the payments account says it (the sheet shows the balance after).
+    PayReceipt:
+      type: object
+      additionalProperties: false
+      required: [business, payee, bank_name, account, amount_kobo, for, paid_at, reference, route]
+      properties:
+        business: {type: string}
+        payee: {type: string}
+        bank_name: {type: string}
+        account: {type: string, description: The account number masked (••6789)}
+        amount_kobo: {type: integer}
+        for: {type: string}
+        paid_at: {type: string, format: date-time}
+        reference: {type: string}
+        route: {type: string, description: Bank transfer, or Taskiem wallet}
     PaymentBatch:
       type: object
       required: [id, title, kind, status, created_by, created_at, payments, total_kobo, count, paid_kobo, waiting, failed]
@@ -49383,6 +49634,22 @@ components:
         paid_kobo: {type: integer}
         waiting: {type: integer}
         failed: {type: integer}
+        fees_kobo:
+          type: integer
+          description: The fees quoted for the rows (paid fees once paid)
+        fees_unknown:
+          type: integer
+          description: Rows whose fee shows after paying
+        balance_kobo:
+          type: [integer, 'null']
+          description: The balance, where the payments account says it
+        short_kobo:
+          type: integer
+          description: How much the balance is short of the rows and their fees, while the batch waits to be confirmed
+        fit:
+          type: array
+          description: The rows that fit the balance, in order, while it is short
+          items: {type: string, format: uuid}
         held:
           type: array
           description: Rows held out when it was prepared, with why
@@ -49923,9 +50190,18 @@ components:
           description: The person said it (else Taskiem did)
         kind:
           type: string
-          enum: [text, button, voice, photo, form, location, diary, chart, menu]
+          enum: [text, button, voice, photo, form, location, diary, chart, menu, receipt, paid_you]
+          description: 'A diary line may name a payment or a batch it is about (shown as it stands: paid, failed with Try again); receipt is a paid payment''s receipt sent into the chat; paid_you a payment to this person.'
         text:
           type: string
+        payment:
+          type: string
+          format: uuid
+          description: The payment a diary line, receipt or paid_you card is about
+        batch:
+          type: string
+          format: uuid
+          description: The batch of payments a diary line is about
         buttons:
           type: array
           items:
@@ -52930,6 +53206,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LinkReaction'
+        payment:
+          type: string
+          format: uuid
+          description: The payment a diary line on our side is about (shown as it stands)
+        batch:
+          type: string
+          format: uuid
+          description: The batch of payments a diary line on our side is about
         starred:
           type: boolean
           description: You starred it

@@ -366,6 +366,12 @@ createPayment
 getPayment
 confirmPayment
 cancelPayment
+# Paying one person, finished (H7): the balance and Add money, the
+# receipt, Try again
+getPayBalance
+getPaymentReceipt
+sharePaymentReceipt
+payAgain
 getPayLimits
 putPayLimit
 # Where a staff member is paid, outside payroll (Pay on their page)

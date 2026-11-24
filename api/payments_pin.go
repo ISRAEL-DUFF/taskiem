@@ -167,6 +167,12 @@ func (s *Server) confirmPaymentPin(w http.ResponseWriter, r *http.Request, id uu
 		writeErr(w, http.StatusBadRequest, "confirm with a passkey or a PIN, not both")
 		return
 	}
+	if in.TellPayee != nil || in.SendReceipt != nil {
+		if err := s.tx(r, func(tx pgx.Tx) error { return setTellTx(r.Context(), tx, id, in) }); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	x, err := s.payByPin(r, id, in.Pin, in.Again)
 	if err != nil {
 		s.payFail(w, r, err)
@@ -220,6 +226,9 @@ func (s *Server) payByPin(r *http.Request, id uuid.UUID, pin string, again bool)
 		}
 		if _, err := s.stillAsPrepared(ctx, p.TenantID, x); err != nil {
 			return x, s.dropChanged(r, x.ID, err)
+		}
+		if err := s.balanceCovers(ctx, p.TenantID, x); err != nil {
+			return x, err
 		}
 	}
 	// The PIN, counted with the approvals' tries, under its row lock.
@@ -297,6 +306,9 @@ func (s *Server) payByPin(r *http.Request, id uuid.UUID, pin string, again bool)
 		return auditTx(r, tx, "payment.confirm", id.String(), map[string]any{"amount_kobo": x.AmountKobo, "needs_ok": x.NeedsOK, "run": run,
 			"changed_account": x.ChangedAccount, "again": revote, "step_up": payStepUpPIN, "via": p.AuthMethod})
 	})
+	if err == nil {
+		s.paymentSent(ctx, p, x)
+	}
 	return x, err
 }
 

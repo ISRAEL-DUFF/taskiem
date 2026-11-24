@@ -8413,6 +8413,66 @@
     "bill.transfer.off": {
       "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
       "reviewed": false
+    },
+    "wa.pay.payee.paid": {
+      "text": "{business} ya biya ka {amount} domin {for} a ranar {date}, zuwa asusunka mai ƙarewa da {last4}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment told to the person paid (a rider, a staff member) once the bank confirmed it: who paid, how much, what for, the day, their account's last four digits. Never who approved, the balance or the fee"
+    },
+    "wa.pay.payee.back": {
+      "text": "{amount} da {business} ya biya ka a ranar {date} bai isa asusunka ba: banki ya mayar da shi. An gaya musu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment the person paid was told of did not reach them: the bank sent it back"
+    },
+    "wa.pay.result.reversed": {
+      "text": "{amount} zuwa ga {to} ya dawo daga banki: yana cikin ma'aunin kuɗinka kuma.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat was paid and later sent back by the bank: who and how much"
+    },
+    "wa.pay.result.receipt": {
+      "text": "Rasidin su, don ka aika musu: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After a payment's result: the link to its receipt, to send to the person paid (Send them a receipt)"
+    },
+    "wa.pay.wallet": {
+      "text": "Walat ɗin Taskiem · yana isa nan take, babu caji.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat goes Taskiem wallet to Taskiem wallet: at once, with no fee"
+    },
+    "wa.pay.fee": {
+      "text": "{amount} + cajin {fee}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat, before it is confirmed: the amount and the fee the payments account quoted (the business pays the fee)"
+    },
+    "wa.pay.fee_after": {
+      "text": "Cajin zai bayyana bayan an biya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat whose payments account quotes no fee before paying"
+    },
+    "wa.pay.balance_after": {
+      "text": "Ma'auni bayan biya: {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat: the balance once it and its fee are paid"
+    },
+    "wa.pay.fwd.ask": {
+      "text": "A biya {name} ({bank} {account}) nawa, kuma domin me?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Answer to a forwarded message (or a reply of pay) with account details: the bank's name for the account, the bank and the last four digits; asks the amount and what for"
+    },
+    "wa.pay.fwd.saved": {
+      "text": "Wannan asusun {name} ne. A biya {name} nawa?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Answer to a forwarded message with the account of one of the business's saved accounts: paid by its name; asks the amount"
+    },
+    "wa.pay.fwd.staff": {
+      "text": "Ma'aikata suna biyan asusun da kasuwanci ya adana ne kawai: roƙi mai shi ya adana wannan tukuna.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A staff member forwarded account details not saved: staff pay the business's saved accounts only"
+    },
+    "wa.pay.fwd.none": {
+      "text": "Wannan saƙon ba shi da lambar asusu da zan iya karantawa. Tura min bayanan asusun, ko ka ce: *send 45k to 0123456789 gtbank*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A reply of pay quoting a message with no account details Taskiem can read"
     }
   }
 }

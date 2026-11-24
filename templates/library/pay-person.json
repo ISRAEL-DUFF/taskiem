@@ -2,7 +2,7 @@
   "id": "pay-person",
   "title": "Pay one person, safely",
   "summary": "Pays one person from your payments account once someone who may pay confirms it with a passkey; the name is checked with the bank first.",
-  "description": "Taskiem's own workflow for paying one person (Pay in Tools and the chat). The person paying confirms it with a passkey in Taskiem, which approves it here; over the payer's limit, or to an account changed since it was last paid, it waits for the owner's approval instead. Then the name on the account is checked with your connected account, the transfer is sent once (a retry never sends twice), Taskiem waits for the bank to confirm and records how it ended on the payment.",
+  "description": "Taskiem's own workflow for paying one person (Pay in Tools and the chat). The person paying confirms it with a passkey in Taskiem, which approves it here; over the payer's limit, or to an account changed since it was last paid, it waits for the owner's approval instead. Then the name on the account is checked with your connected account, the transfer is sent once (a retry never sends twice), Taskiem waits for the bank to confirm and records how it ended on the payment, with the fee the bank charged. When the account paid is another business's Taskiem wallet, it is paid wallet to wallet, at once and with no fee, falling back to the bank if that fails.",
   "category": "payments",
   "tags": [
     "managed"
@@ -15,7 +15,8 @@
   "connectors": [
     "payments@1",
     "capability:pay_bank",
-    "capability:resolve_account"
+    "capability:resolve_account",
+    "capability:pay_wallet"
   ],
   "variables": [],
   "params": [
@@ -136,6 +137,20 @@
             "maxLength": 200,
             "title": "The bank's name for the account",
             "x-pii": "name"
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "bank",
+              "wallet"
+            ],
+            "title": "How it goes",
+            "description": "bank, or wallet: Taskiem wallet to Taskiem wallet, at once"
+          },
+          "wallet_id": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "The Taskiem wallet paid, for wallet to wallet"
           }
         }
       }
@@ -267,6 +282,170 @@
               }
             }
           ]
+        },
+        "when": "=trigger.body.?route.orValue('bank') != 'wallet'"
+      },
+      {
+        "id": "pay_wallet",
+        "type": "capability",
+        "uses": "pay_wallet",
+        "name": "Pay their Taskiem wallet",
+        "connection": "{{rail_connection}}",
+        "needs": [
+          "check_name"
+        ],
+        "when": "=trigger.body.?route.orValue('bank') == 'wallet'",
+        "input": {
+          "amount_kobo": "=trigger.body.amount_kobo",
+          "wallet_id": "=trigger.body.wallet_id",
+          "narration": "=trigger.body.narration",
+          "source": "{{funding_account}}"
+        },
+        "effect": {
+          "idempotency_seed": "='payment-wallet:' + trigger.body.payment_id"
+        },
+        "retry": {
+          "max": 3,
+          "backoff": "exponential",
+          "initial": "5s",
+          "max_delay": "1m",
+          "max_duration": "10m"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "pay_bank_after",
+              "type": "capability",
+              "uses": "pay_bank",
+              "name": "Pay by bank instead",
+              "connection": "{{rail_connection}}",
+              "needs": [],
+              "input": {
+                "amount_kobo": "=trigger.body.amount_kobo",
+                "bank_code": "=trigger.body.bank_code",
+                "account_number": "=trigger.body.account_number",
+                "account_name": "=steps.check_name.output.account_name",
+                "narration": "=trigger.body.narration",
+                "source": "{{funding_account}}"
+              },
+              "effect": {
+                "idempotency_seed": "='payment:' + trigger.body.payment_id"
+              },
+              "retry": {
+                "max": 8,
+                "backoff": "exponential",
+                "initial": "5s",
+                "max_delay": "10m",
+                "max_duration": "6h"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "record_not_paid_after",
+                    "type": "connector",
+                    "name": "Record that the payment could not be made",
+                    "connector": "payments@1",
+                    "action": "finish",
+                    "input": {
+                      "payment_id": "=trigger.body.payment_id",
+                      "status": "failed",
+                      "account_name": "=steps.check_name.output.account_name",
+                      "route": "bank"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "settle_after",
+              "type": "capability",
+              "uses": "await_settlement",
+              "name": "Wait for the bank to confirm",
+              "needs": [
+                "pay_bank_after"
+              ],
+              "timeout": "72h",
+              "when": "=steps.pay_bank_after.output.status == 'pending'",
+              "input": {
+                "payout_id": "=steps.pay_bank_after.output.payout_id"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "record_unknown_after",
+                    "type": "connector",
+                    "name": "Record that the bank did not say",
+                    "connector": "payments@1",
+                    "action": "finish",
+                    "input": {
+                      "payment_id": "=trigger.body.payment_id",
+                      "status": "unknown",
+                      "account_name": "=steps.check_name.output.account_name",
+                      "payout_id": "=steps.pay_bank_after.output.payout_id",
+                      "route": "bank"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "record_paid_after",
+              "type": "connector",
+              "name": "Record how the payment went",
+              "connector": "payments@1",
+              "action": "finish",
+              "input": {
+                "payment_id": "=trigger.body.payment_id",
+                "status": "=steps.pay_bank_after.output.status == 'settled' ? 'paid' : 'failed'",
+                "account_name": "=steps.check_name.output.account_name",
+                "payout_id": "=steps.pay_bank_after.output.payout_id",
+                "reason": "=steps.pay_bank_after.output.?reason.orValue('')",
+                "fee_kobo": "=steps.pay_bank_after.output.?fee_kobo.orValue(0)",
+                "route": "bank"
+              },
+              "needs": [
+                "pay_bank_after"
+              ],
+              "when": "=steps.pay_bank_after.output.status != 'pending'"
+            },
+            {
+              "id": "record_settled_after",
+              "type": "connector",
+              "name": "Record how the payment went",
+              "connector": "payments@1",
+              "action": "finish",
+              "input": {
+                "payment_id": "=trigger.body.payment_id",
+                "status": "=steps.settle_after.output.status == 'settled' ? 'paid' : 'failed'",
+                "account_name": "=steps.check_name.output.account_name",
+                "payout_id": "=steps.pay_bank_after.output.payout_id",
+                "reason": "=steps.settle_after.output.?reason.orValue('')",
+                "fee_kobo": "=steps.settle_after.output.?fee_kobo.orValue(steps.pay_bank_after.output.?fee_kobo.orValue(0))",
+                "route": "bank"
+              },
+              "needs": [
+                "settle_after"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "record_wallet",
+        "type": "connector",
+        "name": "Record that their wallet was paid",
+        "connector": "payments@1",
+        "action": "finish",
+        "needs": [
+          "pay_wallet"
+        ],
+        "input": {
+          "payment_id": "=trigger.body.payment_id",
+          "status": "=steps.pay_wallet.output.status == 'failed' ? 'failed' : 'paid'",
+          "account_name": "=steps.check_name.output.account_name",
+          "payout_id": "=steps.pay_wallet.output.payout_id",
+          "fee_kobo": 0,
+          "route": "wallet"
         }
       },
       {
@@ -311,7 +490,9 @@
           "status": "=steps.pay.output.status == 'settled' ? 'paid' : 'failed'",
           "account_name": "=steps.check_name.output.account_name",
           "payout_id": "=steps.pay.output.payout_id",
-          "reason": "=steps.pay.output.?reason.orValue('')"
+          "reason": "=steps.pay.output.?reason.orValue('')",
+          "fee_kobo": "=steps.pay.output.?fee_kobo.orValue(0)",
+          "route": "bank"
         },
         "needs": [
           "pay"
@@ -329,7 +510,9 @@
           "status": "=steps.settle.output.status == 'settled' ? 'paid' : 'failed'",
           "account_name": "=steps.check_name.output.account_name",
           "payout_id": "=steps.pay.output.payout_id",
-          "reason": "=steps.settle.output.?reason.orValue('')"
+          "reason": "=steps.settle.output.?reason.orValue('')",
+          "fee_kobo": "=steps.settle.output.?fee_kobo.orValue(steps.pay.output.?fee_kobo.orValue(0))",
+          "route": "bank"
         },
         "needs": [
           "settle"

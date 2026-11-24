@@ -109,7 +109,7 @@ func TestPaySeveral(t *testing.T) {
 
 	// A row fails at the bank: paid again as a new batch, its row alone.
 	first := sent["payments"].([]any)[0].(map[string]any)["id"].(string)
-	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(first), uuid.MustParse(first), "failed", "", "", "The bank refused it.", nil); err != nil {
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(first), uuid.MustParse(first), "failed", "", "", "The bank refused it.", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	again := owner.must(201, "POST", "/v1/payment-batches/"+id+"/again", nil)["batch"].(map[string]any)

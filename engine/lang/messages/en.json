@@ -10013,6 +10013,66 @@
       "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
       "reviewed": true,
       "context": "The supplier has Money turned off, so no account number can be had"
+    },
+    "wa.pay.payee.paid": {
+      "text": "{business} paid you {amount} for {for} on {date}, to your account ending {last4}.",
+      "reviewed": true,
+      "context": "A payment told to the person paid (a rider, a staff member) once the bank confirmed it: who paid, how much, what for, the day, their account's last four digits. Never who approved, the balance or the fee"
+    },
+    "wa.pay.payee.back": {
+      "text": "The {amount} {business} paid you on {date} did not reach your account: the bank sent it back. They have been told.",
+      "reviewed": true,
+      "context": "A payment the person paid was told of did not reach them: the bank sent it back"
+    },
+    "wa.pay.result.reversed": {
+      "text": "The {amount} to {to} came back from the bank: it is in your balance again.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat was paid and later sent back by the bank: who and how much"
+    },
+    "wa.pay.result.receipt": {
+      "text": "Their receipt, to send them: {link}",
+      "reviewed": true,
+      "context": "After a payment's result: the link to its receipt, to send to the person paid (Send them a receipt)"
+    },
+    "wa.pay.wallet": {
+      "text": "Taskiem wallet · arrives at once, no fee.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat goes Taskiem wallet to Taskiem wallet: at once, with no fee"
+    },
+    "wa.pay.fee": {
+      "text": "{amount} + {fee} fee.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat, before it is confirmed: the amount and the fee the payments account quoted (the business pays the fee)"
+    },
+    "wa.pay.fee_after": {
+      "text": "The fee shows after paying.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat whose payments account quotes no fee before paying"
+    },
+    "wa.pay.balance_after": {
+      "text": "Balance after: {amount}.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat: the balance once it and its fee are paid"
+    },
+    "wa.pay.fwd.ask": {
+      "text": "Pay {name} ({bank} {account}) how much, and for what?",
+      "reviewed": true,
+      "context": "Answer to a forwarded message (or a reply of pay) with account details: the bank's name for the account, the bank and the last four digits; asks the amount and what for"
+    },
+    "wa.pay.fwd.saved": {
+      "text": "That is {name}'s account. Pay {name} how much?",
+      "reviewed": true,
+      "context": "Answer to a forwarded message with the account of one of the business's saved accounts: paid by its name; asks the amount"
+    },
+    "wa.pay.fwd.staff": {
+      "text": "Staff pay the business's saved accounts only: ask an owner to save this one first.",
+      "reviewed": true,
+      "context": "A staff member forwarded account details not saved: staff pay the business's saved accounts only"
+    },
+    "wa.pay.fwd.none": {
+      "text": "That message has no account number I can read. Forward me the account details, or say: *send 45k to 0123456789 gtbank*.",
+      "reviewed": true,
+      "context": "A reply of pay quoting a message with no account details Taskiem can read"
     }
   }
 }

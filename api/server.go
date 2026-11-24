@@ -471,6 +471,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/app/config", s.appConfig)                      // the phone app's config (app_config.go)
 		r.Get("/chat-links/{code}", s.getChatLinkCard)         // a business's card for its chat link (customer_links.go)
 		r.Get("/saved-files/{token}", s.openSavedFileLink)     // a saved file a message carried, by its link (saved_file_links.go)
+		r.Get("/pay-receipts/{token}/pdf", s.publicPayReceipt) // a payment's receipt sent to the person paid (payments_receipt.go)
 		s.peoplePublicRoutes(r)                                // a person's card at their link (people.go)
 		s.groupPublicRoutes(r)                                 // a group's preview at its link (people_groups.go)
 		r.Get("/transparency/lawful-requests", s.lawfulCounts) // the published count of lawful requests (lawful.go)

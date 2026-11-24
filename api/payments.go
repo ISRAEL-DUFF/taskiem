@@ -47,6 +47,10 @@ const (
 	// The step-up operations, each for "payment:<id>".
 	payOpConfirm = "money.pay"
 	payOpApprove = "money.pay.approve"
+	// payShape is the pay-person workflow's version a business's is made
+	// from: a business's made from an older one is made again (2: the fee
+	// recorded, and wallet to wallet; paying people H7).
+	payShape = 2
 )
 
 // paymentPurposes are what a payment may be for, as the money log keeps it.
@@ -60,6 +64,14 @@ func (s *Server) paymentRoutes(r chi.Router) {
 	// things: the list the Saved page offers.
 	r.With(pay).Get("/payments/banks", s.listPayBanks)
 	r.With(pay).Get("/payments/staff", s.payStaff)
+	// What people are paid from: the balance, and where to add money.
+	r.With(pay).Get("/payments/balance", s.getPayBalance)
+	// A paid payment's receipt: a card in a chat, and a PDF (payments_receipt.go).
+	r.With(pay).Get("/payments/{id}/receipt", s.getPaymentReceipt)
+	r.With(pay).Get("/payments/{id}/receipt/pdf", s.getPaymentReceiptPDF)
+	r.With(pay, s.tenantWide).Post("/payments/{id}/share", s.sharePaymentReceipt)
+	// Try again: a failed (or sent back) payment prepared again, to confirm.
+	r.With(pay, s.tenantWide).Post("/payments/{id}/again", s.payAgain)
 	r.With(pay, s.tenantWide).Post("/payments/name-check", s.payNameCheck) // owners only, checked inside
 	r.With(pay).Post("/payments/read", s.readPayment)
 	r.With(pay, s.tenantWide).Post("/payments", s.createPayment)
@@ -122,18 +134,45 @@ type payment struct {
 	BatchID *uuid.UUID `json:"batch_id"`
 	// StaffID: the staff member paid, when it was one.
 	StaffID *uuid.UUID `json:"staff_id"`
+	// FeeQuoteKobo is the fee the payments account quoted before it was
+	// confirmed (Settled 4); nil when it quotes none: the fee then shows
+	// once paid (FeeKobo).
+	FeeQuoteKobo *int64 `json:"fee_quote_kobo"`
+	// Route is how it goes: "bank", or "wallet" (Taskiem wallet to
+	// Taskiem wallet, at once; Settled 7).
+	Route string `json:"route"`
+	// TellPayee: the person paid is told in their chat once the bank
+	// confirms (Settled 6); SendReceipt: the payer asked for a receipt to
+	// send them.
+	TellPayee   bool `json:"tell_payee"`
+	SendReceipt bool `json:"send_receipt"`
+	// MayTell: the person paid can be told in a chat of theirs (a rider, a
+	// staff member), so the sheet offers Tell them in the chat; else Send
+	// them a receipt.
+	MayTell bool `json:"may_tell"`
+	// BalanceKobo is the payments account's balance when it was prepared
+	// or read (not kept): the sheet says the balance after.
+	BalanceKobo *int64 `json:"balance_kobo,omitempty"`
+
+	toWallet   *string
+	diaryWhere *string
+	payoutRef  *string
+	payeeTold  *string
 }
 
 const paymentCols = `id, saved_id, personal, payee_title, bank_name, last4, account_name, amount_kobo, purpose, purpose_note, note, first_payment,
-	changed_account, needs_ok, status, reason, fee_kobo, run_id, started_from, prepared_by, confirmed_by, created_at, confirmed_at, finished_at, bank_code, account_sealed, rider_id, batch_id, staff_id, provider_channel`
+	changed_account, needs_ok, status, reason, fee_kobo, run_id, started_from, prepared_by, confirmed_by, created_at, confirmed_at, finished_at, bank_code, account_sealed, rider_id, batch_id, staff_id, provider_channel,
+	fee_quote_kobo, route, to_wallet, tell_payee, send_receipt, diary_where, payout_ref, payee_told`
 
 func scanPayment(r pgx.Row) (payment, error) {
 	var x payment
 	var last4 string
 	err := r.Scan(&x.ID, &x.SavedID, &x.Personal, &x.Payee, &x.BankName, &last4, &x.AccountName, &x.AmountKobo, &x.Purpose, &x.PurposeNote, &x.Note,
 		&x.FirstPayment, &x.ChangedAccount, &x.NeedsOK, &x.Status, &x.Reason, &x.FeeKobo, &x.RunID, &x.StartedFrom, &x.PreparedBy, &x.ConfirmedBy,
-		&x.CreatedAt, &x.ConfirmedAt, &x.FinishedAt, &x.bankCode, &x.sealed, &x.RiderID, &x.BatchID, &x.StaffID, &x.provider)
+		&x.CreatedAt, &x.ConfirmedAt, &x.FinishedAt, &x.bankCode, &x.sealed, &x.RiderID, &x.BatchID, &x.StaffID, &x.provider,
+		&x.FeeQuoteKobo, &x.Route, &x.toWallet, &x.TellPayee, &x.SendReceipt, &x.diaryWhere, &x.payoutRef, &x.payeeTold)
 	x.Account = "••" + last4
+	x.MayTell = payeeReachable(x)
 	return x, err
 }
 
@@ -158,6 +197,15 @@ type payIn struct {
 	PurposeNote   string `json:"purpose_note"`
 	Note          string `json:"note"`
 	From          string `json:"from"`
+	// TellPayee (default true): tell the person paid in their chat once
+	// the bank confirms; SendReceipt: a receipt for one who is not on
+	// Taskiem (Settled 6).
+	TellPayee   *bool `json:"tell_payee"`
+	SendReceipt bool  `json:"send_receipt"`
+	// Where is the chat it was paid from, for its diary line: "taskiem"
+	// (the person's Taskiem conversation) or a linked business's link id;
+	// none for a payment from Tools with no chat.
+	Where string `json:"where"`
 }
 
 // payRefused is a payment refused in words, with a code for the clients.
@@ -406,6 +454,18 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 	if err != nil {
 		return payment{}, err
 	}
+	if strings.Trim(payee.bank.BankName, "0123456789") == "" {
+		// Kept by its code alone (a rider's): its name, as the diary line,
+		// the receipt and the person paid say it.
+		if banks, err := s.savedBanks(ctx, tenant, *rl); err == nil {
+			for _, it := range bankItems(banks) {
+				if it.Code == code && it.Name != "" {
+					payee.bank.BankName = it.Name
+					break
+				}
+			}
+		}
+	}
 	if in.AccountNumber != "" || in.RiderID != nil {
 		// An account not saved (or a rider's): its name checked with the
 		// bank now, as the person confirming must see it.
@@ -433,6 +493,33 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 		if in.RiderID == nil {
 			payee.title = res.AccountName
 		}
+	}
+	// The route, the fee and the balance (Settled 2, 4, 7): another
+	// business's Taskiem wallet is paid wallet to wallet, at once and with
+	// no fee; else the fee where the payments account quotes it. A
+	// balance that does not cover the amount and its fee stops it here.
+	route, wallet := "bank", s.walletRoute(ctx, tenant, *rl, payee.bank.AccountNumber)
+	var fee *int64
+	if wallet != "" {
+		route, fee = "wallet", new(int64)
+	} else {
+		fee = s.payFeeQuote(ctx, tenant, *rl, in.AmountKobo, code)
+	}
+	var balance *int64
+	if n, ok := s.payBalance(ctx, tenant, *rl); ok {
+		balance = &n
+		need := in.AmountKobo
+		if fee != nil {
+			need += *fee
+		}
+		if need > n {
+			return payment{}, refusePay(http.StatusConflict, "short", shortWords(n, in.AmountKobo, fee))
+		}
+	}
+	tell := in.TellPayee == nil || *in.TellPayee
+	where, err := s.diaryWhere(ctx, tenant, person, in.Where)
+	if err != nil {
+		return payment{}, err
 	}
 	var x payment
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -488,13 +575,16 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 		}
 		id := uuid.Must(uuid.NewV7())
 		row := tx.QueryRow(ctx, `INSERT INTO payments (id, tenant_id, saved_id, personal, payee_title, bank_name, bank_code, account_sealed, last4, account_name,
-			amount_kobo, purpose, purpose_note, note, first_payment, changed_account, started_from, prepared_by, rider_id, staff_id, provider_channel)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING `+paymentCols,
+			amount_kobo, purpose, purpose_note, note, first_payment, changed_account, started_from, prepared_by, rider_id, staff_id, provider_channel,
+			fee_quote_kobo, route, to_wallet, tell_payee, send_receipt, diary_where)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NULLIF($24, ''), $25, $26, $27) RETURNING `+paymentCols,
 			id, tenant, payee.saved, payee.personal, payee.title, payee.bank.BankName, code, sealed, saved.Last4(payee.bank.AccountNumber), payee.checked,
-			in.AmountKobo, in.Purpose, strings.TrimSpace(in.PurposeNote), strings.TrimSpace(in.Note), first, changed, from, by, payee.rider, payee.staff, rl.Channel())
+			in.AmountKobo, in.Purpose, strings.TrimSpace(in.PurposeNote), strings.TrimSpace(in.Note), first, changed, from, by, payee.rider, payee.staff, rl.Channel(),
+			fee, route, wallet, tell, in.SendReceipt, where)
 		if x, err = scanPayment(row); err != nil {
 			return err
 		}
+		x.BalanceKobo = balance
 		x.Again, err = paidAgainTx(ctx, tx, tenant, x)
 		return err
 	})
@@ -578,6 +668,21 @@ type confirmIn struct {
 	Pin string `json:"pin"`
 	// Again confirms the same payment as one made in the last day.
 	Again bool `json:"again"`
+	// TellPayee and SendReceipt: the sheet's ticks, as it is confirmed
+	// (Tell them in the chat; Send them a receipt).
+	TellPayee   *bool `json:"tell_payee"`
+	SendReceipt *bool `json:"send_receipt"`
+}
+
+// setTellTx keeps the sheet's ticks on a payment being confirmed.
+func setTellTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, in confirmIn) error {
+	if in.TellPayee == nil && in.SendReceipt == nil {
+		return nil
+	}
+	_, err := tx.Exec(ctx, `UPDATE payments SET tell_payee = COALESCE($2, tell_payee), send_receipt = COALESCE($3, send_receipt)
+		WHERE id = $1 AND status IN ('prepared', 'sending', 'waiting_ok')`,
+		id, in.TellPayee, in.SendReceipt)
+	return err
 }
 
 // payPasskey is the step-up for paying: a passkey for op on target, never
@@ -674,6 +779,12 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if !revote {
+		if err := s.balanceCovers(ctx, p.TenantID, x); err != nil {
+			s.payFail(w, r, err)
+			return
+		}
+	}
 	if in.Passkey == nil && in.TOTP == "" && s.payOfferPin(w, r, x, revote) {
 		return
 	}
@@ -697,8 +808,10 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 		var needs string
 		if err := s.tx(r, func(tx pgx.Tx) error {
 			var err error
-			x, needs, err = confirmCheckTx(ctx, tx, p, owner, id, in.Again, true)
-			return err
+			if x, needs, err = confirmCheckTx(ctx, tx, p, owner, id, in.Again, true); err != nil {
+				return err
+			}
+			return setTellTx(ctx, tx, id, in)
 		}); err != nil {
 			s.payFail(w, r, err)
 			return
@@ -725,6 +838,7 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.paymentSent(ctx, p, x)
 	writeJSON(w, http.StatusAccepted, map[string]any{"payment": x})
 }
 
@@ -1071,7 +1185,7 @@ func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Princi
 	ref, _, err := s.Store.StartRun(ctx, runtime.StartRequest{TenantID: p.TenantID, WorkflowID: wf, Version: version, Environment: "prod",
 		Trigger: map[string]any{"type": "manual", "body": map[string]any{"payment_id": x.ID.String(), "payee": x.Payee, "bank_code": x.bankCode,
 			"account_number": number, "amount_kobo": x.AmountKobo, "narration": narration, "purpose": x.Purpose, "needs_ok": needs != "",
-			"needs": needs, "account": x.Account, "account_name": deref(x.AccountName)}},
+			"needs": needs, "account": x.Account, "account_name": deref(x.AccountName), "route": x.Route, "wallet_id": deref(x.toWallet)}},
 		StartedBy: p.Actor(), TriggerID: "payments/pay", DedupKey: "payment:" + x.ID.String()})
 	if err != nil {
 		return uuid.Nil, err
@@ -1097,7 +1211,8 @@ func (s *Server) payWorkflowTx(r *http.Request, tx pgx.Tx, rl invoicing.Rail) (u
 	p := principalFrom(ctx)
 	var have *uuid.UUID
 	var conn, funding string
-	err := tx.QueryRow(ctx, `SELECT workflow_id, connection, funding_account FROM pay_settings WHERE tenant_id = $1`, p.TenantID).Scan(&have, &conn, &funding)
+	var shape int
+	err := tx.QueryRow(ctx, `SELECT workflow_id, connection, funding_account, shape FROM pay_settings WHERE tenant_id = $1`, p.TenantID).Scan(&have, &conn, &funding, &shape)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, err
 	}
@@ -1108,7 +1223,7 @@ func (s *Server) payWorkflowTx(r *http.Request, tx pgx.Tx, rl invoicing.Rail) (u
 		}
 		want = secrets.PlatformName
 	}
-	if have != nil && conn == want && funding == wallet {
+	if have != nil && conn == want && funding == wallet && shape == payShape {
 		return *have, nil
 	}
 	tpl, ok := templates.Default().Get(payPersonTemplate)
@@ -1124,13 +1239,22 @@ func (s *Server) payWorkflowTx(r *http.Request, tx pgx.Tx, rl invoicing.Rail) (u
 		return uuid.Nil, err
 	}
 	steps, _ := def["steps"].([]any)
+	kept := steps[:0]
 	for _, st := range steps {
-		if m, _ := st.(map[string]any); m["type"] == "approval" {
+		m, _ := st.(map[string]any)
+		if m["type"] == "approval" {
 			if cfg, ok := m["config"].(map[string]any); ok {
 				cfg["policy"] = payPolicy
 			}
 		}
+		// Wallet to wallet only on a payments account that pays wallets
+		// (the Taskiem wallet): elsewhere every payment goes to the bank.
+		if !rl.Maps("pay_wallet") && (m["id"] == "pay_wallet" || m["id"] == "record_wallet") {
+			continue
+		}
+		kept = append(kept, st)
 	}
+	def["steps"] = kept
 	patched, err := json.Marshal(def)
 	if err != nil {
 		return uuid.Nil, err
@@ -1154,9 +1278,9 @@ func (s *Server) payWorkflowTx(r *http.Request, tx pgx.Tx, rl invoicing.Rail) (u
 	if err != nil {
 		return uuid.Nil, err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO pay_settings (tenant_id, workflow_id, connection, funding_account, updated_by) VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (tenant_id) DO UPDATE SET workflow_id = $2, connection = $3, funding_account = $4, updated_by = $5, updated_at = now()`,
-		p.TenantID, wf, want, wallet, p.Actor())
+	_, err = tx.Exec(ctx, `INSERT INTO pay_settings (tenant_id, workflow_id, connection, funding_account, updated_by, shape) VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (tenant_id) DO UPDATE SET workflow_id = $2, connection = $3, funding_account = $4, updated_by = $5, updated_at = now(), shape = $6`,
+		p.TenantID, wf, want, wallet, p.Actor(), payShape)
 	return wf, err
 }
 
@@ -1377,7 +1501,7 @@ func paymentPurposeWords(p string) string {
 // paymentStatusWords is a payment's status in words.
 func paymentStatusWords(st string) string {
 	return map[string]string{"sending": "sent", "waiting_ok": "sent for the owner's OK", "paid": "paid", "failed": "not paid", "rejected": "refused",
-		"unknown": "sent", "cancelled": "cancelled"}[st]
+		"unknown": "sent", "cancelled": "cancelled", "reversed": "sent back by the bank"}[st]
 }
 
 // --- the payments@1 connector's operations ---
@@ -1485,16 +1609,21 @@ func (o *payOps) Check(ctx context.Context, tenant, run, id uuid.UUID, in paycon
 }
 
 // Finish records how the pay-person workflow's payment ended.
-func (o *payOps) Finish(ctx context.Context, tenant, run, id uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64) (map[string]any, error) {
+func (o *payOps) Finish(ctx context.Context, tenant, run, id uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64, route string) (map[string]any, error) {
 	if !slices.Contains([]string{"paid", "failed", "unknown", "rejected"}, status) {
 		return nil, fmt.Errorf("%w: a payment ends paid, failed, unknown or rejected", payconn.ErrRefused)
 	}
 	var out map[string]any
 	err := db.InTenantTx(ctx, o.s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var now string
-		err := tx.QueryRow(ctx, `UPDATE payments SET status = $2, account_name = COALESCE(NULLIF($3, ''), account_name), payout_ref = NULLIF($4, ''),
-			reason = NULLIF($5, ''), fee_kobo = $6, finished_at = now()
-			WHERE id = $1 AND run_id = $7 AND (status IN ('sending', 'waiting_ok') OR status = 'unknown' AND $2 IN ('paid', 'failed')) RETURNING status`, id, status, accountName, payoutID, reason, feeKobo, run).Scan(&now)
+		if route != "" && route != "bank" && route != "wallet" {
+			return fmt.Errorf("%w: a payment goes by bank or wallet", payconn.ErrRefused)
+		}
+		// The route it went by: a wallet transfer that failed falls back to
+		// the bank, and says so (route bank).
+		err := tx.QueryRow(ctx, `UPDATE payments SET status = $2, account_name = COALESCE(NULLIF($3, ''), account_name), payout_ref = COALESCE(NULLIF($4, ''), payout_ref),
+			reason = NULLIF($5, ''), fee_kobo = COALESCE($6, fee_kobo), finished_at = now(), route = COALESCE(NULLIF($8, ''), route)
+			WHERE id = $1 AND run_id = $7 AND (status IN ('sending', 'waiting_ok') OR status = 'unknown' AND $2 IN ('paid', 'failed')) RETURNING status`, id, status, accountName, payoutID, reason, feeKobo, run, route).Scan(&now)
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Ended already: the same outcome again changes nothing (one
 			// not known yet is settled by the bank's answer, above).
@@ -1508,8 +1637,73 @@ func (o *payOps) Finish(ctx context.Context, tenant, run, id uuid.UUID, status, 
 			return err
 		}
 		out = map[string]any{"payment_id": id.String(), "status": now}
+		// The fee as its own line of the money log (bank charges), and the
+		// person paid told in their chat (Settled 4, 6).
+		if err := o.s.afterPaymentTx(ctx, tx, tenant, id); err != nil {
+			return err
+		}
 		// Told in the chat it was prepared from, with its end (once).
 		return chatPayResultTx(ctx, tx, tenant, id)
 	})
 	return out, err
+}
+
+// payAgain is POST /v1/payments/{id}/again: a payment that failed, or that
+// the bank sent back, prepared again as it was asked for (the same payee,
+// amount and what for, the diary line in the same chat), checked as any
+// payment is; nothing is sent until it is confirmed. "Try again" on the
+// diary line.
+func (s *Server) payAgain(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	owner := isOwnerOf(p)
+	var in payIn
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		x, err := scanPayment(tx.QueryRow(ctx, `SELECT `+paymentCols+` FROM payments WHERE id = $1 AND (NOT personal OR $2)`, id, owner))
+		if err != nil {
+			return err
+		}
+		if x.Status != "failed" && x.Status != "reversed" {
+			return refusePay(http.StatusConflict, "not_failed", "Only a payment that did not reach them is tried again.")
+		}
+		if !owner && x.PreparedBy != p.Actor() {
+			return refusePay(http.StatusForbidden, "not_yours", "Only who prepared this payment, or an owner, tries it again.")
+		}
+		in = payIn{SavedID: x.SavedID, RiderID: x.RiderID, StaffID: x.StaffID, Mine: x.Personal, AmountKobo: x.AmountKobo, Purpose: x.Purpose,
+			PurposeNote: x.PurposeNote, Note: x.Note, From: x.StartedFrom, TellPayee: &x.TellPayee, SendReceipt: x.SendReceipt, Where: deref(x.diaryWhere)}
+		if in.StaffID != nil {
+			in.SavedID = nil
+		}
+		if x.SavedID == nil && x.RiderID == nil && x.StaffID == nil && !x.Personal {
+			v, err := s.Store.PII.OpenTx(ctx, tx, p.TenantID, x.sealed)
+			if err != nil {
+				return err
+			}
+			in.AccountNumber, in.BankName = fmt.Sprint(v), x.BankName
+		}
+		if in.From == "workflow" {
+			in.From = "tools"
+		}
+		return nil
+	}); err != nil {
+		s.payFail(w, r, err)
+		return
+	}
+	x, err := s.preparePayment(ctx, p.TenantID, p.UserID, owner, in, p.Actor())
+	if err != nil {
+		s.payFail(w, r, err)
+		return
+	}
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		return auditTx(r, tx, "payment.prepare", x.ID.String(), map[string]any{"amount_kobo": x.AmountKobo, "purpose": x.Purpose, "again_of": id})
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"payment": x})
 }

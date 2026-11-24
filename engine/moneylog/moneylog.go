@@ -246,6 +246,18 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 			return same, false, err
 		}
 	}
+	if e.Kind == "payout" && e.Category == "" {
+		// A payment to a person (paying people): its payout says what it
+		// was for, and its fee is its own line (bank charges), written when
+		// the payment ends.
+		cat, ok, err := PayoutPurposeTx(ctx, tx, tenant, e.Channel, e.Reference)
+		if err != nil {
+			return uuid.Nil, false, err
+		}
+		if ok {
+			e.Category, e.FeeKobo = cat, nil
+		}
+	}
 	var payer map[string]any
 	if e.PayerName != "" || e.PayerAccount != "" {
 		if l.PII == nil {
@@ -300,6 +312,12 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 		// Written by a concurrent delivery of the same movement.
 		err := tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND entry_key = $2`, tenant, key).Scan(&id)
 		return id, false, err
+	}
+	if e.Kind == "payout" && e.Status == "reversed" {
+		// A payment to a person the bank sent back after it was paid.
+		if err := reversedPaymentTx(ctx, tx, tenant, e); err != nil {
+			return uuid.Nil, false, err
+		}
 	}
 	return id, true, nil
 }

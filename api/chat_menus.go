@@ -557,6 +557,25 @@ func (s *Server) stepsAnswer(ctx context.Context, c *chat, text string) error {
 		}
 		v = match
 	}
+	// "45k for a delivery" to "how much?": the amount, and what for when
+	// the action asks it next (paying, "how much, and for what?").
+	if fl.Kind == "money" {
+		if amount, what, ok := strings.Cut(v, " for "); ok && stepsCheck("money", strings.TrimSpace(amount)) == "" {
+			for _, x := range a.Fields {
+				if x.Key != "for" || x.Kind != "choice" {
+					continue
+				}
+				if _, done := st.Values["for"]; done {
+					break
+				}
+				p, _, _ := readPurpose(what)
+				if ch := purposeChoice(x.Choices, p); ch != "" {
+					v = strings.TrimSpace(amount)
+					st.Values["for"] = ch
+				}
+			}
+		}
+	}
 	if why := stepsCheck(fl.Kind, v); why != "" {
 		return s.stepsWrong(ctx, c, a, st, c.t(why))
 	}
@@ -814,4 +833,15 @@ func (s *Server) closeMenu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// purposeChoice is the choice among choices that names purpose ("a
+// delivery" for delivery), "" when none does.
+func purposeChoice(choices []string, purpose string) string {
+	for _, ch := range choices {
+		if p, _, _ := readPurpose(ch); p == purpose {
+			return ch
+		}
+	}
+	return ""
 }

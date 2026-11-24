@@ -463,8 +463,13 @@ type TaskiemMessage struct {
 	Text    string          `json:"text"`
 	Buttons []TaskiemButton `json:"buttons,omitempty"`
 	// Link is a page Taskiem's answer opens (Telegram's link button).
-	Link      *whatsapp.LinkButton `json:"-"`
-	CreatedAt time.Time            `json:"created_at"`
+	Link *whatsapp.LinkButton `json:"-"`
+	// Payment and Batch: the payment (or batch) a diary line, a receipt
+	// or a "paid you" card is about, shown as it stands now (paid, failed
+	// with Try again); docs/spec/chat-pay-people.md "After".
+	Payment   *uuid.UUID `json:"payment,omitempty"`
+	Batch     *uuid.UUID `json:"batch,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // webLive collects what Taskiem says to the person while their message
@@ -710,7 +715,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	err := s.tx(r, func(tx pgx.Tx) error {
-		sql := `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done FROM chat_history
+		sql := `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done, payment_id, batch_id FROM chat_history
 			WHERE tenant_id = $1 AND user_id = $2 AND expires_at > now()`
 		args := []any{p.TenantID, p.UserID}
 		order := ` ORDER BY created_at DESC, id DESC LIMIT 50`
@@ -735,7 +740,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		got, err := pgx.CollectRows(rows, func(rr pgx.CollectableRow) (row, error) {
 			var x row
-			err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done)
+			err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done, &x.m.Payment, &x.m.Batch)
 			return x, err
 		})
 		if err != nil {
@@ -773,7 +778,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 // after a time, oldest first (the live stream's look): the same rows and
 // words as GET /v1/taskiem-chat.
 func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, since time.Time, limit int) ([]TaskiemMessage, error) {
-	rows, err := tx.Query(ctx, `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done FROM chat_history
+	rows, err := tx.Query(ctx, `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done, payment_id, batch_id FROM chat_history
 		WHERE tenant_id = $1 AND user_id = $2 AND expires_at > now() AND created_at > $3 ORDER BY created_at, id LIMIT $4`, p.TenantID, p.UserID, since, limit)
 	if err != nil {
 		return nil, err
@@ -786,7 +791,7 @@ func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, sinc
 	}
 	got, err := pgx.CollectRows(rows, func(rr pgx.CollectableRow) (row, error) {
 		var x row
-		err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done)
+		err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done, &x.m.Payment, &x.m.Batch)
 		return x, err
 	})
 	if err != nil {

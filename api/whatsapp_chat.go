@@ -925,6 +925,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) (err error) {
 	}
 	// A menu's row pressed, a number for a numbered menu, an answer to a
 	// question, and help (chat_menus.go).
+	// A forwarded message with account details, or a reply of "pay"
+	// quoting one: the name checked and "how much, and for what?"
+	// (payments_forward.go), whatever the conversation was in the middle
+	// of.
+	if done, err := s.waPayForward(ctx, c); done || err != nil {
+		return err
+	}
 	if done, err := s.waMenuWords(ctx, c, text, cmd); done || err != nil {
 		return err
 	}

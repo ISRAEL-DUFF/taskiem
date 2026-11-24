@@ -150,6 +150,31 @@
         }
       }
     },
+    "quote_fee": {
+      "title": "Quote a payout's fee",
+      "description": "What a bank payout of an amount would cost, before it is made: shown to the person paying. A rail that cannot quote leaves it out, and the fee is read from the payout's answer.",
+      "classes": ["read"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["amount_kobo"],
+        "properties": {
+          "amount_kobo": { "type": "integer", "minimum": 1 },
+          "currency": { "type": "string", "default": "NGN" },
+          "bank_code": { "type": "string", "description": "The bank's NIP code (list_banks), where the fee depends on it" },
+          "source": { "type": "string", "description": "The wallet or account the payout would come from, on rails that hold several" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fee_kobo"],
+        "properties": {
+          "fee_kobo": { "type": "integer", "minimum": 0, "description": "What the rail charges on top of the amount, in minor units" },
+          "currency": { "type": "string" }
+        }
+      }
+    },
     "pay_many": {
       "title": "Pay a list of bank accounts in one batch",
       "description": "Declared only where the rail has a real bulk endpoint; elsewhere templates loop over pay_bank.",

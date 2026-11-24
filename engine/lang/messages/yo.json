@@ -8413,6 +8413,66 @@
     "bill.transfer.off": {
       "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
       "reviewed": false
+    },
+    "wa.pay.payee.paid": {
+      "text": "{business} ti san {amount} fún ọ fún {for} ní {date}, sí àkáǹtì rẹ tí ó parí pẹ̀lú {last4}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment told to the person paid (a rider, a staff member) once the bank confirmed it: who paid, how much, what for, the day, their account's last four digits. Never who approved, the balance or the fee"
+    },
+    "wa.pay.payee.back": {
+      "text": "{amount} tí {business} san fún ọ ní {date} kò dé àkáǹtì rẹ: báǹkì dá a padà. A ti sọ fún wọn.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment the person paid was told of did not reach them: the bank sent it back"
+    },
+    "wa.pay.result.reversed": {
+      "text": "{amount} sí {to} ti padà láti báǹkì: ó tún wà nínú owó rẹ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat was paid and later sent back by the bank: who and how much"
+    },
+    "wa.pay.result.receipt": {
+      "text": "Ìwé ẹ̀rí ìsanwó wọn, láti fi ránṣẹ́ sí wọn: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After a payment's result: the link to its receipt, to send to the person paid (Send them a receipt)"
+    },
+    "wa.pay.wallet": {
+      "text": "Àpò owó Taskiem · ó dé lẹ́sẹ̀kẹsẹ̀, kò sí owó ìdíyelé.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat goes Taskiem wallet to Taskiem wallet: at once, with no fee"
+    },
+    "wa.pay.fee": {
+      "text": "{amount} + owó ìdíyelé {fee}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat, before it is confirmed: the amount and the fee the payments account quoted (the business pays the fee)"
+    },
+    "wa.pay.fee_after": {
+      "text": "Owó ìdíyelé yóò hàn lẹ́yìn ìsanwó.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat whose payments account quotes no fee before paying"
+    },
+    "wa.pay.balance_after": {
+      "text": "Owó tó kù lẹ́yìn náà: {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat: the balance once it and its fee are paid"
+    },
+    "wa.pay.fwd.ask": {
+      "text": "Sanwó fún {name} ({bank} {account}) mélòó, àti fún kí ni?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Answer to a forwarded message (or a reply of pay) with account details: the bank's name for the account, the bank and the last four digits; asks the amount and what for"
+    },
+    "wa.pay.fwd.saved": {
+      "text": "Àkáǹtì {name} nìyẹn. Sanwó fún {name} mélòó?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Answer to a forwarded message with the account of one of the business's saved accounts: paid by its name; asks the amount"
+    },
+    "wa.pay.fwd.staff": {
+      "text": "Àwọn òṣìṣẹ́ máa ń sanwó sí àwọn àkáǹtì tí iṣẹ́ náà ti fi pamọ́ nìkan: ní kí olówó fi èyí pamọ́ ná.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A staff member forwarded account details not saved: staff pay the business's saved accounts only"
+    },
+    "wa.pay.fwd.none": {
+      "text": "Ìfiránṣẹ́ yẹn kò ní nọ́ńbà àkáǹtì tí mo lè kà. Fi àlàyé àkáǹtì ránṣẹ́ sí mi, tàbí sọ pé: *send 45k to 0123456789 gtbank*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A reply of pay quoting a message with no account details Taskiem can read"
     }
   }
 }

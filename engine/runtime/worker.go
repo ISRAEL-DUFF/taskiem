@@ -1255,10 +1255,12 @@ func (w *Worker) record(ctx context.Context, p *plan, outcome *history.Event) er
 		}
 		proj := result.Type == history.StepCompleted && projected(p)
 		*result = project(p, *result)
-		if err := w.recordPayout(ctx, tx, p, *result); err != nil {
+		// The payout told first: a payment it pays then knows its payout,
+		// so the money log's entry for it says what it was for.
+		if err := w.tellPayoutSent(ctx, tx, p, *result); err != nil {
 			return err
 		}
-		if err := w.tellPayoutSent(ctx, tx, p, *result); err != nil {
+		if err := w.recordPayout(ctx, tx, p, *result); err != nil {
 			return err
 		}
 		if err := w.rememberPaidAccounts(ctx, tx, p, *result); err != nil {

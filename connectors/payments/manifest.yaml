@@ -87,6 +87,7 @@ actions:
         payout_id:    { type: string }
         fee_kobo:     { type: integer }
         reason:       { type: string }
+        route:        { type: string, enum: [bank, wallet], description: "How it went: a bank transfer (the default), or Taskiem wallet to Taskiem wallet" }
     output:
       type: object
       properties:

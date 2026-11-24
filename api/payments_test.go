@@ -143,11 +143,11 @@ func TestPayOnePerson(t *testing.T) {
 		t.Fatalf("the payment's own run: %v %v", out, err)
 	}
 	// Only the payment's own run records how it ended.
-	if _, err := ops.Finish(ctx, biz, other, uuid.MustParse(id), "failed", "", "", "", nil); err == nil {
+	if _, err := ops.Finish(ctx, biz, other, uuid.MustParse(id), "failed", "", "", "", nil, ""); err == nil {
 		t.Errorf("another run recorded the payment's outcome")
 	}
 	// The workflow records how it ended.
-	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), "paid", "BAYO RICE MILLS", "trf_1", "", nil); err != nil {
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), "paid", "BAYO RICE MILLS", "trf_1", "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if p := owner.must(200, "GET", "/v1/payments/"+id, nil)["payment"].(map[string]any); p["status"] != "paid" || p["account_name"] != "BAYO RICE MILLS" {
@@ -167,7 +167,7 @@ func TestPayOnePerson(t *testing.T) {
 	if a, b := <-codes, <-codes; a+b != 202+409 {
 		t.Fatalf("two confirms at once: %d %d", a, b)
 	}
-	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(twice), uuid.MustParse(twice), "paid", "BAYO RICE MILLS", "trf_2", "", nil); err != nil {
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(twice), uuid.MustParse(twice), "paid", "BAYO RICE MILLS", "trf_2", "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 

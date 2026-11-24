@@ -4329,6 +4329,20 @@ export type CapabilityPayWalletOutput = {
   reason?: string;
   status: "settled" | "pending" | "failed";
 };
+/** Quote a payout's fee: input */
+export interface CapabilityQuoteFeeInput {
+  amount_kobo: Val<number>;
+  /** The bank's NIP code (list_banks), where the fee depends on it */
+  bank_code?: Val<string>;
+  currency?: Val<string>;
+  /** The wallet or account the payout would come from, on rails that hold several */
+  source?: Val<string>;
+}
+/** Quote a payout's fee: output */
+export type CapabilityQuoteFeeOutput = {
+  currency?: string;
+  fee_kobo: number;
+};
 /** Refund a payment: input */
 export interface CapabilityRefundInput {
   /** Part of the payment; the whole when left out */
@@ -4427,6 +4441,8 @@ export const rail = {
   list_banks: (input: CapabilityListBanksInput, extra?: CapabilityExtra): StepSpec => capability("list_banks", input, extra),
   /** List money paid into customers' account numbers */
   list_credits: (input: CapabilityListCreditsInput, extra?: CapabilityExtra): StepSpec => capability("list_credits", input, extra),
+  /** Quote a payout's fee */
+  quote_fee: (input: CapabilityQuoteFeeInput, extra?: CapabilityExtra): StepSpec => capability("quote_fee", input, extra),
   /** Refund a payment */
   refund: (input: CapabilityRefundInput, extra?: CapabilityExtra): StepSpec => capability("refund", input, extra),
   /** Find the name on a bank account */
@@ -4470,6 +4486,7 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
   pay_many: "pay.many",
   pay_mobile_money: "pay.mobile_money",
   pay_wallet: "pay.wallet",
+  quote_fee: "rail.quote_fee",
   refund: "rail.refund",
   resolve_account: "rail.resolve_account",
   virtual_account: "rail.virtual_account",
@@ -4498,6 +4515,7 @@ export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
   pay_many: [],
   pay_mobile_money: [],
   pay_wallet: ["anchor@1", "iswallet@1"],
+  quote_fee: [],
   refund: ["paystack@1"],
   resolve_account: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
   virtual_account: ["flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
