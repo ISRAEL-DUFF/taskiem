@@ -154,13 +154,21 @@ func TestPayOnePerson(t *testing.T) {
 		t.Fatalf("paid: %v", p)
 	}
 
-	// Two confirms at once: one sends it, the other is told it was sent.
+	// Two confirms at once: one sends it, the other is told it was sent
+	// (or, when its passkey response came second, refused).
 	twice := owner.must(201, "POST", "/v1/payments", map[string]any{"payee": "bayo", "amount_kobo": 120000, "purpose": "bill"})["payment"].(map[string]any)["id"].(string)
 	proofs := []any{stepUp(t, owner, key, "money.pay", "payment:"+twice), stepUp(t, owner, key, "money.pay", "payment:"+twice)}
 	codes := make(chan int, 2)
 	for _, pf := range proofs {
 		go func() {
-			code, _ := owner.do("POST", "/v1/payments/"+twice+"/confirm", map[string]any{"passkey": pf})
+			code, body := owner.do("POST", "/v1/payments/"+twice+"/confirm", map[string]any{"passkey": pf})
+			if code == 403 && body["step_up"] == "passkey" {
+				// Both passed the first check and the later of the one
+				// key's two responses was verified first: the earlier
+				// one's counter no longer advances, refused as a copied
+				// key would be. Either way only one sends it.
+				code = 409
+			}
 			codes <- code
 		}()
 	}
