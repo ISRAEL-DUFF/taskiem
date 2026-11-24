@@ -1,0 +1,44 @@
+{
+  "number": 1,
+  "slug": "open-your-shop",
+  "title": "Open your shop",
+  "headline": "Open your *shop*",
+  "sub": "Sign up, tell Taskiem about your business, and be found.",
+  "mood": "sparse",
+  "films": [
+    "food-open-your-shop",
+    "food-be-found"
+  ],
+  "bridge": {
+    "en": "Ada's Kitchen is on Taskiem. Now, what goes on the menu?",
+    "pcm": "Ada's Kitchen don dey Taskiem. Now, wetin go dey the menu?"
+  },
+  "next": {
+    "number": 2,
+    "title": "Put your goods in",
+    "headline": "Put your *goods* in"
+  },
+  "flow": [
+    {
+      "id": "E1-C1",
+      "who": "Ada Obi",
+      "purpose": "cold open: Ada with a buzzing phone",
+      "seconds": 4,
+      "goes": "before the title card",
+      "action": "Stirs a pot of jollof while her phone buzzes; she glances at it, laughs and shakes her head",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "slow push-in, medium shot"
+    },
+    {
+      "id": "E1-C2",
+      "who": "Ada Obi",
+      "purpose": "bridge: the menu board",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Looks at an empty chalkboard menu on the wall, then at a pot of jollof, and nods with her hands on her hips",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "medium shot, a gentle pan to the pot"
+    }
+  ],
+  "narration": {}
+}

@@ -1,0 +1,48 @@
+{
+  "number": 7,
+  "slug": "your-suppliers",
+  "title": "Your suppliers",
+  "headline": "Your *suppliers*",
+  "sub": "Find a supplier, and reorder what is running low.",
+  "mood": "sparse",
+  "films": [
+    "food-find-a-supplier",
+    "food-reorder"
+  ],
+  "recap": {
+    "en": "The rice is running low at Ada's Kitchen.",
+    "pcm": "Rice dey finish for Ada's Kitchen."
+  },
+  "bridge": {
+    "en": "The rice is ordered. Now Rivers Foods wants party packs. What price?",
+    "pcm": "Rice don order. Now Rivers Foods want party packs. Wetin be the price?"
+  },
+  "next": {
+    "number": 8,
+    "title": "Sell to businesses",
+    "headline": "Sell to *businesses*"
+  },
+  "flow": [
+    {
+      "id": "E7-C1",
+      "who": "Bayo Adeyemi",
+      "purpose": "the supplier at the mill",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Taps a twenty-five kilo burlap bag twice, strokes his beard and gives a slow single nod",
+      "setting": "Bayo Rice Mills warehouse: stacked burlap rice sacks, a hanging scale, dust in a shaft of sunlight",
+      "camera": "medium shot, locked-off"
+    },
+    {
+      "id": "E7-C2",
+      "who": "Bayo Adeyemi",
+      "purpose": "he accepts the order",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Holds his phone at arm's length, reads it, raises one brow, then gives a slow warm smile",
+      "setting": "Bayo Rice Mills warehouse: stacked burlap rice sacks, a hanging scale, dust in a shaft of sunlight",
+      "camera": "medium close-up, locked-off"
+    }
+  ],
+  "narration": {}
+}

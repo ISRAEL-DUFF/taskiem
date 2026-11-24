@@ -1,0 +1,49 @@
+{
+  "number": 10,
+  "slug": "keep-it-safe",
+  "title": "Keep it safe",
+  "headline": "Keep it *safe*",
+  "sub": "Approvals for money going out, and the app lock.",
+  "mood": "sparse",
+  "films": [
+    "food-approve-a-payment",
+    "food-app-lock"
+  ],
+  "recap": {
+    "en": "Money moves all day. How does Ada keep it safe?",
+    "pcm": "Money dey move all day. How Ada go keep am safe?"
+  },
+  "flow": [
+    {
+      "id": "E10-C1",
+      "who": "Tunde",
+      "purpose": "he asks to pay the supplier",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Looks at his phone, taps Send, then glances across the kitchen at Ada, who is at the stove",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "over-the-shoulder two-shot"
+    },
+    {
+      "id": "E10-C2",
+      "who": "Ada Obi",
+      "purpose": "she approves",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Reads her phone, checks the amount, nods and taps once with a firm smile",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "close-up, eye-level"
+    },
+    {
+      "id": "E10-C3",
+      "who": "Ada Obi",
+      "purpose": "closing: the day is done",
+      "seconds": 5,
+      "goes": "closing, after the footage",
+      "action": "Stands in the kitchen doorway at dusk, looks back at the clean counter and smiles with quiet pride",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer, evening lamp light",
+      "camera": "wide-to-medium slow pull-back"
+    }
+  ],
+  "narration": {}
+}

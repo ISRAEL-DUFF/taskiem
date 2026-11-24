@@ -1,0 +1,48 @@
+{
+  "number": 3,
+  "slug": "take-orders",
+  "title": "Take orders",
+  "headline": "Take *orders*",
+  "sub": "Sell at the counter, and turn a WhatsApp message into an order.",
+  "mood": "sparse",
+  "films": [
+    "food-sell-at-counter",
+    "food-customer-order"
+  ],
+  "recap": {
+    "en": "It is lunchtime at Ada's Kitchen. The orders are coming.",
+    "pcm": "Na lunchtime for Ada's Kitchen. Orders dey come."
+  },
+  "bridge": {
+    "en": "Lunch is selling. An office wants to pay by transfer. How does Ada get paid?",
+    "pcm": "Lunch dey sell. One office want pay by transfer. How Ada go collect her money?"
+  },
+  "next": {
+    "number": 4,
+    "title": "Get paid",
+    "headline": "Get *paid*"
+  },
+  "flow": [
+    {
+      "id": "E3-C1",
+      "who": "Chioma Nnadi",
+      "purpose": "the customer orders in a hurry",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Types fast on her phone at her desk with one hand, glances at the office clock, then grins",
+      "setting": "a Yaba open-plan office: desks, a window on the street, lunch break",
+      "camera": "medium shot from the front, slight handheld feel"
+    },
+    {
+      "id": "E3-C2",
+      "who": "Tunde",
+      "purpose": "serving at the counter",
+      "seconds": 4,
+      "goes": "between the two films",
+      "action": "Hands a packed lunch bag across the counter to a customer with a calm half-smile and a small nod",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "medium shot, eye-level"
+    }
+  ],
+  "narration": {}
+}

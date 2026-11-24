@@ -1,0 +1,41 @@
+{
+  "number": 0,
+  "slug": "one-working-day-at-adas-kitchen",
+  "title": "One working day at Ada's Kitchen",
+  "headline": "One working day at *Ada's Kitchen*",
+  "sub": "Orders, riders, stock, money and deals, all run alongside her chats.",
+  "mood": "build",
+  "reel": [],
+  "bridge": {
+    "en": "It starts with opening her shop.",
+    "pcm": "Everything start with how she go open her shop."
+  },
+  "next": {
+    "number": 1,
+    "title": "Open your shop",
+    "headline": "Open your *shop*"
+  },
+  "flow": [
+    {
+      "id": "E0-C1",
+      "who": "Ada Obi",
+      "purpose": "cold open: a busy kitchen at 7am",
+      "seconds": 4,
+      "goes": "before the title card",
+      "action": "Stirs a large pot of jollof with one hand while her phone buzzes again on the counter; she glances at it, laughs softly and shakes her head",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "slow push-in, medium shot, warm morning light"
+    },
+    {
+      "id": "E0-C2",
+      "who": "Ada Obi",
+      "purpose": "closing: the kitchen at dusk",
+      "seconds": 5,
+      "goes": "closing, after the footage, before the call to action",
+      "action": "Wipes down the steel counter at the end of the day, checks her phone, smiles with quiet pride and turns off a light",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer, evening lamp light",
+      "camera": "slow pull-back, medium shot"
+    }
+  ],
+  "narration": {}
+}

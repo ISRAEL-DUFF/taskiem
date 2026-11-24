@@ -1,0 +1,48 @@
+{
+  "number": 4,
+  "slug": "get-paid",
+  "title": "Get paid",
+  "headline": "Get *paid*",
+  "sub": "Send an invoice, and match the money when it arrives.",
+  "mood": "sparse",
+  "films": [
+    "food-send-invoice",
+    "food-match-payment"
+  ],
+  "recap": {
+    "en": "An office has had lunch from Ada's Kitchen. Now, getting paid.",
+    "pcm": "One office don chop from Ada's Kitchen. Now, how to collect money."
+  },
+  "bridge": {
+    "en": "Paid. Now Chioma's lunch has to reach her desk, hot.",
+    "pcm": "E don pay. Now Chioma lunch must reach her desk, hot."
+  },
+  "next": {
+    "number": 5,
+    "title": "Deliver",
+    "headline": "*Deliver*"
+  },
+  "flow": [
+    {
+      "id": "E4-C1",
+      "who": "Ada Obi",
+      "purpose": "counting the lunch orders",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Totals a handwritten list of lunch orders with a pencil, then taps her phone and nods in satisfaction",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "medium close-up, eye-level"
+    },
+    {
+      "id": "E4-C2",
+      "who": "Ada Obi",
+      "purpose": "bridge: packing Chioma's lunch",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Packs two foil lunch boxes and a bottle of zobo into an insulated cool box and snaps the lid shut",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "medium shot, slow push-in"
+    }
+  ],
+  "narration": {}
+}

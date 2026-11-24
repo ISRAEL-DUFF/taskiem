@@ -1,0 +1,48 @@
+{
+  "number": 8,
+  "slug": "sell-to-businesses",
+  "title": "Sell to businesses",
+  "headline": "Sell to *businesses*",
+  "sub": "A price list, an offer, and a deal within your limits.",
+  "mood": "sparse",
+  "films": [
+    "food-price-list",
+    "food-a-deal"
+  ],
+  "recap": {
+    "en": "Rivers Foods wants twenty party packs.",
+    "pcm": "Rivers Foods want twenty party packs."
+  },
+  "bridge": {
+    "en": "A big deal, orders, money, a team. How does Ada see it all first thing in the morning?",
+    "pcm": "Big deal, orders, money, team. How Ada go see everything for morning?"
+  },
+  "next": {
+    "number": 9,
+    "title": "Know your numbers",
+    "headline": "Know your *numbers*"
+  },
+  "flow": [
+    {
+      "id": "E8-C1",
+      "who": "Ibinabo George",
+      "purpose": "the buyer opens the haggle",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Taps a pen on a leather folio, looks up, tilts her head with one brow raised and a polite half-smile",
+      "setting": "a modern canteen office on Victoria Island: glass, neutral greys, a pine accent",
+      "camera": "medium close-up, locked-off, shallow depth of field"
+    },
+    {
+      "id": "E8-C2",
+      "who": "Ada Obi",
+      "purpose": "she agrees",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Reads her phone, gives a firm nod, then breaks into a wide smile with her dimple",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "close-up, eye-level"
+    }
+  ],
+  "narration": {}
+}

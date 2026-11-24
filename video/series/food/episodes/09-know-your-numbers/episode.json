@@ -1,0 +1,47 @@
+{
+  "number": 9,
+  "slug": "know-your-numbers",
+  "title": "Know your numbers",
+  "headline": "Know your *numbers*",
+  "sub": "Your business in one card, every morning.",
+  "mood": "sparse",
+  "films": [
+    "food-know-your-numbers"
+  ],
+  "recap": {
+    "en": "It is eight in the morning. Ada opens Taskiem.",
+    "pcm": "Na eight for morning. Ada open Taskiem."
+  },
+  "bridge": {
+    "en": "The day is moving, and so is the money. How does Ada keep it safe?",
+    "pcm": "The day dey move, money dey move too. How Ada go keep am safe?"
+  },
+  "next": {
+    "number": 10,
+    "title": "Keep it safe",
+    "headline": "Keep it *safe*"
+  },
+  "flow": [
+    {
+      "id": "E9-C1",
+      "who": "Ada Obi",
+      "purpose": "the morning card",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Sips a cup of tea in her kitchen before the pots start, reads her phone, and her brows lift as the numbers appear",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "medium close-up, warm morning light"
+    },
+    {
+      "id": "E9-C2",
+      "who": "Ada Obi",
+      "purpose": "she is pleased",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Looks up from her phone with a quiet proud smile and nods once",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "close-up, eye-level"
+    }
+  ],
+  "narration": {}
+}

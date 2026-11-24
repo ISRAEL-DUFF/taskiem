@@ -1,0 +1,47 @@
+{
+  "number": 5,
+  "slug": "deliver",
+  "title": "Deliver",
+  "headline": "*Deliver*",
+  "sub": "Send an order with a rider, and see where it is.",
+  "mood": "sparse",
+  "films": [
+    "food-deliver"
+  ],
+  "recap": {
+    "en": "Chioma's lunch is ready. It has to reach her desk, hot.",
+    "pcm": "Chioma lunch don ready. E must reach her desk, hot."
+  },
+  "bridge": {
+    "en": "Delivered. The kitchen is busy and Ada cannot do it alone. Tunde is on the till.",
+    "pcm": "E don reach. Kitchen dey busy and Ada no fit do am alone. Tunde dey the till."
+  },
+  "next": {
+    "number": 6,
+    "title": "Your team",
+    "headline": "Your *team*"
+  },
+  "flow": [
+    {
+      "id": "E5-C1",
+      "who": "Emeka Nwosu",
+      "purpose": "the rider collects the cool box",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Rides up to the kitchen door on a small dark-pine motorcycle, takes the cool box from Ada's hands and straps it on his back with a two-finger salute",
+      "setting": "Ada's Kitchen doorway in Yaba, yellow-painted wall, mid-day sun",
+      "camera": "tracking shot beside the bike, eye-level"
+    },
+    {
+      "id": "E5-C2",
+      "who": "Chioma Nnadi",
+      "purpose": "she receives her lunch",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Opens the office door, sees the cool box and her lunch, and puts both hands to her cheeks with delight",
+      "setting": "a Yaba open-plan office: desks, a window on the street, lunch break",
+      "camera": "medium close-up, slight handheld feel"
+    }
+  ],
+  "narration": {}
+}

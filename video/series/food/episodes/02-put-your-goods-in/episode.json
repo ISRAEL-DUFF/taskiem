@@ -1,0 +1,47 @@
+{
+  "number": 2,
+  "slug": "put-your-goods-in",
+  "title": "Put your goods in",
+  "headline": "Put your *goods* in",
+  "sub": "Photos, prices and sizes: a party pack in every size.",
+  "mood": "sparse",
+  "films": [
+    "food-put-goods-in"
+  ],
+  "recap": {
+    "en": "Ada's Kitchen is open on Taskiem. Time to put the menu in.",
+    "pcm": "Ada's Kitchen don open for Taskiem. Make we put the menu inside."
+  },
+  "bridge": {
+    "en": "It is lunchtime and the orders are coming in. How does Ada take them?",
+    "pcm": "Na lunchtime and orders dey come. How Ada go take dem?"
+  },
+  "next": {
+    "number": 3,
+    "title": "Take orders",
+    "headline": "Take *orders*"
+  },
+  "flow": [
+    {
+      "id": "E2-C1",
+      "who": "Ada Obi",
+      "purpose": "photographing the party pack",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Arranges a party pack of jollof rice and chicken on a steel counter and photographs it with her phone, then checks the picture and smiles",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "medium close-up, warm light"
+    },
+    {
+      "id": "E2-C2",
+      "who": "Tunde",
+      "purpose": "bridge: the first lunch order",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Looks at his phone at the counter as a message arrives, reads it and looks up at Ada with raised brows",
+      "setting": "Ada's Kitchen in Yaba: white tiles, steel counters, big steaming pots, a bright window onto a yellow-painted wall, a counter with a receipt printer",
+      "camera": "over-the-shoulder two-shot"
+    }
+  ],
+  "narration": {}
+}
