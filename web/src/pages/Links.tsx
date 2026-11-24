@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useChatTools } from "../lib/useChatTools";
 import { setSound, soundOn } from "../lib/moments";
+import { AreaPageTabs } from "./AreaPageTabs";
 import {
   Link,
+  NavLink,
   useNavigate,
   useParams,
   useLocation,
@@ -1149,6 +1151,21 @@ function FoundRow({
  * Linked businesses (under Secrets & settings): whether other businesses
  * find this one, and every link and request with what can be done to it.
  */
+/** Linked businesses' tab bar (pages H5, g-pages-tab): the links, the
+ * business as others find it, and the business's own pages placed under
+ * Linked businesses, after Taskiem's own. */
+export function LinksTabs() {
+  return (
+    <nav className="tabs" aria-label="Linked businesses">
+      <NavLink to="/settings/links" end>
+        Linked businesses
+      </NavLink>
+      <NavLink to="/settings/links/profile">Your business in Explore</NavLink>
+      <AreaPageTabs areas={["links"]} />
+    </nav>
+  );
+}
+
 export function LinkedBusinessesPage() {
   const { can } = useAuth();
   const manage = can("link.manage");
@@ -1178,6 +1195,7 @@ export function LinkedBusinessesPage() {
         title="Linked businesses"
         description="Businesses on Taskiem you have linked with, and requests either way. Each side keeps its own records."
       />
+      <LinksTabs />
       <ErrorBox error={view.error ?? settings.error ?? act.error} />
       <section
         className="card"

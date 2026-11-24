@@ -12,6 +12,7 @@ import 'package:taskiem/chat/links_screen.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'support.dart';
 
 void main() {
@@ -141,5 +142,58 @@ void main() {
     expect(find.text('No links yet.'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Find a business'));
     expect(found, 1);
+  });
+
+  // Pages H5 (g-pages-tab): a page placed under Linked businesses is a tab
+  // after the screen's own; pressed, it opens the page.
+  testWidgets('a page placed under Linked businesses is a tab', (t) async {
+    t.view.physicalSize = const Size(390, 900);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chats');
+    Map<String, Object?> summary(String name, String title, String? place) => {
+      'name': name,
+      'title': title,
+      'icon': 'tables',
+      'about': '',
+      'roles': <String>[],
+      'pinned': false,
+      'published': true,
+      'has_draft': false,
+      'version': 1,
+      'updated_at': '2026-11-24T10:00:00Z',
+      'place': ?place,
+    };
+    http.Response json(Object body) => http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.url.path == '/v1/pages') {
+          return json({
+            'pages': [summary('trade-today', 'Trade today', 'links'), summary('cash', 'Cash count', 'money'), summary('tickets', 'Tickets', null)],
+            'can_edit': false,
+            'can_publish': false,
+            'max_pinned': 5,
+            'max_pages': 10,
+          });
+        }
+        if (req.url.path == '/v1/pages/trade-today/view') {
+          return json({'page': summary('trade-today', 'Trade today', 'links'), 'draft': false, 'can_edit': false, 'drawn_at': '2026-11-24T10:00:00Z', 'filters': <Object>[],
+            'blocks': [{'id': 'h', 'type': 'heading', 'title': 'Orders to and from linked businesses'}]});
+        }
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: LinksScreen(chats: chats)));
+    await settle(t);
+    expect(find.bySemanticsLabel(RegExp('Linked businesses')), findsWidgets);
+    expect(find.text('Links'), findsOneWidget);
+    expect(find.text('Trade today'), findsOneWidget);
+    expect(find.text('Cash count'), findsNothing);
+    expect(find.text('Tickets'), findsNothing);
+    await looks(t, 'links-page-tabs');
+    await t.tap(find.text('Trade today'));
+    await settle(t);
+    expect(find.text('Orders to and from linked businesses'), findsOneWidget);
   });
 }

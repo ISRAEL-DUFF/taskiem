@@ -996,6 +996,57 @@ class _PlacedPagesState extends State<PlacedPages> {
   }
 }
 
+/// The business's pages placed under an area, as tabs after the area's own
+/// (pages §9; build-plan-gaps H5, g-pages-tab): Linked businesses' tab bar
+/// in the app. The first tab is the screen itself; a page's tab opens the
+/// page. Nothing is drawn when no page is placed there.
+class PlacedPageTabs extends StatefulWidget {
+  const PlacedPageTabs({super.key, required this.auth, required this.areas, required this.own, required this.label, this.backLabel = 'Back'});
+  final Auth auth;
+  final List<String> areas;
+
+  /// The screen's own tab ("Your links").
+  final String own;
+
+  /// What the tab bar is, for a screen reader ("Linked businesses").
+  final String label;
+  final String backLabel;
+
+  @override
+  State<PlacedPageTabs> createState() => _PlacedPageTabsState();
+}
+
+class _PlacedPageTabsState extends State<PlacedPageTabs> {
+  List<PageSummary> _pages = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(() async {
+      try {
+        final all = (await widget.auth.api.listPages()).pages;
+        if (mounted) setState(() => _pages = placedPages(all, widget.areas));
+      } on Object {
+        // None shown: the screen stands without them.
+      }
+    }());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_pages.isEmpty) return const SizedBox.shrink();
+    return TkChips<String>(
+      label: widget.label,
+      padding: const EdgeInsets.only(bottom: 12),
+      chips: [('', widget.own), for (final p in _pages) (p.name, p.title)],
+      on: '',
+      onPick: (name) {
+        if (name.isNotEmpty) unawaited(openPage(context, widget.auth, name, backLabel: widget.backLabel));
+      },
+    );
+  }
+}
+
 /// The published pages placed under these areas.
 List<PageSummary> placedPages(List<PageSummary> pages, List<String> areas) => [for (final p in pages) if (p.published && p.place != null && areas.contains(p.place)) p];
 
