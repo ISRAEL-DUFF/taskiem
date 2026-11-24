@@ -44,5 +44,46 @@
     "title": "Your suppliers",
     "headline": "Your *suppliers*"
   },
-  "narration": {}
+  "narration": {
+    "add-staff": {
+      "en": [
+        "Zainab adds Dami to the team.",
+        "She taps Add staff, and types Dami's name and phone number.",
+        "Dami will be a shift manager.",
+        "She sends the invitation, and Taskiem messages Dami.",
+        "Dami waits until she says yes.",
+        "Then Dami is on the Team page."
+      ],
+      "pcm": [
+        "Zainab dey add Dami to the team.",
+        "She tap Add staff, and type Dami name and phone number.",
+        "Dami go be shift manager.",
+        "She send the invitation, Taskiem go message Dami.",
+        "Dami go wait till she talk yes.",
+        "Then Dami dey the Team page."
+      ]
+    },
+    "tasks-and-handover": {
+      "en": [
+        "Zainab gives Dami a task.",
+        "She writes what to do, and chooses Dami.",
+        "Dami hears it in her chat.",
+        "The task shows under Everyone's.",
+        "On Dami's phone, she taps Done when she finishes.",
+        "At closing, Dami hands the shift over.",
+        "She counts the cash.",
+        "Taskiem says it is five hundred naira short."
+      ],
+      "pcm": [
+        "Zainab give Dami task.",
+        "She write wetin to do, and choose Dami.",
+        "Dami go hear am for her chat.",
+        "The task show under Everyone's.",
+        "For Dami phone, she tap Done when she finish.",
+        "For closing, Dami go hand the shift over.",
+        "She count the cash.",
+        "Taskiem talk say e short by five hundred naira."
+      ]
+    }
+  }
 }

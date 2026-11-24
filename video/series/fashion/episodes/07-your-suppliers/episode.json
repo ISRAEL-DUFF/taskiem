@@ -44,5 +44,38 @@
     "title": "Sell to businesses",
     "headline": "Sell to *businesses*"
   },
-  "narration": {}
+  "narration": {
+    "find-a-supplier": {
+      "en": [
+        "Zainab needs fabric. She opens Find a business.",
+        "She searches for fabric.",
+        "Alhaja Sade's business is listed. She taps Connect.",
+        "The request goes to Alhaja Sade."
+      ],
+      "pcm": [
+        "Zainab need fabric. She open Find a business.",
+        "She search for fabric.",
+        "Alhaja Sade business dey the list. She tap Connect.",
+        "The request go to Alhaja Sade."
+      ]
+    },
+    "reorder": {
+      "en": [
+        "Ankara fabric is running low, and Taskiem says so.",
+        "She taps Reorder twenty.",
+        "Alhaja Sade's price list opens, with the order filled in.",
+        "She taps Review order.",
+        "Twenty yards: seventy thousand naira. Place order.",
+        "The order is sent."
+      ],
+      "pcm": [
+        "Ankara fabric dey finish, and Taskiem talk am.",
+        "She tap Reorder twenty.",
+        "Alhaja Sade price list open, with the order don fill.",
+        "She tap Review order.",
+        "Twenty yards: seventy thousand naira. Place order.",
+        "The order don go."
+      ]
+    }
+  }
 }

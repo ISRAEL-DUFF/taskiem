@@ -1,0 +1,36 @@
+[
+ {
+  "t": 0.0,
+  "text": "Zainab gives Dami a task. On Tasks, she taps Give a task.",
+  "who": "Zainab · Zuri Atelier"
+ },
+ {
+  "t": 4.0,
+  "text": "She writes what is to be done, and chooses who it is for: Dami."
+ },
+ {
+  "t": 9.3,
+  "text": "Tap Give the task. Dami hears it in her chat."
+ },
+ {
+  "t": 12.1,
+  "text": "Under Everyone’s, the task is open, for Dami."
+ },
+ {
+  "t": 15.1,
+  "text": "On Dami’s phone, the task is waiting. She taps Done when finished.",
+  "who": "Dami · Zuri Atelier"
+ },
+ {
+  "t": 20.3,
+  "text": "At the end of her shift, Dami hands it over. Taskiem adds up the shift: ₦86,500 sold in 7 sales."
+ },
+ {
+  "t": 24.5,
+  "text": "She counts the cash drawer and types what is there."
+ },
+ {
+  "t": 26.8,
+  "text": "₦500 short of the cash sold. Tap Hand over."
+ }
+]

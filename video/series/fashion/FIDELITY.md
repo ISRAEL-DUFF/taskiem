@@ -59,3 +59,21 @@ picker is the Money row's own sheet, not the To match page with suggestions. In 
 the rider's moves are made on the stand-in server between frames (31 s of app time is
 skipped without pictures each time so the page's poll picks them up): cuts, not live
 waits; the chat-to-Orders switch is a cut; the Orders tab is shown without the home bar.
+
+## Episode 6
+**add-staff**: the Team page with the roster renamed to the story. Dami is made a *shift
+manager* so the handover in the next film is hers (the app offers handover to shift
+managers). Joining is a stand-in: WhatsApp joining is not an app screen, so the film
+flips its data and shows the Team page after she has joined ("2 of 2 in").
+**tasks-and-handover**: the phone app has **no "tag @Dami in the chat" way to give a task**
+(the web how-to did); a task is given from Tasks, Give a task, with the words typed into
+"What is to be done". There is **no due date** field, so "by Friday" is only in the words.
+The handover sheet opens over the Tasks page here; in the app it opens from the chat's
+tool tile. A cut shows Dami's phone.
+
+## Episode 7
+**find-a-supplier**: two other cards (Surulere Sewing Supplies, Yaba Print Hub) are made up.
+**reorder**: the low-stock card and the order come from the app's own test set-ups; the item
+is set as "remembered" so the "How should we treat it?" question does not appear; the price
+list (Ankara ₦3,500 a yard with a ₦3,200 break at 50, French lace, cotton lining, zips) is
+the story's. About 1.7 s of empty chat after the "Order sent" tick was trimmed.
