@@ -365,6 +365,8 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 	go s.RunPush(ctx)
 	// Approvals waiting, in the bell (whatsapp_approvals.go).
 	go s.RunApprovalBell(ctx)
+	// Payroll's morning check of Payrolla's wallet (payroll_payment_chat.go).
+	go s.runPayrollFunds(ctx)
 	if s.Invoices == nil {
 		<-ctx.Done()
 		return nil

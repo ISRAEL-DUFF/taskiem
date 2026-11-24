@@ -490,3 +490,12 @@ listPayrollSchedules
 getPayrollSchedule
 revealPayrollSchedule
 downloadPayrollSchedule
+# After locking (P4b-4): Pay now and Pay the failed ones again with
+# Payrolla's code; payslips as Taskiem's own cards, anyone's for
+# payroll.read and one's own on My pay (docs/spec/chat-pay-people.md)
+payPayrollRunNow
+retryPayrollRunFailed
+getPayrollPayslip
+sendPayrollPayslipLink
+getMyPayslips
+getMyPayslip

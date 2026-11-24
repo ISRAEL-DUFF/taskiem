@@ -961,6 +961,8 @@ func (s *Server) Handler() http.Handler {
 			r.Group(s.payrollTeamRoutes)
 			// Settings and the tax and pension schedules (payroll_reports.go; P4b-5).
 			r.Group(s.payrollReportsRoutes)
+			// After locking: paying, and payslips (payroll_payment.go; P4b-4).
+			r.Group(s.payrollPaymentRoutes)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)

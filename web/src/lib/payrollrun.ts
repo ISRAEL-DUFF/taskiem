@@ -6,6 +6,7 @@
 
 import { naira } from "./invoices";
 import type { PayrollLine, PayrollRun, PayrollRunView } from "./payroll";
+import type { RunPayment } from "./payslip";
 
 /** One line of a person's breakdown. */
 export interface PayrollItem {
@@ -71,6 +72,8 @@ export interface PayrollRunFull extends Omit<PayrollRunView, "lines"> {
   may?: RunMay;
   not_worked_out?: string;
   pays_on?: string;
+  /** After locking (P4b-4). */
+  payment?: RunPayment;
 }
 
 /** The Payroll page's This month panel. */
@@ -101,7 +104,10 @@ export interface RunDecided {
   words: string;
 }
 
-export type RunAction = "approve" | "lock";
+export type RunAction = "approve" | "lock" | "pay_now" | "retry_failed";
+
+/** The route that takes an action's code. */
+export const actionPath = (a: RunAction) => (a === "pay_now" ? "pay-now" : a === "retry_failed" ? "retry-failed" : a);
 
 /** The run is open to changes (not approved yet). */
 export const openToChange = (status: string) => status === "DRAFT" || status === "COMPUTED";
@@ -115,7 +121,8 @@ export function nextDecision(status: string): RunAction | null {
 }
 
 /** "Approve November 2026 payroll", "Lock and pay". */
-export const actionWords = (a: RunAction) => (a === "approve" ? "Approve" : "Lock and pay");
+export const actionWords = (a: RunAction) =>
+  a === "approve" ? "Approve" : a === "lock" ? "Lock and pay" : a === "pay_now" ? "Pay now" : "Pay the failed ones again";
 
 /** What locking does, said before the code is asked for. */
 export function lockWarning(payDay: string): string {

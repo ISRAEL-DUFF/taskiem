@@ -6862,8 +6862,8 @@ paths:
       operationId: startPayrollRunCode
       tags:
       - Payments
-      summary: Ask Payrolla for a code to approve or lock
-      description: 'Payrolla checks first that this person may do it (the run''s state, their role, separation of duties), then sends their linked Payrolla user a code for this one action on this run. `sent_to` says where it went; `safer` suggests an authenticator app where it went by text. Refusals in words: 403 `sod` (they prepared it; `approvers` names who may), 409 `not_linked` (with `link`), 403 `not_an_approver`, 409 `no_factor`, 422 `no_account` (`people` with no account to be paid into, on lock), 429 `too_many_codes`, 409 `invalid_state`, `scope_required`, `reconnect`.'
+      summary: Ask Payrolla for a code to approve, lock, pay now or pay the failed ones again
+      description: 'Payrolla checks first that this person may do it (the run''s state, their role, separation of duties), then sends their linked Payrolla user a code for this one action on this run. `sent_to` says where it went; `safer` suggests an authenticator app where it went by text. Refusals in words: 403 `sod` (they prepared it; `approvers` names who may), 409 `not_linked` (with `link`), 403 `not_an_approver`, 403 `cannot_pay` (pay_now, retry_failed), 409 `no_factor`, 422 `no_account` (`people` with no account to be paid into, on lock), 429 `too_many_codes`, 409 `invalid_state`, `awaiting_funds` (with `short_by_kobo`), `already_paying`, `nothing_to_retry`, `scope_required`, `reconnect`.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -6887,7 +6887,7 @@ paths:
               additionalProperties: false
               required: [action, key]
               properties:
-                action: {type: string, enum: [approve, lock]}
+                action: {type: string, enum: [approve, lock, pay_now, retry_failed]}
                 key: {type: string, maxLength: 100}
       responses:
         '202':
@@ -7027,6 +7027,331 @@ paths:
                       returned: {type: integer}
                       pending: {type: integer}
                   words: {type: string, description: '"Approved. Lock and pay?", or "Locked. Payrolla pays 48 people ₦9,200,000 on 28 Nov."'}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/pay-now:
+    post:
+      operationId: payPayrollRunNow
+      tags:
+      - Payments
+      summary: Pay now, with the code
+      description: 'A locked payroll paid now instead of on its pay date (P4b-4). Needs payroll.approve and a linked Payrolla user who may pay. The code goes to Payrolla once and is kept nowhere. Refusals as for the code, and 409 `awaiting_funds` (the wallet is short; `short_by_kobo`), `already_paying`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string, maxLength: 20}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, payment, words]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  payment:
+                    type: object
+                    required: [status, total_kobo, paid, failed, returned, pending]
+                    properties:
+                      status: {type: string}
+                      scheduled_for: {type: string}
+                      total_kobo: {type: integer}
+                      paid: {type: integer}
+                      failed: {type: integer}
+                      returned: {type: integer}
+                      pending: {type: integer}
+                  words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/retry-failed:
+    post:
+      operationId: retryPayrollRunFailed
+      tags:
+      - Payments
+      summary: Pay the failed ones again, with the code
+      description: 'Each failed payment is sent again to the person''s current account; payments the bank returned are not (P4b-4). Refusals as for the code, and 409 `nothing_to_retry`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string, maxLength: 20}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, payment, words]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  payment:
+                    type: object
+                    required: [status, total_kobo, paid, failed, returned, pending]
+                    properties:
+                      status: {type: string}
+                      scheduled_for: {type: string}
+                      total_kobo: {type: integer}
+                      paid: {type: integer}
+                      failed: {type: integer}
+                      returned: {type: integer}
+                      pending: {type: integer}
+                  words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/payslips/{payslip}:
+    get:
+      operationId: getPayrollPayslip
+      tags:
+      - Payments
+      summary: Anyone's payslip, from the run
+      description: 'Taskiem''s own card (P4b-4): the full breakdown, the employer''s name and RC number, and the payment. payroll.read only: preparing or approving payroll is not enough. Read from Payrolla now and kept nowhere; who opened it is recorded, with no pay. 409 `payslip_not_final` before the payroll is locked.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.read
+      parameters:
+      - name: payslip
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The payslip
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [payslip]
+                properties:
+                  payslip:
+                    $ref: '#/components/schemas/PayrollPayslip'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/payslips/{payslip}/pdf:
+    get:
+      operationId: getPayrollPayslipPDF
+      tags:
+      - Payments
+      summary: Save a payslip as PDF
+      description: 'Made when asked, with the business''s name, and not kept (payroll.read).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.read
+      parameters:
+      - name: payslip
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The PDF, made now with the business's name and not kept
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/payslips/{payslip}/link:
+    post:
+      operationId: sendPayrollPayslipLink
+      tags:
+      - Payments
+      summary: Payrolla's 7-day link to a payslip, for someone not on Taskiem
+      description: 'The person confirms the last four digits of their phone before it opens. Shown once, kept nowhere. 409 `payslip_links_off` until the owner allows payslip links in Payrolla.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.read
+      x-taskiem-all-environments: true
+      parameters:
+      - name: payslip
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                key: {type: string, maxLength: 100}
+      responses:
+        '201':
+          description: The link
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [url, expires_at]
+                properties:
+                  url: {type: string, format: uri}
+                  expires_at: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/me/payslips:
+    get:
+      operationId: getMyPayslips
+      tags:
+      - Payments
+      summary: My payslips
+      description: 'A staff member''s own payslips, newest first, as the Payrolla employee they are linked to (`linked: false` when they are not). Their own pay only.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: Their payslips
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [linked, payslips]
+                properties:
+                  linked: {type: boolean}
+                  payslips:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [payslip_id, run_id, period, month, pay_date, gross_kobo, net_kobo, state, words]
+                      properties:
+                        payslip_id: {type: string}
+                        run_id: {type: string}
+                        period: {type: string, description: November 2026}
+                        month: {type: string}
+                        pay_date: {type: string}
+                        gross_kobo: {type: integer}
+                        net_kobo: {type: integer}
+                        state: {type: string, enum: [paid, waiting, failed, returned]}
+                        words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/me/payslips/{payslip}:
+    get:
+      operationId: getMyPayslip
+      tags:
+      - Payments
+      summary: One of my payslips
+      description: 'The card, for the employee it is for only: anyone else''s is not found.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: payslip
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The payslip
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [payslip]
+                properties:
+                  payslip:
+                    $ref: '#/components/schemas/PayrollPayslip'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/me/payslips/{payslip}/pdf:
+    get:
+      operationId: getMyPayslipPDF
+      tags:
+      - Payments
+      summary: Save my payslip as PDF
+      description: 'Made when asked, with the business''s name, and not kept.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: payslip
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The PDF, made now with the business's name and not kept
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
         default:
           $ref: '#/components/responses/Error'
   /v1/payroll/runs/{run}/reject:
@@ -7184,6 +7509,26 @@ paths:
                       reconnect: {type: boolean, description: The connection can't do it here; an owner reconnects}
                   not_worked_out: {type: string, description: 'A DRAFT run: Payrolla couldn''t work it out, in words, with Recalculate'}
                   pays_on: {type: string}
+                  payment:
+                    type: object
+                    additionalProperties: false
+                    description: 'After locking (P4b-4): what is happening to the payment, in words ("Pays on 28 Nov", "Waiting for money: short by ₦120,000", "Paying", "Paid", "Paid, 2 not paid"), the counts, and what this person may do'
+                    required: [status, words, tone, total_kobo, paid, failed, returned, pending, short_by_kobo, may_pay_now, may_retry, may_payslips, cannot_pay]
+                    properties:
+                      status: {type: string, enum: [NOT_SCHEDULED, SCHEDULED, AWAITING_FUNDS, PAYING, COMPLETED, PARTIALLY_COMPLETED, FAILED]}
+                      words: {type: string}
+                      tone: {type: string, enum: [ok, warn, bad, info, '']}
+                      scheduled_for: {type: string}
+                      total_kobo: {type: integer}
+                      paid: {type: integer}
+                      failed: {type: integer}
+                      returned: {type: integer}
+                      pending: {type: integer}
+                      short_by_kobo: {type: integer}
+                      may_pay_now: {type: boolean, description: Pay now before the pay date, with a code (payroll.approve and Payrolla's can_pay)}
+                      may_retry: {type: boolean, description: Pay the failed ones again, with a code}
+                      may_payslips: {type: boolean, description: Open anyone's payslip from the run (payroll.read)}
+                      cannot_pay: {type: boolean, description: 'Linked, but Payrolla''s role does not allow paying: "In Payrolla you can''t send payments. Ask the owner."'}
                   counts:
                     type: object
                     required: [paid, waiting, failed, returned]
@@ -50918,6 +51263,53 @@ components:
               since: {type: string}
         suggested: {type: boolean, description: 'Not linked, with the same email as the person asking'}
         me: {type: boolean}
+    PayrollPayslip:
+      type: object
+      additionalProperties: false
+      description: 'A payslip as Taskiem''s own card (P4b-4): read from Payrolla when opened, kept nowhere.'
+      required: [payslip_id, run_id, period, month, period_start, pay_date, employee, employer, gross_kobo, total_earnings_kobo, total_deductions_kobo, net_kobo, items, payment]
+      properties:
+        payslip_id: {type: string}
+        run_id: {type: string}
+        period: {type: string, description: November 2026}
+        month: {type: string}
+        period_start: {type: string}
+        pay_date: {type: string}
+        employee:
+          type: object
+          required: [id, name]
+          properties:
+            id: {type: string}
+            name: {type: string}
+            department: {type: string}
+        employer:
+          type: object
+          required: [name]
+          properties:
+            name: {type: string}
+            rc_number: {type: string}
+        gross_kobo: {type: integer}
+        total_earnings_kobo: {type: integer}
+        total_deductions_kobo: {type: integer}
+        net_kobo: {type: integer}
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, code, label, amount_kobo]
+            properties:
+              kind: {type: string, enum: [earning, deduction, employer]}
+              code: {type: string}
+              label: {type: string}
+              amount_kobo: {type: integer}
+        payment:
+          type: object
+          required: [status, state, words]
+          properties:
+            status: {type: string}
+            state: {type: string, enum: [paid, waiting, failed, returned]}
+            words: {type: string}
     PayrollRun:
       type: object
       additionalProperties: false
@@ -51520,7 +51912,7 @@ components:
           description: The person said it (else Taskiem did)
         kind:
           type: string
-          enum: [text, button, voice, photo, form, location, diary, chart, menu, payroll_run]
+          enum: [text, button, voice, photo, form, location, diary, chart, menu, payroll_run, payslip]
         text:
           type: string
         buttons:

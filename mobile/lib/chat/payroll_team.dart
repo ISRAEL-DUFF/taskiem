@@ -29,6 +29,7 @@ import 'approve.dart' show TkTextBox;
 import 'cards.dart' show CardPill;
 import 'groups.dart' show askSure, pickAction, pickOneOf;
 import 'payroll_settings.dart' show payrollKey;
+import 'payslip.dart' show MyPayslipsSection;
 import 'words.dart' show CardTone, naira;
 
 Map<String, dynamic>? _map(Object? v) => v is Map ? v.cast<String, dynamic>() : null;
@@ -959,6 +960,7 @@ class _MyPayPageState extends State<MyPayPage> {
             ),
           ]),
           if (me.status != 'left') TkCta(label: 'Change my salary account', onTap: () => unawaited(_change())),
+          MyPayslipsSection(auth: widget.auth),
         ],
       ],
     );

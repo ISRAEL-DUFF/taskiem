@@ -84,6 +84,8 @@ const PAGES = [
   "/payroll/team",
   "/payroll/account-changes",
   "/payroll/me",
+  "/payroll/payslips/0192e2e0-0000-7000-8000-00000000f401",
+  "/payroll/me/payslips/0192e2e0-0000-7000-8000-00000000f401",
   "/money/labels",
   "/money/things",
   "/money/things?all=true",

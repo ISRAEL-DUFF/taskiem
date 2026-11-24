@@ -158,6 +158,7 @@ import { BatchPage, PayListPage } from "./pages/PayBatch";
 import { CollectedListPage } from "./pages/PayCollect";
 import { PayrollPage, PayrollStaffPage } from "./pages/Payroll";
 import { PayrollRunPage } from "./pages/PayrollRun";
+import { MyPayslipPage, PayslipPage } from "./pages/Payslip";
 import { PayrollSettingsPage } from "./pages/PayrollSettings";
 import { PayrollSchedulePage, PayrollSchedulesPage } from "./pages/PayrollSchedules";
 import { MyPayPage, PayrollChangesPage, PayrollTeamPage } from "./pages/PayrollTeam";
@@ -966,6 +967,8 @@ function SignedIn() {
                   <Route path="/payroll/team" element={<PayrollTeamPage />} />
                   <Route path="/payroll/account-changes" element={<PayrollChangesPage />} />
                   <Route path="/payroll/me" element={<MyPayPage />} />
+                  <Route path="/payroll/me/payslips/:id" element={<MyPayslipPage />} />
+                  <Route path="/payroll/payslips/:id" element={<PayslipPage />} />
                   <Route path="/money/labels" element={<MoneyLabels />} />
                   <Route path="/money/things" element={<ThingsPage />} />
                   <Route path="/money/things/:id" element={<ThingPage />} />
