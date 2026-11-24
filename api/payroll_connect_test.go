@@ -51,11 +51,8 @@ func newPayrollaWorld(t *testing.T) *payrollaWorld {
 	t.Cleanup(edge.Close)
 	w.srv.Remote = &remote.Reconciler{Pool: w.env.DB.App, Vault: w.env.Vault, Registry: w.env.Registry, Egress: &egress.Guard{Blocked: func(netip.Addr) bool { return false }},
 		HooksURL: edge.URL + "/hooks", Check: time.Nanosecond}
-	// P4a's reads: the company's runs (none yet).
-	f.Handle(http.MethodGet, "/connect/runs", func(w http.ResponseWriter, _ *http.Request, _ *payrollatest.Conn) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"runs":[],"next_cursor":""}}`))
-	})
+	// The company's runs (none yet), and this month's run (P4b-3).
+	f.ServeRuns()
 	return &payrollaWorld{waWorld: w, fake: f}
 }
 

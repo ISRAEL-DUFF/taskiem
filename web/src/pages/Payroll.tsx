@@ -4,7 +4,8 @@
 // member is in Payrolla. Nothing here pays anyone or approves a payroll.
 
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { ThisMonthPanel } from "./PayrollRun";
+import { Link } from "react-router-dom";
 import { ApiError, get, put } from "../api";
 import { useAuth } from "../auth";
 import {
@@ -23,19 +24,15 @@ import {
 import { dateLabel, naira } from "../lib/invoices";
 import {
   choosable,
-  countsWords,
   employeeSub,
   frequencyWords,
-  lineState,
   payrollaLinkBody,
   peopleCount,
   periodLabel,
   runStatus,
-  sortLines,
   suggestionWords,
   type PayrollList,
   type PayrollRun,
-  type PayrollRunView,
   type PayrollStaffMember,
   type PayrollStaffView,
   type PayrollTone,
@@ -184,6 +181,7 @@ export function PayrollPage() {
               </>
             )}
           </p>
+          {d.this_month && <ThisMonthPanel month={d.this_month} mayPrepare={!!d.may_prepare} />}
           {latest && (
             <RunHero
               run={latest}
@@ -267,134 +265,6 @@ export function PayrollPage() {
               testid="payroll-settings-link"
             />
           </Items>
-        </>
-      )}
-    </>
-  );
-}
-
-/** /payroll/runs/:run: one payroll, each person's pay and whether it arrived. */
-export function PayrollRunPage() {
-  const { run = "" } = useParams();
-  const view = useLoad(
-    () => get<PayrollRunView>(`/v1/payroll/runs/${encodeURIComponent(run)}`),
-    [run],
-  );
-  const d = view.data;
-  const s = d?.run.summary;
-  const notConnected =
-    view.error instanceof ApiError && view.error.body.code === "not_connected";
-  return (
-    <>
-      <p className="crumbs">
-        <Link to="/payroll" aria-label="Back to Payroll">
-          Payroll
-        </Link>
-      </p>
-      <PageHeader title={s ? `Payroll for ${periodLabel(s)}` : "Payroll"} />
-      {notConnected ? <NotConnected /> : <ErrorBox error={view.error} />}
-      {!d && !view.error && <Skeleton rows={4} label="Loading the payroll…" />}
-      {d && s && (
-        <>
-          <RunHero run={s} label="Net pay" testid="payroll-run-hero" />
-          {d.approval_url && (
-            <section
-              className="card"
-              aria-labelledby="payroll-approve-h"
-              data-testid="payroll-approve"
-            >
-              <h2 id="payroll-approve-h">Waiting for approval</h2>
-              <p className="hint">
-                Approving happens in Payrolla for now. Check the figures there,
-                approve, and Payrolla pays everyone on pay day.
-              </p>
-              <div className="toolbar">
-                <a
-                  className="button primary"
-                  href={d.approval_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-testid="payroll-approve-open"
-                >
-                  Review and approve in Payrolla
-                  <span className="sr-only"> (opens in a new tab)</span>
-                </a>
-              </div>
-            </section>
-          )}
-          <section
-            className="stats"
-            aria-label="Who was paid"
-            data-testid="payroll-counts"
-          >
-            {(
-              [
-                ["Paid", d.counts.paid],
-                ["Waiting", d.counts.waiting],
-                ["Not paid", d.counts.failed],
-                ["Returned", d.counts.returned],
-              ] as const
-            ).map(([label, n]) => (
-              <div className="stat" key={label}>
-                <span className="stat-label">{label}</span>
-                <span className="stat-value">{n}</span>
-              </div>
-            ))}
-          </section>
-          <section className="card" aria-labelledby="payroll-lines-h">
-            <h2 id="payroll-lines-h">Each person</h2>
-            {countsWords(d.counts) && (
-              <p className="hint">{countsWords(d.counts)}</p>
-            )}
-            {d.lines.length === 0 && (
-              <EmptyState icon="members">
-                No one in this payroll yet.
-              </EmptyState>
-            )}
-            {d.lines.length > 0 && (
-              <Items label="Each person's pay">
-                {sortLines(d.lines).map((l) => {
-                  const st = lineState(l.state);
-                  return (
-                    <Row
-                      key={l.payslip_id || l.employee_id}
-                      letter={l.name || "?"}
-                      tone={st.tone === "ok" ? undefined : st.tone}
-                      title={l.name || "Someone"}
-                      side={
-                        <span className="item-figure">{naira(l.net_kobo)}</span>
-                      }
-                      testid="payroll-line"
-                      attrs={{ "data-state": l.state }}
-                      sub={
-                        <span className="sub">
-                          <Pill label={st.label} tone={st.tone} />
-                          {(l.state === "failed" || l.state === "returned") &&
-                            l.reason && (
-                              <span
-                                className="block"
-                                data-testid="payroll-line-reason"
-                              >
-                                {l.reason}
-                              </span>
-                            )}
-                          {l.staff && (
-                            <span className="block">
-                              <Link
-                                to={`/staff/${encodeURIComponent(l.staff.user_id)}`}
-                              >
-                                Staff: {l.staff.name}
-                              </Link>
-                            </span>
-                          )}
-                        </span>
-                      }
-                    />
-                  );
-                })}
-              </Items>
-            )}
-          </section>
         </>
       )}
     </>

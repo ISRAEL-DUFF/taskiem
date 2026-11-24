@@ -50,6 +50,7 @@ import 'menu_card.dart';
 import 'money_page.dart' show MoneyPage;
 import 'payments_page.dart' show SentPaymentsPage;
 import 'payroll_page.dart' show PayrollPage;
+import 'payroll_run.dart' show PayrollChatCard, payrollCardOf;
 import 'pages_page.dart' show PagesPage, openPage;
 import 'saved_accounts.dart' show SavedAccountsPage;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
@@ -1256,6 +1257,11 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 onForm: (reply, text) => d.say(reply: reply, text: text),
               );
             }
+          }
+          // This month's payroll (P4b-3): its card, drawn from Payrolla now.
+          if (m.kind == 'payroll_run') {
+            final card = payrollCardOf(m.text);
+            if (card != null) return PayrollChatCard(key: ValueKey('payroll-${x.id}'), auth: d.chats.auth, run: card.run, period: card.period);
           }
           if (m.kind == 'chart') {
             final chart = ChartData.parse(m.text);

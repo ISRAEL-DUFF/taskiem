@@ -8208,6 +8208,411 @@
     "bill.transfer.off": {
       "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
       "reviewed": false
+    },
+    "payroll.people": {
+      "text": "{n} people",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): how many people a payroll pays"
+    },
+    "payroll.people_one": {
+      "text": "1 person",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll that pays one person"
+    },
+    "payroll.someone": {
+      "text": "Someone",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a person Payrolla did not name"
+    },
+    "payroll.state.draft": {
+      "text": "not worked out yet",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence: \"it's now …\""
+    },
+    "payroll.state.computed": {
+      "text": "waiting for approval",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.approved": {
+      "text": "approved",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.locked": {
+      "text": "locked",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.disbursing": {
+      "text": "being paid",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.completed": {
+      "text": "paid",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.partially_completed": {
+      "text": "partly paid",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.cancelled": {
+      "text": "cancelled",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.failed": {
+      "text": "failed",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.other": {
+      "text": "somewhere else in Payrolla",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state Taskiem has no words for"
+    },
+    "payroll.short": {
+      "text": "Your Payrolla wallet has {available}. This payroll needs {needed}: short by {short}. Add money before {date}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): the funding line: the wallet against the payroll's total"
+    },
+    "payroll.pays_on": {
+      "text": "Pays on {date}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a locked payroll's card"
+    },
+    "payroll.locked": {
+      "text": "Locked. Payrolla pays {people} {amount} on {date}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): after Lock and pay with the code"
+    },
+    "payroll.approved": {
+      "text": "Approved. Lock and pay?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): after Approve with the code"
+    },
+    "payroll.rejected": {
+      "text": "Sent back. Whoever prepared it is told, with your note.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): after Reject"
+    },
+    "payroll.code.totp": {
+      "text": "Open your authenticator app for Payrolla's code.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla's code is: an authenticator app"
+    },
+    "payroll.code.sms": {
+      "text": "Payrolla sent a code to your phone ending {hint}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: a phone"
+    },
+    "payroll.code.sms_any": {
+      "text": "Payrolla sent a code to your phone.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: a phone with no hint"
+    },
+    "payroll.code.email": {
+      "text": "Payrolla sent a code to your email {hint}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: an email"
+    },
+    "payroll.code.email_any": {
+      "text": "Payrolla sent a code to your email.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: an email with no hint"
+    },
+    "payroll.code.any": {
+      "text": "Payrolla sent you a code.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: unknown"
+    },
+    "payroll.code.type_approve": {
+      "text": "Type it here to approve {period} payroll. It works once, for 5 minutes.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): in the chat thread: type the code to approve"
+    },
+    "payroll.code.type_lock": {
+      "text": "Type it here to lock {period} payroll and pay everyone on {date}. A locked payroll can't be unlocked. It works once, for 5 minutes.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): in the chat thread: type the code to lock"
+    },
+    "payroll.code.safer": {
+      "text": "A code from an authenticator app is safer: set one up in Payrolla.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): under a code sent by text message"
+    },
+    "payroll.code.stopped": {
+      "text": "Stopped. That code won't be used.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): \"stop\" while a code waits"
+    },
+    "payroll.code.entered": {
+      "text": "Code entered",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): what the conversation's history keeps instead of the code"
+    },
+    "payroll.code.again": {
+      "text": "Type the code again, or say stop.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): after a wrong code in the thread"
+    },
+    "payroll.card.title": {
+      "text": "*{period} payroll*",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card in the chat: its title"
+    },
+    "payroll.card.line": {
+      "text": "{people} · {amount} · pay day {date}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: people, total and pay day"
+    },
+    "payroll.card.status": {
+      "text": "{status}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: its state, capitalised"
+    },
+    "payroll.card.new": {
+      "text": "New this month: {who}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: who is new since last month"
+    },
+    "payroll.card.left": {
+      "text": "Not paid this month: {who}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: who was paid last month and is not now"
+    },
+    "payroll.card.changed": {
+      "text": "Pay changed: {who}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: whose pay changed"
+    },
+    "payroll.card.open": {
+      "text": "Open: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: the link to its page"
+    },
+    "payroll.card.waiting": {
+      "text": "Waiting for approval",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.approved": {
+      "text": "Approved: lock and pay next",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.locked": {
+      "text": "Locked. Pays on {date}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.draft": {
+      "text": "Not worked out yet",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.done": {
+      "text": "Now {state}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: any other state"
+    },
+    "payroll.button.approve": {
+      "text": "Approve",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.reject": {
+      "text": "Reject",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.lock": {
+      "text": "Lock and pay",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.new_code": {
+      "text": "Send a new code",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a button after an expired code (20 characters at most)"
+    },
+    "payroll.reject.how": {
+      "text": "To send it back, say: reject payroll, and why. For example: reject payroll, Musa's bonus is wrong",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): how to reject in the chat"
+    },
+    "payroll.none": {
+      "text": "There's no payroll waiting for that now.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): approve or lock payroll with none at that step"
+    },
+    "payroll.no_run": {
+      "text": "There's no payroll in Payrolla yet. Say: prepare {month} payroll",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): \"payroll\" with no run yet"
+    },
+    "payroll.prepared": {
+      "text": "{period} payroll is ready to check: {people}, {amount}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): after preparing a payroll in the chat"
+    },
+    "payroll.prepare.which": {
+      "text": "Say which month, for example: prepare december payroll",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): \"prepare payroll\" with no month"
+    },
+    "payroll.slack": {
+      "text": "Payroll is approved where you type Payrolla's code, never in a shared thread. Open it: {url}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): approving from Slack: a link to the web"
+    },
+    "payroll.not_allowed": {
+      "text": "You can't do that to the payroll here. Ask the owner.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a person without the permission"
+    },
+    "payroll.told.rejected": {
+      "text": "{by} sent back {period} payroll: {note}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): told to whoever prepared it"
+    },
+    "payroll.told.approved": {
+      "text": "{period} payroll was approved by {by} in Payrolla.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.rejected_there": {
+      "text": "{period} payroll was sent back by {by} in Payrolla.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.locked": {
+      "text": "{period} payroll was locked by {by} in Payrolla.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.scheduled": {
+      "text": "{period} payroll is locked. Payrolla pays {people} {amount} on {date}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a payroll's payment scheduled"
+    },
+    "payroll.refused.sod": {
+      "text": "You prepared this payroll, so someone else must approve it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SOD_VIOLATION"
+    },
+    "payroll.refused.sod_who": {
+      "text": "Ask {who}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): who can approve instead"
+    },
+    "payroll.refused.not_linked": {
+      "text": "Link your Payrolla account first. It takes one code: Payroll settings, Link my Payrolla account.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's APPROVER_NOT_LINKED"
+    },
+    "payroll.refused.not_an_approver": {
+      "text": "In Payrolla you can't approve payroll. Ask the owner to make you an Approver in Payrolla.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NOT_AN_APPROVER"
+    },
+    "payroll.refused.cannot_pay": {
+      "text": "In Payrolla you can't send payments. Ask the owner.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CANNOT_PAY"
+    },
+    "payroll.refused.no_factor": {
+      "text": "Payrolla has nowhere to send you a code yet. Ask the owner to add your phone in Payrolla.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's PAYMENT_CONFIRMATION_NOT_SET_UP"
+    },
+    "payroll.refused.code_invalid": {
+      "text": "That code isn't right. Check it and type it again.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_INVALID"
+    },
+    "payroll.refused.code_expired": {
+      "text": "That code has expired. Send a new code.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_EXPIRED"
+    },
+    "payroll.refused.code_locked": {
+      "text": "Too many wrong tries for that code. Send a new code.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_LOCKED"
+    },
+    "payroll.refused.code_used": {
+      "text": "That code was already used. Send a new code.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_USED"
+    },
+    "payroll.refused.too_many_codes": {
+      "text": "Payrolla has sent you too many codes. Try again in 10 minutes.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's TOO_MANY_CODES"
+    },
+    "payroll.refused.invalid_state": {
+      "text": "This payroll has moved on: it's now {state}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's INVALID_STATE"
+    },
+    "payroll.refused.invalid_state_unknown": {
+      "text": "This payroll has moved on. Open it again to see where it is.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's INVALID_STATE, the state unknown"
+    },
+    "payroll.refused.no_account": {
+      "text": "Some people have no account to be paid into: {who}. Add their account, or leave them out this month.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NO_PAYOUT_DESTINATION"
+    },
+    "payroll.refused.no_account_some": {
+      "text": "Some people have no account to be paid into. Add their account, or leave them out this month.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NO_PAYOUT_DESTINATION, no names"
+    },
+    "payroll.refused.duplicate": {
+      "text": "There is already a payroll for {period}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's DUPLICATE_RUN"
+    },
+    "payroll.refused.compute_error": {
+      "text": "Payrolla couldn't work out this payroll: {reason}. Fix it in Payrolla's settings, then Recalculate.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a run's compute_error"
+    },
+    "payroll.refused.not_worked_out": {
+      "text": "Payrolla couldn't work out this payroll yet. Fix it in Payrolla's settings, then Recalculate.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a run still not worked out"
+    },
+    "payroll.refused.scope_owner": {
+      "text": "Payrolla hasn't allowed Taskiem to do this. Reconnect Payrolla and allow Prepare payroll and Approve and pay.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SCOPE_REQUIRED, to an owner"
+    },
+    "payroll.refused.scope_other": {
+      "text": "Ask the owner to allow this in Payrolla.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SCOPE_REQUIRED, to others"
+    },
+    "payroll.refused.reason": {
+      "text": "Say why.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's REASON_REQUIRED"
+    },
+    "payroll.refused.note": {
+      "text": "Say why you're sending it back, in a short note.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a rejection with no note"
+    },
+    "payroll.button.open": {
+      "text": "Open",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. This month's payroll (P4b-3, api/payroll_runs.go): a link button on the payroll's card on Telegram"
     }
   }
 }

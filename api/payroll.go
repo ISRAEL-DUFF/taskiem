@@ -173,6 +173,9 @@ func (s *Server) getPayroll(w http.ResponseWriter, r *http.Request) {
 	if c := strOf(list["next_cursor"]); c != "" {
 		out["next_cursor"] = c
 	}
+	// This month (P4b-3): its run, or Prepare for those who may.
+	out["may_prepare"] = p.Can(PermPayrollPrepare)
+	out["this_month"] = thisMonth(time.Now(), runs)
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -189,6 +192,12 @@ type payrollLine struct {
 	Reference string           `json:"reference,omitempty"`
 	Reason    string           `json:"reason,omitempty"`
 	Staff     *payrollStaffRef `json:"staff"`
+	// The breakdown (P4b-3): gross, what was added and taken, and each
+	// line by name.
+	GrossKobo      int64         `json:"gross_kobo"`
+	EarningsKobo   int64         `json:"total_earnings_kobo"`
+	DeductionsKobo int64         `json:"total_deductions_kobo"`
+	Items          []payrollItem `json:"items"`
 }
 
 type payrollStaffRef struct {
@@ -257,7 +266,8 @@ func (s *Server) getPayrollRun(w http.ResponseWriter, r *http.Request) {
 		}
 		l := payrollLine{PayslipID: strOf(m["payslip_id"]), EmployeeID: strOf(m["employee_id"]),
 			Name:    strings.TrimSpace(strOf(m["first_name"]) + " " + strOf(m["last_name"])),
-			NetKobo: intOf(m["net_kobo"]), Status: strOf(m["disbursement_status"]), Reference: strOf(m["reference"]), Reason: strOf(m["reason"])}
+			NetKobo: intOf(m["net_kobo"]), Status: strOf(m["disbursement_status"]), Reference: strOf(m["reference"]), Reason: strOf(m["reason"]),
+			GrossKobo: intOf(m["gross_kobo"]), EarningsKobo: intOf(m["total_earnings_kobo"]), DeductionsKobo: intOf(m["total_deductions_kobo"]), Items: itemsOf(m["items"])}
 		l.State = lineState(l.Status)
 		counts[l.State]++
 		if st, ok := linked[l.EmployeeID]; ok {
@@ -270,6 +280,9 @@ func (s *Server) getPayrollRun(w http.ResponseWriter, r *http.Request) {
 	if u := strOf(detail["approval_url"]); u != "" && strings.HasPrefix(u, "https://") {
 		out["approval_url"] = u
 	}
+	// This month's run in Taskiem (P4b-3): the changes made, the wallet,
+	// and what this person may do (payroll_runs.go).
+	s.runMore(ctx, p, run, out)
 	writeJSON(w, http.StatusOK, out)
 }
 

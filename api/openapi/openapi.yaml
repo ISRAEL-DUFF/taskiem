@@ -6478,7 +6478,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: payroll.read
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
       parameters:
       - name: cursor
         in: query
@@ -6515,6 +6515,565 @@ paths:
                     items:
                       $ref: '#/components/schemas/PayrollRun'
                   next_cursor: {type: string}
+                  may_prepare: {type: boolean, description: 'payroll.prepare: Prepare this month''s payroll (P4b-3)'}
+                  this_month:
+                    type: object
+                    description: 'This month, for the Payroll page''s This month panel: its period (2026-11), in words, and its run when there is one'
+                    required: [period, label, month]
+                    properties:
+                      period: {type: string}
+                      label: {type: string}
+                      month: {type: string}
+                      run:
+                        $ref: '#/components/schemas/PayrollRun'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs:
+    post:
+      operationId: preparePayrollRun
+      tags:
+      - Payments
+      summary: Prepare a month's payroll
+      description: 'Payrolla makes the run for the period (`period` 2026-11; companies paid weekly or every two weeks send `period_start` and `period_end`) and works it out at once; the pay date is the period''s last day unless given. A run Payrolla could not work out is made all the same, with `compute_error` in words (fix it in Payrolla''s settings, then Recalculate). 409 `duplicate_run` names the period''s run (`run_id`). `key` is the id the form made when it opened. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                period: {type: string, pattern: '^\d{4}-\d{2}$'}
+                period_start: {type: string, format: date}
+                period_end: {type: string, format: date}
+                pay_date: {type: string, format: date}
+                key: {type: string, maxLength: 100}
+      responses:
+        '201':
+          description: Prepared
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/adjustments:
+    post:
+      operationId: adjustPayrollRun
+      tags:
+      - Payments
+      summary: Add a bonus or a deduction
+      description: 'For one person in a run not approved yet, with a reason (an advance repaid is a deduction). The amount is before tax: tax and pension apply as usual. The run is worked out again. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [employee_id, type, amount_kobo, reason, key]
+              properties:
+                employee_id: {type: string, format: uuid}
+                type: {type: string, enum: [bonus, deduction, BONUS, DEDUCTION]}
+                amount_kobo: {type: integer, minimum: 100}
+                reason: {type: string, maxLength: 200}
+                key: {type: string, maxLength: 100}
+      responses:
+        '201':
+          description: Added, and the run worked out again
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/adjustments/{id}:
+    delete:
+      operationId: unadjustPayrollRun
+      tags:
+      - Payments
+      summary: Remove a bonus or a deduction
+      description: 'The run is worked out again. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: key
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 100
+      responses:
+        '200':
+          description: Removed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/exclusions:
+    post:
+      operationId: excludePayrollRun
+      tags:
+      - Payments
+      summary: Leave someone out this month
+      description: 'This run only, with a reason; they are paid again next month. Someone left out already is taken as done. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [employee_id, reason, key]
+              properties:
+                employee_id: {type: string, format: uuid}
+                reason: {type: string, maxLength: 200}
+                key: {type: string, maxLength: 100}
+      responses:
+        '201':
+          description: Left out, and the run worked out again
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/exclusions/{id}:
+    delete:
+      operationId: putBackPayrollRun
+      tags:
+      - Payments
+      summary: Put someone back
+      description: 'Someone left out is put back in the run, worked out again. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: key
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 100
+      responses:
+        '200':
+          description: Put back
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/compute:
+    post:
+      operationId: computePayrollRun
+      tags:
+      - Payments
+      summary: Recalculate
+      description: 'Payrolla works the run out again (one not approved yet). A run still not worked out answers `compute_error`. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Worked out again
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/cancel:
+    post:
+      operationId: cancelPayrollRun
+      tags:
+      - Payments
+      summary: Cancel this payroll
+      description: 'Before approval only; an approved run is cancelled in Payrolla. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/confirmations:
+    post:
+      operationId: startPayrollRunCode
+      tags:
+      - Payments
+      summary: Ask Payrolla for a code to approve or lock
+      description: 'Payrolla checks first that this person may do it (the run''s state, their role, separation of duties), then sends their linked Payrolla user a code for this one action on this run. `sent_to` says where it went; `safer` suggests an authenticator app where it went by text. Refusals in words: 403 `sod` (they prepared it; `approvers` names who may), 409 `not_linked` (with `link`), 403 `not_an_approver`, 409 `no_factor`, 422 `no_account` (`people` with no account to be paid into, on lock), 429 `too_many_codes`, 409 `invalid_state`, `scope_required`, `reconnect`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action, key]
+              properties:
+                action: {type: string, enum: [approve, lock]}
+                key: {type: string, maxLength: 100}
+      responses:
+        '202':
+          description: A code is on its way
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [challenge, sent_to, safer]
+                properties:
+                  challenge:
+                    type: object
+                    required: [challenge_id, channel, expires_at]
+                    properties:
+                      challenge_id: {type: string}
+                      channel: {type: string, enum: [TOTP, SMS, EMAIL]}
+                      destination_hint: {type: string}
+                      expires_at: {type: string}
+                  sent_to: {type: string}
+                  safer: {type: boolean}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/approve:
+    post:
+      operationId: approvePayrollRun
+      tags:
+      - Payments
+      summary: Approve, with the code
+      description: 'The code goes to Payrolla once and is kept nowhere. Then Lock and pay. Refusals as for the code, and 422 `code_invalid` (type it again), 410 `code_expired`, `code_locked` or `code_used` (send a new code).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string, maxLength: 20}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, payment, words]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  payment:
+                    type: object
+                    required: [status, total_kobo, paid, failed, returned, pending]
+                    properties:
+                      status: {type: string}
+                      scheduled_for: {type: string}
+                      total_kobo: {type: integer}
+                      paid: {type: integer}
+                      failed: {type: integer}
+                      returned: {type: integer}
+                      pending: {type: integer}
+                  words: {type: string, description: '"Approved. Lock and pay?", or "Locked. Payrolla pays 48 people ₦9,200,000 on 28 Nov."'}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/lock:
+    post:
+      operationId: lockPayrollRun
+      tags:
+      - Payments
+      summary: Lock and pay, with the code
+      description: 'Locking schedules the payment: Payrolla pays everyone on the pay date (at once if it has come). A locked payroll can''t be unlocked. The code goes to Payrolla once and is kept nowhere. Refusals as for approving, and 422 `no_account`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string, maxLength: 20}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, payment, words]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  payment:
+                    type: object
+                    required: [status, total_kobo, paid, failed, returned, pending]
+                    properties:
+                      status: {type: string}
+                      scheduled_for: {type: string}
+                      total_kobo: {type: integer}
+                      paid: {type: integer}
+                      failed: {type: integer}
+                      returned: {type: integer}
+                      pending: {type: integer}
+                  words: {type: string, description: '"Approved. Lock and pay?", or "Locked. Payrolla pays 48 people ₦9,200,000 on 28 Nov."'}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/reject:
+    post:
+      operationId: rejectPayrollRun
+      tags:
+      - Payments
+      summary: Reject, with a note
+      description: 'Sends the run back to be fixed. No code: it moves no money; the person must be linked. Whoever prepared it is told, with the note. 400 `note_required`; refusals as for approving.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [note, key]
+              properties:
+                note: {type: string, maxLength: 300}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Sent back
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, words]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  words: {type: string}
         default:
           $ref: '#/components/responses/Error'
   /v1/payroll/runs/{run}:
@@ -6523,12 +7082,12 @@ paths:
       tags:
       - Payments
       summary: One payroll run, from Payrolla
-      description: 'The run and its timeline, each person''s net pay and whether it arrived (`state`: paid, waiting, failed or returned, with Payrolla''s reason), the staff member each is in Taskiem, and Payrolla''s approval link while it waits for approval.'
+      description: 'The run and its timeline, each person''s net pay and whether it arrived (`state`: paid, waiting, failed or returned, with Payrolla''s reason), the staff member each is in Taskiem, and Payrolla''s approval link while it waits for approval where it can''t be approved here. From P4b-3: each line''s breakdown (gross, each earning, deduction and employer''s contribution by name, net), the bonuses and deductions and who is left out, who is new, who left and whose pay changed since the last payroll, the wallet against the total (`funding.short_by_kobo`), and what this person may do (`may`).'
       security:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: payroll.read
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
       parameters:
       - name: run
         in: path
@@ -6562,6 +7121,69 @@ paths:
                       approved_at: {type: [string, 'null']}
                       locked_at: {type: [string, 'null']}
                   approval_url: {type: string, format: uri}
+                  adjustments:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, employee_id, name, type, amount_kobo, reason]
+                      properties:
+                        id: {type: string}
+                        employee_id: {type: string}
+                        name: {type: string}
+                        type: {type: string, enum: [bonus, deduction]}
+                        amount_kobo: {type: integer}
+                        reason: {type: string}
+                  exclusions:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, employee_id, name, reason]
+                      properties:
+                        id: {type: string}
+                        employee_id: {type: string}
+                        name: {type: string}
+                        reason: {type: string}
+                  changes:
+                    type: object
+                    additionalProperties: false
+                    required: [new, left, pay_changed]
+                    properties:
+                      since: {type: string, description: The last payroll compared with}
+                      new: {type: array, items: {type: string}}
+                      left: {type: array, items: {type: string}}
+                      pay_changed:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: false
+                          required: [name, from_kobo, to_kobo]
+                          properties:
+                            name: {type: string}
+                            from_kobo: {type: integer}
+                            to_kobo: {type: integer}
+                  funding:
+                    type: object
+                    additionalProperties: false
+                    required: [has_wallet, available_kobo, needed_kobo, short_by_kobo]
+                    properties:
+                      has_wallet: {type: boolean}
+                      available_kobo: {type: integer}
+                      needed_kobo: {type: integer}
+                      short_by_kobo: {type: integer}
+                      words: {type: string, description: '"Your Payrolla wallet has … short by ₦120,000. Add money before 28 Nov."'}
+                  may:
+                    type: object
+                    additionalProperties: false
+                    required: [prepare, approve, linked, reconnect]
+                    properties:
+                      prepare: {type: boolean}
+                      approve: {type: boolean}
+                      linked: {type: boolean, description: Linked to a Payrolla user who may approve}
+                      reconnect: {type: boolean, description: The connection can't do it here; an owner reconnects}
+                  not_worked_out: {type: string, description: 'A DRAFT run: Payrolla couldn''t work it out, in words, with Recalculate'}
+                  pays_on: {type: string}
                   counts:
                     type: object
                     required: [paid, waiting, failed, returned]
@@ -6585,6 +7207,20 @@ paths:
                         state: {type: string, enum: [paid, waiting, failed, returned]}
                         reference: {type: string}
                         reason: {type: string}
+                        gross_kobo: {type: integer}
+                        total_earnings_kobo: {type: integer}
+                        total_deductions_kobo: {type: integer}
+                        items:
+                          type: array
+                          items:
+                            type: object
+                            additionalProperties: false
+                            required: [kind, code, label, amount_kobo]
+                            properties:
+                              kind: {type: string, enum: [earning, deduction, employer]}
+                              code: {type: string}
+                              label: {type: string, description: 'In plain words: Basic, Housing, Tax (PAYE), Pension (yours), Pension (employer''s), NHF'}
+                              amount_kobo: {type: integer}
                         staff:
                           oneOf:
                           - type: 'null'
@@ -50653,7 +51289,7 @@ components:
           description: The person said it (else Taskiem did)
         kind:
           type: string
-          enum: [text, button, voice, photo, form, location, diary, chart, menu]
+          enum: [text, button, voice, photo, form, location, diary, chart, menu, payroll_run]
         text:
           type: string
         buttons:

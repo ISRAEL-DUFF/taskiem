@@ -165,6 +165,7 @@ Within a stage, phases that do not need each other may be built at once by separ
     - the funding warning;
     - approve, reject, and **Lock and pay** with a code, on the web, in the app, and in the chat (the card, the code typed in the thread).
     - Done when: November's payroll is prepared, adjusted, approved in the WhatsApp thread by someone other than its preparer, and locked in the app, with nothing done in Payrolla's screens.
+    - **Status (24 November 2026): built** against the fake Payrolla ([as built](chat-pay-people.md#p4b-3-this-months-run-in-taskiem)): preparing, each line's breakdown, bonuses and deductions, leaving out and putting back, recalculating, cancelling, the wallet's shortfall, approving, rejecting and locking with Payrolla's code on the web, in the app and in the chat (the card; the code typed in the WhatsApp or Telegram thread; Slack by link), `payroll.prepare`, and the run's events told. The chat's words for a bonus or leaving someone out are not yet built.
   - **P4b-4. After locking** (needs P4b-3):
     - the payment's state and each person's result;
     - waiting for money, and the shortfall told before and on the pay date;

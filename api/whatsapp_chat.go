@@ -844,6 +844,12 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			cmd = "no"
 		}
 	}
+	// This month's payroll: its words, its card's buttons, and a code
+	// typed while one waits (payroll_runs_chat.go), before anything else
+	// reads the message.
+	if done, err := s.waPayroll(ctx, c, text, cmd); done || err != nil {
+		return err
+	}
 	if cmd == "cancel" || cmd == "stop" {
 		if c.state == stateIdle {
 			return c.say(ctx, s, c.t("wa.nothing_to_cancel"))

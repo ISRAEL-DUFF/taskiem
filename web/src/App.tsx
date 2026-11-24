@@ -156,7 +156,8 @@ import { PaymentPage, PaymentsPage } from "./pages/Payments";
 import { ToolPage } from "./pages/MadeToolSheet";
 import { BatchPage, PayListPage } from "./pages/PayBatch";
 import { CollectedListPage } from "./pages/PayCollect";
-import { PayrollPage, PayrollRunPage, PayrollStaffPage } from "./pages/Payroll";
+import { PayrollPage, PayrollStaffPage } from "./pages/Payroll";
+import { PayrollRunPage } from "./pages/PayrollRun";
 import { PayrollSettingsPage } from "./pages/PayrollSettings";
 import { MyPayPage, PayrollChangesPage, PayrollTeamPage } from "./pages/PayrollTeam";
 import { brandFile } from "./brand";
@@ -520,7 +521,7 @@ function SignedIn() {
     // Paying people from the business's payments account (pages/Payments.tsx).
     ["/payments", "Pay people", "send", can("money.pay")],
     // Payroll, read from Payrolla (pages/Payroll.tsx).
-    ["/payroll", "Payroll", "billing", can("payroll.read")],
+    ["/payroll", "Payroll", "billing", can("payroll.read") || can("payroll.prepare") || can("payroll.approve")],
     // A staff member's own salary account in Payrolla (pages/PayrollTeam.tsx).
     ["/payroll/me", "My pay", "billing", !can("payroll.read")],
     // Linked suppliers' invoices (business links, pages/Bills.tsx).

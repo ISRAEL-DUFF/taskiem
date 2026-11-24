@@ -76,7 +76,7 @@ Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-
    - adding, changing and ending employees (`/v1/payroll/team`, `payroll.prepare`);
    - bank changes held for a second approver (`/v1/payroll/bank-changes`, approved with the approver's code);
    - an employee's own salary account change (`/v1/payroll/me`, the code Payrolla texts them).
-3. **This month's run in Taskiem** (P4b-3):
+3. **This month's run in Taskiem** (P4b-3), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-3-this-months-run-in-taskiem); `/v1/payroll/runs`, `payroll.prepare`, the run's card and the code typed in the WhatsApp or Telegram thread):
    - prepare it, add a bonus or a deduction, leave someone out;
    - approve and **Lock and pay**, confirmed with **Payrolla's own one-time code**, typed into Taskiem.
 
