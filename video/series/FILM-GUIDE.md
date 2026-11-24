@@ -43,6 +43,14 @@ Each film writes to `<out>/<name>/` (`f00000.png ...`, `cues.json`).
 ## Rules for a good film
 
 - **One goal, one flow.** What the viewer can do after it. 15 to 60 seconds.
+- **Reproducible by the viewer (founder's rule).** These are how-to videos: people
+  follow them on their own phone. Every step shown must be one a person can do in the
+  real app: a real button, a real route to each sheet (a tap, never a sheet opened by test
+  code), only the app's own options (no stand-in-only choices), and a caption that matches
+  the frame. Cutting to a second person's phone is fine (two people can play both parts);
+  inventing a screen, button, field or option is not. If the real route to a screen cannot
+  be filmed, cut the step or say so; never fake the route. Stand-in data (names, prices) is
+  fine. Check each film against this before handing back.
 - **Only what the app does.** Use the screen's own flow, the real words. Never
   invent a button. If the screen cannot be filmed from its tests' set-up, say so.
 - **A caption per step**, 8 to 12 words, present tense, plain ("Tap Next."). The
