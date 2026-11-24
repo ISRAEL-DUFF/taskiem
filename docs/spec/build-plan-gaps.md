@@ -135,7 +135,7 @@ The specs are [made tools](made-tools.md) and [saved objects](saved-objects.md).
 
 **Review of H6 (24 November 2026), fixed the same day:** a saved person's title (their name) is left out of a run's `saved` unless the run is revealed; a saved file in a run is its reference (`saved-file:<id>`), never a link: a message step gets a short link made when it sends (`saved_file_links`, 00644, the token kept as a hash; `GET /v1/saved-files/{token}` sends to the business's storage for five minutes), so nothing opening a file is kept in a run's history, nothing is signed at a run's start, and a late or resumed step's link is fresh; the link is kept whole wherever a message is cut (the notice template's link, the update template's line, the SMS's parts) and refused plainly when it cannot fit; only the saved root names a file (`=saved.price_list`), never a link or another expression; `saved_uses` keeps the latest 200 for each thing and a purged run's rows go with it (00643); an environment's key sees its environment's runs on a thing's page; the web keeps no typed values with a chat's runs and forgets them on signing out or another person signing in; a tool whose only input is optional reads the words after its command ("/log at Total"). Tests: `TestSavedFileSentByWorkflow`, `TestSavedFileBySMS`, `TestSavedFileByChat`, `TestMessageFile`, `TestReaderOnlyOptionalInput`, `theirRuns.test.ts`.
 
-## 9. Phase H7: paying one person, finished
+## 9. Phase H7: paying one person, finished — done 24 November 2026
 
 The spec is [paying people from the chat](chat-pay-people.md). The first item is against the spec, and its own test for the phase expects the payment recorded. This is the largest of the H phases; it may be two pull requests, server first.
 
@@ -156,6 +156,8 @@ The spec is [paying people from the chat](chat-pay-people.md). The first item is
 | **Forward or reply "pay" on WhatsApp, Telegram and Slack** | `g-pay-fwd` | A forwarded message, or a reply of "pay" to one, is read for an account as a typed one is: "Pay Chidi Okeke (GTBank ••6789) how much, and for what?". |
 
 All of this is built and tested against the stand-in provider, as P1 to P4 were. Real money still waits for D6 (§12).
+
+**Built 24 November 2026**, every task above, on the server, the web, the app and WhatsApp, Telegram and Slack: [chat-pay-people.md, As built (H7)](chat-pay-people.md#as-built-h7-24-november-2026) says how. Migration 00650; the provider's contract gained `quote_fee` (with `balance` and `pay_wallet`, which it had). Tests: `api/payments_h7_test.go` (the phase's own "Done when", end to end on the stand-in: a rider paid ₦45,000 with the fee and the balance after, the delivery and the bank charges in the money log, the diary line, the rider's card and its reversal, the receipt's signed PDF, Try again, wallet to wallet, a forward and a reply of "pay" on WhatsApp and Telegram), `api/slack_pay_forward_test.go`, `api/payment_batches_h7_test.go`, `api/first_payment_h7_test.go`, `api/payments_chat_list_test.go` (the stuck batch row), `engine/moneylog/purposes_test.go`, the parsers' own; vitest `web/src/lib/payh7.test.ts`; Playwright `web/e2e/pay-finished.spec.ts`; Flutter `mobile/test/pay_finished_test.dart` with its pictures (`pay-balance`, `pay-fee`, `pay-receipt`, `pay-diary`, `pay-batch-short`; `pay-check` drawn again for its new rows). Two things the plan named have no thing to attach to, said in the spec: invoices have no refund in Taskiem (Pay on a refund is on an order's), and a payee "not on Taskiem" has no address Taskiem holds, so **Send them a receipt** gives the payer the receipt's link and PDF to send.
 
 **Done when (the spec's own, in full):** an owner pays a rider ₦45,000 from Tools in under 30 seconds, sees the fee and the balance after before confirming, and it is recorded as a delivery in the money log with its fee as bank charges; the chat's diary line turns to "Received by the bank"; the rider sees a card in their chat; a changed account for a past payee is stopped for the owner's OK; and a forwarded message with an account number is answered with the name and "how much?".
 
@@ -244,7 +246,7 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 
 | Item | Where |
 | --- | --- |
-| g-pay-core | H7 |
+| g-pay-core | H7 (built 24 November 2026) |
 | g-things-menu | H2 (done 24 November 2026) |
 | g-label-pre | H2 (done 24 November 2026) |
 | g-label-merge | H2 (done 24 November 2026) |
@@ -270,12 +272,12 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-saved-personal | §12 |
 | g-saved-review | §12 |
 | g-pay-wallet | §12 |
-| g-pay-w2w | H7 |
-| g-pay-saveas | H7 |
-| g-pay-first | H7 |
-| g-pay-staff | H7 (refunds; staff and riders built) |
-| g-pay-batch | H7 |
-| g-pay-fwd | H7 |
+| g-pay-w2w | H7 (built 24 November 2026) |
+| g-pay-saveas | H7 (built 24 November 2026) |
+| g-pay-first | H7 (built 24 November 2026) |
+| g-pay-staff | H7 (refunds: built 24 November 2026; staff and riders built before) |
+| g-pay-batch | H7 (built 24 November 2026) |
+| g-pay-fwd | H7 (built 24 November 2026) |
 | g-pay-payroll | §12 |
 | g-pay-momo | §12 |
 | g-photo-phone | §12 |
@@ -310,6 +312,6 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-doc-plan | H1 |
 | g-doc-device | H1 |
 | g-doc-pin | H1 |
-| (found in H1) a batch whose last row is refused never ends | H7 |
+| (found in H1) a batch whose last row is refused never ends | H7 (built 24 November 2026) |
 
 66 items, and one found while doing H1: 44 (and the one found) in phases H1 to H8, 3 in the later milestones, 17 waiting (§12), and 2 already built (their docs fixed in H1).

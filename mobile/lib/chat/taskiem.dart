@@ -49,6 +49,7 @@ import 'bills_page.dart' show BillsPage, openBill;
 import 'menu_card.dart';
 import 'money_page.dart' show MoneyPage;
 import 'payments_page.dart' show SentPaymentsPage;
+import 'pay_diary.dart' show PayChatCard, PayDiaryLine;
 import 'payroll_page.dart' show PayrollPage;
 import 'pages_page.dart' show PagesPage, openPage;
 import 'saved_accounts.dart' show SavedAccountsPage;
@@ -1261,7 +1262,12 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
             final chart = ChartData.parse(m.text);
             if (chart != null) return ChartCard(chart: chart);
           }
+          // A payment's (or a batch's) line says how it stands now (H7).
+          if (m.kind == 'diary' && (m.payment != null || m.batch != null)) {
+            return PayDiaryLine(auth: d.chats.auth, words: m.text, when: 'You, ${clock(m.createdAt)}', payment: m.payment, batch: m.batch);
+          }
           if (m.kind == 'diary') return DiaryLine(words: m.text, when: 'You, ${clock(m.createdAt)}');
+          if (m.kind == 'receipt' || m.kind == 'paid_you') return PayChatCard(auth: d.chats.auth, kind: m.kind, text: m.text, payment: m.payment);
           // startsRun: a run is one side's.
           final first = prev == null || prev.m.inbound != m.inbound;
           return Padding(

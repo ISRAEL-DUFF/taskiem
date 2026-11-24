@@ -15,13 +15,15 @@
 
 import 'dart:async';
 
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/passkey.dart';
-import '../kit/forms.dart' show errorWords;
+import '../kit/forms.dart' show TkSwitchRow, errorWords;
 import '../kit/icon.dart' show TkIcon;
 import '../kit/kit.dart';
 import '../kit/look.dart';
@@ -69,8 +71,113 @@ String purposeWords(Payment p) {
   'rejected' => (words: 'Refused', tone: CardTone.danger),
   'unknown' => (words: 'Sent, waiting for the bank', tone: CardTone.plain),
   'cancelled' => (words: 'Cancelled', tone: CardTone.plain),
+  'reversed' => (words: 'Came back', tone: CardTone.danger),
   _ => (words: status, tone: CardTone.plain),
 };
+
+int? _koboOf(Object? v) => v is num ? v.toInt() : null;
+
+/// The fee before paying, in words (paying people H7, Settled 4 and 7):
+/// "₦45,000 + ₦25 fee", that the fee shows after paying, or the wallet's
+/// route (lib/payments.ts feeWords).
+String payFeeWords(Payment p) {
+  if (p.route == 'wallet') return 'Taskiem wallet · arrives at once, no fee';
+  final fee = _koboOf(p.feeQuoteKobo);
+  if (fee == null) return 'The fee shows after paying';
+  return '${naira(p.amountKobo)} + ${naira(fee)} fee';
+}
+
+/// The balance once a payment and its fee are paid; null when not known.
+int? payBalanceAfter(Payment p) {
+  final b = _koboOf(p.balanceKobo);
+  if (b == null) return null;
+  return b - p.amountKobo - (_koboOf(p.feeQuoteKobo) ?? 0);
+}
+
+/// A diary line's state (lib/payments.ts diaryState): received, failed
+/// with Try again, or on its way.
+({String words, bool again}) payDiaryState(String status) => switch (status) {
+  'paid' => (words: 'Received by the bank', again: false),
+  'failed' => (words: 'Failed: refunded to your balance', again: true),
+  'reversed' => (words: 'Came back: refunded to your balance', again: true),
+  'waiting_ok' => (words: 'Waiting for the owner’s OK', again: false),
+  'rejected' => (words: 'Refused: nothing was paid', again: false),
+  'cancelled' => (words: 'Cancelled: nothing was paid', again: false),
+  _ => (words: 'Sent, waiting for the bank', again: false),
+};
+
+/// A beneficiary's name from the bank's name: its first word, lowered.
+String beneficiaryName(String? accountName) {
+  final w = (accountName ?? '').trim().split(RegExp(r'\s+')).first;
+  final out = w.toLowerCase().replaceAll(RegExp(r'[^\p{L}\p{N}_-]', unicode: true), '');
+  return out.length > 32 ? out.substring(0, 32) : out;
+}
+
+/// What people are paid from, at the top of the Pay sheet (Settled 2):
+/// the balance, and Add money: the Taskiem wallet's own account number.
+class PayBalanceRow extends StatefulWidget {
+  const PayBalanceRow({super.key, required this.auth});
+  final Auth auth;
+
+  @override
+  State<PayBalanceRow> createState() => _PayBalanceRowState();
+}
+
+class _PayBalanceRowState extends State<PayBalanceRow> {
+  GetPayBalanceResponse? _b;
+  bool _open = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.auth.api.getPayBalance().then((r) {
+      if (mounted) setState(() => _b = r);
+    }, onError: (Object _) {}));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final b = _b;
+    if (b == null || b.from.isEmpty) return const SizedBox.shrink();
+    final look = TkLook.of(context);
+    final available = _koboOf(b.availableKobo);
+    final add = b.addMoney;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TkCallout(
+          leading: TkSquare('b-bank', color: look.teal),
+          title: available == null ? 'Paid from ${b.from}' : 'Balance ${naira(available)}',
+          sub: available == null ? null : 'In ${b.from}',
+          color: look.teal,
+          button: add == null ? null : (_open ? 'Hide' : 'Add money'),
+          semantics: add == null ? null : 'Add money: your Taskiem wallet’s account number',
+          onPressed: add == null ? null : () => setState(() => _open = !_open),
+        ),
+        if (_open && add != null) ...[
+          const SizedBox(height: 8),
+          TkFormGroup(
+            title: 'Send money from your bank to it',
+            children: [
+              TkLines([('Bank', add.bankName), ('Account number', add.accountNumber), ('Name', add.accountName)]),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TkLink(
+                  label: 'Copy the account number',
+                  bold: true,
+                  onTap: () async {
+                    await Clipboard.setData(ClipboardData(text: add.accountNumber));
+                    if (context.mounted) showTkToast(context, 'Account number copied');
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
 
 /// The bank's name for the account once checked, else the payee's.
 String paymentName(Payment p) {
@@ -183,6 +290,30 @@ ChatAction riderPayAction(String name) => ChatAction.fromJson({
   ],
 });
 
+/// The Pay sheet's form for an order's refund (H7): the customer's account
+/// number and bank, the amount owed back and "a refund", filled in.
+ChatAction refundPayAction(String reference) => ChatAction.fromJson({
+  'id': 'pay.account',
+  'title': 'Pay back $reference',
+  'line': 'Their account: the bank’s name for it is checked first',
+  'icon': 'money',
+  'does': 'asks',
+  'opens': 'form',
+  'tool': 'pay',
+  'confirm': 'passkey',
+  'fields': [
+    {'key': 'number', 'label': 'Their account number', 'hint': '10 digits.', 'kind': 'account'},
+    {'key': 'bank', 'label': 'Which bank is it with?', 'kind': 'bank'},
+    {'key': 'amount', 'label': 'How much?', 'kind': 'money'},
+    {
+      'key': 'for',
+      'label': 'What is it for?',
+      'kind': 'choice',
+      'choices': [for (final (w, _) in payPurposes) w],
+    },
+  ],
+});
+
 /// The Pay sheet's form for a staff member, paid to the saved account
 /// linked to them (outside payroll, which is Payrolla's): how much, what
 /// for (wages unless changed) and a note.
@@ -214,7 +345,11 @@ const noAccountInPhoto = 'No account number in that photo. Type it in.';
 /// form, then the payment prepared to check and pay. Closes with the
 /// payment once it is sent, or null.
 class PaySheet extends StatefulWidget {
-  const PaySheet({super.key, required this.auth, required this.action, this.initial = const {}, this.from = 'chat', this.riderId, this.staffId, this.said = '', this.saidIn = 'message'});
+  const PaySheet({super.key, required this.auth, required this.action, this.initial = const {}, this.from = 'chat', this.riderId, this.staffId, this.said = '', this.saidIn = 'message', this.where});
+
+  /// The chat its diary line goes to: a linked business's (its link); the
+  /// person's Taskiem chat when none is given (H7).
+  final String? where;
   final Auth auth;
   final ChatAction action;
   final Map<String, String> initial;
@@ -530,6 +665,7 @@ class _PaySheetState extends State<PaySheet> {
       purpose: what == null ? 'other' : purposeOf(values[what.key]!),
       note: note == null || values[note.key]!.isEmpty ? null : values[note.key],
       from: widget.from,
+      where: widget.where,
     );
     try {
       Payment p;
@@ -677,7 +813,21 @@ class _PaySheetState extends State<PaySheet> {
   Widget build(BuildContext context) {
     final p = _payment;
     if (p != null) {
-      return PaymentSheet(key: ValueKey(p.id), auth: widget.auth, payment: p, fresh: true, said: _saidName, saidIn: _saidIn, onBack: () => setState(() => _payment = null));
+      // An account typed or read (not a saved one, a rider's or a staff
+      // member's): offered to be saved as a beneficiary once paid.
+      final bank = _ofKind('bank');
+      final number = widget.riderId == null && widget.staffId == null && p.savedId == null && !p.personal ? _number : null;
+      return PaymentSheet(
+        key: ValueKey(p.id),
+        auth: widget.auth,
+        payment: p,
+        fresh: true,
+        said: _saidName,
+        saidIn: _saidIn,
+        saveNumber: number,
+        saveBank: bank == null ? null : _banksChosen[bank.key],
+        onBack: () => setState(() => _payment = null),
+      );
     }
     final problem = _problem;
     final look = TkLook.of(context);
@@ -689,6 +839,7 @@ class _PaySheetState extends State<PaySheet> {
       second: 'Cancel',
       onSecond: () => Navigator.of(context).pop(),
       children: [
+        PayBalanceRow(auth: widget.auth),
         if (_photoOffered) _photoRow(),
         TkFormGroup(children: [for (final f in _fields) _field(f)]),
         ?_answers(),
@@ -717,9 +868,14 @@ class _PaySheetState extends State<PaySheet> {
 /// first. A payment not sent yet has Pay (the passkey) and Cancel. Closes
 /// with the payment once sent.
 class PaymentSheet extends StatefulWidget {
-  const PaymentSheet({super.key, required this.auth, required this.payment, this.fresh = false, this.onBack, this.said = '', this.saidIn = 'message'});
+  const PaymentSheet({super.key, required this.auth, required this.payment, this.fresh = false, this.onBack, this.said = '', this.saidIn = 'message', this.saveNumber, this.saveBank});
   final Auth auth;
   final Payment payment;
+
+  /// An account typed or read for this payment: Save as a beneficiary is
+  /// offered (on by default), saved once it is paid.
+  final String? saveNumber;
+  final String? saveBank;
 
   /// The name the message gave, set against the bank's.
   final String said;
@@ -758,6 +914,11 @@ class _PaymentSheetState extends State<PaymentSheet> {
   bool _phonePasskey = true;
   String? _error;
   String _errorTitle = 'Not paid';
+  // The sheet's ticks (Settled 6), and Save as a beneficiary.
+  late bool _tell = widget.payment.tellPayee ?? true;
+  late bool _receipt = widget.payment.sendReceipt ?? false;
+  bool _saveAs = true;
+  late final _saveName = TextEditingController(text: beneficiaryName(widget.payment.accountName is String ? widget.payment.accountName as String : null));
 
   Auth get _auth => widget.auth;
 
@@ -772,6 +933,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
   void dispose() {
     _code.dispose();
     _pin.dispose();
+    _saveName.dispose();
     // Prepared here and let go unpaid: nothing is left waiting.
     if (widget.fresh && !_tried && _p.status == 'prepared') {
       unawaited(_auth.api.cancelPayment(id: _p.id).then((_) {}, onError: (Object _) {}));
@@ -781,8 +943,65 @@ class _PaymentSheetState extends State<PaymentSheet> {
 
   Future<Payment> _confirm({Map<String, dynamic>? passkey, String? totp, String? pin}) async => (await _auth.api.confirmPayment(
     id: _p.id,
-    body: ConfirmPaymentRequest(passkey: passkey, totp: totp, pin: pin, again: _again ? true : null),
+    body: ConfirmPaymentRequest(
+      passkey: passkey,
+      totp: totp,
+      pin: pin,
+      again: _again ? true : null,
+      // Only a tick changed from how it was prepared goes with it.
+      tellPayee: _p.mayTell == true && _tell != (_p.tellPayee ?? true) ? _tell : null,
+      sendReceipt: _p.mayTell != true && _receipt != (_p.sendReceipt ?? false) ? _receipt : null,
+    ),
   )).payment;
+
+  /// Paid: saved as a beneficiary, when it was asked.
+  Future<void> _saveBeneficiary(Payment p) async {
+    final number = widget.saveNumber;
+    final name = _saveName.text.trim().replaceFirst(RegExp('^@'), '');
+    if (number == null || !_saveAs || name.isEmpty) return;
+    try {
+      await _auth.api.addSaved(
+        body: SavedObjectIn(kind: 'bank_account', name: name, title: paymentName(p), bankName: widget.saveBank ?? p.bankName, accountNumber: number),
+      );
+      if (mounted) showTkToast(context, 'Saved as @$name');
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, 'Not saved: ${errorWords(e)}', error: true);
+    }
+  }
+
+  /// The receipt's link, sent to them from the phone's share sheet.
+  Future<void> _sendReceipt() async {
+    try {
+      final r = await _auth.api.getPaymentReceipt(id: _p.id);
+      if (r.url.isEmpty) return;
+      await SharePlus.instance.share(ShareParams(text: 'Receipt: ${r.url}'));
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    }
+  }
+
+  /// The receipt as a card in the person's own Taskiem chat.
+  Future<void> _receiptToChat() async {
+    try {
+      await _auth.api.sharePaymentReceipt(id: _p.id, body: const SharePaymentReceiptRequest(where: 'taskiem'));
+      if (mounted) showTkToast(context, 'The receipt is in your Taskiem chat');
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    }
+  }
+
+  /// Try again: prepared again as it was asked for, to confirm here.
+  Future<void> _tryAgain() async {
+    setState(() => (_busy = true, _error = null));
+    try {
+      final p = (await _auth.api.payAgain(id: _p.id)).payment;
+      if (mounted) setState(() => (_p = p, _again = p.again == true, _tried = false));
+    } on Object catch (e) {
+      if (mounted) setState(() => (_error = errorWords(e), _errorTitle = 'Not prepared again'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   /// Paying with the passkey: the server is asked first, with no proof, so
   /// what stops the payment is said before the passkey is asked for, and
@@ -832,6 +1051,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       }
       if (p == null) return;
       setState(() => (_p = p!, _sent = true));
+      unawaited(_saveBeneficiary(p));
       // The tick draws, then the sheet goes.
       await Future<void>.delayed(const Duration(milliseconds: 1200));
       if (mounted) Navigator.of(context).pop(p);
@@ -908,8 +1128,12 @@ class _PaymentSheetState extends State<PaymentSheet> {
     final pin = _pin.text.replaceAll(RegExp(r'\D'), '');
     final fee = p.feeKobo is num ? (p.feeKobo as num).toInt() : null;
     final reason = p.reason is String ? p.reason as String : '';
+    final after = payBalanceAfter(p);
     final lines = <(String, String)>[
       ('Amount', amount),
+      if (prepared) (p.route == 'wallet' ? 'How' : (_koboOf(p.feeQuoteKobo) == null ? 'Fee' : 'With the fee'), payFeeWords(p)),
+      if (prepared && after != null) ('Balance after', naira(after)),
+      if (!prepared && p.route == 'wallet') ('How', 'Taskiem wallet'),
       if (fee != null) ('Fee', naira(fee)),
       ('What for', purposeWords(p)),
       if ((p.note ?? '').isNotEmpty) ('Note', p.note!),
@@ -1010,6 +1234,40 @@ class _PaymentSheetState extends State<PaymentSheet> {
             }),
           ),
         ),
+      if (prepared)
+        TkFormGroup(
+          title: 'After paying',
+          children: [
+            if (p.mayTell == true)
+              TkSwitchRow(
+                label: 'Tell them in the chat',
+                hint: 'Once the bank has it: the amount, what for and the day. Never your balance or the fee.',
+                on: _tell,
+                onChanged: (v) => setState(() => _tell = v),
+              )
+            else
+              TkSwitchRow(
+                label: 'Send them a receipt',
+                hint: 'For someone not on Taskiem: a receipt to send them once it is paid.',
+                on: _receipt,
+                onChanged: (v) => setState(() => _receipt = v),
+              ),
+            if (widget.saveNumber != null) TkSwitchRow(label: 'Save as a beneficiary', on: _saveAs, onChanged: (v) => setState(() => _saveAs = v)),
+            if (widget.saveNumber != null && _saveAs)
+              TkKitField(
+                label: 'Call them',
+                hint: 'Next time, pay @${_saveName.text.isEmpty ? 'them' : _saveName.text} in one tap.',
+                child: TkTextBox(controller: _saveName),
+              ),
+          ],
+        ),
+      if (p.status == 'paid')
+        TkButtonRow([
+          TkSmallButton(label: 'Send them the receipt', icon: 'b-share', primary: true, onPressed: _sendReceipt),
+          TkSmallButton(label: 'Put it in the chat', onPressed: _receiptToChat),
+        ]),
+      if (p.status == 'failed' || p.status == 'reversed')
+        TkButtonRow([TkSmallButton(label: _busy ? 'Checking with the bank…' : 'Try again', primary: true, onPressed: _busy ? null : _tryAgain)]),
     ];
     final overlay = _sent ? TkSavedTick(words: paymentSentWords(p)) : null;
     if (!prepared) {

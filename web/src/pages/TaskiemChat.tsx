@@ -62,6 +62,7 @@ import { markSeen, seenAt, unreadAfter } from "../lib/taskiemSeen";
 import { setDraft } from "../lib/drafts";
 import { toast } from "../toast";
 import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
+import { PayChatCard, PayDiaryState } from "./PayDiary";
 
 // The Taskiem conversation on the web (business links L3, §5.5): the
 // person's own conversation with Taskiem, the one they have on WhatsApp,
@@ -607,7 +608,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
                 </div>
               );
           }
-          // A change made with a chat tool: a line, not a bubble.
+          // A change made with a chat tool: a line, not a bubble. A
+          // payment's (or a batch's) says how it stands now.
           if (m.kind === "diary")
             return (
               <DiaryLine
@@ -619,8 +621,22 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
                   </time>
                 }
               >
-                {m.text}
+                {m.payment || m.batch ? (
+                  <>
+                    {m.text}
+                    <PayDiaryState payment={m.payment} batch={m.batch} />
+                  </>
+                ) : (
+                  m.text
+                )}
               </DiaryLine>
+            );
+          // A receipt sent into the chat, or a payment to this person.
+          if (m.kind === "receipt" || m.kind === "paid_you")
+            return (
+              <div className="tk-chart-row" data-msg={m.id}>
+                <PayChatCard kind={m.kind} text={m.text} payment={m.payment} />
+              </div>
             );
           const choice = pressed.get(m.id);
           const pressable = m.id === pressableId;

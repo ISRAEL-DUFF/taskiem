@@ -2526,6 +2526,28 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .pay-sent { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .pay-sent p { margin: 0; }
 .pay-foot-hint { margin: 8px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+/* Paying people H7: the balance and Add money, the sheet's ticks, the receipt, and a payment's diary line. */
+.pay-balance { display: grid; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2, var(--panel)); border: 1px solid var(--border); font-size: 14px; }
+.pay-balance-line { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; justify-content: space-between; }
+.pay-balance-line strong { font-variant-numeric: tabular-nums; }
+.pay-balance-from { color: var(--muted); }
+.pay-add p { margin: 0; color: var(--muted); }
+.pay-add .pay-check-facts { margin-top: 6px; }
+.pay-ticks { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; border: 0; min-width: 0; }
+.pay-ticks .tk-check { align-items: flex-start; }
+.pay-ticks .tk-check input { margin-top: 3px; flex: none; }
+.pay-ticks .tk-check .tk-field-hint { display: block; font-weight: 400; }
+.pay-receipt { display: grid; gap: 8px; margin: 10px 0; }
+.pay-receipt-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pay-diary-state { font-weight: 600; }
+.pay-diary-state.ok { color: color-mix(in srgb, var(--ok) 75%, var(--text)); }
+.pay-diary-state.danger { color: color-mix(in srgb, var(--danger) 82%, var(--text)); }
+.pay-diary-state.info, .pay-diary-state.muted { color: var(--muted); }
+.pay-diary-again { margin-left: 8px; }
+.pay-chat-card { max-width: 420px; padding: 12px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); display: grid; gap: 6px; font-size: 14px; }
+.pay-chat-card-label { font-size: 12px; color: var(--muted); text-transform: none; }
+.pay-chat-card strong { font-size: 16px; overflow-wrap: anywhere; }
+.batch-short { margin: 10px 0; }
 .card .pay-check + .pay-warn, .card .pay-check ~ .toolbar { margin-top: 14px; }
 
 /* Pay several people (pages/PayBatch.tsx): a row's fields, a row's

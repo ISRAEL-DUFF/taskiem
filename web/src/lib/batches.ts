@@ -51,6 +51,16 @@ export interface PaymentBatch {
   paid_kobo: number;
   waiting: number;
   failed: number;
+  /** The fees quoted for the rows (paid fees once paid). */
+  fees_kobo?: number;
+  /** Rows whose fee shows after paying (no quote). */
+  fees_unknown?: number;
+  /** The balance, where the payments account says it. */
+  balance_kobo?: number | null;
+  /** How much the balance is short of the rows and fees, while prepared. */
+  short_kobo?: number;
+  /** The rows that fit the balance, in order, while it is short. */
+  fit?: string[];
 }
 
 /** One line of a pasted list, as POST /v1/payment-batches/read reads it. */
@@ -338,3 +348,33 @@ export function confirmWords(b: Pick<PaymentBatch, "payments">): string {
 
 /** A row's status pill, as one payment's. */
 export const rowStatus = (x: Payment) => paymentStatus(x.status);
+
+/** The foot of a batch waiting to be confirmed (paying people H7): the
+ * fees, the balance after, and when the balance is short, by how much and
+ * how many rows fit, never one lump "failed". */
+export function batchMoney(
+  b: Pick<PaymentBatch, "payments" | "fees_kobo" | "fees_unknown" | "balance_kobo" | "short_kobo" | "fit">,
+): { fees: string; after: string | null; short: string | null } {
+  const rows = b.payments.filter((x) => x.status === "prepared");
+  const total = rows.reduce((t, x) => t + x.amount_kobo, 0);
+  const fees = b.fees_kobo ?? 0;
+  const unknown = b.fees_unknown ?? 0;
+  const feeWords =
+    unknown > 0 && fees === 0
+      ? "The fees show after paying"
+      : unknown > 0
+        ? `${naira(fees)}, and the rest show after paying`
+        : naira(fees);
+  const balance = b.balance_kobo;
+  const after = balance == null ? null : naira(balance - total - fees);
+  let short: string | null = null;
+  if ((b.short_kobo ?? 0) > 0 && balance != null) {
+    const fit = (b.fit ?? []).length;
+    short =
+      `Your balance is ${naira(balance)}: ${naira(b.short_kobo ?? 0)} short for all ${peopleWords(rows.length)}. ` +
+      (fit === 0
+        ? "None fit: add money first."
+        : `The first ${fit === 1 ? "one fits" : `${fit} fit`}: take some out, or add money first.`);
+  }
+  return { fees: feeWords, after: short ? null : after, short };
+}

@@ -13,7 +13,8 @@ export type PaymentStatus =
   | "failed"
   | "rejected"
   | "unknown"
-  | "cancelled";
+  | "cancelled"
+  | "reversed";
 
 export type PaymentPurpose =
   | "bill"
@@ -56,6 +57,94 @@ export interface Payment {
   /** Confirmed by you, and its run still waits for your own OK, which did
    * not reach it: confirming it again gives it. */
   awaits_your_ok?: boolean;
+  /** The fee quoted before paying; null when the fee shows after. */
+  fee_quote_kobo?: number | null;
+  /** "wallet": Taskiem wallet to Taskiem wallet, at once, no fee. */
+  route?: "bank" | "wallet";
+  /** Tell the person paid in their chat; a receipt to send them. */
+  tell_payee?: boolean;
+  send_receipt?: boolean;
+  /** They can be told in a chat of theirs (a rider, a staff member). */
+  may_tell?: boolean;
+  /** The balance when it was prepared, where the account says it. */
+  balance_kobo?: number | null;
+  rider_id?: string | null;
+}
+
+/** What people are paid from: GET /v1/payments/balance. */
+export interface PayBalance {
+  from: string;
+  available_kobo: number | null;
+  wallet: boolean;
+  quotes_fee: boolean;
+  add_money: {
+    bank_name: string;
+    account_number: string;
+    account_name: string;
+  } | null;
+}
+
+/** A paid payment's receipt: GET /v1/payments/{id}/receipt. */
+export interface PayReceipt {
+  business: string;
+  payee: string;
+  bank_name: string;
+  account: string;
+  amount_kobo: number;
+  for: string;
+  paid_at: string;
+  reference: string;
+  route: string;
+}
+
+/** The fee before paying, in words (Settled 4 and 7): "₦45,000 + ₦25
+ * fee", or that the fee shows after paying, or the wallet's route. */
+export function feeWords(
+  x: Pick<Payment, "amount_kobo" | "fee_quote_kobo" | "route">,
+): string {
+  if (x.route === "wallet") return "Taskiem wallet · arrives at once, no fee";
+  if (x.fee_quote_kobo == null) return "The fee shows after paying";
+  return `${naira(x.amount_kobo)} + ${naira(x.fee_quote_kobo)} fee`;
+}
+
+/** The balance once it and its fee are paid; null when not known. */
+export function balanceAfter(
+  x: Pick<Payment, "amount_kobo" | "fee_quote_kobo" | "balance_kobo">,
+): number | null {
+  if (x.balance_kobo == null) return null;
+  return x.balance_kobo - x.amount_kobo - (x.fee_quote_kobo ?? 0);
+}
+
+/** A payment's diary line's state: "Received by the bank", "Failed:
+ * refunded to your balance" (with Try again), or on its way. */
+export function diaryState(x: Pick<Payment, "status">): {
+  words: string;
+  tone: "ok" | "danger" | "info" | "muted";
+  again: boolean;
+} {
+  switch (x.status) {
+    case "paid":
+      return { words: "Received by the bank", tone: "ok", again: false };
+    case "failed":
+      return { words: "Failed: refunded to your balance", tone: "danger", again: true };
+    case "reversed":
+      return { words: "Came back: refunded to your balance", tone: "danger", again: true };
+    case "waiting_ok":
+      return { words: "Waiting for the owner's OK", tone: "info", again: false };
+    case "rejected":
+      return { words: "Refused: nothing was paid", tone: "muted", again: false };
+    case "cancelled":
+      return { words: "Cancelled: nothing was paid", tone: "muted", again: false };
+    default:
+      return { words: "Sent, waiting for the bank", tone: "info", again: false };
+  }
+}
+
+/** A beneficiary's name from the bank's name for the account: its first
+ * word, lowered ("CHIDI OKEKE" is chidi). */
+export function beneficiaryName(accountName: string | null | undefined): string {
+  const w = (accountName ?? "").trim().split(/\s+/)[0] ?? "";
+  return w.toLowerCase().replace(/[^\p{L}\p{N}_-]/gu, "").slice(0, 32);
 }
 
 /** A role's limit: one payment, and a day's total. */
@@ -74,6 +163,7 @@ const STATUS: Record<PaymentStatus, { label: string; tone: Tone }> = {
   unknown: { label: "Sent, waiting for the bank", tone: "info" },
   paid: { label: "Paid", tone: "ok" },
   failed: { label: "Not paid", tone: "danger" },
+  reversed: { label: "Came back", tone: "danger" },
   rejected: { label: "Refused", tone: "danger" },
   cancelled: { label: "Cancelled", tone: "muted" },
 };
@@ -177,8 +267,11 @@ export function payFieldProblem(kind: string, value: string): string | null {
 export function payBody(
   values: Record<string, string>,
   from: string,
+  where?: string,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { from };
+  // The chat its diary line goes to: the Taskiem chat, or a business's.
+  if (where) body.where = where;
   const number = accountDigits(values.number ?? "");
   // A staff member: paid to the saved account linked to them.
   if (values.staff) body.staff_id = values.staff;
@@ -283,6 +376,10 @@ export function outcomeWords(x: Payment): string {
         : "The owner refused it. Nothing was paid.";
     case "cancelled":
       return "Cancelled before it was sent. Nothing was paid.";
+    case "reversed":
+      return x.reason
+        ? `The bank sent it back: ${x.reason}. It is in your balance again.`
+        : "The bank sent it back. It is in your balance again.";
     default:
       return "";
   }
