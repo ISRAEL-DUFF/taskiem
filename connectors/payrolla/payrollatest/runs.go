@@ -163,16 +163,31 @@ func (f *Fake) ServeRuns() {
 		f.Handle(m, "/connect/runs", f.runsRoute)
 	}
 	f.Handle(http.MethodGet, "/connect/funding", f.fundingRoute)
-	f.Handle(http.MethodGet, "/connect/employees/", f.workerRoute)
+	f.Handle(http.MethodGet, "/connect/employees/", f.employeeRoute)
 }
 
-// workerRoute is one employee as a run's page names them.
-func (f *Fake) workerRoute(w http.ResponseWriter, req *http.Request, c *Conn) {
+// employeeRoute is GET /connect/employees/{id}, the one handler for it
+// whether the fake serves runs (ServeRuns), staff and pay (NewTeam) or
+// both: a run's worker first, then the Team's employee.
+func (f *Fake) employeeRoute(w http.ResponseWriter, req *http.Request, c *Conn) {
+	if f.workerRoute(w, req, c) {
+		return
+	}
+	if t, ok := teams.Load(f); ok {
+		t.(*Team).serve(w, req, c)
+		return
+	}
+	writeErr(w, http.StatusNotFound, "NOT_FOUND", "no such employee")
+}
+
+// workerRoute answers for one employee as a run's page names them, and
+// says whether it did.
+func (f *Fake) workerRoute(w http.ResponseWriter, req *http.Request, c *Conn) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !has(c, "employees:read") {
 		writeErr(w, http.StatusForbidden, "SCOPE_REQUIRED", "this connection needs employees:read")
-		return
+		return true
 	}
 	id := strings.TrimPrefix(req.URL.Path, "/api/v1/connect/employees/")
 	for _, x := range f.rs().workers {
@@ -186,10 +201,10 @@ func (f *Fake) workerRoute(w http.ResponseWriter, req *http.Request, c *Conn) {
 			}
 			writeData(w, http.StatusOK, map[string]any{"employee": map[string]any{"id": x.ID, "first_name": x.First, "last_name": x.Last, "email": "", "phone": "",
 				"department": "", "status": status, "employment_type": "SALARIED", "start_date": "2026-01-01", "pay_method": method}})
-			return
+			return true
 		}
 	}
-	writeErr(w, http.StatusNotFound, "NOT_FOUND", "no such employee")
+	return false
 }
 
 // Flush sends the events queued since the last Flush, in order, to the

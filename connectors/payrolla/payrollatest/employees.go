@@ -80,6 +80,10 @@ func NewTeam(f *Fake) *Team {
 	if got, loaded := teams.LoadOrStore(f, t); loaded {
 		return got.(*Team)
 	}
+	// One employee is read through the fake's one handler for it, which
+	// also knows a run's workers (ServeRuns); registered first, as the
+	// first matching prefix serves.
+	f.Handle(http.MethodGet, "/connect/employees/", f.employeeRoute)
 	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPatch} {
 		f.Handle(m, "/connect/employees", t.serve)
 		f.Handle(m, "/connect/bank-changes", t.serve)

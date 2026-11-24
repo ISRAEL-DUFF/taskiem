@@ -51,8 +51,10 @@ func newPayrollaWorld(t *testing.T) *payrollaWorld {
 	t.Cleanup(edge.Close)
 	w.srv.Remote = &remote.Reconciler{Pool: w.env.DB.App, Vault: w.env.Vault, Registry: w.env.Registry, Egress: &egress.Guard{Blocked: func(netip.Addr) bool { return false }},
 		HooksURL: edge.URL + "/hooks", Check: time.Nanosecond}
-	// The company's runs (none yet), and this month's run (P4b-3).
+	// The company's runs (none yet), and this month's run (P4b-3); staff
+	// and pay (P4b-2), whose tests take the same Team with NewTeam.
 	f.ServeRuns()
+	payrollatest.NewTeam(f)
 	return &payrollaWorld{waWorld: w, fake: f}
 }
 
