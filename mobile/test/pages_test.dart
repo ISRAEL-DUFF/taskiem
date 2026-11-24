@@ -205,6 +205,53 @@ void main() {
     expect(find.textContaining('from a starter'), findsOneWidget);
   });
 
+  // G5: a list of the business's saved things of a kind (Generators), in
+  // the order their date comes, each saying when, a private value masked
+  // as the server sent it; drawn as any list.
+  testWidgets('A page of saved things: in the order their date comes, each saying when', (t) async {
+    phone(t, 760);
+    final api = _Api();
+    api.routes['GET /v1/pages/generators/view'] = (_) => {
+      'page': _summary('generators', 'Generators'),
+      'draft': false,
+      'can_edit': false,
+      'drawn_at': '2026-11-24T10:00:00Z',
+      'filters': <Object>[],
+      'blocks': [
+        {'id': 'soon', 'type': 'figure', 'label': 'Due within a week', 'value': 2, 'shown': '2', 'tone': 'warn', 'lead': true, 'naira': false},
+        {
+          'id': 'list',
+          'type': 'list',
+          'title': 'Generators',
+          'size': 'full',
+          'empty': 'None saved yet',
+          'has_detail': true,
+          'count': 3,
+          'more': null,
+          'rows': [
+            {'id': '01a2-office', 'title': 'Office gen', 'sub': '5kVA · ••7766', 'state': {'text': '2 days ago', 'tone': 'bad'},
+              'detail': {'title': 'Office gen', 'lines': [{'label': 'Serial', 'value': '••7766'}, {'label': 'Next service', 'value': '22 Nov 2026'}]}},
+            {'id': '01a2-yard', 'title': 'Yard gen', 'sub': '60kVA · ••4411', 'state': {'text': 'In 3 days', 'tone': 'warn'},
+              'detail': {'title': 'Yard gen', 'lines': [{'label': 'Serial', 'value': '••4411'}, {'label': 'Next service', 'value': '27 Nov 2026'}]}},
+            {'id': '01a2-spare', 'title': 'Spare gen', 'sub': '2kVA', 'state': {'text': 'On 24 Jan 2027', 'tone': 'plain'},
+              'detail': {'title': 'Spare gen', 'lines': [{'label': 'Next service', 'value': '24 Jan 2027'}]}},
+          ],
+        },
+      ],
+    };
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'generators', backLabel: 'Back to Pages')));
+    await settle(t);
+    expect(find.text('Office gen'), findsOneWidget);
+    expect(find.text('2 days ago'), findsOneWidget);
+    expect(find.text('In 3 days'), findsOneWidget);
+    expect(find.textContaining('7766'), findsOneWidget);
+    expect(t.getTopLeft(find.text('Office gen')).dy, lessThan(t.getTopLeft(find.text('Yard gen')).dy));
+    await looks(t, 'page-saved');
+    await t.tap(find.text('Yard gen'));
+    await settle(t);
+    expect(find.text('27 Nov 2026'), findsOneWidget);
+  });
+
   testWidgets('A page: its figures, a list in groups, a table as rows, a row’s card, filters sent', (t) async {
     phone(t, 1500);
     final api = _Api();
