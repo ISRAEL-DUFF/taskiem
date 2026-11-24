@@ -1954,6 +1954,18 @@ class TaskiemApi {
     await _t.send('PUT', '/v1/tools/${Uri.encodeComponent(command)}/settings', body: body.toJson());
   }
 
+  /// List templates (`GET /v1/templates`)
+  Future<TemplateList> listTemplates({String? q, String? category, String? callable, String? tool}) async {
+    final j = await _t.send('GET', '/v1/templates', query: {'q': ?q, 'category': ?category, 'callable': ?callable, 'tool': ?tool});
+    return TemplateList.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Create a workflow from a template (`POST /v1/templates/{id}/instantiate`)
+  Future<TemplateInstantiated> instantiateTemplate({required InstantiateRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/templates/${Uri.encodeComponent(id)}/instantiate', body: body.toJson());
+    return TemplateInstantiated.fromJson(j as Map<String, dynamic>);
+  }
+
   /// What a scanned code can start (`GET /v1/scan/offers`)
   Future<ScanOffersResponse> scanOffers({String? format, String? environment}) async {
     final j = await _t.send('GET', '/v1/scan/offers', query: {'format': ?format, 'environment': ?environment});
@@ -17034,6 +17046,577 @@ class SetToolSettingsRequest {
   Map<String, dynamic> toJson() => {
         'always_ask': alwaysAsk,
         'environment': ?environment,
+      };
+}
+
+class TemplateList {
+  const TemplateList({required this.templates});
+
+  final List<Template> templates;
+
+  factory TemplateList.fromJson(Map<String, dynamic> j) => TemplateList(
+        templates: (j['templates'] as List).map((e) => Template.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'templates': templates.map((e) => e.toJson()).toList(),
+      };
+}
+
+class Template {
+  const Template({required this.available, this.callable, required this.category, required this.connectors, this.definition, required this.description, required this.id, this.needsDeveloper, required this.params, this.product, this.services, required this.steps, required this.summary, this.supersededBy, this.tables, required this.tags, required this.title, this.tool, required this.variables});
+
+  /// Whether every connector it uses is available here.
+  final bool available;
+  /// For a template another workflow can use as a step (decision 0047), its
+  /// interface.
+  final TemplateCallable? callable;
+  final String category;
+  final List<String> connectors;
+  /// The template's definition, with placeholders (one template only).
+  final Object? definition;
+  final String description;
+  final String id;
+  /// It starts from a web address another system calls (a webhook), which takes
+  /// someone technical to set up.
+  final bool? needsDeveloper;
+  final List<TemplateParam> params;
+  /// The product the template works around (payrolla); the Start page offers it
+  /// to organisations that connected the product, and retrieval only for goals
+  /// that name it.
+  final String? product;
+  /// The services the template works with that an organisation connects, each
+  /// the connectors that serve it, any one of which will do (the books are
+  /// QuickBooks or Zoho Books); the Start page offers the template, first, once
+  /// each is connected.
+  final List<List<String>>? services;
+  /// The workflow in plain words, filled with the example values.
+  final List<TemplateStepsItem> steps;
+  final String summary;
+  /// The template that replaces this one; it is no longer listed, and workflows
+  /// made from it are offered the upgrade.
+  final String? supersededBy;
+  /// The data tables the workflow works on; made for the organisation when the
+  /// template is used if they do not exist yet.
+  final List<TemplateTable>? tables;
+  final List<String> tags;
+  final String title;
+  /// For a recipe (made tools §13), the tool it makes, used from the chat.
+  final TemplateTool? tool;
+  final List<TemplateNeed> variables;
+
+  factory Template.fromJson(Map<String, dynamic> j) => Template(
+        available: j['available'] as bool,
+        callable: j['callable'] == null ? null : TemplateCallable.fromJson(j['callable'] as Map<String, dynamic>),
+        category: j['category'] as String,
+        connectors: (j['connectors'] as List).map((e) => e as String).toList(),
+        definition: j['definition'],
+        description: j['description'] as String,
+        id: j['id'] as String,
+        needsDeveloper: j['needs_developer'] == null ? null : j['needs_developer'] as bool,
+        params: (j['params'] as List).map((e) => TemplateParam.fromJson(e as Map<String, dynamic>)).toList(),
+        product: j['product'] == null ? null : j['product'] as String,
+        services: j['services'] == null ? null : (j['services'] as List).map((e) => (e as List).map((e) => e as String).toList()).toList(),
+        steps: (j['steps'] as List).map((e) => TemplateStepsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        summary: j['summary'] as String,
+        supersededBy: j['superseded_by'] == null ? null : j['superseded_by'] as String,
+        tables: j['tables'] == null ? null : (j['tables'] as List).map((e) => TemplateTable.fromJson(e as Map<String, dynamic>)).toList(),
+        tags: (j['tags'] as List).map((e) => e as String).toList(),
+        title: j['title'] as String,
+        tool: j['tool'] == null ? null : TemplateTool.fromJson(j['tool'] as Map<String, dynamic>),
+        variables: (j['variables'] as List).map((e) => TemplateNeed.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available': available,
+        'callable': ?callable?.toJson(),
+        'category': category,
+        'connectors': connectors.map((e) => e).toList(),
+        'definition': ?definition,
+        'description': description,
+        'id': id,
+        'needs_developer': ?needsDeveloper,
+        'params': params.map((e) => e.toJson()).toList(),
+        'product': ?product,
+        'services': ?services?.map((e) => e.map((e) => e).toList()).toList(),
+        'steps': steps.map((e) => e.toJson()).toList(),
+        'summary': summary,
+        'superseded_by': ?supersededBy,
+        'tables': ?tables?.map((e) => e.toJson()).toList(),
+        'tags': tags.map((e) => e).toList(),
+        'title': title,
+        'tool': ?tool?.toJson(),
+        'variables': variables.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// For a template another workflow can use as a step (decision 0047), its
+/// interface.
+class TemplateCallable {
+  const TemplateCallable({required this.effect, required this.inputs, required this.outputs, required this.params});
+
+  /// What the template does at most, computed from its steps.
+  final TemplateCallableEffect effect;
+  /// The run inputs a template step gives, as a JSON Schema.
+  final Map<String, dynamic> inputs;
+  /// What the step's output holds, by name.
+  final List<TemplateCallableOutputsItem> outputs;
+  /// The parameters a template step fills (those only the template's trigger
+  /// uses are left out).
+  final List<String> params;
+
+  factory TemplateCallable.fromJson(Map<String, dynamic> j) => TemplateCallable(
+        effect: TemplateCallableEffect.fromJson(j['effect'] as Map<String, dynamic>),
+        inputs: j['inputs'] as Map<String, dynamic>,
+        outputs: (j['outputs'] as List).map((e) => TemplateCallableOutputsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        params: (j['params'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'effect': effect.toJson(),
+        'inputs': inputs,
+        'outputs': outputs.map((e) => e.toJson()).toList(),
+        'params': params.map((e) => e).toList(),
+      };
+}
+
+/// What the template does at most, computed from its steps.
+class TemplateCallableEffect {
+  const TemplateCallableEffect({required this.class_, this.timeout, required this.waitsForEvent, required this.waitsForPerson});
+
+  final String class_;
+  /// The template's run timeout.
+  final String? timeout;
+  final bool waitsForEvent;
+  final bool waitsForPerson;
+
+  factory TemplateCallableEffect.fromJson(Map<String, dynamic> j) => TemplateCallableEffect(
+        class_: j['class'] as String,
+        timeout: j['timeout'] == null ? null : j['timeout'] as String,
+        waitsForEvent: j['waits_for_event'] as bool,
+        waitsForPerson: j['waits_for_person'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'class': class_,
+        'timeout': ?timeout,
+        'waits_for_event': waitsForEvent,
+        'waits_for_person': waitsForPerson,
+      };
+}
+
+class TemplateCallableOutputsItem {
+  const TemplateCallableOutputsItem({required this.description, required this.name, required this.title, required this.type, required this.value});
+
+  final String description;
+  final String name;
+  final String title;
+  final String type;
+  /// The expression over the template's own steps that fills it.
+  final String value;
+
+  factory TemplateCallableOutputsItem.fromJson(Map<String, dynamic> j) => TemplateCallableOutputsItem(
+        description: j['description'] as String,
+        name: j['name'] as String,
+        title: j['title'] as String,
+        type: j['type'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'description': description,
+        'name': name,
+        'title': title,
+        'type': type,
+        'value': value,
+      };
+}
+
+class TemplateParam {
+  const TemplateParam({this.capability, this.choices, this.connector, this.default_, required this.description, this.enum_, this.example, this.from, this.maxLength, this.maximum, this.minimum, required this.name, this.pattern, this.picker, required this.required, required this.title, required this.type});
+
+  /// For a connection parameter instead of connector, the capabilities its rail
+  /// must have (pay_bank); any rail that can is offered, and an empty value is
+  /// the only one that can.
+  final List<String>? capability;
+  /// With picker choice, the connector's picker it lists from
+  /// (mailchimp:audiences), through GET /v1/connections/choices.
+  final String? choices;
+  /// For a connection parameter, the connector it is for.
+  final String? connector;
+  final Object? default_;
+  final String description;
+  final List<String>? enum_;
+  final Object? example;
+  /// The parameter the picker depends on (a tab's spreadsheet, a column's
+  /// table, a language's template, a choice's connection).
+  final String? from;
+  final int? maxLength;
+  final double? maximum;
+  final double? minimum;
+  final String name;
+  final String? pattern;
+  /// How the value is chosen instead of typed.
+  final String? picker;
+  final bool required;
+  final String title;
+  /// command is a recipe's tool's word after / (made tools §13), written as a
+  /// command (Add Sale is add-sale); installing gives the next free one when it
+  /// is taken.
+  final String type;
+
+  factory TemplateParam.fromJson(Map<String, dynamic> j) => TemplateParam(
+        capability: j['capability'] == null ? null : (j['capability'] as List).map((e) => e as String).toList(),
+        choices: j['choices'] == null ? null : j['choices'] as String,
+        connector: j['connector'] == null ? null : j['connector'] as String,
+        default_: j['default'],
+        description: j['description'] as String,
+        enum_: j['enum'] == null ? null : (j['enum'] as List).map((e) => e as String).toList(),
+        example: j['example'],
+        from: j['from'] == null ? null : j['from'] as String,
+        maxLength: j['max_length'] == null ? null : (j['max_length'] as num).toInt(),
+        maximum: j['maximum'] == null ? null : (j['maximum'] as num).toDouble(),
+        minimum: j['minimum'] == null ? null : (j['minimum'] as num).toDouble(),
+        name: j['name'] as String,
+        pattern: j['pattern'] == null ? null : j['pattern'] as String,
+        picker: j['picker'] == null ? null : j['picker'] as String,
+        required: j['required'] as bool,
+        title: j['title'] as String,
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'capability': ?capability?.map((e) => e).toList(),
+        'choices': ?choices,
+        'connector': ?connector,
+        'default': ?default_,
+        'description': description,
+        'enum': ?enum_?.map((e) => e).toList(),
+        'example': ?example,
+        'from': ?from,
+        'max_length': ?maxLength,
+        'maximum': ?maximum,
+        'minimum': ?minimum,
+        'name': name,
+        'pattern': ?pattern,
+        'picker': ?picker,
+        'required': required,
+        'title': title,
+        'type': type,
+      };
+}
+
+class TemplateStepsItem {
+  const TemplateStepsItem({required this.depth, required this.number, required this.text});
+
+  final int depth;
+  final String number;
+  final String text;
+
+  factory TemplateStepsItem.fromJson(Map<String, dynamic> j) => TemplateStepsItem(
+        depth: (j['depth'] as num).toInt(),
+        number: j['number'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'depth': depth,
+        'number': number,
+        'text': text,
+      };
+}
+
+class TemplateTable {
+  const TemplateTable({required this.columns, this.description, required this.name, this.title});
+
+  final List<TemplateTableColumnsItem> columns;
+  final String? description;
+  /// The table's name, or a `{{parameter}}` marker naming the parameter that
+  /// chooses it.
+  final String name;
+  final String? title;
+
+  factory TemplateTable.fromJson(Map<String, dynamic> j) => TemplateTable(
+        columns: (j['columns'] as List).map((e) => TemplateTableColumnsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        description: j['description'] == null ? null : j['description'] as String,
+        name: j['name'] as String,
+        title: j['title'] == null ? null : j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'columns': columns.map((e) => e.toJson()).toList(),
+        'description': ?description,
+        'name': name,
+        'title': ?title,
+      };
+}
+
+class TemplateTableColumnsItem {
+  const TemplateTableColumnsItem({required this.name, this.personal, this.required, this.title, required this.type});
+
+  final String name;
+  final bool? personal;
+  final bool? required;
+  final String? title;
+  final String type;
+
+  factory TemplateTableColumnsItem.fromJson(Map<String, dynamic> j) => TemplateTableColumnsItem(
+        name: j['name'] as String,
+        personal: j['personal'] == null ? null : j['personal'] as bool,
+        required: j['required'] == null ? null : j['required'] as bool,
+        title: j['title'] == null ? null : j['title'] as String,
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'personal': ?personal,
+        'required': ?required,
+        'title': ?title,
+        'type': type,
+      };
+}
+
+/// For a recipe (made tools §13), the tool it makes, used from the chat.
+class TemplateTool {
+  const TemplateTool({required this.about, required this.answer, required this.care, required this.command, this.companion, required this.for_, this.icon, required this.name});
+
+  final String about;
+  /// What it says back; empty when it only says it ran.
+  final String answer;
+  /// How much it asks before it runs, worked out from its steps.
+  final String care;
+  /// The word it is called by unless another is chosen at install.
+  final String command;
+  /// The schedule installed beside it (the daily report, watch and act), whose
+  /// button opens the tool.
+  final String? companion;
+  final String for_;
+  final String? icon;
+  final String name;
+
+  factory TemplateTool.fromJson(Map<String, dynamic> j) => TemplateTool(
+        about: j['about'] as String,
+        answer: j['answer'] as String,
+        care: j['care'] as String,
+        command: j['command'] as String,
+        companion: j['companion'] == null ? null : j['companion'] as String,
+        for_: j['for'] as String,
+        icon: j['icon'] == null ? null : j['icon'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'about': about,
+        'answer': answer,
+        'care': care,
+        'command': command,
+        'companion': ?companion,
+        'for': for_,
+        'icon': ?icon,
+        'name': name,
+      };
+}
+
+class TemplateNeed {
+  const TemplateNeed({this.connector, required this.name, required this.why});
+
+  final String? connector;
+  /// A variable (or connection) the workflow reads.
+  final String name;
+  final String why;
+
+  factory TemplateNeed.fromJson(Map<String, dynamic> j) => TemplateNeed(
+        connector: j['connector'] == null ? null : j['connector'] as String,
+        name: j['name'] as String,
+        why: j['why'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'connector': ?connector,
+        'name': name,
+        'why': why,
+      };
+}
+
+class InstantiateRequest {
+  const InstantiateRequest({this.name, this.params});
+
+  /// The workflow's name; the template's title when empty.
+  final String? name;
+  /// The parameters' values, by name.
+  final Map<String, dynamic>? params;
+
+  factory InstantiateRequest.fromJson(Map<String, dynamic> j) => InstantiateRequest(
+        name: j['name'] == null ? null : j['name'] as String,
+        params: j['params'] == null ? null : j['params'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': ?name,
+        'params': ?params,
+      };
+}
+
+class TemplateInstantiated {
+  const TemplateInstantiated({required this.id, required this.problems, required this.state, this.tables, required this.template, this.tool, this.variables, required this.version});
+
+  /// The new workflow.
+  final String id;
+  final List<Problem> problems;
+  final String state;
+  /// What became of each data table the template declares.
+  final List<TemplateInstantiatedTablesItem>? tables;
+  final String template;
+  /// For a recipe (made tools §13), the command its tool was given, the next
+  /// free one when the one asked for was taken, and the schedule installed
+  /// beside it.
+  final TemplateInstantiatedTool? tool;
+  /// Variables to set before it runs.
+  final List<TemplateNeed>? variables;
+  final int version;
+
+  factory TemplateInstantiated.fromJson(Map<String, dynamic> j) => TemplateInstantiated(
+        id: j['id'] as String,
+        problems: (j['problems'] as List).map((e) => Problem.fromJson(e as Map<String, dynamic>)).toList(),
+        state: j['state'] as String,
+        tables: j['tables'] == null ? null : (j['tables'] as List).map((e) => TemplateInstantiatedTablesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        template: j['template'] as String,
+        tool: j['tool'] == null ? null : TemplateInstantiatedTool.fromJson(j['tool'] as Map<String, dynamic>),
+        variables: j['variables'] == null ? null : (j['variables'] as List).map((e) => TemplateNeed.fromJson(e as Map<String, dynamic>)).toList(),
+        version: (j['version'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'problems': problems.map((e) => e.toJson()).toList(),
+        'state': state,
+        'tables': ?tables?.map((e) => e.toJson()).toList(),
+        'template': template,
+        'tool': ?tool?.toJson(),
+        'variables': ?variables?.map((e) => e.toJson()).toList(),
+        'version': version,
+      };
+}
+
+class Problem {
+  const Problem({this.fix, required this.message, required this.path, this.plain});
+
+  /// Where it is put right, as a web app path
+  /// (`/connections?connect=paystack`), or `#step=<id>` for the step in the
+  /// editor.
+  final ProblemFix? fix;
+  final String message;
+  /// JSON pointer into the definition, e.g. `/steps/2/needs`.
+  final String path;
+  /// The problem in plain words for a business owner, naming the step by its
+  /// name.
+  final String? plain;
+
+  factory Problem.fromJson(Map<String, dynamic> j) => Problem(
+        fix: j['fix'] == null ? null : ProblemFix.fromJson(j['fix'] as Map<String, dynamic>),
+        message: j['message'] as String,
+        path: j['path'] as String,
+        plain: j['plain'] == null ? null : j['plain'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fix': ?fix?.toJson(),
+        'message': message,
+        'path': path,
+        'plain': ?plain,
+      };
+}
+
+/// Where it is put right, as a web app path (`/connections?connect=paystack`),
+/// or `#step=<id>` for the step in the editor.
+class ProblemFix {
+  const ProblemFix({this.label, this.path});
+
+  final String? label;
+  final String? path;
+
+  factory ProblemFix.fromJson(Map<String, dynamic> j) => ProblemFix(
+        label: j['label'] == null ? null : j['label'] as String,
+        path: j['path'] == null ? null : j['path'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': ?label,
+        'path': ?path,
+      };
+}
+
+class TemplateInstantiatedTablesItem {
+  const TemplateInstantiatedTablesItem({this.error, this.missing, required this.name, required this.status});
+
+  final String? error;
+  /// The columns a table that exists already lacks, which the workflow uses.
+  final List<String>? missing;
+  final String name;
+  final String status;
+
+  factory TemplateInstantiatedTablesItem.fromJson(Map<String, dynamic> j) => TemplateInstantiatedTablesItem(
+        error: j['error'] == null ? null : j['error'] as String,
+        missing: j['missing'] == null ? null : (j['missing'] as List).map((e) => e as String).toList(),
+        name: j['name'] as String,
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'error': ?error,
+        'missing': ?missing?.map((e) => e).toList(),
+        'name': name,
+        'status': status,
+      };
+}
+
+/// For a recipe (made tools §13), the command its tool was given, the next
+/// free one when the one asked for was taken, and the schedule installed beside
+/// it.
+class TemplateInstantiatedTool {
+  const TemplateInstantiatedTool({required this.asked, required this.changed, required this.command, this.companion});
+
+  final String asked;
+  /// The command asked for was taken (one of Taskiem's own words, or another
+  /// tool's), so it was given the next free one.
+  final bool changed;
+  final String command;
+  /// The schedule installed as its own draft workflow, whose button opens the
+  /// tool.
+  final TemplateInstantiatedToolCompanion? companion;
+
+  factory TemplateInstantiatedTool.fromJson(Map<String, dynamic> j) => TemplateInstantiatedTool(
+        asked: j['asked'] as String,
+        changed: j['changed'] as bool,
+        command: j['command'] as String,
+        companion: j['companion'] == null ? null : TemplateInstantiatedToolCompanion.fromJson(j['companion'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'asked': asked,
+        'changed': changed,
+        'command': command,
+        'companion': ?companion?.toJson(),
+      };
+}
+
+/// The schedule installed as its own draft workflow, whose button opens the
+/// tool.
+class TemplateInstantiatedToolCompanion {
+  const TemplateInstantiatedToolCompanion({required this.id, required this.name});
+
+  final String id;
+  final String name;
+
+  factory TemplateInstantiatedToolCompanion.fromJson(Map<String, dynamic> j) => TemplateInstantiatedToolCompanion(
+        id: j['id'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
       };
 }
 

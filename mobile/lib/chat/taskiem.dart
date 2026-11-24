@@ -52,6 +52,7 @@ import 'payments_page.dart' show SentPaymentsPage;
 import 'pay_diary.dart' show PayChatCard, PayDiaryLine;
 import 'payroll_page.dart' show PayrollPage;
 import 'pages_page.dart' show PagesPage, openPage;
+import 'recipes.dart' show openRecipes;
 import 'saved_accounts.dart' show SavedAccountsPage;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'purchases_page.dart' show openPurchase;
@@ -765,6 +766,9 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       if (d.briefs) (key: 'briefing', title: 'Briefing', icon: 'sparkle', line: "Today's numbers", onPick: () => pick(() => _showBriefing(d))),
       // Tasks, given and done: the Tasks screen.
       (key: 'tasks', title: 'Tasks', icon: 'check', line: 'To do, and given', onPick: () => pick(() => openTasks(context, d.chats.auth))),
+      // Ready-made tools (made tools §13): recipes to add, for builders.
+      if (can('workflow.edit'))
+        (key: 'recipes', title: 'Add a tool', icon: 'plus', line: 'Ready-made', onPick: () => pick(() => unawaited(openRecipes(context, d.chats.auth, backLabel: 'Back to Taskiem')))),
       // Clocking in and out, as "in" and "out" are said: for staff.
       if (!can('member.manage')) ...[
         (key: 'clock-in', title: 'Clock in', icon: 'clock', line: 'Start your shift', onPick: () => pick(() => d.say(text: 'in'))),

@@ -413,6 +413,9 @@ confirmTool
 holdToolFile
 getRunAnswer
 setToolSettings
+# Recipes: templates that make a tool, installed from the app (build plan M6)
+listTemplates
+instantiateTemplate
 # A code scanned from the home screen (device fields D2)
 scanOffers
 
