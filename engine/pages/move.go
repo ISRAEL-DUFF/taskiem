@@ -363,6 +363,9 @@ func Missing(p *Page, tables []datatables.Table, areaOn func(area string) bool) 
 		}
 	}
 	for _, name := range names {
+		if IsSaved(name) {
+			continue // a kind the business lacks is Check's to say
+		}
 		if view, ok := strings.CutPrefix(name, RecordsPrefix); ok {
 			v, known := RecordViewNamed(view)
 			switch {

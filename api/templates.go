@@ -340,7 +340,7 @@ func (s *Server) recipeCommandTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 		return nil, nil, templates.ErrParams{{Param: cp.Name, Message: err.Error()}}
 	}
 	base := asked.(string)
-	given, err := s.freeToolCommandTx(ctx, tx, tenant, base, uuid.Nil)
+	given, err := s.freeToolCommandTx(ctx, tx, tenant, base, uuid.Nil, nil)
 	if err != nil {
 		if errors.Is(err, errCommandsTaken) {
 			return nil, nil, templates.ErrParams{{Param: cp.Name, Message: "is taken; choose another word"}}
@@ -362,13 +362,14 @@ var errCommandsTaken = errors.New("every command made from the word is taken")
 // (review M6, 3). except is the workflow the tool is for, whose own
 // versions may keep their word. A lock per business holds from the check
 // to the transaction's end, so two installs at once get two words (review
-// M6, 5).
-func (s *Server) freeToolCommandTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, base string, except uuid.UUID) (string, error) {
+// M6, 5). also are words already given out in the same change (a
+// starter's or a described page's other tools).
+func (s *Server) freeToolCommandTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, base string, except uuid.UUID, also []string) (string, error) {
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':tool-command', 0))`, tenant.String()); err != nil {
 		return "", err
 	}
 	taken := func(c string) (bool, error) {
-		if wdcheck.ReservedCommand(c) {
+		if wdcheck.ReservedCommand(c) || slices.Contains(also, c) {
 			return true, nil
 		}
 		var used bool

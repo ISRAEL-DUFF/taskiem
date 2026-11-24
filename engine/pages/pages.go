@@ -171,12 +171,19 @@ type Source struct {
 	// Tool is a made tool's command, Inputs its values (words, or an
 	// expression over filters), Output the output a figure shows or a
 	// list lists.
-	Tool    string         `json:"tool,omitempty"`
-	Inputs  map[string]any `json:"inputs,omitempty"`
-	Output  string         `json:"output,omitempty"`
-	Filters []Condition    `json:"filters,omitempty"`
-	Order   []Order        `json:"order,omitempty"`
-	Uses    []string       `json:"uses,omitempty"`
+	Tool   string         `json:"tool,omitempty"`
+	Inputs map[string]any `json:"inputs,omitempty"`
+	Output string         `json:"output,omitempty"`
+	// Saved is a kind the business made, by name: its saved things are
+	// the rows (G5, saved.go). Coming names one of their dates, which
+	// orders them, soonest first; Within keeps those coming within so
+	// many days.
+	Saved   string      `json:"saved,omitempty"`
+	Coming  string      `json:"coming,omitempty"`
+	Within  int         `json:"within,omitempty"`
+	Filters []Condition `json:"filters,omitempty"`
+	Order   []Order     `json:"order,omitempty"`
+	Uses    []string    `json:"uses,omitempty"`
 }
 
 // Condition is one condition every row shown meets.
@@ -608,18 +615,33 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 		return
 	}
 	s := b.Source
-	if s == nil || (s.Table == "" && s.Records == "" && s.Tool == "") {
+	if s == nil || (s.Table == "" && s.Records == "" && s.Tool == "" && s.Saved == "") {
 		ps.add(at+"/source", "%s needs the table it shows.", name)
 		return
 	}
 	n := 0
-	for _, x := range []string{s.Table, s.Records, s.Tool} {
+	for _, x := range []string{s.Table, s.Records, s.Tool, s.Saved} {
 		if x != "" {
 			n++
 		}
 	}
 	if n > 1 {
-		ps.add(at+"/source", "%s shows one table, Taskiem's own records or a tool's answer: one of them.", name)
+		ps.add(at+"/source", "%s shows one table, Taskiem's own records, a tool's answer or saved things: one of them.", name)
+	}
+	if s.Saved == "" && (s.Coming != "" || s.Within != 0) {
+		ps.add(at+"/source", "%s: only saved things are put in the order a date of theirs comes.", name)
+	}
+	if s.Saved != "" {
+		b.parseSaved(at, name, ps)
+		for j, u := range s.Uses {
+			if _, ok := filters[u]; !ok {
+				ps.add(fmt.Sprintf("%s/source/uses/%d", at, j), "%s uses a filter the page does not have: %s.", name, u)
+			}
+		}
+		if b.Type == "figure" && len(s.Uses) > 0 {
+			ps.add(at+"/source/uses", "%s counts every one: the page's filters narrow its lists and tables only.", name)
+		}
+		return
 	}
 	if s.Records != "" && (b.Type == "board" || b.Type == "chart") {
 		ps.add(at+"/source/records", "%s shows one of the business's own tables or a tool's answer, not Taskiem's own records.", name)

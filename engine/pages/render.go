@@ -850,6 +850,10 @@ func Shows(p *Page, tables []datatables.Table) []string {
 		}
 		out = append(out, line)
 	}
+	// Saved things of a kind (G5): "Saved Generator things, as their list shows them".
+	for _, k := range p.SavedKinds() {
+		out = append(out, "Saved "+k+" things, as the business's list shows them (what is kept private masked)")
+	}
 	// What tools work out for it (G2): "/spend's answer: total, rows".
 	var tools []string
 	outs := map[string][]string{}

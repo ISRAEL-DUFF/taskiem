@@ -1,0 +1,38 @@
+{
+  "id": "tickets-desk",
+  "title": "Tickets desk",
+  "about": "Tickets on a board by where each one is, with how many are open, and a button to add one.",
+  "icon": "check",
+  "tables": [
+    {"name": "tickets", "title": "Tickets", "columns": [
+      {"name": "title", "title": "Title", "type": "text", "required": true},
+      {"name": "customer", "title": "Customer", "type": "text"},
+      {"name": "email", "title": "Email", "type": "email"},
+      {"name": "priority", "title": "Priority", "type": "text"},
+      {"name": "status", "title": "Status", "type": "text"}]}
+  ],
+  "tools": [
+    {"command": "new-ticket", "name": "New ticket", "about": "Adds a ticket, open", "kind": "add", "table": "tickets",
+     "asks": ["title", "customer", "email", "priority"], "sets": {"status": "open"}, "icon": "list"},
+    {"command": "move-ticket", "name": "Move a ticket", "about": "Moves a ticket to open, doing or done", "kind": "change", "table": "tickets",
+     "asks": ["status"], "icon": "check"}
+  ],
+  "page": {"page": "page/v1", "name": "tickets", "title": "Tickets", "icon": "check", "about": "Every ticket, by where it is",
+    "filters": [{"id": "q", "type": "search", "columns": ["title", "customer"]}],
+    "blocks": [
+      {"id": "open", "type": "figure", "label": "Open", "value": "count", "tone": "warn", "lead": true,
+       "source": {"table": "tickets", "filters": [{"column": "status", "op": "eq", "value": "open"}]}},
+      {"id": "doing", "type": "figure", "label": "Doing", "value": "count",
+       "source": {"table": "tickets", "filters": [{"column": "status", "op": "eq", "value": "doing"}]}},
+      {"id": "done", "type": "figure", "label": "Done", "value": "count", "tone": "good",
+       "source": {"table": "tickets", "filters": [{"column": "status", "op": "eq", "value": "done"}]}},
+      {"id": "new", "type": "buttons", "actions": [{"label": "New ticket", "tool": "new-ticket"}]},
+      {"id": "board", "type": "board", "title": "Tickets",
+       "source": {"table": "tickets", "order": [{"column": "created_at", "desc": true}], "uses": ["q"]},
+       "item": {"title": "=row.title", "sub": "=row.customer", "state": {"text": "=row.priority", "tones": {"high": "bad", "low": "plain"}}},
+       "board": {"column": "status", "columns": [{"value": "open", "label": "Open"}, {"value": "doing", "label": "Doing"}, {"value": "done", "label": "Done"}],
+         "move": {"label": "Move", "tool": "move-ticket", "inputs": {"ref": "=row.id", "status": "=to"}}},
+       "detail": {"title": "=row.title", "lines": [{"label": "Customer", "value": "=row.customer"}, {"label": "Priority", "value": "=row.priority"}, {"label": "Opened", "value": "=row.created_at"}]},
+       "empty": "No tickets here"}
+    ]}
+}

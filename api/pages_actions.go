@@ -63,6 +63,7 @@ var pageToolWait = 3 * time.Second
 // pageEnvTools fills env's tools and workflows: what a page's buttons and
 // tool sources are checked against.
 func pageEnvTools(ctx context.Context, s *Server, tx pgx.Tx, env *pages.Env) {
+	pageEnvSaved(ctx, tx, env) // the business's kinds of saved things (pages_saved.go)
 	env.Tool = func(command string) (pages.ToolInfo, bool) {
 		_, info, ok := pageToolInfo(ctx, s, tx, command)
 		return info, ok
@@ -733,6 +734,9 @@ func (s *Server) pageRowAct(ctx context.Context, pc *pageCtx, b pages.Block, row
 			return nil, gone
 		}
 		return pages.ToolAct(got.outputs, item, pc.values), nil
+	}
+	if b.Source.Saved != "" {
+		return s.savedRowAct(ctx, pc, b, row) // pages_saved.go
 	}
 	t := pc.table(b)
 	read, err := pc.page.ReadFor(b, t, pc.values, nil)

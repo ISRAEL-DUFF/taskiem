@@ -729,7 +729,7 @@ func (s *Server) aiGetBuild(w http.ResponseWriter, r *http.Request) {
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var sealed any
 		if err := tx.QueryRow(r.Context(), `SELECT id, status, stage, error, goal, goal_sealed, workflow_id, environment, provider, model, proposal, actor, created_at,
-			finished_at, saved_workflow_id, saved_version, template_id, channel FROM ai_builds WHERE id = $1`, id).
+			finished_at, saved_workflow_id, saved_version, template_id, channel FROM ai_builds WHERE id = $1 AND kind = 'workflow'`, id).
 			Scan(&v.ID, &v.Status, &v.Stage, &v.Error, &v.Goal, &sealed, &v.Workflow, &v.Environment, &v.Provider, &v.Model, &prop, &v.CreatedBy,
 				&v.CreatedAt, &v.FinishedAt, &v.SavedWorkflowID, &v.SavedVersion, &v.TemplateID, &v.Channel); err != nil {
 			return err
@@ -950,7 +950,7 @@ func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 	var target *uuid.UUID
 	var templateID *string
 	var prop, base []byte
-	if err := tx.QueryRow(ctx, `SELECT status, workflow_id, proposal, model, provider, template_id, base_digest FROM ai_builds WHERE id = $1 FOR UPDATE`, id).
+	if err := tx.QueryRow(ctx, `SELECT status, workflow_id, proposal, model, provider, template_id, base_digest FROM ai_builds WHERE id = $1 AND kind = 'workflow' FOR UPDATE`, id).
 		Scan(&status, &target, &prop, &model, &provider, &templateID, &base); err != nil {
 		return wf, 0, nil, nil, err
 	}

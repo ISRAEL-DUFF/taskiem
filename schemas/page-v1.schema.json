@@ -112,16 +112,19 @@
       }
     },
     "source": {
-      "description": "A data table, a view of Taskiem's own records, or a made tool that answers at once: the rows whose conditions all hold, in an order, narrowed by the page's filters the block uses (a tool: its output, given its values).",
+      "description": "A data table, a view of Taskiem's own records, a made tool that answers at once, or the business's saved things of one made-up kind: the rows whose conditions all hold, in an order, narrowed by the page's filters the block uses (a tool: its output, given its values).",
       "type": "object",
       "additionalProperties": false,
-      "oneOf": [{ "required": ["table"] }, { "required": ["records"] }, { "required": ["tool", "output"] }],
+      "oneOf": [{ "required": ["table"] }, { "required": ["records"] }, { "required": ["tool", "output"] }, { "required": ["saved"] }],
       "properties": {
         "table": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$" },
         "records": { "description": "One of Taskiem's own record views, read only: orders, invoices, deliveries, customers or staff.", "type": "string", "pattern": "^[a-z][a-z_]{1,30}$" },
         "tool": { "description": "A made tool that answers at once, by its command (G2): the part shows one of its outputs.", "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
         "inputs": { "description": "The tool's values: words, or an expression over filters.", "type": "object", "maxProperties": 20 },
         "output": { "description": "The tool's output the part shows (a figure) or lists (a list).", "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" },
+        "saved": { "description": "The business's saved things of one kind it made (Generator), by the kind's name (G5).", "type": "string", "minLength": 1, "maxLength": 40 },
+        "coming": { "description": "Saved things: a date field's key; the things in the order that date comes, soonest first, each saying when (row.coming).", "type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+        "within": { "description": "Saved things with coming: only those whose date is within this many days, or past.", "type": "integer", "minimum": 1, "maximum": 366 },
         "filters": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/condition" } },
         "order": {
           "type": "array",

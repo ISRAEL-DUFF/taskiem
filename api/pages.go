@@ -58,6 +58,8 @@ func (s *Server) pageRoutes(r chi.Router) {
 	r.Post("/pages/{name}/refresh", s.refreshPage)                       // pages_actions.go
 	r.With(s.need(PermPageEdit)).Get("/page-records", s.listPageRecords) // pages_records.go
 	r.With(s.need(PermPageEdit)).Get("/page-choices", s.listPageChoices) // the editor's tools and workflows (pages_choices.go)
+	s.pageStarterRoutes(r)                                               // starters (pages_starters.go)
+	s.pageDescribeRoutes(r)                                              // Describe it (pages_describe.go)
 	s.pageVersionRoutes(r)                                               // versions, export and import (pages_versions.go)
 }
 
@@ -513,56 +515,19 @@ func (s *Server) publishPage(w http.ResponseWriter, r *http.Request) {
 	var refused []pages.Problem
 	var nothing bool
 	err := s.tx(r, func(tx pgx.Tx) error {
-		// The draft and who saved it are read under the row's lock, so a
-		// draft saved by someone else between the two reads cannot be
-		// published as another person's (four-eyes).
-		if _, err := tx.Exec(r.Context(), `SELECT 1 FROM pages WHERE name = $1 FOR UPDATE`, chi.URLParam(r, "name")); err != nil {
+		var err error
+		var env *pages.Env
+		refused, nothing, env, err = s.publishPageTx(r.Context(), tx, p, chi.URLParam(r, "name"), func(action, target string, detail map[string]any) error {
+			return auditTx(r, tx, action, target, detail)
+		})
+		if err != nil || refused != nil || nothing {
 			return err
 		}
 		pg, err := loadPage(r.Context(), tx, chi.URLParam(r, "name"))
 		if err != nil {
 			return err
 		}
-		if pg.Draft == nil {
-			nothing = true
-			return nil
-		}
-		page, ps := pages.Parse(pg.Draft)
-		env, err := s.pageEnv(r.Context(), tx, pg.ID)
-		if err != nil {
-			return err
-		}
-		if len(ps) == 0 {
-			ps = pages.Check(page, env)
-		}
-		if len(ps) > 0 {
-			refused = ps
-			return nil
-		}
-		if err := pagePublishFourEyes(r.Context(), tx, p, pg.ID); err != nil {
-			return err
-		}
-		version := 1
-		if pg.Version != nil {
-			version = *pg.Version + 1
-		}
-		doc := page.Marshal()
-		if _, err := tx.Exec(r.Context(), `INSERT INTO page_versions (page_id, tenant_id, version, document, published_by) VALUES ($1, $2, $3, $4, $5)`,
-			pg.ID, p.TenantID, version, doc, p.Actor()); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(r.Context(), `UPDATE pages SET published_version = $2, published_at = now(), title = $3, icon = $4, roles = $5,
-			draft = NULL, draft_by = NULL, draft_at = NULL, updated_at = now() WHERE id = $1`, pg.ID, version, page.Title, page.Icon, nonNil(page.Roles)); err != nil {
-			return err
-		}
-		shows := pages.Shows(page, env.Tables)
-		if err := auditTx(r, tx, "page.publish", pg.Name, map[string]any{"version": version, "roles": nonNil(page.Roles), "shows": shows}); err != nil {
-			return err
-		}
-		if pg, err = loadPage(r.Context(), tx, pg.Name); err != nil {
-			return err
-		}
-		out = pageDetail(p, pg, &env)
+		out = pageDetail(p, pg, env)
 		return nil
 	})
 	switch {
@@ -575,6 +540,58 @@ func (s *Server) publishPage(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusOK, out)
 	}
+}
+
+// publishPageTx publishes a page's draft by p, once it has no problem
+// left: under four-eyes, by another person than the one who saved it.
+// Who may open it and what it shows are audited (§8). It gives the
+// problems that refuse it, or nothing when there is no draft.
+func (s *Server) publishPageTx(ctx context.Context, tx pgx.Tx, p *Principal, name string, audit func(action, target string, detail map[string]any) error) (refused []pages.Problem, nothing bool, env *pages.Env, err error) {
+	// The draft and who saved it are read under the row's lock, so a
+	// draft saved by someone else between the two reads cannot be
+	// published as another person's (four-eyes).
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM pages WHERE name = $1 FOR UPDATE`, name); err != nil {
+		return nil, false, nil, err
+	}
+	pg, err := loadPage(ctx, tx, name)
+	if err != nil {
+		return nil, false, nil, err
+	}
+	if pg.Draft == nil {
+		return nil, true, nil, nil
+	}
+	page, ps := pages.Parse(pg.Draft)
+	e, err := s.pageEnv(ctx, tx, pg.ID)
+	if err != nil {
+		return nil, false, nil, err
+	}
+	if len(ps) == 0 {
+		ps = pages.Check(page, e)
+	}
+	if len(ps) > 0 {
+		return ps, false, &e, nil
+	}
+	if err := pagePublishFourEyes(ctx, tx, p, pg.ID); err != nil {
+		return nil, false, nil, err
+	}
+	version := 1
+	if pg.Version != nil {
+		version = *pg.Version + 1
+	}
+	doc := page.Marshal()
+	if _, err := tx.Exec(ctx, `INSERT INTO page_versions (page_id, tenant_id, version, document, published_by) VALUES ($1, $2, $3, $4, $5)`,
+		pg.ID, p.TenantID, version, doc, p.Actor()); err != nil {
+		return nil, false, nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE pages SET published_version = $2, published_at = now(), title = $3, icon = $4, roles = $5,
+		draft = NULL, draft_by = NULL, draft_at = NULL, updated_at = now() WHERE id = $1`, pg.ID, version, page.Title, page.Icon, nonNil(page.Roles)); err != nil {
+		return nil, false, nil, err
+	}
+	shows := pages.Shows(page, e.Tables)
+	if err := audit("page.publish", pg.Name, map[string]any{"version": version, "roles": nonNil(page.Roles), "shows": shows}); err != nil {
+		return nil, false, nil, err
+	}
+	return nil, false, &e, nil
 }
 
 // pagePublishFourEyes holds publishing a page to four-eyes where the
@@ -980,7 +997,7 @@ func (s *Server) pageBlock(w http.ResponseWriter, r *http.Request) {
 	}
 	var cur pages.Cursor
 	var err error
-	if b.Source.Records != "" {
+	if b.Source.Records != "" || b.Source.Saved != "" {
 		cur, err = pages.ReadRecordCursor(r.URL.Query().Get("cursor"), order)
 	} else {
 		ranked := pages.RankedByPersonal(b, pc.table(b), order, pc.values.Viewer.Personal)
@@ -1006,6 +1023,9 @@ func (s *Server) drawPart(ctx context.Context, pc *pageCtx, b pages.Block, curso
 	if b.Type == "heading" {
 		out["title"], out["text"] = b.Title, b.Text
 		return out
+	}
+	if b.Source != nil && b.Source.Saved != "" {
+		return s.drawSaved(ctx, pc, b, cursor, out) // pages_saved.go
 	}
 	t := pc.table(b)
 	read, err := pc.page.ReadFor(b, t, pc.values, order)

@@ -29,6 +29,9 @@ type Env struct {
 	Signal func(workflow, name string) string
 	// Workflow says whether the business has a workflow by this name.
 	Workflow func(name string) bool
+	// SavedKind is a kind of saved things the business made, by its name
+	// (any case; G5); nil, none.
+	SavedKind func(name string) (SavedKind, bool)
 }
 
 // ReservedName reports whether a page's name is one of Taskiem's own
@@ -115,7 +118,12 @@ func Check(p *Page, env Env) []Problem {
 			checkActionEnv(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, env)
 		}
 		var t datatables.Table
-		if b.Source.Records != "" {
+		if b.Source.Saved != "" {
+			var ok bool
+			if t, ok = savedChecks(&ps, at, name, b, env); !ok {
+				continue
+			}
+		} else if b.Source.Records != "" {
 			var ok bool
 			if t, ok = recordsChecks(&ps, at, name, b, env); !ok {
 				continue
@@ -128,8 +136,10 @@ func Check(p *Page, env Env) []Problem {
 				continue
 			}
 		}
-		if _, err := b.Source.query(t, nil); err != nil {
-			ps.add(at+"/source", "%s: %s.", name, plainQueryError(err))
+		if b.Source.Saved == "" {
+			if _, err := b.Source.query(t, nil); err != nil {
+				ps.add(at+"/source", "%s: %s.", name, plainQueryError(err))
+			}
 		}
 		col := func(path, c, what string) (datatables.Column, bool) {
 			found, ok := columnOf(t, c)
@@ -230,6 +240,9 @@ func Check(p *Page, env Env) []Problem {
 // or dates filter on a personal column cannot: its values are masked for
 // a viewer without table.read, and narrowing by them would show them.
 func (f Filter) fits(t datatables.Table) string {
+	if IsSaved(t.Name) && f.Type != "search" {
+		return "saved things are narrowed by a search only"
+	}
 	if v, ok := RecordViewOf(t.Name); ok {
 		// A view's column read from its sealed envelope (a rider's name) is
 		// never narrowed by: that is SQL, and the value is not there.

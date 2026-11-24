@@ -37,7 +37,7 @@ func (s *Server) freeDraftCommandTx(ctx context.Context, tx pgx.Tx, tenant uuid.
 	if !templates.ToolCommand.MatchString(asked) {
 		return doc, nil, nil // the checks say why
 	}
-	given, err := s.freeToolCommandTx(ctx, tx, tenant, asked, except)
+	given, err := s.freeToolCommandTx(ctx, tx, tenant, asked, except, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), errCommandsTaken.Error()) {
 			return doc, nil, nil // the publish refuses it, with the word

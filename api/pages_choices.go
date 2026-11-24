@@ -67,18 +67,22 @@ func (s *Server) listPageChoices(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(ctx)
 	tools := []pageChoiceTool{}
 	flows := []pageChoiceWorkflow{}
+	var kinds []map[string]any
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		if tools, err = s.pageChoiceTools(ctx, tx, p); err != nil {
 			return err
 		}
-		flows, err = s.pageChoiceWorkflows(ctx, tx, p)
+		if flows, err = s.pageChoiceWorkflows(ctx, tx, p); err != nil {
+			return err
+		}
+		kinds, err = pageSavedChoices(ctx, tx) // the kinds of saved things (pages_saved.go, G5)
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tools": tools, "workflows": flows})
+	writeJSON(w, http.StatusOK, map[string]any{"tools": tools, "workflows": flows, "saved_kinds": kinds})
 }
 
 func (s *Server) pageChoiceTools(ctx context.Context, tx pgx.Tx, p *Principal) ([]pageChoiceTool, error) {

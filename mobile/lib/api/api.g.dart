@@ -2025,6 +2025,18 @@ class TaskiemApi {
     await _t.send('POST', '/v1/pages/${Uri.encodeComponent(name)}/refresh');
   }
 
+  /// The starters a page can be made from (`GET /v1/page-starters`)
+  Future<ListPageStartersResponse> listPageStarters() async {
+    final j = await _t.send('GET', '/v1/page-starters');
+    return ListPageStartersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a page from a starter, with its tables and tools (`POST /v1/page-starters/{id}/install`)
+  Future<PageBundleMade> installPageStarter({required PageBundleRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/page-starters/${Uri.encodeComponent(id)}/install', body: body.toJson());
+    return PageBundleMade.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Update a row (`PATCH /v1/tables/{id}/rows/{row}`)
   Future<RowWritten> updateTableRow({required RowPatch body, required String id, required String row, String? idempotencyKey}) async {
     final j = await _t.send('PATCH', '/v1/tables/${Uri.encodeComponent(id)}/rows/${Uri.encodeComponent(row)}', body: body.toJson(), headers: {'Idempotency-Key': ?idempotencyKey});
@@ -18729,6 +18741,183 @@ class PageActResultTool {
         'inputs': inputs,
         'name': name,
         'once': once,
+      };
+}
+
+class ListPageStartersResponse {
+  const ListPageStartersResponse({required this.starters});
+
+  final List<PageStarter> starters;
+
+  factory ListPageStartersResponse.fromJson(Map<String, dynamic> j) => ListPageStartersResponse(
+        starters: (j['starters'] as List).map((e) => PageStarter.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'starters': starters.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PageStarter {
+  const PageStarter({required this.about, required this.icon, required this.id, required this.makes, required this.page, required this.parts, required this.title});
+
+  final String about;
+  final String icon;
+  final String id;
+  /// What it makes, a line each ("The table Tickets: Title, Customer…",
+  /// "/new-ticket (New ticket): adds a row to Tickets, asking for…").
+  final List<String> makes;
+  /// The page's title.
+  final String page;
+  /// The kinds of part its page has, in order (figure, buttons, board…).
+  final List<String> parts;
+  final String title;
+
+  factory PageStarter.fromJson(Map<String, dynamic> j) => PageStarter(
+        about: j['about'] as String,
+        icon: j['icon'] as String,
+        id: j['id'] as String,
+        makes: (j['makes'] as List).map((e) => e as String).toList(),
+        page: j['page'] as String,
+        parts: (j['parts'] as List).map((e) => e as String).toList(),
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'about': about,
+        'icon': icon,
+        'id': id,
+        'makes': makes.map((e) => e).toList(),
+        'page': page,
+        'parts': parts.map((e) => e).toList(),
+        'title': title,
+      };
+}
+
+class PageBundleRequest {
+  const PageBundleRequest({this.publish});
+
+  /// Publish the tools and then the page once made, where the caller may and
+  /// nothing holds it back.
+  final bool? publish;
+
+  factory PageBundleRequest.fromJson(Map<String, dynamic> j) => PageBundleRequest(
+        publish: j['publish'] == null ? null : j['publish'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'publish': ?publish,
+      };
+}
+
+class PageBundleMade {
+  const PageBundleMade({required this.page, required this.problems, required this.published, required this.tables, required this.title, required this.tools, this.waiting});
+
+  /// The page's short name (the next free one when taken).
+  final String page;
+  final List<PageProblem> problems;
+  /// The tools and the page are in use.
+  final bool published;
+  final List<PageBundleMadeTablesItem> tables;
+  final String title;
+  final List<PageBundleMadeToolsItem> tools;
+  /// Why they are not, in plain words.
+  final String? waiting;
+
+  factory PageBundleMade.fromJson(Map<String, dynamic> j) => PageBundleMade(
+        page: j['page'] as String,
+        problems: (j['problems'] as List).map((e) => PageProblem.fromJson(e as Map<String, dynamic>)).toList(),
+        published: j['published'] as bool,
+        tables: (j['tables'] as List).map((e) => PageBundleMadeTablesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        title: j['title'] as String,
+        tools: (j['tools'] as List).map((e) => PageBundleMadeToolsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        waiting: j['waiting'] == null ? null : j['waiting'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'page': page,
+        'problems': problems.map((e) => e.toJson()).toList(),
+        'published': published,
+        'tables': tables.map((e) => e.toJson()).toList(),
+        'title': title,
+        'tools': tools.map((e) => e.toJson()).toList(),
+        'waiting': ?waiting,
+      };
+}
+
+class PageProblem {
+  const PageProblem({required this.message, required this.path});
+
+  /// What is wrong, in plain words an owner can act on.
+  final String message;
+  /// Where in the document (/blocks/2/source/table).
+  final String path;
+
+  factory PageProblem.fromJson(Map<String, dynamic> j) => PageProblem(
+        message: j['message'] as String,
+        path: j['path'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'message': message,
+        'path': path,
+      };
+}
+
+class PageBundleMadeTablesItem {
+  const PageBundleMadeTablesItem({required this.asked, required this.changed, this.id, required this.name, required this.title});
+
+  final String asked;
+  /// The name asked for was taken, so it was given this one.
+  final bool changed;
+  final String? id;
+  final String name;
+  final String title;
+
+  factory PageBundleMadeTablesItem.fromJson(Map<String, dynamic> j) => PageBundleMadeTablesItem(
+        asked: j['asked'] as String,
+        changed: j['changed'] as bool,
+        id: j['id'] == null ? null : j['id'] as String,
+        name: j['name'] as String,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'asked': asked,
+        'changed': changed,
+        'id': ?id,
+        'name': name,
+        'title': title,
+      };
+}
+
+class PageBundleMadeToolsItem {
+  const PageBundleMadeToolsItem({required this.asked, required this.changed, required this.command, required this.name, required this.state, required this.workflow});
+
+  final String asked;
+  final bool changed;
+  final String command;
+  final String name;
+  /// draft, published, pending_approval, not_ready or in_the_app.
+  final String state;
+  final String workflow;
+
+  factory PageBundleMadeToolsItem.fromJson(Map<String, dynamic> j) => PageBundleMadeToolsItem(
+        asked: j['asked'] as String,
+        changed: j['changed'] as bool,
+        command: j['command'] as String,
+        name: j['name'] as String,
+        state: j['state'] as String,
+        workflow: j['workflow'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'asked': asked,
+        'changed': changed,
+        'command': command,
+        'name': name,
+        'state': state,
+        'workflow': workflow,
       };
 }
 

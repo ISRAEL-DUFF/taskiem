@@ -41579,8 +41579,33 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [tools, workflows]
+                required: [tools, workflows, saved_kinds]
                 properties:
+                  saved_kinds:
+                    type: array
+                    description: The business's kinds of saved things (G5), for a list of them; each field's key, label, type and whether it is kept private (never a value).
+                    items:
+                      type: object
+                      required: [name, fields]
+                      properties:
+                        name:
+                          type: string
+                        fields:
+                          type: array
+                          items:
+                            type: object
+                            required: [key, label, type, private]
+                            properties:
+                              key:
+                                type: string
+                              label:
+                                type: string
+                              type:
+                                type: string
+                              private:
+                                type: boolean
+                            additionalProperties: false
+                      additionalProperties: false
                   tools:
                     type: array
                     items:
@@ -41658,6 +41683,209 @@ paths:
                             additionalProperties: false
                       additionalProperties: false
                 additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/page-starters:
+    get:
+      operationId: listPageStarters
+      tags:
+      - Pages
+      summary: The starters a page can be made from
+      description: >-
+        G5: Tickets desk, Expenses this month, Leave, Stock count, Deliveries today, Waiting list and Service log, each a page with the tables and tools it brings, said in plain words (`makes`), and the kinds of part its page has. For the editor (page.edit).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [starters]
+                properties:
+                  starters:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PageStarter'
+                additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/page-starters/{id}/install:
+    post:
+      operationId: installPageStarter
+      tags:
+      - Pages
+      summary: Make a page from a starter, with its tables and tools
+      description: >-
+        Makes the starter's tables (table.edit; a name the business uses takes the next free one, tickets_2), its tools as workflows' drafts (workflow.edit; a command that is taken, the next free one, new-ticket-2, said in `tools`) and its page as a draft (page.edit, table.read; the next free name), the tools and the page made to read what was given. With `publish`, a caller who may publish workflows and pages publishes the tools and then the page through the Publish buttons' own checks (readiness, four-eyes, the page's Check); where one cannot be published now, the rest stay drafts and `waiting` says why. Audited `workflow.create` and `page.create` with the starter.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageBundleRequest'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBundleMade'
+        '403':
+          description: The caller may not make its tables (table.edit) or its tools (workflow.edit); nothing was made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such starter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/page-builds:
+    post:
+      operationId: describePage
+      tags:
+      - Pages
+      summary: Describe it, for a page
+      description: >-
+        G5: drafts a page from one sentence, in the background, with the tables and tools it would make, checked as a page is before it is published (corrected up to three times). The model is told the business's tables, its tools in use that the caller may start, its kinds of saved things and its pages' names, by name and type only: never a row, a value or a saved thing. Held to the AI builder's rate and monthly budget; its model calls are in the build's interactions (GET /v1/ai/builds/{id}/interactions, audit.read).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [goal]
+              properties:
+                goal:
+                  type: string
+                  maxLength: 4000
+                  description: What the page is for, in one sentence.
+              additionalProperties: false
+      responses:
+        '202':
+          description: Drafting
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, status]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                additionalProperties: false
+        '429':
+          description: Too many builds at once, or this month's AI budget is used up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: AI building is not set up on this deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/page-builds/{id}:
+    get:
+      operationId: getPageBuild
+      tags:
+      - Pages
+      summary: A page Describe it drafted
+      description: >-
+        The draft (`proposal`: the page, the tables and tools it would make, what still stops it) and, once drafted, `review`: what making it makes, what of the business's it uses and what the page shows, in plain words.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBuild'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/page-builds/{id}/make:
+    post:
+      operationId: makePageBuild
+      tags:
+      - Pages
+      summary: Make the page Describe it drafted
+      description: >-
+        Makes the draft's tables, tools and page as POST /v1/page-starters/{id}/install does, once; a draft with problems is refused (409).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageBundleRequest'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBundleMade'
+        '409':
+          description: Made already, not drafted yet, or the draft has problems.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/pages/{name}/blocks/{block}:
@@ -63057,6 +63285,151 @@ components:
       type: object
       description: 'A row: id, the columns, created_at and updated_at, typed as the data API returns them.'
       additionalProperties: true
+    PageStarter:
+      type: object
+      required: [id, title, about, icon, page, makes, parts]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        about:
+          type: string
+        icon:
+          type: string
+        page:
+          type: string
+          description: The page's title.
+        makes:
+          type: array
+          items:
+            type: string
+          description: 'What it makes, a line each ("The table Tickets: Title, Customer…", "/new-ticket (New ticket): adds a row to Tickets, asking for…").'
+        parts:
+          type: array
+          items:
+            type: string
+          description: The kinds of part its page has, in order (figure, buttons, board…).
+      additionalProperties: false
+    PageBundleRequest:
+      type: object
+      properties:
+        publish:
+          type: boolean
+          description: Publish the tools and then the page once made, where the caller may and nothing holds it back.
+      additionalProperties: false
+    PageBundleMade:
+      type: object
+      required: [page, title, tables, tools, published, problems]
+      properties:
+        page:
+          type: string
+          description: The page's short name (the next free one when taken).
+        title:
+          type: string
+        tables:
+          type: array
+          items:
+            type: object
+            required: [name, title, asked, changed]
+            properties:
+              name:
+                type: string
+              title:
+                type: string
+              asked:
+                type: string
+              changed:
+                type: boolean
+                description: The name asked for was taken, so it was given this one.
+              id:
+                type: string
+            additionalProperties: false
+        tools:
+          type: array
+          items:
+            type: object
+            required: [command, asked, changed, name, workflow, state]
+            properties:
+              command:
+                type: string
+              asked:
+                type: string
+              changed:
+                type: boolean
+              name:
+                type: string
+              workflow:
+                type: string
+                format: uuid
+              state:
+                type: string
+                description: draft, published, pending_approval, not_ready or in_the_app.
+            additionalProperties: false
+        published:
+          type: boolean
+          description: The tools and the page are in use.
+        waiting:
+          type: string
+          description: Why they are not, in plain words.
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageProblem'
+      additionalProperties: false
+    PageBuild:
+      type: object
+      required: [id, status, stage, error, goal, created_at, finished_at, page_name, proposal]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: running, proposed, failed or saved (made).
+        stage:
+          type: string
+        error:
+          type: [string, 'null']
+        goal:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: [string, 'null']
+          format: date-time
+        page_name:
+          type: [string, 'null']
+          description: The page made from it.
+        proposal:
+          type: [object, 'null']
+          additionalProperties: true
+          description: 'The draft: summary, page (page/v1), tables, tools (each {command, name, about, kind add or change, table, asks, sets, icon}), problems, warnings, rounds, valid_first_try.'
+        review:
+          type: object
+          required: [makes, uses, shows, title, parts]
+          properties:
+            makes:
+              type: array
+              items:
+                type: string
+            uses:
+              type: array
+              items:
+                type: string
+            shows:
+              type: array
+              items:
+                type: string
+            title:
+              type: string
+            parts:
+              type: array
+              items:
+                type: string
+          additionalProperties: false
+      additionalProperties: false
     PageDocument:
       type: object
       description: A page/v1 document (`schemas/page-v1.schema.json`, docs/contracts/page-v1.md).
