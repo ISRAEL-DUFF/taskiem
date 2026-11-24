@@ -1871,6 +1871,8 @@ export interface PaymentsFinishInput {
   payment_id: Val<string>;
   payout_id?: Val<string>;
   reason?: Val<string>;
+  /** How it went: a bank transfer (the default), or Taskiem wallet to Taskiem wallet */
+  route?: Val<"bank" | "wallet">;
   status: Val<"paid" | "failed" | "unknown" | "rejected">;
 }
 export interface PaymentsPrepareInput {
