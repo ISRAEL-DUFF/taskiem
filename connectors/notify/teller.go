@@ -114,7 +114,7 @@ func (n *Notifier) deliver(ctx context.Context, tx pgx.Tx, business string, m Me
 			continue // an account made by phone or chat has no mailbox
 		}
 		if file == "" && m.File != "" {
-			if file, err = n.fileLineFor(ctx, m.Tenant, m.File); err != nil {
+			if file, err = n.fileLineFor(ctx, tx, m.Tenant, m.Run, m.File); err != nil {
 				return res, err
 			}
 		}
@@ -238,7 +238,7 @@ func (n *Notifier) Message(ctx context.Context, m Outside) (Delivery, error) {
 		if n.Messages == nil {
 			return nil
 		}
-		file, err := n.fileLineFor(ctx, m.Tenant, m.File)
+		file, err := n.fileLineFor(ctx, tx, m.Tenant, m.Run, m.File)
 		if err != nil {
 			return err
 		}

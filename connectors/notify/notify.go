@@ -97,6 +97,11 @@ type Teller interface {
 // exactly its variables; their values may be expressions.
 func CheckTell(input map[string]any) []string {
 	out := checkButtons(input)
+	// Outside WhatsApp's window a template of its own has no place for a
+	// file's link: one or the other.
+	if _, t := input["template"]; t && input["file"] != nil {
+		out = append(out, "a message with a template of its own cannot send a saved file: leave out the template, or the file")
+	}
 	if t := checkTellTemplate(input); len(t) > 0 {
 		out = append(out, t...)
 	}

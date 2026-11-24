@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/saved"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Links to a business's saved files in the messages its workflows send
@@ -42,11 +45,18 @@ type SavedFileLinks struct {
 	BaseURL string
 }
 
-// FileLink is the business's saved file ref's name and a new link to it.
-func (f SavedFileLinks) FileLink(ctx context.Context, tenant uuid.UUID, ref string) (string, string, error) {
+// FileLink is the business's saved file ref's name and a new link to it,
+// for a message of run: the file must be one the run read when it
+// started (saved_uses), so a step cannot send another of the business's
+// files by its id. In tx when given (the business's scope), else in a
+// transaction of its own.
+func (f SavedFileLinks) FileLink(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID, ref string) (string, string, error) {
 	id, err := uuid.Parse(strings.TrimPrefix(ref, notify.FileRefPrefix))
 	if err != nil || !strings.HasPrefix(ref, notify.FileRefPrefix) {
 		return "", "", notify.ErrNoFile
+	}
+	if strings.TrimSpace(f.BaseURL) == "" {
+		return "", "", notify.ErrFilesOff
 	}
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
@@ -55,11 +65,13 @@ func (f SavedFileLinks) FileLink(ctx context.Context, tenant uuid.UUID, ref stri
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	hash := sha256.Sum256([]byte(token))
 	var name string
-	err = db.InTenantTx(ctx, f.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		// A business's own file, not removed, kept in its storage.
+	mint := func(tx pgx.Tx) error {
+		// A business's own file, not removed, kept in its storage, and
+		// read by this run at its start.
 		if err := tx.QueryRow(ctx, `SELECT COALESCE(o.details->>'file_name', o.title) FROM saved_objects o
 			JOIN saved_files f ON f.object_id = o.id AND f.field = '' AND f.tenant_id = $1 AND f.person_id IS NULL AND f.path IS NOT NULL
-			WHERE o.id = $2 AND o.tenant_id = $1 AND o.person_id IS NULL AND o.kind = $3 AND o.archived_at IS NULL`, tenant, id, saved.KindFile).Scan(&name); err != nil {
+			JOIN saved_uses u ON u.tenant_id = $1 AND u.object_id = o.id AND u.run_id = $4
+			WHERE o.id = $2 AND o.tenant_id = $1 AND o.person_id IS NULL AND o.kind = $3 AND o.archived_at IS NULL`, tenant, id, saved.KindFile, run).Scan(&name); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM saved_file_links WHERE tenant_id = $1 AND expires_at < now()`, tenant); err != nil {
@@ -68,7 +80,12 @@ func (f SavedFileLinks) FileLink(ctx context.Context, tenant uuid.UUID, ref stri
 		_, err := tx.Exec(ctx, `INSERT INTO saved_file_links (token_hash, tenant_id, object_id, expires_at) VALUES ($1, $2, $3, now() + make_interval(secs => $4))`,
 			hash[:], tenant, id, savedFileLinkTTL.Seconds())
 		return err
-	})
+	}
+	if tx != nil {
+		err = mint(tx)
+	} else {
+		err = db.InTenantTx(ctx, f.Pool, []uuid.UUID{tenant}, mint)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", notify.ErrNoFile
 	}
@@ -78,19 +95,33 @@ func (f SavedFileLinks) FileLink(ctx context.Context, tenant uuid.UUID, ref stri
 	return name, strings.TrimRight(f.BaseURL, "/") + "/v1/saved-files/" + token, nil
 }
 
-// savedFileLinks are the links the chat outbox gives a saved file.
-func (s *Server) savedFileLinks() SavedFileLinks {
+// savedFileLinks are the links the chat outbox gives a saved file
+// (SavedFiles, when set, in their place: tests).
+func (s *Server) savedFileLinks() notify.FileLinks {
+	if s.SavedFiles != nil {
+		return s.SavedFiles
+	}
 	return SavedFileLinks{Pool: s.Store.Pool, BaseURL: s.PublicURL}
 }
 
-// savedFileLine is the line a step's saved file adds to a message sent
-// now ("" without one).
-func (s *Server) savedFileLine(ctx context.Context, tenant uuid.UUID, in map[string]any) (name, link string, err error) {
+// savedFileLine is the line a step's saved file adds to a message of the
+// item's run sent now ("" without one).
+func (s *Server) savedFileLine(ctx context.Context, it whatsapp.OutboxItem, in map[string]any) (name, link string, err error) {
 	ref, err := notify.FileRef(in)
-	if err != nil || ref == "" {
+	if err != nil || ref == "" || it.Run == nil {
 		return "", "", err
 	}
-	return s.savedFileLinks().FileLink(ctx, tenant, ref)
+	return s.savedFileLinks().FileLink(ctx, nil, it.Tenant, *it.Run, ref)
+}
+
+// fileFailure is a message's saved file that could not be given a link:
+// nothing to send when it never can be (gone, too long, off), else as it
+// is, so the outbox tries the message again.
+func fileFailure(err error) error {
+	if notify.FileGone(err) {
+		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
+	}
+	return err
 }
 
 // openSavedFileLink is GET /v1/saved-files/{token}: a link a message
@@ -102,18 +133,18 @@ func (s *Server) openSavedFileLink(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	if !s.limiter("saved-file-link:"+clientIP(r), time.Minute, 30).Allow() {
+	hash := sha256.Sum256([]byte(token))
+	if !s.limiter("saved-file-link:"+limitIP(r), time.Second, 60).Allow() || !s.limiter("saved-file-link-token:"+hex.EncodeToString(hash[:8]), time.Second, 30).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "slow down: a moment between requests")
 		return
 	}
-	hash := sha256.Sum256([]byte(token))
 	var tenant, object uuid.UUID
 	if err := s.Store.Pool.QueryRow(r.Context(), `SELECT tenant_id, object_id FROM taskiem_saved_file_link($1)`, hash[:]).Scan(&tenant, &object); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeErr(w, http.StatusNotFound, "This link has expired, or the file is not there any more. Ask the business to send it again.")
 			return
 		}
-		s.fail(w, r, err)
+		s.linkFailed(w, err)
 		return
 	}
 	var path string
@@ -126,15 +157,32 @@ func (s *Server) openSavedFileLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.fail(w, r, err)
+		s.linkFailed(w, err)
 		return
 	}
 	url, _, err := s.Media.SignURL(r.Context(), tenant, path, savedFileOpenTTL)
 	if err != nil {
-		s.fail(w, r, err)
+		s.linkFailed(w, err)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	http.Redirect(w, r, url, http.StatusFound)
+}
+
+// linkFailed answers an unexpected error opening a saved file's link with
+// a reference, logged without the request's path, which holds the token.
+func (s *Server) linkFailed(w http.ResponseWriter, err error) {
+	ref := errorRef()
+	s.Logger.Error("saved file link failed", "err", err, "reference", ref)
+	writeInternal(w, ref)
+}
+
+// loggedPath is a request's path as logs keep it: a saved file link's
+// token left out.
+func loggedPath(p string) string {
+	if rest, ok := strings.CutPrefix(p, "/v1/saved-files/"); ok && rest != "" {
+		return "/v1/saved-files/•"
+	}
+	return p
 }

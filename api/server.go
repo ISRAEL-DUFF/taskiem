@@ -25,6 +25,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/time/rate"
 
+	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/catalogue"
@@ -207,6 +208,9 @@ type Server struct {
 	// (the public host's inbox key, storefront.InboxKey of
 	// TASKIEM_PUBLIC_KEY); nil: the family inbox is not drained here.
 	SchoolInboxKey []byte
+	// SavedFiles makes the links to saved files the chat outbox sends; nil:
+	// SavedFileLinks on the store's pool and PublicURL (saved_file_links.go).
+	SavedFiles notify.FileLinks
 	// Forms are hosted forms' api side (S7); nil: forms cannot be deployed.
 	Forms *forms.Service
 	// Email is inbound email's api side (N10); MailDomain is where
@@ -1089,7 +1093,7 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 		defer func() {
 			if v := recover(); v != nil {
 				ref := errorRef()
-				s.Logger.Error("panic in handler", "path", r.URL.Path, "panic", v, "reference", ref)
+				s.Logger.Error("panic in handler", "path", loggedPath(r.URL.Path), "panic", v, "reference", ref)
 				writeInternal(w, ref)
 			}
 		}()
@@ -1171,7 +1175,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "capability"})
 	default:
 		ref := errorRef()
-		s.Logger.Error("request failed", "path", r.URL.Path, "err", err, "reference", ref)
+		s.Logger.Error("request failed", "path", loggedPath(r.URL.Path), "err", err, "reference", ref)
 		writeInternal(w, ref)
 	}
 }

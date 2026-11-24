@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -26,15 +27,31 @@ import (
 const FileRefPrefix = "saved-file:"
 
 // ErrNoFile is a saved file a message cannot send: not the business's,
-// removed, or kept nowhere.
+// not one its run read, removed, or kept nowhere.
 var ErrNoFile = errors.New("the saved file is not there any more")
+
+// ErrFilesOff is a Taskiem that cannot send saved files (it has no
+// address of its own for the links).
+var ErrFilesOff = errors.New("saved files cannot be sent from this Taskiem")
+
+// ErrFileTooLong is a saved file's line that does not fit in a message.
+var ErrFileTooLong = errors.New("the saved file's link does not fit in this message")
+
+// FileGone reports whether err says a message's saved file can never be
+// sent (so the message is not tried again for it); any other error may
+// pass, and the message is tried again.
+func FileGone(err error) bool {
+	return errors.Is(err, ErrNoFile) || errors.Is(err, ErrFilesOff) || errors.Is(err, ErrFileTooLong) || errors.Is(err, effects.ErrFatal)
+}
 
 // FileLinks makes links to a business's saved files for the messages that
 // send them.
 type FileLinks interface {
 	// FileLink is the saved file ref's name and a link to it, good for a
-	// week; ErrNoFile when the business has no such file.
-	FileLink(ctx context.Context, tenant uuid.UUID, ref string) (name, link string, err error)
+	// week, for a message of run (the file must be one the run read): in
+	// tx when given (the business's scope), else in a transaction of its
+	// own. ErrNoFile when the run read no such file of the business's.
+	FileLink(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID, ref string) (name, link string, err error)
 }
 
 // fileExpr is a file written as the saved root: =saved.price_list,
@@ -114,7 +131,7 @@ func CutFor(text, sep, line string, max int) (string, error) {
 	return text + sep + line, nil
 }
 
-var errFileTooLong = fmt.Errorf("the saved file's link does not fit in this message: %w", effects.ErrFatal)
+var errFileTooLong = fmt.Errorf("%w: %w", ErrFileTooLong, effects.ErrFatal)
 
 // SMSTextWithFile is SMSText with a saved file's line kept whole after
 // the message (cut to make room); an error when the line alone does not
@@ -146,16 +163,16 @@ func SMSTextWithFile(business, title, message, line string) (string, error) {
 }
 
 // fileLineFor is the line a message's saved file adds, its link made now
-// (none without a file).
-func (n *Notifier) fileLineFor(ctx context.Context, tenant uuid.UUID, ref string) (string, error) {
+// in tx, the business's (none without a file).
+func (n *Notifier) fileLineFor(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID, ref string) (string, error) {
 	if ref == "" {
 		return "", nil
 	}
 	if n.Files == nil {
-		return "", fmt.Errorf("saved files cannot be sent from this Taskiem: %w", effects.ErrFatal)
+		return "", fmt.Errorf("%w: %w", ErrFilesOff, effects.ErrFatal)
 	}
-	name, link, err := n.Files.FileLink(ctx, tenant, ref)
-	if errors.Is(err, ErrNoFile) {
+	name, link, err := n.Files.FileLink(ctx, tx, tenant, run, ref)
+	if FileGone(err) {
 		return "", fmt.Errorf("%w: %w", err, effects.ErrFatal)
 	}
 	if err != nil {

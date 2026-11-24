@@ -80,6 +80,17 @@ func TestSavedFileSentByWorkflow(t *testing.T) {
 		t.Fatalf("the link: %d %q", st, body[:min(len(body), 8)])
 	}
 	anyone.must(404, "GET", "/v1/saved-files/"+strings.Repeat("x", 43), nil)
+	// One token tried again and again is slowed down, whoever asks.
+	limited := false
+	for range 40 {
+		if st, _ := anyone.do("GET", "/v1/saved-files/"+strings.Repeat("y", 43), nil); st == 429 {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Error("a token is not limited")
+	}
 	// A week on, it opens nothing.
 	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE saved_file_links SET expires_at = now() - interval '1 minute'`); err != nil {
 		t.Fatal(err)

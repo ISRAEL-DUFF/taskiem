@@ -111,3 +111,10 @@ describe("saved things as a step's values", () => {
     expect(await loadSavedSources(() => Promise.reject(new Error("offline")))).toEqual([]);
   });
 });
+
+describe("a made-up kind's field named file", () => {
+  it("is read as field_file: only a saved file is a message's file", () => {
+    expect(customFieldKey("file")).toBe("field_file");
+    expect(customFieldKey("colour")).toBe("colour");
+  });
+});

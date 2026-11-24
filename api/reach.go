@@ -404,8 +404,8 @@ func (s *Server) sendReachItem(ctx context.Context, it whatsapp.OutboxItem) erro
 	// A saved file: its name and a link made now, after the message, and
 	// kept whole in the template's one line outside the window.
 	var file string
-	if name, link, err := s.savedFileLine(ctx, it.Tenant, in); err != nil {
-		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
+	if name, link, err := s.savedFileLine(ctx, it, in); err != nil {
+		return fileFailure(err)
 	} else if link != "" {
 		file = notify.FileLine(name, link)
 	}
@@ -474,8 +474,8 @@ func (s *Server) reachFallback(ctx context.Context, it whatsapp.OutboxItem, busi
 	}
 	// A saved file: its line kept whole in the SMS, the message cut for it.
 	var file string
-	if name, link, err := s.savedFileLine(ctx, it.Tenant, in); err != nil {
-		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
+	if name, link, err := s.savedFileLine(ctx, it, in); err != nil {
+		return fileFailure(err)
 	} else if link != "" {
 		file = notify.FileLine(name, link)
 	}

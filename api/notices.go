@@ -72,9 +72,9 @@ func (s *Server) sendNoticeItem(ctx context.Context, it whatsapp.OutboxItem) err
 	}
 	// A saved file: its name under the message, its link (made now) in
 	// the alert's link, which the template carries outside the window too.
-	name, link, err := s.savedFileLine(ctx, it.Tenant, in)
+	name, link, err := s.savedFileLine(ctx, it, in)
 	if err != nil {
-		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
+		return fileFailure(err)
 	}
 	if link != "" {
 		body = strings.TrimLeft(body+"\n\n"+strings.TrimSpace(name), "\n")

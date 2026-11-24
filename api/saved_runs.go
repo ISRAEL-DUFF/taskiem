@@ -198,5 +198,7 @@ func (s *Server) savedRunFields(ctx context.Context, tx pgx.Tx, o savedOwner, x 
 	return f, sealed, nil
 }
 
-// savedRunOwnField are the fields every saved thing has in a run.
-var savedRunOwnField = map[string]bool{"name": true, "title": true, "kind": true, "note": true}
+// savedRunOwnField are the fields every saved thing has in a run, and
+// file, a saved file's own (a made-up kind's field so named is read as
+// field_file, so only a saved file is ever a message's file).
+var savedRunOwnField = map[string]bool{"name": true, "title": true, "kind": true, "note": true, "file": true}

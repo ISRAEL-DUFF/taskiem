@@ -3,15 +3,15 @@
 -- whichever path deletes it), and the application keeps at most the latest
 -- few hundred for each saved thing (api/saved_runs.go, savedUsesKept).
 -- The trigger runs as taskiem_dispatch, which may delete a run's rows and
--- read nothing but their run.
+-- read nothing but their business and run (by the tenant_id-led index).
 -- +goose Up
 CREATE POLICY dispatch_forget ON saved_uses TO taskiem_dispatch USING (true);
-GRANT SELECT (run_id), DELETE ON saved_uses TO taskiem_dispatch;
+GRANT SELECT (tenant_id, run_id), DELETE ON saved_uses TO taskiem_dispatch;
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_saved_uses_run_gone() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 BEGIN
-  DELETE FROM saved_uses WHERE run_id = OLD.id;
+  DELETE FROM saved_uses WHERE tenant_id = OLD.tenant_id AND run_id = OLD.id;
   RETURN OLD;
 END
 $$;
@@ -24,5 +24,5 @@ CREATE TRIGGER saved_uses_run_gone AFTER DELETE ON runs
 -- +goose Down
 DROP TRIGGER saved_uses_run_gone ON runs;
 DROP FUNCTION taskiem_saved_uses_run_gone();
-REVOKE SELECT (run_id), DELETE ON saved_uses FROM taskiem_dispatch;
+REVOKE SELECT (tenant_id, run_id), DELETE ON saved_uses FROM taskiem_dispatch;
 DROP POLICY dispatch_forget ON saved_uses;

@@ -24,6 +24,13 @@ func TestMessageFile(t *testing.T) {
 			t.Errorf("%v: %v", bad, got)
 		}
 	}
+	// A template of its own has no place for the link.
+	if got := CheckTell(map[string]any{"message": "x", "template": "taskiem_daily_close", "template_vars": map[string]any{"day": "d", "summary": "s"}, "file": "=saved.price_list"}); len(got) != 1 || !strings.Contains(got[0], "cannot send a saved file") {
+		t.Errorf("a template and a file: %v", got)
+	}
+	if !FileGone(errFileTooLong) || !FileGone(ErrNoFile) || !FileGone(ErrFilesOff) || FileGone(errors.New("a passing outage")) {
+		t.Error("FileGone")
+	}
 	if got := checkInput("text", map[string]any{"file": "https://x"}); len(got) != 0 {
 		t.Errorf("text takes no file: %v", got)
 	}

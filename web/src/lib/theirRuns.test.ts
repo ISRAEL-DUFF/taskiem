@@ -59,6 +59,8 @@ describe("their runs kept in a chat", () => {
     // An older page's typed values are dropped when read.
     s.setItem("taskiem_their_tool_runs:c2", JSON.stringify([{ ...run("r2", "2026-11-24T10:00:00Z"), values: [{ value: "secret" }] }]));
     expect(JSON.stringify(keptTheirRuns("c2", s))).not.toContain("secret");
+    // And written back without them.
+    expect(s.m.get("taskiem_their_tool_runs:c2")).not.toContain("secret");
     s.setItem("other", "kept");
     forgetTheirRuns(s);
     expect([...s.m.keys()]).toEqual(["other"]);

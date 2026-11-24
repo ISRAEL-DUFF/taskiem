@@ -26,14 +26,23 @@ export const THEIR_RUNS_MAX = 30;
 const key = (chat: string) => `${PREFIX}${chat}`;
 
 /** The runs a chat keeps, oldest first; none when none could be read. */
-export function keptTheirRuns(chat: string, store: Pick<Storage, "getItem"> | undefined = safeStorage()): KeptTheirRun[] {
+export function keptTheirRuns(chat: string, store: Pick<Storage, "getItem"> | Pick<Storage, "getItem" | "setItem"> | undefined = safeStorage()): KeptTheirRun[] {
   try {
     const raw = store?.getItem(key(chat));
     if (!raw) return [];
     const list: unknown = JSON.parse(raw);
     if (!Array.isArray(list)) return [];
-    // Only what is kept: an older page's typed values are dropped.
-    return list.filter(isKept).map(({ id, command, name, at }) => ({ id, command, name, at }));
+    // Only what is kept: an older page's typed values are dropped, and
+    // the list written again without them.
+    const kept = list.filter(isKept).map(({ id, command, name, at }) => ({ id, command, name, at }));
+    if (JSON.stringify(kept) !== raw && store && "setItem" in store) {
+      try {
+        (store as Pick<Storage, "setItem">).setItem(key(chat), JSON.stringify(kept));
+      } catch {
+        // Kept as it was until a write works.
+      }
+    }
+    return kept;
   } catch {
     // Kept by an older page, or not JSON: the conversation stands without them.
     return [];

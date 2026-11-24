@@ -64,7 +64,8 @@ export interface SavedFile extends SavedBase {
 }
 
 /** A made-up kind: its fields by key (a field named as one every thing
- * has is read as field_<key>), sensitive and never-shared ones left out. */
+ * has, or file, is read as field_<key>), sensitive and never-shared ones
+ * left out. */
 export interface SavedCustom extends SavedBase {
   kind: "custom";
   [field: string]: string;
