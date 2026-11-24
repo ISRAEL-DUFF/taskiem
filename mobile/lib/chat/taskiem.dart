@@ -51,6 +51,7 @@ import 'money_page.dart' show MoneyPage;
 import 'payments_page.dart' show SentPaymentsPage;
 import 'payroll_page.dart' show PayrollPage;
 import 'payroll_run.dart' show PayrollChatCard, payrollCardOf;
+import 'payslip.dart' show PayslipChatCard, payslipCardOf;
 import 'pages_page.dart' show PagesPage, openPage;
 import 'saved_accounts.dart' show SavedAccountsPage;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
@@ -1262,6 +1263,11 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
           if (m.kind == 'payroll_run') {
             final card = payrollCardOf(m.text);
             if (card != null) return PayrollChatCard(key: ValueKey('payroll-${x.id}'), auth: d.chats.auth, run: card.run, period: card.period);
+          }
+          // A payslip (P4b-4): the employee's own card, drawn from Payrolla now.
+          if (m.kind == 'payslip') {
+            final card = payslipCardOf(m.text);
+            if (card != null) return PayslipChatCard(key: ValueKey('payslip-${x.id}'), auth: d.chats.auth, payslip: card.payslip, period: card.period);
           }
           if (m.kind == 'chart') {
             final chart = ChartData.parse(m.text);

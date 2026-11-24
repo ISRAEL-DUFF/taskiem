@@ -2233,7 +2233,7 @@ class TaskiemApi {
     return CancelPayrollRunResponse.fromJson(j as Map<String, dynamic>);
   }
 
-  /// Ask Payrolla for a code to approve or lock (`POST /v1/payroll/runs/{run}/confirmations`)
+  /// Ask Payrolla for a code to approve, lock, pay now or pay the failed ones again (`POST /v1/payroll/runs/{run}/confirmations`)
   Future<StartPayrollRunCodeResponse> startPayrollRunCode({required StartPayrollRunCodeRequest body, required String run}) async {
     final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/confirmations', body: body.toJson());
     return StartPayrollRunCodeResponse.fromJson(j as Map<String, dynamic>);
@@ -2255,6 +2255,42 @@ class TaskiemApi {
   Future<RejectPayrollRunResponse> rejectPayrollRun({required RejectPayrollRunRequest body, required String run}) async {
     final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/reject', body: body.toJson());
     return RejectPayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay now, with the code (`POST /v1/payroll/runs/{run}/pay-now`)
+  Future<PayPayrollRunNowResponse> payPayrollRunNow({required PayPayrollRunNowRequest body, required String run}) async {
+    final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/pay-now', body: body.toJson());
+    return PayPayrollRunNowResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay the failed ones again, with the code (`POST /v1/payroll/runs/{run}/retry-failed`)
+  Future<RetryPayrollRunFailedResponse> retryPayrollRunFailed({required RetryPayrollRunFailedRequest body, required String run}) async {
+    final j = await _t.send('POST', '/v1/payroll/runs/${Uri.encodeComponent(run)}/retry-failed', body: body.toJson());
+    return RetryPayrollRunFailedResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Anyone's payslip, from the run (`GET /v1/payroll/payslips/{payslip}`)
+  Future<GetPayrollPayslipResponse> getPayrollPayslip({required String payslip}) async {
+    final j = await _t.send('GET', '/v1/payroll/payslips/${Uri.encodeComponent(payslip)}');
+    return GetPayrollPayslipResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Payrolla's 7-day link to a payslip, for someone not on Taskiem (`POST /v1/payroll/payslips/{payslip}/link`)
+  Future<SendPayrollPayslipLinkResponse> sendPayrollPayslipLink({required SendPayrollPayslipLinkRequest body, required String payslip}) async {
+    final j = await _t.send('POST', '/v1/payroll/payslips/${Uri.encodeComponent(payslip)}/link', body: body.toJson());
+    return SendPayrollPayslipLinkResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// My payslips (`GET /v1/payroll/me/payslips`)
+  Future<GetMyPayslipsResponse> getMyPayslips() async {
+    final j = await _t.send('GET', '/v1/payroll/me/payslips');
+    return GetMyPayslipsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One of my payslips (`GET /v1/payroll/me/payslips/{payslip}`)
+  Future<GetMyPayslipResponse> getMyPayslip({required String payslip}) async {
+    final j = await _t.send('GET', '/v1/payroll/me/payslips/${Uri.encodeComponent(payslip)}');
+    return GetMyPayslipResponse.fromJson(j as Map<String, dynamic>);
   }
 }
 
@@ -15966,7 +16002,7 @@ class GetPayrollResponseThisMonth {
 }
 
 class GetPayrollRunResponse {
-  const GetPayrollRunResponse({this.adjustments, this.approvalUrl, this.changes, required this.connection, required this.counts, this.exclusions, this.funding, required this.lines, this.may, this.notWorkedOut, this.paysOn, required this.run});
+  const GetPayrollRunResponse({this.adjustments, this.approvalUrl, this.changes, required this.connection, required this.counts, this.exclusions, this.funding, required this.lines, this.may, this.notWorkedOut, this.payment, this.paysOn, required this.run});
 
   final List<GetPayrollRunResponseAdjustmentsItem>? adjustments;
   final String? approvalUrl;
@@ -15979,6 +16015,10 @@ class GetPayrollRunResponse {
   final GetPayrollRunResponseMay? may;
   /// A DRAFT run: Payrolla couldn't work it out, in words, with Recalculate
   final String? notWorkedOut;
+  /// After locking (P4b-4): what is happening to the payment, in words ("Pays
+  /// on 28 Nov", "Waiting for money: short by ₦120,000", "Paying", "Paid",
+  /// "Paid, 2 not paid"), the counts, and what this person may do
+  final GetPayrollRunResponsePayment? payment;
   final String? paysOn;
   final GetPayrollRunResponseRun run;
 
@@ -15993,6 +16033,7 @@ class GetPayrollRunResponse {
         lines: (j['lines'] as List).map((e) => GetPayrollRunResponseLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
         may: j['may'] == null ? null : GetPayrollRunResponseMay.fromJson(j['may'] as Map<String, dynamic>),
         notWorkedOut: j['not_worked_out'] == null ? null : j['not_worked_out'] as String,
+        payment: j['payment'] == null ? null : GetPayrollRunResponsePayment.fromJson(j['payment'] as Map<String, dynamic>),
         paysOn: j['pays_on'] == null ? null : j['pays_on'] as String,
         run: GetPayrollRunResponseRun.fromJson(j['run'] as Map<String, dynamic>),
       );
@@ -16008,6 +16049,7 @@ class GetPayrollRunResponse {
         'lines': lines.map((e) => e.toJson()).toList(),
         'may': ?may?.toJson(),
         'not_worked_out': ?notWorkedOut,
+        'payment': ?payment?.toJson(),
         'pays_on': ?paysOn,
         'run': run.toJson(),
       };
@@ -16257,6 +16299,67 @@ class GetPayrollRunResponseMay {
         'linked': linked,
         'prepare': prepare,
         'reconnect': reconnect,
+      };
+}
+
+/// After locking (P4b-4): what is happening to the payment, in words ("Pays on
+/// 28 Nov", "Waiting for money: short by ₦120,000", "Paying", "Paid", "Paid,
+/// 2 not paid"), the counts, and what this person may do
+class GetPayrollRunResponsePayment {
+  const GetPayrollRunResponsePayment({required this.cannotPay, required this.failed, required this.mayPayNow, required this.mayPayslips, required this.mayRetry, required this.paid, required this.pending, required this.returned, this.scheduledFor, required this.shortByKobo, required this.status, required this.tone, required this.totalKobo, required this.words});
+
+  /// Linked, but Payrolla's role does not allow paying: "In Payrolla you can't
+  /// send payments. Ask the owner."
+  final bool cannotPay;
+  final int failed;
+  /// Pay now before the pay date
+  final bool mayPayNow;
+  /// Open anyone's payslip from the run (payroll.read)
+  final bool mayPayslips;
+  /// Pay the failed ones again
+  final bool mayRetry;
+  final int paid;
+  final int pending;
+  final int returned;
+  final String? scheduledFor;
+  final int shortByKobo;
+  final String status;
+  final String tone;
+  final int totalKobo;
+  final String words;
+
+  factory GetPayrollRunResponsePayment.fromJson(Map<String, dynamic> j) => GetPayrollRunResponsePayment(
+        cannotPay: j['cannot_pay'] as bool,
+        failed: (j['failed'] as num).toInt(),
+        mayPayNow: j['may_pay_now'] as bool,
+        mayPayslips: j['may_payslips'] as bool,
+        mayRetry: j['may_retry'] as bool,
+        paid: (j['paid'] as num).toInt(),
+        pending: (j['pending'] as num).toInt(),
+        returned: (j['returned'] as num).toInt(),
+        scheduledFor: j['scheduled_for'] == null ? null : j['scheduled_for'] as String,
+        shortByKobo: (j['short_by_kobo'] as num).toInt(),
+        status: j['status'] as String,
+        tone: j['tone'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'cannot_pay': cannotPay,
+        'failed': failed,
+        'may_pay_now': mayPayNow,
+        'may_payslips': mayPayslips,
+        'may_retry': mayRetry,
+        'paid': paid,
+        'pending': pending,
+        'returned': returned,
+        'scheduled_for': ?scheduledFor,
+        'short_by_kobo': shortByKobo,
+        'status': status,
+        'tone': tone,
+        'total_kobo': totalKobo,
+        'words': words,
       };
 }
 
@@ -20468,5 +20571,400 @@ class RejectPayrollRunResponse {
   Map<String, dynamic> toJson() => {
         'run': run.toJson(),
         'words': words,
+      };
+}
+
+class PayPayrollRunNowRequest {
+  const PayPayrollRunNowRequest({required this.challengeId, required this.code, required this.key});
+
+  final String challengeId;
+  final String code;
+  final String key;
+
+  factory PayPayrollRunNowRequest.fromJson(Map<String, dynamic> j) => PayPayrollRunNowRequest(
+        challengeId: j['challenge_id'] as String,
+        code: j['code'] as String,
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'code': code,
+        'key': key,
+      };
+}
+
+class PayPayrollRunNowResponse {
+  const PayPayrollRunNowResponse({required this.payment, required this.run, required this.words});
+
+  final PayPayrollRunNowResponsePayment payment;
+  final PayrollRun run;
+  final String words;
+
+  factory PayPayrollRunNowResponse.fromJson(Map<String, dynamic> j) => PayPayrollRunNowResponse(
+        payment: PayPayrollRunNowResponsePayment.fromJson(j['payment'] as Map<String, dynamic>),
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payment': payment.toJson(),
+        'run': run.toJson(),
+        'words': words,
+      };
+}
+
+class PayPayrollRunNowResponsePayment {
+  const PayPayrollRunNowResponsePayment({required this.failed, required this.paid, required this.pending, required this.returned, this.scheduledFor, required this.status, required this.totalKobo});
+
+  final int failed;
+  final int paid;
+  final int pending;
+  final int returned;
+  final String? scheduledFor;
+  final String status;
+  final int totalKobo;
+
+  factory PayPayrollRunNowResponsePayment.fromJson(Map<String, dynamic> j) => PayPayrollRunNowResponsePayment(
+        failed: (j['failed'] as num).toInt(),
+        paid: (j['paid'] as num).toInt(),
+        pending: (j['pending'] as num).toInt(),
+        returned: (j['returned'] as num).toInt(),
+        scheduledFor: j['scheduled_for'] == null ? null : j['scheduled_for'] as String,
+        status: j['status'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'failed': failed,
+        'paid': paid,
+        'pending': pending,
+        'returned': returned,
+        'scheduled_for': ?scheduledFor,
+        'status': status,
+        'total_kobo': totalKobo,
+      };
+}
+
+class RetryPayrollRunFailedRequest {
+  const RetryPayrollRunFailedRequest({required this.challengeId, required this.code, required this.key});
+
+  final String challengeId;
+  final String code;
+  final String key;
+
+  factory RetryPayrollRunFailedRequest.fromJson(Map<String, dynamic> j) => RetryPayrollRunFailedRequest(
+        challengeId: j['challenge_id'] as String,
+        code: j['code'] as String,
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'code': code,
+        'key': key,
+      };
+}
+
+class RetryPayrollRunFailedResponse {
+  const RetryPayrollRunFailedResponse({required this.payment, required this.run, required this.words});
+
+  final RetryPayrollRunFailedResponsePayment payment;
+  final PayrollRun run;
+  final String words;
+
+  factory RetryPayrollRunFailedResponse.fromJson(Map<String, dynamic> j) => RetryPayrollRunFailedResponse(
+        payment: RetryPayrollRunFailedResponsePayment.fromJson(j['payment'] as Map<String, dynamic>),
+        run: PayrollRun.fromJson(j['run'] as Map<String, dynamic>),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payment': payment.toJson(),
+        'run': run.toJson(),
+        'words': words,
+      };
+}
+
+class RetryPayrollRunFailedResponsePayment {
+  const RetryPayrollRunFailedResponsePayment({required this.failed, required this.paid, required this.pending, required this.returned, this.scheduledFor, required this.status, required this.totalKobo});
+
+  final int failed;
+  final int paid;
+  final int pending;
+  final int returned;
+  final String? scheduledFor;
+  final String status;
+  final int totalKobo;
+
+  factory RetryPayrollRunFailedResponsePayment.fromJson(Map<String, dynamic> j) => RetryPayrollRunFailedResponsePayment(
+        failed: (j['failed'] as num).toInt(),
+        paid: (j['paid'] as num).toInt(),
+        pending: (j['pending'] as num).toInt(),
+        returned: (j['returned'] as num).toInt(),
+        scheduledFor: j['scheduled_for'] == null ? null : j['scheduled_for'] as String,
+        status: j['status'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'failed': failed,
+        'paid': paid,
+        'pending': pending,
+        'returned': returned,
+        'scheduled_for': ?scheduledFor,
+        'status': status,
+        'total_kobo': totalKobo,
+      };
+}
+
+class GetPayrollPayslipResponse {
+  const GetPayrollPayslipResponse({required this.payslip});
+
+  final PayrollPayslip payslip;
+
+  factory GetPayrollPayslipResponse.fromJson(Map<String, dynamic> j) => GetPayrollPayslipResponse(
+        payslip: PayrollPayslip.fromJson(j['payslip'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payslip': payslip.toJson(),
+      };
+}
+
+/// A payslip as Taskiem's own card (P4b-4): read from Payrolla when opened,
+/// kept nowhere.
+class PayrollPayslip {
+  const PayrollPayslip({required this.employee, required this.employer, required this.grossKobo, required this.items, required this.month, required this.netKobo, required this.payDate, required this.payment, required this.payslipId, required this.period, required this.periodStart, required this.runId, required this.totalDeductionsKobo, required this.totalEarningsKobo});
+
+  final PayrollPayslipEmployee employee;
+  final PayrollPayslipEmployer employer;
+  final int grossKobo;
+  final List<PayrollPayslipItemsItem> items;
+  final String month;
+  final int netKobo;
+  final String payDate;
+  final PayrollPayslipPayment payment;
+  final String payslipId;
+  /// November 2026
+  final String period;
+  final String periodStart;
+  final String runId;
+  final int totalDeductionsKobo;
+  final int totalEarningsKobo;
+
+  factory PayrollPayslip.fromJson(Map<String, dynamic> j) => PayrollPayslip(
+        employee: PayrollPayslipEmployee.fromJson(j['employee'] as Map<String, dynamic>),
+        employer: PayrollPayslipEmployer.fromJson(j['employer'] as Map<String, dynamic>),
+        grossKobo: (j['gross_kobo'] as num).toInt(),
+        items: (j['items'] as List).map((e) => PayrollPayslipItemsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        month: j['month'] as String,
+        netKobo: (j['net_kobo'] as num).toInt(),
+        payDate: j['pay_date'] as String,
+        payment: PayrollPayslipPayment.fromJson(j['payment'] as Map<String, dynamic>),
+        payslipId: j['payslip_id'] as String,
+        period: j['period'] as String,
+        periodStart: j['period_start'] as String,
+        runId: j['run_id'] as String,
+        totalDeductionsKobo: (j['total_deductions_kobo'] as num).toInt(),
+        totalEarningsKobo: (j['total_earnings_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'employee': employee.toJson(),
+        'employer': employer.toJson(),
+        'gross_kobo': grossKobo,
+        'items': items.map((e) => e.toJson()).toList(),
+        'month': month,
+        'net_kobo': netKobo,
+        'pay_date': payDate,
+        'payment': payment.toJson(),
+        'payslip_id': payslipId,
+        'period': period,
+        'period_start': periodStart,
+        'run_id': runId,
+        'total_deductions_kobo': totalDeductionsKobo,
+        'total_earnings_kobo': totalEarningsKobo,
+      };
+}
+
+class PayrollPayslipEmployee {
+  const PayrollPayslipEmployee({this.department, required this.id, required this.name});
+
+  final String? department;
+  final String id;
+  final String name;
+
+  factory PayrollPayslipEmployee.fromJson(Map<String, dynamic> j) => PayrollPayslipEmployee(
+        department: j['department'] == null ? null : j['department'] as String,
+        id: j['id'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'department': ?department,
+        'id': id,
+        'name': name,
+      };
+}
+
+class PayrollPayslipEmployer {
+  const PayrollPayslipEmployer({required this.name, this.rcNumber});
+
+  final String name;
+  final String? rcNumber;
+
+  factory PayrollPayslipEmployer.fromJson(Map<String, dynamic> j) => PayrollPayslipEmployer(
+        name: j['name'] as String,
+        rcNumber: j['rc_number'] == null ? null : j['rc_number'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'rc_number': ?rcNumber,
+      };
+}
+
+class PayrollPayslipItemsItem {
+  const PayrollPayslipItemsItem({required this.amountKobo, required this.code, required this.kind, required this.label});
+
+  final int amountKobo;
+  final String code;
+  final String kind;
+  final String label;
+
+  factory PayrollPayslipItemsItem.fromJson(Map<String, dynamic> j) => PayrollPayslipItemsItem(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        code: j['code'] as String,
+        kind: j['kind'] as String,
+        label: j['label'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'code': code,
+        'kind': kind,
+        'label': label,
+      };
+}
+
+class PayrollPayslipPayment {
+  const PayrollPayslipPayment({required this.state, required this.status, required this.words});
+
+  final String state;
+  final String status;
+  final String words;
+
+  factory PayrollPayslipPayment.fromJson(Map<String, dynamic> j) => PayrollPayslipPayment(
+        state: j['state'] as String,
+        status: j['status'] as String,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'state': state,
+        'status': status,
+        'words': words,
+      };
+}
+
+class SendPayrollPayslipLinkRequest {
+  const SendPayrollPayslipLinkRequest({required this.key});
+
+  final String key;
+
+  factory SendPayrollPayslipLinkRequest.fromJson(Map<String, dynamic> j) => SendPayrollPayslipLinkRequest(
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+      };
+}
+
+class SendPayrollPayslipLinkResponse {
+  const SendPayrollPayslipLinkResponse({required this.expiresAt, required this.url});
+
+  final String expiresAt;
+  final String url;
+
+  factory SendPayrollPayslipLinkResponse.fromJson(Map<String, dynamic> j) => SendPayrollPayslipLinkResponse(
+        expiresAt: j['expires_at'] as String,
+        url: j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_at': expiresAt,
+        'url': url,
+      };
+}
+
+class GetMyPayslipsResponse {
+  const GetMyPayslipsResponse({required this.linked, required this.payslips});
+
+  final bool linked;
+  final List<GetMyPayslipsResponsePayslipsItem> payslips;
+
+  factory GetMyPayslipsResponse.fromJson(Map<String, dynamic> j) => GetMyPayslipsResponse(
+        linked: j['linked'] as bool,
+        payslips: (j['payslips'] as List).map((e) => GetMyPayslipsResponsePayslipsItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'linked': linked,
+        'payslips': payslips.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GetMyPayslipsResponsePayslipsItem {
+  const GetMyPayslipsResponsePayslipsItem({required this.grossKobo, required this.month, required this.netKobo, required this.payDate, required this.payslipId, required this.period, required this.runId, required this.state, required this.words});
+
+  final int grossKobo;
+  final String month;
+  final int netKobo;
+  final String payDate;
+  final String payslipId;
+  /// November 2026
+  final String period;
+  final String runId;
+  final String state;
+  final String words;
+
+  factory GetMyPayslipsResponsePayslipsItem.fromJson(Map<String, dynamic> j) => GetMyPayslipsResponsePayslipsItem(
+        grossKobo: (j['gross_kobo'] as num).toInt(),
+        month: j['month'] as String,
+        netKobo: (j['net_kobo'] as num).toInt(),
+        payDate: j['pay_date'] as String,
+        payslipId: j['payslip_id'] as String,
+        period: j['period'] as String,
+        runId: j['run_id'] as String,
+        state: j['state'] as String,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'gross_kobo': grossKobo,
+        'month': month,
+        'net_kobo': netKobo,
+        'pay_date': payDate,
+        'payslip_id': payslipId,
+        'period': period,
+        'run_id': runId,
+        'state': state,
+        'words': words,
+      };
+}
+
+class GetMyPayslipResponse {
+  const GetMyPayslipResponse({required this.payslip});
+
+  final PayrollPayslip payslip;
+
+  factory GetMyPayslipResponse.fromJson(Map<String, dynamic> j) => GetMyPayslipResponse(
+        payslip: PayrollPayslip.fromJson(j['payslip'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payslip': payslip.toJson(),
       };
 }

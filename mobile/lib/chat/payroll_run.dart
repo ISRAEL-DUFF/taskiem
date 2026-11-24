@@ -35,6 +35,7 @@ import 'groups.dart' show askSure, pickOneOf;
 import 'invoices_page.dart' show shortDay;
 import 'payroll_page.dart' show payrollLineState, payrollPeriod, payrollRefusal, payrollStatus, peopleCount;
 import 'payroll_settings.dart' show PayrollSettingsPage, payrollKey;
+import 'payslip.dart' show PayslipPage;
 import 'team_pages.dart' show StaffPersonPage;
 import 'words.dart' show naira;
 
@@ -46,8 +47,23 @@ Future<T?> _sheet<T>(BuildContext context, Widget sheet) => showTkSheet<T>(conte
 /// for approval, lock an approved one.
 String? payrollNextDecision(String status) => switch (status) { 'COMPUTED' => 'approve', 'APPROVED' => 'lock', _ => null };
 
-/// "Approve", "Lock and pay".
-String payrollActionWords(String action) => action == 'lock' ? 'Lock and pay' : 'Approve';
+/// "Approve", "Lock and pay", "Pay now", "Pay the failed ones again".
+String payrollActionWords(String action) => switch (action) {
+  'lock' => 'Lock and pay',
+  'pay_now' => 'Pay now',
+  'retry_failed' => 'Pay the failed ones again',
+  _ => 'Approve',
+};
+
+/// "Paid 46 of 48 people, 2 not paid".
+String payrollPaymentCounts(GetPayrollRunResponsePayment p) {
+  final total = p.paid + p.failed + p.returned + p.pending;
+  return [
+    if (p.paid > 0) 'Paid ${p.paid} of $total ${total == 1 ? 'person' : 'people'}',
+    if (p.failed > 0) '${p.failed} not paid',
+    if (p.returned > 0) '${p.returned} returned by the bank',
+  ].join(', ');
+}
 
 /// Said before a lock's code is asked for.
 String payrollLockWarning(String payDay) => 'Locking pays everyone on $payDay. A locked payroll can’t be unlocked.';
@@ -122,6 +138,10 @@ class _PayrollCodeSheetState extends State<PayrollCodeSheet> {
       final String words;
       if (widget.action == 'lock') {
         words = (await widget.auth.api.lockPayrollRun(run: widget.run.runId, body: LockPayrollRunRequest(challengeId: id, code: code, key: payrollKey()))).words;
+      } else if (widget.action == 'pay_now') {
+        words = (await widget.auth.api.payPayrollRunNow(run: widget.run.runId, body: PayPayrollRunNowRequest(challengeId: id, code: code, key: payrollKey()))).words;
+      } else if (widget.action == 'retry_failed') {
+        words = (await widget.auth.api.retryPayrollRunFailed(run: widget.run.runId, body: RetryPayrollRunFailedRequest(challengeId: id, code: code, key: payrollKey()))).words;
       } else {
         words = (await widget.auth.api.approvePayrollRun(run: widget.run.runId, body: ApprovePayrollRunRequest(challengeId: id, code: code, key: payrollKey()))).words;
       }
@@ -157,6 +177,23 @@ class _PayrollCodeSheetState extends State<PayrollCodeSheet> {
             title: payrollLockWarning(day.isEmpty ? 'pay day' : day),
             subLines: 3,
             color: look.orange,
+          ),
+        if (widget.action == 'pay_now')
+          TkCallout(
+            key: const ValueKey('payroll-pay-now-warning'),
+            leading: TkSquare('b-cash', color: look.orange),
+            title: 'Payrolla pays everyone now instead of on ${day.isEmpty ? 'pay day' : day}.',
+            subLines: 3,
+            color: look.orange,
+          ),
+        if (widget.action == 'retry_failed')
+          TkCallout(
+            key: const ValueKey('payroll-retry-note'),
+            leading: TkSquare('b-cash', color: look.teal),
+            title: 'Each failed payment goes again',
+            sub: 'To the person’s current account. Payments the bank returned are not sent again.',
+            subLines: 3,
+            color: look.teal,
           ),
         if (sent == null)
           TkCallout(
@@ -337,11 +374,15 @@ class _PayrollAdjustSheetState extends State<PayrollAdjustSheet> {
 
 /// One person's pay, line by line; Leave out this month for those who may.
 class PayrollLineSheet extends StatefulWidget {
-  const PayrollLineSheet({super.key, required this.auth, required this.run, required this.line, required this.mayChange});
+  const PayrollLineSheet({super.key, required this.auth, required this.run, required this.line, required this.mayChange, this.payslip = false});
   final Auth auth;
   final String run;
   final GetPayrollRunResponseLinesItem line;
   final bool mayChange;
+
+  /// Open the payslip (a locked payroll, for payroll.read): the sheet
+  /// closes with 'payslip'.
+  final bool payslip;
 
   @override
   State<PayrollLineSheet> createState() => _PayrollLineSheetState();
@@ -396,8 +437,12 @@ class _PayrollLineSheetState extends State<PayrollLineSheet> {
       crumb: 'This month’s pay',
       action: _leaving ? (_busy ? 'Leaving out…' : 'Leave out') : 'Done',
       onAction: _busy ? null : () => _leaving ? unawaited(_leave()) : Navigator.of(context).pop(false),
-      second: widget.mayChange && !_leaving ? 'Leave out this month' : null,
-      onSecond: widget.mayChange && !_leaving ? () => setState(() => _leaving = true) : null,
+      second: widget.mayChange && !_leaving ? 'Leave out this month' : (widget.payslip ? 'Open the payslip' : null),
+      onSecond: widget.mayChange && !_leaving
+          ? () => setState(() => _leaving = true)
+          : widget.payslip
+              ? () => Navigator.of(context).pop('payslip')
+              : null,
       children: [
         if (items.isEmpty) TkCallout(leading: TkSquare('b-cash', color: look.teal), title: 'Net pay ${naira(l.netKobo)}', color: look.teal) else TkFormGroup(children: [TkLines(rows)]),
         if (emp.isNotEmpty) TkFormGroup(title: 'The business also pays', children: [TkLines([for (final i in emp) (i.label, naira(i.amountKobo))])]),
@@ -476,7 +521,12 @@ class _PayrollRunPageState extends State<PayrollRunPage> {
   }
 
   Future<void> _openLine(GetPayrollRunResponseLinesItem l, bool may) async {
-    final changed = await _sheet<bool>(context, PayrollLineSheet(auth: _auth, run: widget.run, line: l, mayChange: may));
+    final slips = _got?.payment?.mayPayslips ?? false;
+    final changed = await _sheet<Object>(context, PayrollLineSheet(auth: _auth, run: widget.run, line: l, mayChange: may, payslip: slips && !may));
+    if (changed == 'payslip' && mounted) {
+      await _push(context, PayslipPage(auth: _auth, payslip: l.payslipId, own: false, backLabel: 'Back to the payroll'));
+      return;
+    }
     if (changed == true && mounted) {
       showTkToast(context, '${l.name} left out this month');
       await _load();
@@ -562,7 +612,8 @@ class _PayrollRunPageState extends State<PayrollRunPage> {
     final next = r != null && (may?.approve ?? false) ? payrollNextDecision(r.status) : null;
     final approval = got?.approvalUrl;
     final changes = payrollChanges(got?.changes);
-    final short = got?.funding;
+    final pay = got?.payment;
+    final short = pay == null ? got?.funding : null;
     final adjustments = got?.adjustments ?? const [];
     final out = got?.exclusions ?? const [];
     return TkPageScreen(
@@ -602,6 +653,37 @@ class _PayrollRunPageState extends State<PayrollRunPage> {
             ),
           ),
         if (_said != null) TkCallout(key: const ValueKey('payroll-said'), leading: TkSquare('b-check', color: look.teal), title: _said!, subLines: 3, color: look.teal),
+        if (r != null && pay != null && pay.status != 'NOT_SCHEDULED') ...[
+          TkSection(title: 'Payment', inset: 56, children: [
+            TkListRow(
+              key: const ValueKey('payroll-payment'),
+              title: pay.words,
+              sub: payrollPaymentCounts(pay),
+              subLines: 2,
+              titleLines: 2,
+              icon: 'b-cash',
+              square: pay.tone == 'warn' || pay.tone == 'bad' ? look.orange : look.lime,
+              chevron: false,
+            ),
+          ]),
+          if (pay.status == 'AWAITING_FUNDS')
+            TkCallout(
+              key: const ValueKey('payroll-add-money'),
+              leading: TkSquare('b-alert', color: look.orange),
+              title: 'Add money to your Payrolla wallet',
+              sub: 'Payrolla pays as soon as it’s in.',
+              subLines: 3,
+              color: look.orange,
+            ),
+          if (pay.cannotPay && (pay.status == 'SCHEDULED' || pay.failed > 0))
+            TkCallout(leading: TkSquare('b-lock', color: look.orange), title: 'In Payrolla you can’t send payments', sub: 'Ask the owner.', color: look.orange),
+          if (pay.mayPayNow || pay.mayRetry)
+            TkButtonRow([
+              if (pay.mayPayNow) TkSmallButton(label: 'Pay now', primary: true, semantics: 'Pay now', onPressed: () => unawaited(_decide(r, 'pay_now'))),
+              if (pay.mayRetry)
+                TkSmallButton(label: 'Pay the failed ones again', primary: true, semantics: 'Pay the failed ones again', onPressed: () => unawaited(_decide(r, 'retry_failed'))),
+            ]),
+        ],
         if (got?.notWorkedOut != null)
           TkCallout(
             leading: TkSquare('b-alert', color: look.orange),
@@ -871,7 +953,8 @@ class _PayrollChatCardState extends State<PayrollChatCard> {
     final look = TkLook.of(context);
     final got = _got;
     final r = got?.run.summary;
-    final next = r != null && (got?.may?.approve ?? false) ? payrollNextDecision(r.status) : null;
+    final pay = got?.payment;
+    final next = r != null && (got?.may?.approve ?? false) ? (payrollNextDecision(r.status) ?? ((pay?.mayRetry ?? false) ? 'retry_failed' : null)) : null;
     final st = payrollStatus(r?.status ?? '');
     return TkSection(
       title: '${widget.period.isEmpty ? 'This month’s' : widget.period} payroll',
@@ -890,7 +973,9 @@ class _PayrollChatCardState extends State<PayrollChatCard> {
             semanticsLabel: '${widget.period} payroll: ${naira(r.totalNetKobo)}, ${peopleCount(r.employeeCount)}, ${got?.paysOn ?? st.words}. Open',
             onTap: () => unawaited(_push(context, PayrollRunPage(auth: widget.auth, run: r.runId, summary: r, backLabel: 'Back to the chat'))),
           ),
-          if ((got?.funding?.shortByKobo ?? 0) > 0)
+          if (pay != null && pay.status != 'NOT_SCHEDULED' && pay.status != 'SCHEDULED')
+            TkListRow(key: const ValueKey('payroll-card-payment'), title: pay.words, icon: 'b-cash', square: pay.tone == 'ok' ? look.lime : look.orange, titleLines: 2, chevron: false),
+          if (pay == null && (got?.funding?.shortByKobo ?? 0) > 0)
             TkListRow(title: 'Your Payrolla wallet is short by ${naira(got!.funding!.shortByKobo)}', icon: 'b-alert', square: look.orange, titleLines: 2, chevron: false),
           if (_said != null) TkListRow(title: _said!, icon: 'b-check', square: look.teal, titleLines: 3, chevron: false),
           if (next != null)

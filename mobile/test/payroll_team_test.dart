@@ -338,6 +338,13 @@ void main() {
         'waiting_change': waiting,
       },
     };
+    // Her payslips (P4b-4), listed under her account.
+    api.routes['GET /v1/payroll/me/payslips'] = (_) => {
+      'linked': true,
+      'payslips': [
+        {'payslip_id': 'ps1', 'run_id': 'r1', 'period': 'October 2026', 'month': 'October', 'pay_date': '2026-10-31', 'gross_kobo': 45000000, 'net_kobo': 38250000, 'state': 'paid', 'words': 'Paid'},
+      ],
+    };
     api.routes['POST /v1/payroll/me/bank-change'] = (_) => _status(202, {
       'challenge': {'challenge_id': 'ch9', 'channel': 'SMS', 'destination_hint': '•••• 7801', 'expires_at': '2026-11-24T10:10:00Z'},
       'account_name': 'ZAINAB A. BELLO',
