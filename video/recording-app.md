@@ -21,12 +21,13 @@ tap a row. It is skipped unless `VIDEO_DIR` is set.
 Three parts:
 
 1. **`mobile/test/film.dart`**, the helper a film uses: `Film.start`, `play`,
-   `hold`, `tap(finder)`, `drag(finder, by)`, `say(text, who:)`, `settle`,
-   `finish`. It sets a 390 x 844 phone with the status bar (47 pt) and gesture
+   `hold`, `tap(finder)`, `drag(finder, by)`, `keyboard(show)`, `type(field, text)`,
+   `system('biometric', seconds)`, `say(text, who:)`, `settle`, `finish`. It sets a 390 x 844 phone with the status bar (47 pt) and gesture
    bar (24 pt) kept clear, writes a picture every 33 ms at 3 px to a point, and
    `cues.json` (where and when each tap, drag and caption was).
 2. **A film**, a test that sets the screen up and drives it:
-   `mobile/test/film_today_test.dart` is the first. Skipped unless `VIDEO_DIR`
+   `mobile/test/film_today_test.dart` (Today) and `film_pay_test.dart` (pay a
+   supplier, with the number keyboard and a fingerprint prompt). Skipped unless `VIDEO_DIR`
    is set.
 3. **`video/phone/compose.py`**, which puts the frames into a phone and draws the
    tap ring, status bar, captions and joins them into an MP4.
@@ -62,7 +63,9 @@ your sequence. Check with `flutter analyze test/<your film>`.
 - Runs here (and in CI); no phone or emulator.
 
 ## Not yet
-- The on-screen keyboard (a test runner draws none): a film that types needs one drawn in the compositor.
+- Only a **number** keyboard is drawn. A film that types words needs a letter keyboard in `compose.py`.
+- `settle()` fast-forwards without pictures; use `play()` wherever something visible happens.
+- The fingerprint prompt is drawn by `compose.py`; the film holds the app's passkey call open for as long as it shows (see `_FilmPasskeys` in `film_pay_test.dart`).
 - Live data: this uses recorded answers. The app's tests against the real
   server (`mobile/test/server/`) could feed it the demo world.
 - Shared set-ups: each film still copies a screen test's set-up (its recorded

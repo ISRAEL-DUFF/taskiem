@@ -40,6 +40,7 @@ BODY_W, BODY_H = SCREEN_W + 2 * EDGE, SCREEN_H + 2 * EDGE
 R_BODY = 62
 R_SCREEN = 46
 BTN = 3.4           # how far a side button stands out
+GESTURE = 24        # the gesture bar's height
 
 
 def font(name_hint, px):
@@ -249,12 +250,16 @@ class Phone:
         self.front = fr
 
     # -- per frame -------------------------------------------------------
-    def frame(self, app_png, rings):
+    def frame(self, app_png, rings, under=(), over=()):
         img = self.back.copy()
         app = Image.open(app_png).convert("RGB").resize((self.sw, self.sh), Image.LANCZOS)
         screen = app.convert("RGBA")
+        for layer in under:
+            screen = Image.alpha_composite(screen, layer)
         for ring in rings:
             screen = Image.alpha_composite(screen, ring(self))
+        for layer in over:
+            screen = Image.alpha_composite(screen, layer)
         img.paste(screen.convert("RGB"), (self.sx, self.sy), self.screen_mask)
         return Image.alpha_composite(img, self.front).convert("RGB")
 
@@ -316,6 +321,122 @@ def drag_ring(cue, t):
         return ov.resize((ph.sw, ph.sh), Image.LANCZOS)
 
     return draw
+
+
+# ---- the phone's own parts: keyboard and fingerprint prompt ---------------
+def sym_font(px):
+    for p in ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",):
+        if os.path.exists(p):
+            return ImageFont.truetype(p, int(px))
+    return font("Regular", px)
+
+
+def keyboard_state(cues, t):
+    """(progress 0..1, height, pressed key or None) of the keyboard at [t]."""
+    state = None
+    for c in cues:
+        if c["kind"] == "keyboard" and c["t"] <= t:
+            state = c
+    if not state:
+        return 0.0, 0, None
+    u = min((t - state["t"]) / (8 / 30), 1.0)
+    p = ease_out(u) if state["show"] else 1 - ease_out(u)
+    pressed = None
+    for c in cues:
+        if c["kind"] == "key" and 0 <= t - c["t"] < 0.16:
+            pressed = c["key"]
+    return p, state["height"], pressed
+
+
+def keyboard_layer(ph, cues, t, theme):
+    p, kh, pressed = keyboard_state(cues, t)
+    if p <= 0.001:
+        return None
+    S = 2
+    ov = Image.new("RGBA", (ph.sw * S, ph.sh * S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(ov)
+    dark = theme == "dark"
+    bg = (32, 34, 38, 255) if dark else (228, 231, 236, 255)
+    key = (60, 63, 68, 255) if dark else (255, 255, 255, 255)
+    key_on = (96, 100, 108, 255) if dark else (196, 202, 212, 255)
+    accent = (154, 182, 255, 255) if dark else (168, 199, 250, 255)
+    ink = (235, 236, 240, 255) if dark else (28, 30, 34, 255)
+    u = lambda v: ph.px(v) * S
+    top = SCREEN_H - kh * p
+    d.rectangle((0, u(top), ph.sw * S, ph.sh * S), fill=bg)
+    rows = [["1", "2", "3", "\u232b"], ["4", "5", "6", "-"], ["7", "8", "9", "_"], [",", "0", ".", "\u2713"]]
+    pad, gap = 8, 6
+    usable = kh - GESTURE - pad - 4
+    kw = (SCREEN_W - 2 * pad - 3 * gap) / 4
+    kht = (usable - 3 * gap) / 4
+    f = font("Medium", u(24))
+    sf = sym_font(u(24))
+    for ri, row in enumerate(rows):
+        for ci, label in enumerate(row):
+            x0 = pad + ci * (kw + gap)
+            y0 = top + pad + ri * (kht + gap)
+            on = (label == pressed)
+            fill = accent if label == "\u2713" else key
+            if on:
+                fill = key_on
+            d.rounded_rectangle((u(x0), u(y0), u(x0 + kw), u(y0 + kht)), radius=u(16), fill=fill)
+            cx, cy = u(x0 + kw / 2), u(y0 + kht / 2)
+            if label == "_":
+                d.line([(cx - u(14), cy - u(3)), (cx - u(14), cy + u(4)), (cx + u(14), cy + u(4)), (cx + u(14), cy - u(3))], fill=ink[:3] + (190,), width=round(u(2)), joint="curve")
+            elif label in ("\u232b", "\u2713"):
+                d.text((cx, cy), label, font=sf, fill=ink, anchor="mm")
+            else:
+                d.text((cx, cy), label, font=f, fill=ink, anchor="mm")
+    return ov.resize((ph.sw, ph.sh), Image.LANCZOS)
+
+
+def system_layer(ph, cues, t):
+    """A phone dialog over the app: the fingerprint prompt."""
+    cur = None
+    for c in cues:
+        if c["kind"] == "system" and c["t"] <= t < c["t"] + c["seconds"] + 0.4:
+            cur = c
+    if not cur:
+        return None
+    age, dur = t - cur["t"], cur["seconds"]
+    slide_in = ease_out(min(age / 0.3, 1))
+    slide_out = ease_out(min(max(age - dur, 0) / 0.3, 1))
+    vis = slide_in * (1 - slide_out)
+    ok = age > dur - 0.5
+    S = 2
+    ov = Image.new("RGBA", (ph.sw * S, ph.sh * S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(ov)
+    u = lambda v: ph.px(v) * S
+    d.rectangle((0, 0, ph.sw * S, ph.sh * S), fill=(0, 0, 0, int(125 * vis)))
+    h = 300
+    y0 = SCREEN_H - 20 - h + (1 - vis) * (h + 40)
+    x0, x1 = 14, SCREEN_W - 14
+    # a soft shadow, then the card
+    sh = Image.new("L", ov.size, 0)
+    ImageDraw.Draw(sh).rounded_rectangle((u(x0), u(y0 + 6), u(x1), u(y0 + h + 6)), radius=u(30), fill=90)
+    sh = sh.filter(ImageFilter.GaussianBlur(u(10)))
+    ov = Image.composite(Image.new("RGBA", ov.size, (0, 0, 0, 255)), ov, sh.point(lambda v: v // 3))
+    d = ImageDraw.Draw(ov)
+    d.rounded_rectangle((u(x0), u(y0), u(x1), u(y0 + h)), radius=u(30), fill=(251, 251, 253, 255))
+    cx = u((x0 + x1) / 2)
+    # the app's little mark and name
+    d.rounded_rectangle((cx - u(14), u(y0 + 24), cx + u(14), u(y0 + 52)), radius=u(8), fill=PINE + (255,))
+    d.text((cx, u(y0 + 38.5)), "t", font=font("Medium", u(20)), fill=LIME + (255,), anchor="mm")
+    d.text((cx, u(y0 + 76)), cur.get("title", "Confirm it's you"), font=font("Medium", u(21)), fill=(28, 30, 34, 255), anchor="mm")
+    d.text((cx, u(y0 + 102)), cur.get("line", "Taskiem"), font=font("Regular", u(15)), fill=(86, 90, 98, 255), anchor="mm")
+    # the fingerprint: arcs that turn into a green tick when it is read
+    fy = y0 + 178
+    if ok:
+        d.ellipse((cx - u(34), u(fy - 34), cx + u(34), u(fy + 34)), fill=(30, 142, 62, 255))
+        d.line([(cx - u(15), u(fy + 1)), (cx - u(4), u(fy + 12)), (cx + u(17), u(fy - 12))], fill=(255, 255, 255, 255), width=round(u(5)), joint="curve")
+    else:
+        col = (26, 115, 232, 255)
+        for r, a0, a1 in ((30, 200, 340), (23, 190, 350), (16, 180, 360), (9, 170, 10 + 360), (30, 20, 70), (23, 20, 60), (16, 12, 50), (9, 14, 38)):
+            d.arc((cx - u(r), u(fy) - u(r), cx + u(r), u(fy) + u(r)), a0, a1, fill=col, width=round(u(2.6)))
+        d.arc((cx - u(36), u(fy) - u(36), cx + u(36), u(fy) + u(36)), 0, 360, fill=(26, 115, 232, 70), width=round(u(1.4)))
+    d.text((cx, u(y0 + 246)), "Touch the fingerprint sensor" if not ok else "Confirmed", font=font("Regular", u(14)), fill=(86, 90, 98, 255), anchor="mm")
+    d.text((cx, u(y0 + h - 24)), "Cancel", font=font("Medium", u(16)), fill=(26, 115, 232, 255), anchor="mm")
+    return ov.resize((ph.sw, ph.sh), Image.LANCZOS)
 
 
 def captions_layer(ph, cues, t, canvas):
@@ -382,7 +503,7 @@ def main():
             r = tap_ring(c, t) if c["kind"] == "tap" else drag_ring(c, t) if c["kind"] == "drag" else None
             if r:
                 rings.append(r)
-        img = phone.frame(folder / f"f{i:05d}.png", rings)
+        img = phone.frame(folder / f"f{i:05d}.png", rings, under=[l for l in (keyboard_layer(phone, cues, t, a.theme),) if l], over=[l for l in (system_layer(phone, cues, t),) if l])
         if a.captions:
             cap = captions_layer(phone, cues, t, (cw, ch))
             if cap:

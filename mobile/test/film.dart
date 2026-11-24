@@ -109,6 +109,36 @@ class Film {
     await g.up();
   }
 
+
+  /// The phone's keyboard slides up ([show]) or away: the app's layout moves
+  /// with it as on a real phone, and compose.py draws the keys. [kind] is
+  /// 'number' for now.
+  Future<void> keyboard(bool show, {String kind = 'number', double height = 290}) async {
+    _cues.add({'kind': 'keyboard', 't': now, 'show': show, 'type': kind, 'height': height});
+    const frames = 8;
+    for (var i = 1; i <= frames; i++) {
+      final u = Curves.easeOutCubic.transform(i / frames);
+      t.view.viewInsets = FakeViewPadding(bottom: height * (show ? u : 1 - u));
+      await _step();
+    }
+    if (!show) t.view.resetViewInsets();
+  }
+
+  /// Types [text] into [field] a key at a time, each key lit on the keyboard.
+  Future<void> type(Finder field, String text, {double perKey = 0.2}) async {
+    for (var i = 1; i <= text.length; i++) {
+      _cues.add({'kind': 'key', 't': now, 'key': text[i - 1]});
+      await t.enterText(field, text.substring(0, i));
+      await play(perKey);
+    }
+  }
+
+  /// The phone's own dialog over the app (a fingerprint check): drawn by
+  /// compose.py from [name] ('biometric'), shown for [seconds].
+  void system(String name, double seconds, {String? title, String? line}) {
+    _cues.add({'kind': 'system', 't': now, 'name': name, 'seconds': seconds, 'title': ?title, 'line': ?line});
+  }
+
   /// A caption from now until the next one (or the end), with [who] over it.
   void say(String text, {String? who}) {
     _cues.add({'kind': 'say', 't': now, 'text': text, 'who': ?who});
@@ -119,6 +149,7 @@ class Film {
     debugDisableShadows = _shadows;
     t.view.resetPadding();
     t.view.resetViewPadding();
+    t.view.resetViewInsets();
     File('$dir/cues.json').writeAsStringSync(const JsonEncoder.withIndent(' ').convert({
       'name': name,
       'fps': fps,
