@@ -110,7 +110,7 @@ The specs are [made tools](made-tools.md) and [saved objects](saved-objects.md).
 | --- | --- | --- |
 | **On the web, a customer's answer kept in the conversation** | `g-ct-webkeep` | As the app's TheirRuns: after Yes the sheet closes and the answer lands in the person's chat with the business (`web/src/pages/PersonChats.tsx`, `PersonTools.tsx` 189–227), kept on reload. |
 | **Optional inputs read from words** | `g-ct-chip` | `api/tools_read.go` 56–67 gives the model only what the chat form asks. Give it the optional inputs too, still shown before anything runs. |
-| **Answers for menu entries carried over from the old public menu** | `g-ct-oldmenu` | Published versions are never rewritten. Offer the owner, on the menu's settings, **Give it an answer**: a new draft with a `tool` block (a text answer from its `public` outputs), published by them. Until then the entry starts and says its reference, as today. |
+| **Retire the separate public menu: a business's customer menu is its customers' tools** | `g-ct-oldmenu` | Decided 24 November 2026: nothing is in production, so nothing is carried over. Remove the public-menu list (`whatsapp_public_workflows`, its `command` column and the carry-over in migration 00569, `PUT /v1/whatsapp/public-menu`, the menu's settings page on the web and in the app, and the code reading both lists in `api/tools_customers.go`). **menu** on WhatsApp, and the app's and web's Their tools, list the business's customers' tools only, each with its answer. The `public_menu` switch stays as the business's choice to offer customers' tools at all, or goes if customers' tools have their own switch; the docs (`docs/tools.md`, `docs/whatsapp.md`, made tools §11, decision 0073 point 6) say so. A new migration drops the table; 00569's down stays reversible. |
 | **Tool changes said in plain words** | `g-ct-later` | `engine/wdtext` says what changed in a tool (command, phrases, who it is for, the answer) in plain words, where the version history and review show changes. |
 | **A test file stating the answer** | `g-ct-later` | `wd-test/v1` gains an expected answer (text, card fields, list rows) checked by `engine/wdtest`. |
 | **A workflow sends a saved file** | `g-saved-wf` | `api/saved_runs.go` 131–134 gives a run the file's name and type only. Let a step attach a saved file (a message, an email), read at run start under the business's scope, never a person's own file. |
@@ -118,7 +118,7 @@ The specs are [made tools](made-tools.md) and [saved objects](saved-objects.md).
 | **Saved things in the SDK** | `g-saved-wf` | The SDK's `saved` root (types and helpers), as the server's `saved.*` expressions. |
 | **An address on an invoice made with @name** | `g-saved-addr` | Invoices hold name, phone and email only. Add an address (sealed with the customer), on the PDF, the web and the app, filled from a saved person's or business's place. Migration of the customer envelope. |
 
-**Done when:** a customer's answer stays in their chat after a reload on the web; "log 4500 diesel at Total" fills an optional "where" input; an owner gives an old menu entry an answer and customers get it; a review of a changed tool says "now also says 'spent'"; a wd-test fails when the answer changes; a weekly workflow emails `@price-list`; a saved thing's page lists the runs that read it; and `invoice @acme 250k` prints Acme's address.
+**Done when:** a customer's answer stays in their chat after a reload on the web; "log 4500 diesel at Total" fills an optional "where" input; **menu** on WhatsApp lists only the business's customers' tools, each answering, and no public-menu settings remain; a review of a changed tool says "now also says 'spent'"; a wd-test fails when the answer changes; a weekly workflow emails `@price-list`; a saved thing's page lists the runs that read it; and `invoice @acme 250k` prints Acme's address.
 
 ## 9. Phase H7: paying one person, finished
 
@@ -213,16 +213,16 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | 4 | H8 | The words from waves 2 and 3 are in by then |
 | 5 | M6, then G4, then G5 | G5 needs M6 |
 
-## 14. Decisions for the founder before the phases start
+## 14. Decisions (answered by the founder, 24 November 2026)
 
-| Phase | Question | Proposed |
+| Phase | Question | Answer |
 | --- | --- | --- |
-| H3 | Device fields in customers' tools? | No (as today); members' tools only |
-| H3 | Camera scanning on the web only where the browser has a barcode reader? | Yes, typed elsewhere |
-| H6 | Old menu entries: an owner-made answer (a new draft they publish), never a rewrite of what they published? | Yes |
-| H7 | When the provider gives no fee quote: show "fee shown after paying" and pay anyway? | Yes, as today |
-| H7 | Wallet to wallet chosen by Taskiem when both have one, never by the payer? | Yes |
-| G4 | Charts drawn by Taskiem (no chart library from outside)? | Yes, plain SVG, as the money screens |
+| H3 | Device fields (location, photo, signature, scan) in customers' tools? | **No: members' tools only.** Customers' tools keep refusing them |
+| H3 | How the web scans a code | **The camera where the browser has a barcode reader; typed elsewhere.** No outside barcode library |
+| H6 | The old public menu's entries | **Nothing is in production, so nothing is carried over: retire the separate public menu.** A business's customer menu is its customers' tools, each with its answer |
+| H7 | When the provider gives no fee quote | **Pay, and show the fee after.** The sheet says "The fee shows after paying"; the fee is recorded when the provider reports it |
+| H7 | Who chooses wallet to wallet when both sides have a Taskiem wallet | **Taskiem, whenever it can.** "Taskiem wallet · arrives at once", falling back to the bank if that route fails |
+| G4 | How charts are drawn | **By Taskiem, as plain SVG**, as the money screens; a table behind each chart for screen readers; no chart library |
 
 ## 15. Every item, and where it went
 
@@ -274,7 +274,7 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-ct-linked | §12 |
 | g-ct-files | §12 |
 | g-ct-later | H6 (plain words, wd-test answer); §11 M6 (template library) |
-| g-ct-oldmenu | H6 |
+| g-ct-oldmenu | H6 (the public menu retired, §14) |
 | g-ct-tg | §12 |
 | g-ct-webkeep | H6 |
 | g-ct-chip | Chip built (H1 fixes the doc); optional inputs H6 |
