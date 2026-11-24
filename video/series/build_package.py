@@ -127,7 +127,12 @@ def concat(files, out):
 
 # ---- reel: Episode 0 from the other episodes' footage ----------------------
 def make_reel(spec, films_root, work):
-    """Frames and cues for a reel of beats: [{film, from, to, tag}]."""
+    """Frames and cues for a reel of beats: [{film, from, to, tag, caption}].
+
+    Each beat is a stretch of one film, with its own one-line caption and the
+    chapter tag ("Episode 4: Get paid") shown over it. The source film's taps,
+    keyboards and fingerprint prompts that fall in the stretch are kept; a
+    keyboard already up at the cut is carried in."""
     work.mkdir(parents=True, exist_ok=True)
     for old in work.glob("f*.png"):
         old.unlink()
@@ -136,21 +141,25 @@ def make_reel(spec, films_root, work):
         src = Film(films_root, beat["film"])
         a, b = int(beat["from"] * fps), min(src.meta["frames"], int(beat["to"] * fps))
         base = n
-        cues.append({"kind": "say", "t": n / fps, "text": beat["tag"], "who": beat.get("who", "")})
+        cues.append({"kind": "say", "t": n / fps, "text": beat["caption"], "who": beat["tag"]})
+        kb = [c for c in src.meta["cues"] if c["kind"] == "keyboard" and c["t"] < a / fps]
+        if kb and kb[-1]["show"]:
+            cues.append({**kb[-1], "t": base / fps, "instant": True})
         for i in range(a, b):
-            link = work / f"f{n:05d}.png"
-            os.symlink(src.dir / f"f{i:05d}.png", link)
+            os.symlink(src.dir / f"f{i:05d}.png", work / f"f{n:05d}.png")
             n += 1
         for c in src.meta["cues"]:
-            if c["kind"] in ("say",):
+            if c["kind"] == "say":
                 continue
             t = c["t"]
             if c["kind"] == "system":
-                if a / fps <= t < b / fps:
-                    cues.append({**c, "t": base / fps + (t - a / fps)})
-                continue
-            if a / fps - 0.7 <= t < b / fps:
-                cues.append({**c, "t": base / fps + (t - a / fps)})
+                keep = a / fps <= t < b / fps
+            elif c["kind"] == "keyboard":
+                keep = a / fps <= t < b / fps
+            else:
+                keep = a / fps - 0.7 <= t < b / fps
+            if keep:
+                cues.append({**c, "t": base / fps + max(0.0, t - a / fps)})
     meta = {"name": "reel", "fps": fps, "frames": n, "width": 390, "height": 844, "statusBar": 47, "gestureBar": 24, "cues": sorted(cues, key=lambda c: c["t"])}
     (work / "cues.json").write_text(json.dumps(meta, indent=1))
     return Film(work.parent, work.name)
@@ -219,7 +228,9 @@ def build_episode(ep, series, args, out_root, cast):
         for i, r in enumerate(rows, 1):
             caption_png(d / f"{i:03d}.png", r["text"], ink)
 
-    narr = ep.get("narration", {})
+    narr = dict(ep.get("narration", {}))
+    if ep.get("reel"):
+        narr[films[0].name] = {"en": [b["narration"]["en"] for b in ep["reel"]], "pcm": [b["narration"].get("pcm", "") for b in ep["reel"]]}
     for lang, label in (("en", "English"), ("pcm", "Pidgin (draft: a native speaker must check it)")):
         lines = [f"Episode {num}: {title}. Narration, {label}.", "One line per caption. Times are in the footage joined in order.", ""]
         said = []
