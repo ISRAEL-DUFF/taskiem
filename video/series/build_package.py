@@ -29,7 +29,7 @@ import cards  # noqa: E402
 
 COMPOSE = ROOT / "video" / "phone" / "compose.py"
 MUSIC = ROOT / "video" / "music" / "compose.py"
-SHAPES = {"9x16": dict(canvas="1080x1920", phone_height=1640), "16x9": dict(canvas="1920x1080", phone_height=980)}
+SHAPES = {"9x16": dict(canvas="1080x1920", phone_height=1640, captioned_height=1400), "16x9": dict(canvas="1920x1080", phone_height=980, captioned_height=900)}
 STYLE = ("Stylised semi-realistic animated-feature character art, soft 3D-like shading, warm natural light, "
          "expressive eyes, no outlines.")
 GUARD = ("Rich, luminous, warm skin tone with warm highlights, true to the description. Exactly one person, exactly as "
@@ -109,7 +109,7 @@ def compose(film, out, shape, captions, theme="light", force=False):
         return out
     spec = SHAPES[shape]
     opts = FILM_OPTS.get(film.name, {})
-    cmd = ["python3", COMPOSE, "--frames", film.dir, "--out", out, "--canvas", spec["canvas"], "--phone-height", spec["phone_height"], "--theme", opts.get("theme", theme), "--time", opts.get("time", "13:00")]
+    cmd = ["python3", COMPOSE, "--frames", film.dir, "--out", out, "--canvas", spec["canvas"], "--phone-height", spec["captioned_height"] if captions else spec["phone_height"], "--theme", opts.get("theme", theme), "--time", opts.get("time", "13:00")]
     if captions:
         cmd.append("--captions")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -188,7 +188,8 @@ def build_episode(ep, series, args, out_root, cast):
             clean[s].append(compose(f, ed / "parts" / f"{f.name}-{s}.mp4", s, False, force=args.force))
         capt.append(compose(f, ed / "parts" / f"{f.name}-preview-9x16.mp4", "9x16", True, force=args.force))
     for s in shapes:
-        concat(clean[s], ed / f"footage-{s}.mp4")
+        if args.force or not (ed / f"footage-{s}.mp4").exists():
+            concat(clean[s], ed / f"footage-{s}.mp4")
     total = sum(f.dur for f in films)
 
     # music for this episode
@@ -206,10 +207,11 @@ def build_episode(ep, series, args, out_root, cast):
         (work / "timeline.json").write_text(json.dumps({"length": total, "scenes": scenes}))
         run(["python3", MUSIC, work / "film.json", work / "timeline.json", wav, "--no-sfx"])
     # the preview: captioned footage with the music under it
-    prev_silent = concat(capt, ed / "_preview-silent.mp4")
-    run(["ffmpeg", "-loglevel", "error", "-y", "-i", prev_silent, "-i", wav, "-filter_complex", "[1:a]volume=0.55,afade=t=in:d=0.5,afade=t=out:st=%.2f:d=1.2[a]" % max(0, total - 1.2),
+    if args.force or not (ed / "preview-9x16.mp4").exists():
+      prev_silent = concat(capt, ed / "_preview-silent.mp4")
+      run(["ffmpeg", "-loglevel", "error", "-y", "-i", prev_silent, "-i", wav, "-filter_complex", "[1:a]volume=0.55,afade=t=in:d=0.5,afade=t=out:st=%.2f:d=1.2[a]" % max(0, total - 1.2),
          "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", ed / "preview-9x16.mp4"])
-    prev_silent.unlink()
+      prev_silent.unlink()
 
     # captions: srt, pngs, narration, cues
     offset, rows, all_cues = 0.0, [], []
@@ -360,6 +362,8 @@ def main():
     for f in (sdir / "characters.md", ROOT / "video" / "characters" / "bible.md", ROOT / "video" / "characters" / "pronunciation.md", ROOT / "video" / "characters" / "flow-guide.md"):
         if f.exists():
             shutil.copy(f, cdir / (f.name if f.name != "characters.md" else f"{args.series}-characters.md"))
+    if (sdir / "FIDELITY.md").exists():
+        shutil.copy(sdir / "FIDELITY.md", out / "FIDELITY.md")
     write_readme(out, series, built)
     write_edit_guide(out, series, built)
     print(f"built {len(built)} episode(s) into {out}", file=sys.stderr)
@@ -377,7 +381,7 @@ def main():
 
 def write_readme(out, series, built):
     L = [f"# {series['title']}", "", series["blurb"], "",
-         "Everything is provided as parts for your own video editor. See `EDIT-GUIDE.md` for the timeline of each episode.",
+         "Everything is provided as parts for your own video editor. See `EDIT-GUIDE.md` for the timeline of each episode, and `FIDELITY.md` for where the footage differs from the real app (read it before publishing).",
          "", "## Episodes", "", "| # | Episode | Length | Footage |", "| --- | --- | --- | --- |"]
     for b in built:
         L.append(f"| {b['num']} | {b['title']} | {mmss(b['total'])} | `episodes/{b['num']:02d}-{b['slug']}/` |")
