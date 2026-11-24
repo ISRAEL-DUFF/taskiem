@@ -175,6 +175,21 @@ func ownLabelTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, label *uuid.UU
 	return checkChoiceTx(ctx, tx, tenant, &c, "", 0, 1)
 }
 
+// ownSupplierTx checks a supplier is the business's own (none is fine).
+func ownSupplierTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, supplier *uuid.UUID) error {
+	if supplier == nil {
+		return nil
+	}
+	var ok bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM suppliers WHERE tenant_id = $1 AND id = $2)`, tenant, *supplier).Scan(&ok); err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNoSupplier
+	}
+	return nil
+}
+
 // AddThingTx adds a row to Things we have by hand.
 func AddThingTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in NewThing, actor string) (Thing, error) {
 	in.Name = strings.Join(strings.Fields(in.Name), " ")
@@ -195,14 +210,8 @@ func AddThingTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in NewThing, a
 	if err := ownLabelTx(ctx, tx, tenant, in.LabelID); err != nil {
 		return Thing{}, err
 	}
-	if in.SupplierID != nil {
-		var ok bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM suppliers WHERE tenant_id = $1 AND id = $2)`, tenant, *in.SupplierID).Scan(&ok); err != nil {
-			return Thing{}, err
-		}
-		if !ok {
-			return Thing{}, ErrNoSupplier
-		}
+	if err := ownSupplierTx(ctx, tx, tenant, in.SupplierID); err != nil {
+		return Thing{}, err
 	}
 	id := uuid.Must(uuid.NewV7())
 	if _, err := tx.Exec(ctx, `INSERT INTO kept_things (id, tenant_id, name, label_id, supplier_id, cost_kobo, received_at, serial, warranty_until, note, created_by)
@@ -226,6 +235,10 @@ type ThingChange struct {
 	Note          *string     `json:"note"`
 	LabelID       *uuid.UUID  `json:"label_id"`
 	ClearLabel    bool        `json:"clear_label"`
+	// SupplierID is from whom it came, one of the business's suppliers;
+	// ClearSupplier takes it off (not said).
+	SupplierID    *uuid.UUID `json:"supplier_id"`
+	ClearSupplier bool       `json:"clear_supplier"`
 	// SalePriceKobo, with Status sold: what it sold for, money in
 	// labelled SaleCategory, paid in cash or by transfer (SalePaidHow).
 	SalePriceKobo *int64 `json:"sale_price_kobo"`
@@ -308,6 +321,12 @@ func ChangeThingTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, c Thing
 	if err := ownLabelTx(ctx, tx, tenant, c.LabelID); err != nil {
 		return t, err
 	}
+	if c.SupplierID != nil && c.ClearSupplier {
+		return t, fmt.Errorf("%w: a supplier, or clear_supplier, not both", ErrPurchase)
+	}
+	if err := ownSupplierTx(ctx, tx, tenant, c.SupplierID); err != nil {
+		return t, err
+	}
 	var entry *uuid.UUID
 	if c.Sells() {
 		if t.SaleEntryID != nil {
@@ -353,14 +372,20 @@ func ChangeThingTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, c Thing
 	if _, err := tx.Exec(ctx, `UPDATE kept_things SET status = COALESCE($3, status), serial = CASE WHEN $4 THEN NULLIF($5, '') ELSE serial END,
 		warranty_until = CASE WHEN $6 THEN $7::date ELSE warranty_until END, note = CASE WHEN $8 THEN NULLIF($9, '') ELSE note END,
 		label_id = CASE WHEN $10 THEN NULL WHEN $11::uuid IS NOT NULL THEN $11 ELSE label_id END, sale_entry_id = COALESCE($12, sale_entry_id),
-		sale_key = CASE WHEN $12::uuid IS NOT NULL THEN $13 ELSE sale_key END
+		sale_key = CASE WHEN $12::uuid IS NOT NULL THEN $13 ELSE sale_key END,
+		supplier_id = CASE WHEN $14 THEN NULL WHEN $15::uuid IS NOT NULL THEN $15 ELSE supplier_id END
 		WHERE tenant_id = $1 AND id = $2`, tenant, id, c.Status, c.Serial != nil, deref(c.Serial), c.WarrantyUntil != nil, warranty, c.Note != nil, deref(c.Note),
-		c.ClearLabel, c.LabelID, entry, key); err != nil {
+		c.ClearLabel, c.LabelID, entry, key, c.ClearSupplier, c.SupplierID); err != nil {
 		return t, err
 	}
 	detail := map[string]any{"thing_id": id, "by": actor}
 	if c.Status != nil {
 		detail["status"] = *c.Status
+	}
+	if c.SupplierID != nil || c.ClearSupplier {
+		// From whom it came, changed: the one before and the one now.
+		detail["supplier_before"] = t.SupplierID
+		detail["supplier_id"] = c.SupplierID
 	}
 	if entry != nil {
 		detail["sale_entry_id"], detail["sale_kobo"] = *entry, *c.SalePriceKobo

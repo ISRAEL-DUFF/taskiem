@@ -15,6 +15,7 @@ package api
 import (
 	"context"
 	"errors"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -41,6 +42,7 @@ const (
 	treatStepMany  = "many"        // tracking more than stock.TrackAsk
 	treatStepLabel = "label"       // the label
 	treatStepTyped = "label_typed" // Another: the label typed
+	treatStepUses  = "uses"        // how many of the stock item one is
 	treatItems     = 5             // stock items offered
 	treatLabels    = 3             // labels offered
 )
@@ -71,6 +73,9 @@ type treatAsk struct {
 	// Label a label said with the treatment ("keep track of it, machines").
 	Choice    stock.LineChoice `json:"choice"`
 	StockName string           `json:"stock_name,omitempty"`
+	// StockUnit is the unit its stock item is counted in, when it asks
+	// how many of it one of the line is (stock.AskUses).
+	StockUnit string `json:"stock_unit,omitempty"`
 	Label     string           `json:"label,omitempty"`
 	// Offered are the stock items or labels offered, by number.
 	Offered []treatOffer `json:"offered,omitempty"`
@@ -226,6 +231,20 @@ func clipRow(s string) string {
 // treatQuantity is a line's quantity in words: "60 bags", "1".
 func (ta *treatAsk) quantity() string {
 	return (stock.Item{Unit: ta.Unit}).Quantity(ta.Quantity)
+}
+
+// treatAnswers are the buying question's answers, as the model is told
+// them (chat_understand.go modelAnswer): the words lang.MatchTreat reads
+// in English, what follows a comma the stock item or the label said.
+var treatAnswers = []string{"just record it", "just record it, <its label>", "add to stock", "add to stock, <the stock item's name>",
+	"keep track of it", "keep track of it, <its label>"}
+
+// treatQuestion is the buying question as the person was asked it, with
+// what each answer does.
+func (s *Server) treatQuestion(c *chat, ta *treatAsk) string {
+	return c.t("wa.treat.ask", "item", ta.Item, "count", ta.quantity(), "supplier", ta.Supplier) + "\n" + c.t("wa.treat.how") +
+		"\n(Just record it: what it cost goes into spending, nothing is counted. Add to stock: it is counted into one of the business's stock items when it comes." +
+		" Keep track of it: each one is put on the business's list of things it has.)"
 }
 
 func (s *Server) treatAskTreat(ctx context.Context, c *chat, ta *treatAsk, before string) error {
@@ -394,6 +413,14 @@ func (s *Server) waTreatReply(ctx context.Context, c *chat, text, cmd string) er
 			t = []stock.Treatment{stock.Record, stock.AddToStock, stock.Track}[treatNumber(text, 3)-1]
 		case saidOK && (said == lang.TreatRecord || said == lang.TreatStock || said == lang.TreatTrack):
 			t = stock.Treatment(said)
+		default:
+			// Words of its own ("add 10 bags of rice", "we will sell
+			// them"): the model reads them as an answer to this question.
+			if cmd := s.modelAnswer(ctx, c, text, s.treatQuestion(c, ta), treatAnswers); cmd != "" {
+				if m, r, ok := lang.MatchTreat(cmd, []lang.Tag{lang.EN}); ok && (m == lang.TreatRecord || m == lang.TreatStock || m == lang.TreatTrack) {
+					t, rest = stock.Treatment(m), r
+				}
+			}
 		}
 		if !t.Valid() {
 			return s.treatAskTreat(ctx, c, ta, c.t("wa.treat.reminder", "item", whatsapp.SafeText(ta.Item)))
@@ -424,6 +451,19 @@ func (s *Server) waTreatReply(ctx context.Context, c *chat, text, cmd string) er
 			return s.treatItemNamed(ctx, c, ta, strings.TrimSpace(text))
 		}
 		return s.treatAskItem(ctx, c, ta, c.t("wa.treat.item_reminder", "item", whatsapp.SafeText(ta.Item)), nil)
+	case treatStepUses:
+		n := usesOf(text)
+		if n == 0 && !pressed {
+			if cmd := s.modelAnswer(ctx, c, text, c.t("wa.treat.uses", "stock", ta.StockName, "unit", ta.StockUnit, "one", ta.one()),
+				[]string{"<a whole number of " + ta.StockUnit + ", digits only, like 1000>"}); cmd != "" {
+				n = usesOf(cmd)
+			}
+		}
+		if n == 0 {
+			return s.treatAskUses(ctx, c, ta, c.t("wa.treat.uses_reminder", "unit", whatsapp.SafeText(ta.StockUnit), "one", whatsapp.SafeText(ta.one())))
+		}
+		ta.Choice.Uses = n
+		return s.treatLabelStep(ctx, c, ta, "")
 	case treatStepSell:
 		switch cmd {
 		case "yes", "y":
@@ -556,8 +596,49 @@ func (s *Server) treatItemChosen(ctx context.Context, c *chat, ta *treatAsk, it 
 		return err
 	}
 	ta.Choice = stock.LineChoice{Treatment: stock.AddToStock, StockItemID: l.StockItemID, Uses: l.Uses}
-	ta.StockName = it.Name
+	ta.StockName, ta.StockUnit = it.Name, ""
+	if stock.AskUses(ta.Unit, it.Unit, l.Uses) {
+		// Counted in another unit (grams, yards): how many of it one of
+		// the line is, asked once and remembered with the item.
+		ta.StockUnit = it.Unit
+		return s.treatAskUses(ctx, c, ta, "")
+	}
 	return s.treatLabelStep(ctx, c, ta, "")
+}
+
+// treatOne is what one of the line is called in the uses question: its
+// unit ("bag"), else the item's name.
+func (ta *treatAsk) one() string {
+	if u := strings.TrimSpace(ta.Unit); u != "" {
+		return stock.Singular(u)
+	}
+	return ta.Item
+}
+
+// treatAskUses asks how many of the stock item one of the line is: "Rice
+// is counted in g. How many g is one bag?"
+func (s *Server) treatAskUses(ctx context.Context, c *chat, ta *treatAsk, before string) error {
+	ta.Step = treatStepUses
+	return s.treatSay(ctx, c, ta, before, c.t("wa.treat.uses", "stock", whatsapp.SafeText(ta.StockName), "unit", whatsapp.SafeText(ta.StockUnit),
+		"one", whatsapp.SafeText(ta.one())), nil)
+}
+
+// usesNumberRe is a whole number at the start of an answer ("1,000",
+// "50 kg", "50000g").
+var usesNumberRe = regexp.MustCompile(`^\s*(\d[\d,]*)`)
+
+// usesOf reads how many of the stock item one is from an answer; 0 when
+// it says none in range.
+func usesOf(text string) int64 {
+	m := usesNumberRe.FindStringSubmatch(text)
+	if m == nil {
+		return 0
+	}
+	n, err := strconv.ParseInt(strings.ReplaceAll(m[1], ",", ""), 10, 64)
+	if err != nil || n < 1 || n > stock.MaxDelta {
+		return 0
+	}
+	return n
 }
 
 // treatNewItem makes the line's item a new stock item, as counting in

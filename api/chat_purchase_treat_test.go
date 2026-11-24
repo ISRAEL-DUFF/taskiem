@@ -11,6 +11,7 @@ import (
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/xenibase"
 	"github.com/israel-duff/taskiem/connectors/xenibase/xenibasetest"
+	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/telegram/telegramtest"
@@ -53,6 +54,7 @@ func treatSetup(t *testing.T, w *world, seller, buyer *client) treatFixture {
 		{"name": "Lace fabric", "unit": "yard", "price_kobo": 150000},
 		{"name": "Toolbox", "price_kobo": 1200000},
 		{"name": "Plastic spoons", "price_kobo": 1000},
+		{"name": "Rice", "unit": "bag", "price_kobo": 7500000},
 	} {
 		it["quantity"] = 1000
 		id := seller.must(201, "POST", "/v1/stock/items", it, "Idempotency-Key", "s-"+string(rune('a'+i)))["item"].(map[string]any)["id"].(string)
@@ -518,5 +520,84 @@ func TestPurchaseQuestionOnSlack(t *testing.T) {
 	f.treated(t, "Generator", "track", "Machines")
 	if r := click(buttons(c)[0]); !strings.Contains(r["text"].(string), "Sent P-") {
 		t.Fatalf("sent: %v", r)
+	}
+}
+
+// g-uses-ask (build-plan-gaps H2): Add to stock into a stock item counted
+// in another unit asks how many of it one of the line is, once: rice
+// bought in bags, counted in grams, asks how many grams one bag is, and
+// the line goes in with it; the next order of it asks nothing, the uses
+// remembered with the item. A reply in words of its own ("add 10 bags of
+// rice") is read by the model, given the question, as its answer.
+func TestPurchaseQuestionAsksUses(t *testing.T) {
+	w := shopWorld(t)
+	withStock(w.world)
+	withPurchases(w.world)
+	withLinkedOrders(w.world)
+	seller, buyer, _, _ := linkedPair(t, w.waWorld)
+	asked := []string{}
+	fake := &ai.Fake{Respond: func(req ai.Request) (*ai.Response, error) {
+		p := ai.PromptText(req)
+		asked = append(asked, p)
+		msg := p[strings.Index(p, "<message>\n")+len("<message>\n") : strings.Index(p, "\n</message>")]
+		switch msg {
+		case "add 10 bags of rice":
+			return &ai.Response{Text: `{"kind":"command","id":"","pick":"","values":[],"command":"add to stock, rice","reply":""}`}, nil
+		case "fifty kilos":
+			return &ai.Response{Text: `{"kind":"command","id":"","pick":"","values":[],"command":"50000","reply":""}`}, nil
+		}
+		return &ai.Response{Text: `{"kind":"cannot","id":"","pick":"","values":[],"command":"","reply":"Not an answer."}`}, nil
+	}}
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN}, Model: fake}
+	const on = "+2348010000711"
+	w.bind(t, buyer, on)
+	w.say(t, on, "links")
+	f := treatSetup(t, w.world, seller, buyer)
+	buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 0, "unit": "g", "material": true}, "Idempotency-Key", "b-rice")
+	rice := itemsByName(t, buyer.must(200, "GET", "/v1/stock", nil))["Rice"]["stock_item_id"].(string)
+
+	if r := w.say(t, on, "order 10 bags of rice from dangote"); !strings.Contains(r, "*Rice* (10 bags) from *Dangote Stores*: how should we treat it?") {
+		t.Fatalf("asked: %q", r)
+	}
+	// Its own words: the model is given the question, and its answer is
+	// Add to stock into Rice; then how many grams one bag is.
+	r := w.say(t, on, "add 10 bags of rice")
+	if len(asked) != 1 || !strings.Contains(asked[0], "how should we treat it?") || !strings.Contains(asked[0], "add to stock, <the stock item's name>") {
+		t.Fatalf("the model was not given the question: %v", asked)
+	}
+	if !strings.Contains(r, "*Rice* is counted in g. How many g is one bag?") {
+		t.Fatalf("uses asked: %q", r)
+	}
+	// Not a number: said again; in words, read by the model.
+	if r := w.say(t, on, "a lot"); !strings.Contains(r, "Say how many g one bag is, as a number") {
+		t.Fatalf("not a number: %q", r)
+	}
+	if r := w.say(t, on, "fifty kilos"); !strings.Contains(r, "Label for *Rice*?") {
+		t.Fatalf("in words: %q", r)
+	}
+	if r := w.say(t, on, "1"); !strings.Contains(r, "*Rice*: Add to stock (Rice) · Stock bought.") {
+		t.Fatalf("saved: %q", r)
+	}
+	if _, line := f.lineOf(t, "Rice"); line["treatment"] != "stock" || line["stock_item_id"] != rice || line["uses"] != float64(50000) || line["label"] != "Stock bought" {
+		t.Fatalf("the line: %v", line)
+	}
+	w.say(t, on, "no")
+	// Remembered with the item: the next order asks nothing, and goes in
+	// at 50,000 g a bag.
+	n := len(asked)
+	if r := w.say(t, on, "order 2 bags of rice from dangote"); strings.Contains(r, "how should we treat it?") || strings.Contains(r, "How many g") ||
+		!strings.Contains(r, "Send it to them?") {
+		t.Fatalf("remembered: %q", r)
+	}
+	po, line := f.lineOf(t, "Rice")
+	if line["uses"] != float64(50000) || line["quantity"] != float64(2) || len(asked) != n {
+		t.Fatalf("the next order: %v %v", po["reference"], line)
+	}
+	w.say(t, on, "no")
+	// The same unit asks nothing: lace bought in yards into Lace, counted
+	// in yards.
+	w.say(t, on, "order 3 yards of lace fabric from dangote")
+	if r := w.say(t, on, "add to stock, lace"); strings.Contains(r, "How many") || !strings.Contains(r, "Label for *Lace fabric*?") {
+		t.Fatalf("the same unit: %q", r)
 	}
 }

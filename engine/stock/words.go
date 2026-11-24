@@ -34,6 +34,28 @@ func Singular(u string) string {
 	return u
 }
 
+// countUnits count things one by one: a stock item counted in one of them
+// (or in none) takes one of it for each one bought.
+var countUnits = map[string]bool{"": true, "piece": true, "pc": true, "unit": true, "item": true, "each": true, "one": true, "no": true}
+
+// unitKey is a unit as AskUses compares it: lower case, for one.
+func unitKey(u string) string { return strings.ToLower(Singular(strings.TrimSpace(u))) }
+
+// AskUses reports whether a line bought in lineUnit ("bag", or "" when
+// none was said), going into a stock item counted in stockUnit, asks how
+// many of the stock item one of it is (what a business buys §6;
+// build-plan-gaps H2, g-uses-ask): the stock item is counted in another
+// unit (grams, yards) and nothing says it yet (uses, a product's own, is
+// 1). The web (lib/treat.ts askUses) and the app (treat_line.dart
+// askUses) ask by the same rule.
+func AskUses(lineUnit, stockUnit string, uses int64) bool {
+	if uses > 1 {
+		return false
+	}
+	s := unitKey(stockUnit)
+	return !countUnits[s] && unitKey(lineUnit) != s
+}
+
 func isUnit(w string) bool {
 	s := strings.ToLower(Singular(w))
 	for _, u := range Units {

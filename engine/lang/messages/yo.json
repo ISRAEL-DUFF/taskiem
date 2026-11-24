@@ -3344,6 +3344,16 @@
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 200: it cannot be, and is just recorded"
     },
+    "wa.treat.uses": {
+      "text": "A ń ka *{stock}* ní {unit}. {unit} mélòó ló wà nínú {one} kan? Sọ nọ́ńbà kan, bíi 1000.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Add to stock into a stock item counted in another unit (grams, yards): how many of the stock item one of the line bought is ({one} is the line's unit, like bag, or the item's name). Asked once; remembered with the item"
+    },
+    "wa.treat.uses_reminder": {
+      "text": "Sọ iye {unit} tó wà nínú {one} kan, ní nọ́ńbà, bíi 50.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The answer to how many of the stock item one of the line is was not a number: said again before the question"
+    },
     "wa.treat.which_item": {
       "text": "Which stock item does *{item}* go into? Pick one, or type its name.",
       "reviewed": false,

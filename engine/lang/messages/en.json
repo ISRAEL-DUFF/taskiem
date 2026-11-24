@@ -3804,6 +3804,16 @@
       "reviewed": true,
       "context": "Keep track of it for more than 200: it cannot be, and is just recorded"
     },
+    "wa.treat.uses": {
+      "text": "*{stock}* is counted in {unit}. How many {unit} is one {one}? Say a number, like 1000.",
+      "reviewed": true,
+      "context": "Add to stock into a stock item counted in another unit (grams, yards): how many of the stock item one of the line bought is ({one} is the line's unit, like bag, or the item's name). Asked once; remembered with the item"
+    },
+    "wa.treat.uses_reminder": {
+      "text": "Say how many {unit} one {one} is, as a number, like 50.",
+      "reviewed": true,
+      "context": "The answer to how many of the stock item one of the line is was not a number: said again before the question"
+    },
     "wa.treat.which_item": {
       "text": "Which stock item does *{item}* go into? Pick one, or type its name.",
       "reviewed": true,

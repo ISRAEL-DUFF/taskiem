@@ -15714,6 +15714,13 @@ paths:
                   format: uuid
                 clear_label:
                   type: boolean
+                supplier_id:
+                  type: string
+                  format: uuid
+                  description: From whom it came, one of the business's suppliers
+                clear_supplier:
+                  type: boolean
+                  description: Takes its supplier off (not said)
                 sale_price_kobo:
                   type: integer
                   minimum: 1
@@ -49477,6 +49484,9 @@ components:
         label_id:
           type: string
           format: uuid
+        label:
+          type: string
+          description: The name of the label kept for label_id (a merged label followed to the one kept); none without a label
         seller_item_id:
           type: string
           description: The linked supplier's own item
