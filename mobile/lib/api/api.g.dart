@@ -1811,6 +1811,36 @@ class TaskiemApi {
     return PutStaffPayrollaResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// How Payroll is connected to Payrolla (`GET /v1/payroll/connection`)
+  Future<GetPayrollConnectionResponse> getPayrollConnection() async {
+    final j = await _t.send('GET', '/v1/payroll/connection');
+    return GetPayrollConnectionResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Who may approve and pay in Payrolla, and who they are in Taskiem (`GET /v1/payroll/approvers`)
+  Future<GetPayrollApproversResponse> getPayrollApprovers() async {
+    final j = await _t.send('GET', '/v1/payroll/approvers');
+    return GetPayrollApproversResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Link my Payrolla account (send the code) (`POST /v1/payroll/approvers/{user}/link`)
+  Future<StartPayrollLinkResponse> startPayrollLink({required StartPayrollLinkRequest body, required String user}) async {
+    final j = await _t.send('POST', '/v1/payroll/approvers/${Uri.encodeComponent(user)}/link', body: body.toJson());
+    return StartPayrollLinkResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Link my Payrolla account (type the code) (`POST /v1/payroll/approvers/{user}/link/confirm`)
+  Future<ConfirmPayrollLinkResponse> confirmPayrollLink({required ConfirmPayrollLinkRequest body, required String user}) async {
+    final j = await _t.send('POST', '/v1/payroll/approvers/${Uri.encodeComponent(user)}/link/confirm', body: body.toJson());
+    return ConfirmPayrollLinkResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Unlink a Payrolla account (`DELETE /v1/payroll/approvers/{user}/link`)
+  Future<UnlinkPayrollResponse> unlinkPayroll({required String user, String? key}) async {
+    final j = await _t.send('DELETE', '/v1/payroll/approvers/${Uri.encodeComponent(user)}/link', query: {'key': ?key});
+    return UnlinkPayrollResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Batches of payments, the newest first (`GET /v1/payment-batches`)
   Future<ListPaymentBatchesResponse> listPaymentBatches() async {
     final j = await _t.send('GET', '/v1/payment-batches');
@@ -15644,28 +15674,40 @@ class PatchPayCollectionRequest {
 }
 
 class GetPayrollResponse {
-  const GetPayrollResponse({this.company, required this.connected, this.connection, this.nextCursor, required this.runs, this.test});
+  const GetPayrollResponse({this.auth, this.company, required this.connected, this.connection, this.ended, this.isOwner, this.nextCursor, required this.runs, this.test});
 
+  /// Connected in one step, or with a pasted key (whose owner sees Reconnect
+  /// Payrolla)
+  final String? auth;
   final GetPayrollResponseCompany? company;
   final bool connected;
   final String? connection;
+  /// The Payrolla connection ended (P4b-1): owners see Reconnect Payrolla
+  final bool? ended;
+  final bool? isOwner;
   final String? nextCursor;
   final List<PayrollRun> runs;
   final bool? test;
 
   factory GetPayrollResponse.fromJson(Map<String, dynamic> j) => GetPayrollResponse(
+        auth: j['auth'] == null ? null : j['auth'] as String,
         company: j['company'] == null ? null : GetPayrollResponseCompany.fromJson(j['company'] as Map<String, dynamic>),
         connected: j['connected'] as bool,
         connection: j['connection'] == null ? null : j['connection'] as String,
+        ended: j['ended'] == null ? null : j['ended'] as bool,
+        isOwner: j['is_owner'] == null ? null : j['is_owner'] as bool,
         nextCursor: j['next_cursor'] == null ? null : j['next_cursor'] as String,
         runs: (j['runs'] as List).map((e) => PayrollRun.fromJson(e as Map<String, dynamic>)).toList(),
         test: j['test'] == null ? null : j['test'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
+        'auth': ?auth,
         'company': ?company?.toJson(),
         'connected': connected,
         'connection': ?connection,
+        'ended': ?ended,
+        'is_owner': ?isOwner,
         'next_cursor': ?nextCursor,
         'runs': runs.map((e) => e.toJson()).toList(),
         'test': ?test,
@@ -15943,6 +15985,282 @@ class PutStaffPayrollaResponse {
 
   Map<String, dynamic> toJson() => {
         'payrolla': ?payrolla,
+      };
+}
+
+class GetPayrollConnectionResponse {
+  const GetPayrollConnectionResponse({required this.connected, this.connection, this.ended, required this.isOwner, required this.mayLink, required this.modes});
+
+  final bool connected;
+  final GetPayrollConnectionResponseConnection? connection;
+  final bool? ended;
+  final bool isOwner;
+  final bool mayLink;
+  final List<String> modes;
+
+  factory GetPayrollConnectionResponse.fromJson(Map<String, dynamic> j) => GetPayrollConnectionResponse(
+        connected: j['connected'] as bool,
+        connection: j['connection'] == null ? null : GetPayrollConnectionResponseConnection.fromJson(j['connection'] as Map<String, dynamic>),
+        ended: j['ended'] == null ? null : j['ended'] as bool,
+        isOwner: j['is_owner'] as bool,
+        mayLink: j['may_link'] as bool,
+        modes: (j['modes'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'connected': connected,
+        'connection': ?connection?.toJson(),
+        'ended': ?ended,
+        'is_owner': isOwner,
+        'may_link': mayLink,
+        'modes': modes.map((e) => e).toList(),
+      };
+}
+
+class GetPayrollConnectionResponseConnection {
+  const GetPayrollConnectionResponseConnection({required this.auth, this.company, required this.id, required this.name, this.scopes, required this.status, required this.test});
+
+  final String auth;
+  final GetPayrollConnectionResponseConnectionCompany? company;
+  final String id;
+  final String name;
+  final List<String>? scopes;
+  final String status;
+  final bool test;
+
+  factory GetPayrollConnectionResponseConnection.fromJson(Map<String, dynamic> j) => GetPayrollConnectionResponseConnection(
+        auth: j['auth'] as String,
+        company: j['company'] == null ? null : GetPayrollConnectionResponseConnectionCompany.fromJson(j['company'] as Map<String, dynamic>),
+        id: j['id'] as String,
+        name: j['name'] as String,
+        scopes: j['scopes'] == null ? null : (j['scopes'] as List).map((e) => e as String).toList(),
+        status: j['status'] as String,
+        test: j['test'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'auth': auth,
+        'company': ?company?.toJson(),
+        'id': id,
+        'name': name,
+        'scopes': ?scopes?.map((e) => e).toList(),
+        'status': status,
+        'test': test,
+      };
+}
+
+class GetPayrollConnectionResponseConnectionCompany {
+  const GetPayrollConnectionResponseConnectionCompany({this.id, this.name});
+
+  final String? id;
+  final String? name;
+
+  factory GetPayrollConnectionResponseConnectionCompany.fromJson(Map<String, dynamic> j) => GetPayrollConnectionResponseConnectionCompany(
+        id: j['id'] == null ? null : j['id'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': ?id,
+        'name': ?name,
+      };
+}
+
+class GetPayrollApproversResponse {
+  const GetPayrollApproversResponse({required this.approvers, required this.isOwner, required this.mayLink, this.me});
+
+  final List<PayrollApprover> approvers;
+  final bool isOwner;
+  final bool mayLink;
+  final Object? me;
+
+  factory GetPayrollApproversResponse.fromJson(Map<String, dynamic> j) => GetPayrollApproversResponse(
+        approvers: (j['approvers'] as List).map((e) => PayrollApprover.fromJson(e as Map<String, dynamic>)).toList(),
+        isOwner: j['is_owner'] as bool,
+        mayLink: j['may_link'] as bool,
+        me: j['me'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approvers': approvers.map((e) => e.toJson()).toList(),
+        'is_owner': isOwner,
+        'may_link': mayLink,
+        'me': ?me,
+      };
+}
+
+class PayrollApprover {
+  const PayrollApprover({required this.canApprove, required this.canConfirm, required this.canPay, required this.email, this.linked, required this.me, required this.name, required this.role, required this.suggested, required this.userId});
+
+  final bool canApprove;
+  /// They have somewhere to get codes (a phone, an email or an authenticator
+  /// app)
+  final bool canConfirm;
+  final bool canPay;
+  final String email;
+  final Object? linked;
+  final bool me;
+  final String name;
+  final String role;
+  /// Not linked, with the same email as the person asking
+  final bool suggested;
+  final String userId;
+
+  factory PayrollApprover.fromJson(Map<String, dynamic> j) => PayrollApprover(
+        canApprove: j['can_approve'] as bool,
+        canConfirm: j['can_confirm'] as bool,
+        canPay: j['can_pay'] as bool,
+        email: j['email'] as String,
+        linked: j['linked'],
+        me: j['me'] as bool,
+        name: j['name'] as String,
+        role: j['role'] as String,
+        suggested: j['suggested'] as bool,
+        userId: j['user_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'can_approve': canApprove,
+        'can_confirm': canConfirm,
+        'can_pay': canPay,
+        'email': email,
+        'linked': ?linked,
+        'me': me,
+        'name': name,
+        'role': role,
+        'suggested': suggested,
+        'user_id': userId,
+      };
+}
+
+class StartPayrollLinkRequest {
+  const StartPayrollLinkRequest({required this.key});
+
+  final String key;
+
+  factory StartPayrollLinkRequest.fromJson(Map<String, dynamic> j) => StartPayrollLinkRequest(
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+      };
+}
+
+class StartPayrollLinkResponse {
+  const StartPayrollLinkResponse({required this.challenge, required this.safer, required this.sentTo});
+
+  final StartPayrollLinkResponseChallenge challenge;
+  final bool safer;
+  final String sentTo;
+
+  factory StartPayrollLinkResponse.fromJson(Map<String, dynamic> j) => StartPayrollLinkResponse(
+        challenge: StartPayrollLinkResponseChallenge.fromJson(j['challenge'] as Map<String, dynamic>),
+        safer: j['safer'] as bool,
+        sentTo: j['sent_to'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge': challenge.toJson(),
+        'safer': safer,
+        'sent_to': sentTo,
+      };
+}
+
+class StartPayrollLinkResponseChallenge {
+  const StartPayrollLinkResponseChallenge({required this.challengeId, required this.channel, this.destinationHint, required this.expiresAt});
+
+  final String challengeId;
+  final String channel;
+  final String? destinationHint;
+  final String expiresAt;
+
+  factory StartPayrollLinkResponseChallenge.fromJson(Map<String, dynamic> j) => StartPayrollLinkResponseChallenge(
+        challengeId: j['challenge_id'] as String,
+        channel: j['channel'] as String,
+        destinationHint: j['destination_hint'] == null ? null : j['destination_hint'] as String,
+        expiresAt: j['expires_at'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'channel': channel,
+        'destination_hint': ?destinationHint,
+        'expires_at': expiresAt,
+      };
+}
+
+class ConfirmPayrollLinkRequest {
+  const ConfirmPayrollLinkRequest({required this.challengeId, required this.code, required this.key});
+
+  final String challengeId;
+  final String code;
+  final String key;
+
+  factory ConfirmPayrollLinkRequest.fromJson(Map<String, dynamic> j) => ConfirmPayrollLinkRequest(
+        challengeId: j['challenge_id'] as String,
+        code: j['code'] as String,
+        key: j['key'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'code': code,
+        'key': key,
+      };
+}
+
+class ConfirmPayrollLinkResponse {
+  const ConfirmPayrollLinkResponse({required this.approver});
+
+  final ConfirmPayrollLinkResponseApprover approver;
+
+  factory ConfirmPayrollLinkResponse.fromJson(Map<String, dynamic> j) => ConfirmPayrollLinkResponse(
+        approver: ConfirmPayrollLinkResponseApprover.fromJson(j['approver'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approver': approver.toJson(),
+      };
+}
+
+class ConfirmPayrollLinkResponseApprover {
+  const ConfirmPayrollLinkResponseApprover({this.canApprove, this.canPay, this.name, this.role, this.userId});
+
+  final bool? canApprove;
+  final bool? canPay;
+  final String? name;
+  final String? role;
+  final String? userId;
+
+  factory ConfirmPayrollLinkResponseApprover.fromJson(Map<String, dynamic> j) => ConfirmPayrollLinkResponseApprover(
+        canApprove: j['can_approve'] == null ? null : j['can_approve'] as bool,
+        canPay: j['can_pay'] == null ? null : j['can_pay'] as bool,
+        name: j['name'] == null ? null : j['name'] as String,
+        role: j['role'] == null ? null : j['role'] as String,
+        userId: j['user_id'] == null ? null : j['user_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'can_approve': ?canApprove,
+        'can_pay': ?canPay,
+        'name': ?name,
+        'role': ?role,
+        'user_id': ?userId,
+      };
+}
+
+class UnlinkPayrollResponse {
+  const UnlinkPayrollResponse({required this.unlinked});
+
+  final bool unlinked;
+
+  factory UnlinkPayrollResponse.fromJson(Map<String, dynamic> j) => UnlinkPayrollResponse(
+        unlinked: j['unlinked'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'unlinked': unlinked,
       };
 }
 

@@ -79,6 +79,7 @@ const PAGES = [
   "/payments/several",
   "/payments/several/list",
   "/payroll",
+  "/payroll/settings",
   "/money/labels",
   "/money/things",
   "/money/things?all=true",

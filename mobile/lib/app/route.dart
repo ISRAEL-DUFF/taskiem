@@ -139,7 +139,7 @@ AppRoute routeOf(String path) {
   }
   // Payroll (Payrolla's runs), and one run (/payroll/runs/{run}): over
   // Money; id '' for the list. Staff in Payrolla opens the list too.
-  final payroll = RegExp(r'^/payroll(?:/runs/([^/]+)|/staff)?$').firstMatch(p);
+  final payroll = RegExp(r'^/payroll(?:/runs/([^/]+)|/staff|/settings)?$').firstMatch(p);
   if (payroll != null) {
     try {
       return (tab: tabMoney, screen: RouteScreen.payroll, id: payroll[1] == null ? '' : Uri.decodeComponent(payroll[1]!));

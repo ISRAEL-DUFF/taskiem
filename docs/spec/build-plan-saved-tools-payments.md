@@ -151,6 +151,7 @@ Within a stage, phases that do not need each other may be built at once by separ
     - Taskiem's own webhook subscription per connection;
     - Payrolla people linked to Taskiem people with one code.
     - Done when: an owner new to Payrolla connects and signs up in one step, a key connection keeps working until its owner reconnects, and an approver links with one code.
+    - **Status (24 November 2026): built** against a fake Payrolla that follows Payrolla's OpenAPI file fetched that day ([as built](chat-pay-people.md#p4b-1-connect-in-one-step-keep-keys-reconnect-link-approvers)): `/v1/payroll/connect`, `/v1/payrolla/callback` on the connections callback's handler, reconnecting moving the same connection onto the tokens, Taskiem's own `"*"` subscription and `company.disconnected`, `payroll.approve`, the approvers and linking by one code, on the web and in the app. Live waits for Payrolla's registration of Taskiem and its production sign-in address; the chat's words come with P4b-3.
   - **P4b-2. Staff and pay** (needs P4b-1):
     - add someone with their bank account checked; change pay and details; end employment (at once);
     - a bank account change held for a second approver, and approving it with a code;

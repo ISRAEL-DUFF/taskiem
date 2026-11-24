@@ -1,6 +1,8 @@
 # Payrolla (payroll for Nigerian companies), Connect API version 2026-11-01.
 # Built from what Payrolla published for Taskiem (decision 0044 R5), read
-# 23 October 2026 (docs/integrations/payrolla-reference):
+# 23 October 2026 (docs/integrations/payrolla-reference), and connecting
+# in one step (P4b-1) from its current OpenAPI file, fetched 24 November
+# 2026 (api/payrolla-connect-v1-2026-11-24.yaml, Phase C reply 07):
 #   api/payrolla-connect-v1.yaml   /connect/company, runs, run lines, the
 #                                  approval link, employees, payslip links,
 #                                  webhooks (list, create, delete, test),
@@ -15,7 +17,7 @@
 # capabilities. See docs/integrations/payrolla.md.
 manifest: connector/v1
 id: payrolla
-version: 1.1.0
+version: 1.2.0
 name: Payrolla
 description: Start workflows when a payroll is ready for approval, approved, paid or returned, or when employees change; read runs, each employee's pay status and the team; send an approval link or a payslip link. Payrolla pays and approves; Taskiem never does.
 category: productivity
@@ -23,15 +25,69 @@ kind: product
 regions: [NG]
 auth:
   type: api_key
+  # Two ways in (decision 0074, P4b-1): one step through Taskiem's
+  # Payrolla app (OAuth 2.0 with PKCE; the business signs up in the same
+  # step when it is not on Payrolla yet), or a key pasted from Payrolla ->
+  # Settings -> Connected apps, which keeps working as before. A connection
+  # holds one or the other (CheckCredentials).
   fields:
-    - { key: api_key, label: "API key (pyk_live_… for live), from Payrolla → Settings → Connected apps", secret: true }
+    - key: api_key
+      label: "API key (pyk_live_… for live), from Payrolla → Settings → Connected apps"
+      secret: true
+      required: false
+      help: A company key from Payrolla, or connect with one click and nothing is pasted.
+      where: Payrolla → Settings → Connected apps → Connect an app
+    # Kept by Taskiem for a connection made in one step: the refresh token
+    # (spent once, rotated under the connection's lock), the access token
+    # it last got and when it lapses, Taskiem's app it was granted to, and
+    # the company and what the owner allowed.
+    - { key: refresh_token, label: Refresh token (kept by Taskiem), secret: true, required: false }
+    - { key: access_token, label: Access token (kept by Taskiem), secret: true, required: false }
+    - { key: access_expires_at, label: Access token expiry (kept by Taskiem), required: false }
+    - { key: client_id, label: Payrolla app client id (Taskiem's), required: false }
+    - { key: client_secret, label: Payrolla app client secret (Taskiem's), secret: true, required: false }
+    - { key: company_id, label: Payrolla company (filled when you connect), required: false }
+    - { key: company_name, label: Payrolla company name (filled when you connect), required: false }
+    - { key: scopes, label: What the owner allowed (filled when you connect), required: false }
+    - { key: connection_key_id, label: Payrolla's id for this connection (filled when you connect), required: false }
+    # Only for a subscription made by hand in Payrolla instead of
+    # Taskiem's own (registration: connection asks for one).
+    - { key: webhook_secret, label: "Signing secret of a webhook you made yourself in Payrolla (Taskiem makes its own)", secret: true, required: false }
   # Live and test are separate Payrolla deployments whose keys never work
   # in each other (rule 17): production at ispend.name.ng, the sandbox at
   # synledger.name.ng (Payrolla, 26 October 2026). TASKIEM_PAYROLLA_URL and
-  # TASKIEM_PAYROLLA_TEST_URL move them.
+  # TASKIEM_PAYROLLA_TEST_URL move them. Each has its own registration of
+  # Taskiem's app (TASKIEM_OAUTH_PAYROLLA_* for live,
+  # TASKIEM_OAUTH_PAYROLLA_SANDBOX_* for test) and its own sign-in app,
+  # where the owner allows Taskiem: the sandbox's is payroller.surge.sh
+  # (its OpenAPI file, 24 November 2026); production's is set with
+  # TASKIEM_PAYROLLA_APP_URL, and live is not linkable until it is.
   modes:
     - { mode: live, label: Live (real money), base_url: https://ispend.name.ng/payrolla/api/v1 }
-    - { mode: test, label: Test (practice), base_url: https://synledger.name.ng/payrolla/api/v1 }
+    - { mode: test, label: Test (practice), base_url: https://synledger.name.ng/payrolla/api/v1, client: payrolla_sandbox, authorize_url: https://payroller.surge.sh/oauth/authorize }
+  # The token and revoke endpoints are on each deployment's API host
+  # (${server}, the mode's base URL); the client proves itself in HTTP
+  # Basic. Access tokens last an hour and refresh tokens are spent once:
+  # the connector refreshes under the connection's lock and stores the new
+  # refresh token before it uses the new access token. The company and
+  # what the owner allowed come back with the token; Payrolla's id for the
+  # connection is read once from /connect/company (Link), so a
+  # company.disconnected for an old key does not end the new connection.
+  # The scopes are those Taskiem asked Payrolla to register
+  # (payrolla-reference/08-taskiem-answers.md, section 2). authorize_url
+  # here is the sandbox's: a mode's own (auth.modes) wins, and a mode
+  # without one is not linkable while another mode names one.
+  oauth2:
+    authorize_url: https://payroller.surge.sh/oauth/authorize
+    token_url: ${server}/oauth/token
+    revoke_url: ${server}/oauth/revoke
+    scopes: [payroll:read, employees:read, employees:write, payroll:write, payroll:approve, payslips:read, payslips:links, self_service, reports:read, webhooks:manage]
+    pkce: true
+    client_auth: basic
+    authorize_params: { response_type: code }
+    fields_from_token: { refresh_token: refresh_token, access_token: access_token, company_id: company_id, company_name: company_name, scopes: scope }
+    platform_client_fields: { client_id: id, client_secret: secret }
+    linked_fields: [access_expires_at, connection_key_id]
   test: { action: get_company }
 # Where connections made before modes go: the sandbox, where they always
 # went, or TASKIEM_PAYROLLA_URL when it is set.
@@ -280,4 +336,21 @@ triggers:
     event_type: =body.type
     dedup: =body.id
     correlation: "=body.type == 'ping' ? '' : body.data.run_id"
+    test_event: =body.type == 'ping'
+  # Taskiem's own subscription for a connection made in one step
+  # (registration: connection; decision 0074): every event ("*"), made
+  # when the connection is and again when it is reconnected. It brings
+  # company.disconnected, Payrolla's last delivery to a connection that
+  # ended, which marks the connection expired and tells the owners. A key
+  # connection holds none (its owner reconnects to get one).
+  connection_event:
+    type: webhook
+    title: Everything in Payrolla (Taskiem's own)
+    where: Taskiem subscribes a connection made with Connect Payrolla itself
+    registration: connection
+    verify: { scheme: hmac_sha256_timestamped, header: Payrolla-Signature, signature_format: t_v1, tolerance: 5m, secret_field: webhook_secret }
+    events: [company.disconnected, run.computed, run.approved, run.rejected, run.locked, run.cancelled, run.disbursement_started, run.completed, run.partially_completed, run.payment_scheduled, run.awaiting_funds, approval.recorded, payout.succeeded, payout.failed, payout.reversed, employee.created, employee.updated, employee.terminated, employee.bank_change_requested, employee.bank_change_approved, employee.bank_change_rejected, payslip.issued, ping]
+    event_type: =body.type
+    dedup: =body.id
+    correlation: "=body.type == 'company.disconnected' ? string(body.data.key_id) : ''"
     test_event: =body.type == 'ping'

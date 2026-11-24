@@ -301,7 +301,7 @@ func (s *Server) connectWithOAuth(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.setOAuthBrowser(w, browser)
+	s.setOAuthBrowser(w, browser, c)
 	writeJSON(w, http.StatusOK, map[string]any{"url": consent, "expires_in": int(secrets.OAuthRequestTTL.Seconds())})
 }
 

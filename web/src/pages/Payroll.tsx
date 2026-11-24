@@ -58,8 +58,24 @@ function Pill({
   );
 }
 
-/** Not connected: payroll is worked out and paid in Payrolla. */
-function NotConnected() {
+/** Not connected: payroll is worked out and paid in Payrolla. One that
+ * ended says so, with Reconnect Payrolla for the owner. */
+function NotConnected({ ended, owner }: { ended?: boolean; owner?: boolean }) {
+  if (ended)
+    return (
+      <div className="warning" role="note" data-testid="payroll-ended">
+        {owner ? (
+          <>
+            <p style={{ marginTop: 0 }}>Payrolla is no longer connected.</p>
+            <Link className="button" to="/payroll/settings" data-testid="payroll-reconnect-link">
+              Reconnect Payrolla
+            </Link>
+          </>
+        ) : (
+          <p style={{ margin: 0 }}>Payroll isn't connected right now. The owner has been told.</p>
+        )}
+      </div>
+    );
   return (
     <div className="warning" role="note" data-testid="payroll-not-connected">
       <p style={{ marginTop: 0 }}>
@@ -67,7 +83,7 @@ function NotConnected() {
         business's Payrolla here to see each payroll, who was paid and who was
         not, without leaving Taskiem.
       </p>
-      <Link className="button" to="/connections?connect=payrolla" data-testid="payroll-connect">
+      <Link className="button" to="/payroll/settings" data-testid="payroll-connect">
         Connect Payrolla
       </Link>
     </div>
@@ -147,9 +163,17 @@ export function PayrollPage() {
       />
       <ErrorBox error={list.error} />
       {!d && !list.error && <Skeleton rows={4} label="Loading the payroll…" />}
-      {d && !d.connected && <NotConnected />}
+      {d && !d.connected && <NotConnected ended={d.ended} owner={d.is_owner} />}
       {d && d.connected && (
         <>
+          {d.auth === "key" && d.is_owner && (
+            <div className="notice" data-testid="payroll-key-reconnect">
+              <p style={{ marginTop: 0 }}>Connect again in one step so you can run payroll here.</p>
+              <Link className="button" to="/payroll/settings">
+                Reconnect Payrolla
+              </Link>
+            </div>
+          )}
           <p className="payroll-company" data-testid="payroll-company">
             <strong>{d.company?.name || "Your company"}</strong>
             {freq && <span className="sub"> · {freq}</span>}
@@ -231,6 +255,13 @@ export function PayrollPage() {
               title="Staff in Payrolla"
               sub="Who each of your staff is in Payrolla"
               testid="payroll-staff-link"
+            />
+            <Item
+              to="/payroll/settings"
+              icon="settings"
+              title="Payroll settings"
+              sub="Payrolla's connection, and who can approve"
+              testid="payroll-settings-link"
             />
           </Items>
         </>

@@ -382,6 +382,12 @@ getPayroll
 getPayrollRun
 getPayrollStaff
 putStaffPayrolla
+# Payroll settings: the connection, who can approve, linking (P4b-1)
+getPayrollConnection
+getPayrollApprovers
+startPayrollLink
+confirmPayrollLink
+unlinkPayroll
 
 # Pay several people (P3, docs/spec/chat-pay-people.md)
 listPaymentBatches

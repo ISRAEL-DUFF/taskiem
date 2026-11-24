@@ -704,6 +704,7 @@ oauth_connection_requests.kek_version
 oauth_connection_requests.mode
 oauth_connection_requests.name
 oauth_connection_requests.person
+oauth_connection_requests.replaces
 oauth_connection_requests.state_hash
 oauth_connection_requests.tenant_id
 oauth_connection_requests.used_at

@@ -157,6 +157,7 @@ import { ToolPage } from "./pages/MadeToolSheet";
 import { BatchPage, PayListPage } from "./pages/PayBatch";
 import { CollectedListPage } from "./pages/PayCollect";
 import { PayrollPage, PayrollRunPage, PayrollStaffPage } from "./pages/Payroll";
+import { PayrollSettingsPage } from "./pages/PayrollSettings";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
 import { PasskeyNudge } from "./pages/PasskeyNudge";
@@ -954,6 +955,7 @@ function SignedIn() {
                   <Route path="/payroll" element={<PayrollPage />} />
                   <Route path="/payroll/runs/:run" element={<PayrollRunPage />} />
                   <Route path="/payroll/staff" element={<PayrollStaffPage />} />
+                  <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
                   <Route path="/money/labels" element={<MoneyLabels />} />
                   <Route path="/money/things" element={<ThingsPage />} />
                   <Route path="/money/things/:id" element={<ThingPage />} />

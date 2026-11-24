@@ -148,6 +148,17 @@ func ReleaseConnection(ctx context.Context, tx pgx.Tx, env, connector, connectio
 	return release(ctx, tx, `workflow_id IS NULL AND environment = $1 AND connector = $2 AND COALESCE(connection, '') = $3`, env, connector, connection)
 }
 
+// RepairConnection marks every live subscription made through a
+// connection (its own, and the workflows' that name it or name none) to be
+// applied again: the connection now holds other credentials (Payrolla,
+// reconnected from a key to OAuth tokens: subscriptions belong to the key
+// that made them, so they are made again with the new tokens).
+func RepairConnection(ctx context.Context, tx pgx.Tx, env, connector, connection string) error {
+	_, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET applied_hash = NULL, next_attempt_at = now(), attempts = 0, updated_at = now()
+		WHERE environment = $1 AND connector = $2 AND (connection IS NULL OR connection = $3) AND desired = 'present'`, env, connector, connection)
+	return err
+}
+
 // Retry makes a connector's failed subscriptions in env due now (a
 // connection was just added, so the refusal may be gone).
 func Retry(ctx context.Context, tx pgx.Tx, env, connector string) error {

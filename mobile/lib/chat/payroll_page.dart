@@ -30,6 +30,7 @@ import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
 import 'groups.dart' show askSure, pickOneOf;
 import 'invoices_page.dart' show shortDay;
+import 'payroll_settings.dart' show PayrollSettingsPage;
 import 'team_pages.dart' show StaffPersonPage;
 import 'words.dart' show CardTone, naira;
 
@@ -224,11 +225,19 @@ class _PayrollPageState extends State<PayrollPage> {
       children: [
         if (_error != null) _refusal(context, _error!, 'Payroll did not load'),
         if (got == null && _error == null) const TkSkeleton(rows: 3, label: 'Loading the payroll…'),
-        if (got != null && !got.connected)
+        if (got != null && !got.connected && got.ended == true)
+          TkCallout(
+            leading: TkSquare('b-alert', color: look.red),
+            title: got.isOwner == true ? 'Payrolla is no longer connected' : 'Payroll isn’t connected right now',
+            sub: got.isOwner == true ? 'Reconnect Payrolla to see and run your payroll here.' : 'The owner has been told.',
+            subLines: 4,
+            color: look.red,
+          )
+        else if (got != null && !got.connected)
           TkCallout(
             leading: TkSquare('b-calendar', color: look.violet),
             title: 'Payroll runs in Payrolla',
-            sub: 'Connect Payrolla to see its runs here, with the key from Payrolla’s Connected apps.',
+            sub: 'Connect Payrolla to see its runs here: in one step, or with the key from Payrolla’s Connected apps.',
             subLines: 4,
             color: look.violet,
           ),
@@ -236,11 +245,20 @@ class _PayrollPageState extends State<PayrollPage> {
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: TkSmallButton(
-              label: 'Connect Payrolla',
+              label: got.ended == true ? 'Reconnect Payrolla' : 'Connect Payrolla',
               primary: true,
-              onPressed: () => unawaited(openOrSay(
-                  context, () => openOutside(Uri.parse('${widget.auth.transport.base}/connections?connect=payrolla')), 'Connections could not be opened.')),
+              onPressed: () => unawaited(_push(context, PayrollSettingsPage(auth: _auth))),
             ),
+          ),
+        if (got != null && got.connected && got.auth == 'key' && got.isOwner == true)
+          TkCallout(
+            leading: TkSquare('b-alert', color: look.orange),
+            title: 'Reconnect Payrolla',
+            sub: 'Connect again in one step so you can run payroll here.',
+            subLines: 3,
+            color: look.orange,
+            button: 'Reconnect Payrolla',
+            onPressed: () => unawaited(_push(context, PayrollSettingsPage(auth: _auth))),
           ),
         if (got != null && got.connected) ...[
           if (got.test == true)
@@ -264,6 +282,14 @@ class _PayrollPageState extends State<PayrollPage> {
                 icon: 'b-people',
                 square: look.teal,
                 onTap: () => unawaited(_push(context, PayrollStaffPage(auth: _auth, backLabel: 'Back to Payroll'))),
+              ),
+              TkListRow(
+                title: 'Payroll settings',
+                sub: 'Connecting, and who approves',
+                subLines: 1,
+                icon: 'b-tools',
+                square: look.violet,
+                onTap: () => unawaited(_push(context, PayrollSettingsPage(auth: _auth))),
               ),
             ],
           ),

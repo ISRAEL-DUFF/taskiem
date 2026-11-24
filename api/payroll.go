@@ -84,8 +84,16 @@ func (s *Server) payrollaConnected(ctx context.Context, tenant uuid.UUID, connec
 
 // payrolla runs one Payrolla read on the connection named.
 func (s *Server) payrolla(ctx context.Context, connection, action string, in map[string]any) (map[string]any, error) {
-	out, err := s.connectorAction(ctx, principalFrom(ctx), payrollaID, "Payrolla", connection, action, "payroll."+action, in)
+	p := principalFrom(ctx)
+	out, err := s.connectorAction(ctx, p, payrollaID, "Payrolla", connection, action, "payroll."+action, in)
 	if err != nil {
+		if payrolla.Ended(err) {
+			// A connection made in one step that Payrolla no longer honours
+			// ends here too; a key is the owner's to replace.
+			if xerr := s.Vault.ExpireConnection(context.WithoutCancel(ctx), p.TenantID, "prod", payrollaID, connection); xerr != nil {
+				s.Logger.Warn("payrolla: marking the connection ended", "err", xerr)
+			}
+		}
 		return nil, payrollaRefusal(err)
 	}
 	return out, nil
@@ -99,6 +107,8 @@ func payrollaRefusal(err error) error {
 	switch {
 	case errors.As(err, &pe) && pe.Code == "SCOPE_REQUIRED":
 		return refusePay(http.StatusConflict, "scope_required", "Your Payrolla key cannot read this: in Payrolla, Settings → Connected apps, make a key with the Read payroll and Read employees permissions and reconnect it in Taskiem.")
+	case errors.Is(err, payrolla.ErrConnectionEnded):
+		return refusePay(http.StatusConflict, "reconnect", "Payrolla is no longer connected. Reconnect Payrolla on the Payroll page.")
 	case errors.Is(err, connector.ErrCredentialsRejected) || errors.As(err, &pe) && strings.HasPrefix(pe.Code, "API_KEY"):
 		return refusePay(http.StatusConflict, "reconnect", "Payrolla no longer accepts the key: make a new one in Payrolla, Settings → Connected apps, and reconnect it in Taskiem.")
 	case errors.Is(err, connector.ErrNotFound):
@@ -122,7 +132,13 @@ func (s *Server) getPayroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if name == "" {
-		writeJSON(w, http.StatusOK, map[string]any{"connected": false, "runs": []payrollRun{}})
+		// A connection that ended (revoked in Payrolla, a refused refresh)
+		// shows Reconnect Payrolla to owners (P4b-1).
+		out := map[string]any{"connected": false, "runs": []payrollRun{}, "is_owner": isOwnerOf(p)}
+		if conn, err := s.payrollaConnection(ctx, p.TenantID); err == nil && conn != nil && conn.Status == "expired" {
+			out["ended"] = true
+		}
+		writeJSON(w, http.StatusOK, out)
 		return
 	}
 	co, err := s.payrolla(ctx, name, "get_company", map[string]any{})
@@ -146,7 +162,13 @@ func (s *Server) getPayroll(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	company, _ := co["company"].(map[string]any)
-	out := map[string]any{"connected": true, "connection": name, "test": mode != nil && *mode == "test",
+	// auth: a key connection's owner sees Reconnect Payrolla, to run
+	// payroll here (P4b-1).
+	auth := "key"
+	if conn, err := s.payrollaConnection(ctx, p.TenantID); err == nil && conn != nil && conn.oauth() {
+		auth = "oauth"
+	}
+	out := map[string]any{"connected": true, "connection": name, "test": mode != nil && *mode == "test", "auth": auth, "is_owner": isOwnerOf(p),
 		"company": map[string]any{"name": strOf(company["name"]), "pay_frequency": strOf(company["pay_frequency"])}, "runs": runs}
 	if c := strOf(list["next_cursor"]); c != "" {
 		out["next_cursor"] = c

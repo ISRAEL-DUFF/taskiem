@@ -449,6 +449,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/auth/sso/{id}/start", s.ssoStart)
 		r.Get("/auth/sso/oidc/callback", s.oidcCallback)
 		r.Get("/connections/oauth/callback", s.oauthConnectionCallback) // providers send the browser back here (oauthconnections.go)
+		r.Get("/payrolla/callback", s.oauthConnectionCallback)          // Payrolla's registered callback, the same handler (P4b-1)
 		// Connect links sent from chat: the token is the authority, for one
 		// connection (connect_links.go).
 		r.Get("/connect/{token}", s.getConnectLink)
@@ -934,6 +935,14 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermPayrollRead)).Get("/payroll/runs/{run}", s.getPayrollRun)
 			r.With(s.need(PermPayrollRead)).Get("/payroll/staff", s.getPayrollStaff)
 			r.With(s.need(PermPayrollRead), s.tenantWide).Put("/staff/{user}/payrolla", s.putStaffPayrolla)
+			// Connecting Payrolla in one step, reconnecting, and linking
+			// approvers (payroll_connect.go; P4b-1).
+			r.With(s.need(PermPayrollPeople)).Get("/payroll/connection", s.getPayrollConnection)
+			r.With(s.tenantWide).Post("/payroll/connect", s.connectPayroll) // owners only, checked inside
+			r.With(s.need(PermPayrollPeople)).Get("/payroll/approvers", s.getPayrollApprovers)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/approvers/{user}/link", s.startPayrollLink)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/approvers/{user}/link/confirm", s.confirmPayrollLink)
+			r.With(s.need(PermPayrollPeople), s.tenantWide).Delete("/payroll/approvers/{user}/link", s.unlinkPayroll)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)

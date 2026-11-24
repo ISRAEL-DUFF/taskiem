@@ -21,6 +21,11 @@ export interface PayrollRun {
 /** GET /v1/payroll. */
 export interface PayrollList {
   connected: boolean;
+  /** The Payrolla connection ended (revoked in Payrolla): owners reconnect. */
+  ended?: boolean;
+  is_owner?: boolean;
+  /** Connected in one step, or with a pasted key (whose owner reconnects). */
+  auth?: "oauth" | "key";
   connection?: string;
   test?: boolean;
   company?: { name: string; pay_frequency: string };
@@ -176,3 +181,119 @@ export function employeeSub(e: PayrollaEmployee): string {
 
 /** The PUT /v1/staff/{user}/payrolla body: an employee, or nothing to unlink. */
 export const payrollaLinkBody = (employeeId: string | null) => (employeeId ? { employee_id: employeeId } : {});
+
+// --- Connecting in one step and linking approvers (P4b-1) ---
+
+/** GET /v1/payroll/connection. */
+export interface PayrollConnection {
+  connected: boolean;
+  ended?: boolean;
+  is_owner: boolean;
+  may_link: boolean;
+  /** The modes Payrolla can be connected in one step here. */
+  modes: string[];
+  connection?: {
+    id: string;
+    name: string;
+    status: "active" | "expired";
+    auth: "oauth" | "key";
+    test: boolean;
+    company?: { id?: string; name?: string };
+    scopes?: string[];
+  };
+}
+
+/** A Payrolla user who may approve or pay, and who they are in Taskiem. */
+export interface PayrollApprover {
+  user_id: string;
+  name: string;
+  email: string;
+  role: string;
+  can_approve: boolean;
+  can_pay: boolean;
+  can_confirm: boolean;
+  linked: { user_id: string; name: string; since?: string } | null;
+  suggested: boolean;
+  me: boolean;
+}
+
+/** GET /v1/payroll/approvers. */
+export interface PayrollApprovers {
+  approvers: PayrollApprover[];
+  me: PayrollApprover | null;
+  may_link: boolean;
+  is_owner: boolean;
+}
+
+/** POST /v1/payroll/approvers/{user}/link. */
+export interface LinkCodeSent {
+  challenge: { challenge_id: string; channel: "TOTP" | "SMS" | "EMAIL"; destination_hint?: string; expires_at: string };
+  sent_to: string;
+  safer: boolean;
+}
+
+/** What the connection is, in the owner's terms. */
+export type ConnectionState = "none" | "ended" | "key" | "one_step";
+
+export function connectionState(c: PayrollConnection | undefined): ConnectionState {
+  if (!c?.connection) return "none";
+  if (c.ended || c.connection.status === "expired") return "ended";
+  return c.connection.auth === "key" ? "key" : "one_step";
+}
+
+/** Whether Payrolla lets this connection approve and pay (so its
+ * approvers can be listed and linked). */
+export const canApproveHere = (c: PayrollConnection | undefined) =>
+  connectionState(c) === "one_step" && (c?.connection?.scopes ?? []).includes("payroll:approve");
+
+const ROLE: Record<string, string> = { OWNER: "Owner", ADMIN: "Admin", APPROVER: "Approver" };
+
+/** An approver's line: their role and what Payrolla lets them do. */
+export function approverSub(a: PayrollApprover): string {
+  const can = [a.can_approve ? "approves" : "", a.can_pay ? "pays" : ""].filter(Boolean);
+  const parts = [ROLE[a.role] ?? "In Payrolla"];
+  if (can.length) {
+    const words = can.join(" and ");
+    parts.push(words.charAt(0).toUpperCase() + words.slice(1));
+  }
+  if (!a.can_confirm) parts.push("No phone for codes yet");
+  return parts.join(" · ");
+}
+
+/** Who an approver is linked to in Taskiem, in words. */
+export function linkedWords(a: PayrollApprover): string {
+  if (!a.linked) return a.suggested ? "Looks like you (same email)" : "Not linked";
+  return a.me ? "Linked to you" : `Linked to ${a.linked.name}`;
+}
+
+/** The approvers with this person's own first, then the one that looks
+ * like them. */
+export function sortApprovers(list: PayrollApprover[]): PayrollApprover[] {
+  return [...list].sort((a, b) => Number(b.me) - Number(a.me) || Number(b.suggested) - Number(a.suggested));
+}
+
+/** A code as typed: its digits only (spaces allowed), at most six. */
+export const codeDigits = (s: string) => s.replace(/\D/g, "").slice(0, 6);
+
+/** The refusals after which only a new code helps. */
+export const NEW_CODE_NEEDED = new Set(["code_expired", "code_locked", "code_used"]);
+
+/** An id for one sheet's submission, kept through its retries: the
+ * server makes Payrolla's Idempotency-Key from it. */
+export function newKey(): string {
+  const c = globalThis.crypto;
+  if (c && "randomUUID" in c) return c.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+/** The POST /v1/payroll/connect body: the mode, and Payrolla's sign-up for
+ * a business not on Payrolla yet. */
+export function connectBody(mode: string, signUp: boolean, rcNumber: string): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (mode) body.mode = mode;
+  if (signUp) {
+    body.sign_up = true;
+    if (rcNumber.trim()) body.rc_number = rcNumber.trim();
+  }
+  return body;
+}

@@ -58,6 +58,12 @@ func declareConnectionSubscriptions(ctx context.Context, tx pgx.Tx, tenant uuid.
 	if creds["shared_client"] == "true" {
 		return false, nil
 	}
+	// A Payrolla key connection holds none: Taskiem's own subscription
+	// comes with connecting in one step (P4b-1), and a key keeps working
+	// as it did.
+	if c.Manifest.ID == payrollaID && creds["refresh_token"] == "" {
+		return false, nil
+	}
 	declared := false
 	for _, trig := range slices.Sorted(maps.Keys(c.Manifest.Triggers)) {
 		t := c.Manifest.Triggers[trig]

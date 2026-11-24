@@ -6499,6 +6499,9 @@ paths:
                 required: [connected, runs]
                 properties:
                   connected: {type: boolean}
+                  ended: {type: boolean, description: 'The Payrolla connection ended (P4b-1): owners see Reconnect Payrolla'}
+                  is_owner: {type: boolean}
+                  auth: {type: string, enum: [oauth, key], description: 'Connected in one step, or with a pasted key (whose owner sees Reconnect Payrolla)'}
                   connection: {type: string}
                   test: {type: boolean}
                   company:
@@ -6654,6 +6657,274 @@ paths:
                         department: {type: string}
                         status: {type: string}
                         linked_to: {type: [string, 'null'], format: uuid}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/connection:
+    get:
+      operationId: getPayrollConnection
+      tags:
+      - Payments
+      summary: How Payroll is connected to Payrolla
+      description: 'P4b-1: the business''s Payrolla connection (made in one step, `auth: oauth`, or with a pasted key, `auth: key`), whether it ended (`ended`: revoked in Payrolla or a refused refresh; owners see Reconnect Payrolla), the company and what the owner allowed, the modes it can be connected in one step here, and whether this person is the owner and may link their own Payrolla account (`payroll.approve`).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.approve'
+      responses:
+        '200':
+          description: The connection
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [connected, is_owner, may_link, modes]
+                properties:
+                  connected: {type: boolean}
+                  ended: {type: boolean}
+                  is_owner: {type: boolean}
+                  may_link: {type: boolean}
+                  modes:
+                    type: array
+                    items: {type: string}
+                  connection:
+                    type: object
+                    additionalProperties: false
+                    required: [id, name, status, auth, test]
+                    properties:
+                      id: {type: string, format: uuid}
+                      name: {type: string}
+                      status: {type: string, enum: [active, expired]}
+                      auth: {type: string, enum: [oauth, key]}
+                      test: {type: boolean}
+                      company:
+                        type: object
+                        properties:
+                          id: {type: string}
+                          name: {type: string}
+                      scopes:
+                        type: array
+                        items: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/connect:
+    post:
+      operationId: connectPayroll
+      tags:
+      - Payments
+      summary: Connect Payrolla in one step, or reconnect it
+      description: 'Owners only (403 `owner_only`). Answers Payrolla''s consent page to send the browser to (OAuth 2.0 with PKCE through Taskiem''s OAuth machinery) and binds the request to this browser; Payrolla sends it back to `/v1/payrolla/callback`. `sign_up` fills in Payrolla''s sign-up for a business not on Payrolla yet: the company''s name (the business''s, unless given), its RC number and the owner''s email. A business already connected (with a key, or a connection that ended) is reconnected: the same connection moves onto the new tokens (`reconnect: true`). 503 `oauth_unavailable` when Taskiem is not registered with Payrolla for the mode here.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                mode: {type: string, enum: [live, test]}
+                sign_up: {type: boolean}
+                company_name: {type: string, maxLength: 200}
+                rc_number: {type: string, maxLength: 20}
+                email: {type: string, maxLength: 254}
+      responses:
+        '200':
+          description: The consent page
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [url, reconnect, expires_in]
+                properties:
+                  url: {type: string}
+                  reconnect: {type: boolean}
+                  expires_in: {type: integer}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/approvers:
+    get:
+      operationId: getPayrollApprovers
+      tags:
+      - Payments
+      summary: Who may approve and pay in Payrolla, and who they are in Taskiem
+      description: 'Payrolla''s list of the company''s Owners, Admins and Approvers (`GET /connect/approvers`), with whether each can approve, pay and get codes, the Taskiem person linked to them (Payrolla''s `linked_as` is the record; Taskiem keeps no copy), whether that is this person (`me`), and the one with this person''s email first (`suggested`). 409 `scope_required` when the connection cannot (a key without Approve and pay: an owner reconnects), `reconnect` when Payrolla is not connected.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.approve'
+      responses:
+        '200':
+          description: The approvers
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [approvers, me, may_link, is_owner]
+                properties:
+                  approvers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PayrollApprover'
+                  me:
+                    oneOf:
+                    - $ref: '#/components/schemas/PayrollApprover'
+                    - type: 'null'
+                  may_link: {type: boolean}
+                  is_owner: {type: boolean}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/approvers/{user}/link:
+    post:
+      operationId: startPayrollLink
+      tags:
+      - Payments
+      summary: Link my Payrolla account (send the code)
+      description: 'Payrolla sends that Payrolla user a code on their own factor (their authenticator app, their phone or their email) to link this person to them. `key` is the id the sheet made when it opened, kept through its retries (the Idempotency-Key is a hash of it with the connection and the route). `sent_to` says where the code went; `safer` suggests an authenticator app where it went by text. One Payrolla user per person: 409 `already_linked`. Refusals in words: 409 `no_factor`, 429 `too_many_codes`, `scope_required`, `reconnect`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                key: {type: string, maxLength: 100}
+      responses:
+        '202':
+          description: A code is on its way
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [challenge, sent_to, safer]
+                properties:
+                  challenge:
+                    type: object
+                    required: [challenge_id, channel, expires_at]
+                    properties:
+                      challenge_id: {type: string}
+                      channel: {type: string, enum: [TOTP, SMS, EMAIL]}
+                      destination_hint: {type: string}
+                      expires_at: {type: string}
+                  sent_to: {type: string}
+                  safer: {type: boolean}
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unlinkPayroll
+      tags:
+      - Payments
+      summary: Unlink a Payrolla account
+      description: 'Removes the Payrolla user''s link to Taskiem. Owners unlink anyone; anyone unlinks themselves (403 `owner_only` otherwise). `key` is the id the screen made for this change.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.approve'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: key
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Unlinked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [unlinked]
+                properties:
+                  unlinked: {type: boolean}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/approvers/{user}/link/confirm:
+    post:
+      operationId: confirmPayrollLink
+      tags:
+      - Payments
+      summary: Link my Payrolla account (type the code)
+      description: 'The code the Payrolla user received, sent to Payrolla once and kept nowhere (not stored, logged or audited). `key` is the sheet''s id for this attempt: each attempt at a code gets its own. Refusals in words: 422 `code_invalid` (type it again), 410 `code_expired`, `code_locked` or `code_used` (send a new code), 409 `already_linked`, `no_factor`, 429 `too_many_codes`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string, maxLength: 20}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Linked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [approver]
+                properties:
+                  approver:
+                    type: object
+                    properties:
+                      user_id: {type: string}
+                      name: {type: string}
+                      role: {type: string}
+                      can_approve: {type: boolean}
+                      can_pay: {type: boolean}
         default:
           $ref: '#/components/responses/Error'
   /v1/payments:
@@ -19987,6 +20258,37 @@ paths:
         schema:
           type: string
         description: '`access_denied` when the person denied.'
+      responses:
+        '302':
+          description: Redirects the browser
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payrolla/callback:
+    get:
+      operationId: payrollaCallback
+      tags:
+      - Connectors
+      summary: Payrolla's OAuth callback
+      description: 'Where Payrolla sends the browser back after Connect Payrolla (the redirect URI registered with Payrolla), served by the same handler as `/v1/connections/oauth/callback`. Redirects to the web app''s Payroll settings with `?linked=<id>`, or `?error=<message>` ("You didn''t allow Taskiem in Payrolla. Nothing changed" for `access_denied`).'
+      security: []
+      parameters:
+      - name: code
+        in: query
+        schema:
+          type: string
+      - name: state
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: error
+        in: query
+        schema:
+          type: string
+      - name: error_description
+        in: query
+        schema:
+          type: string
       responses:
         '302':
           description: Redirects the browser
@@ -49080,6 +49382,30 @@ components:
               payment: {type: string, format: uuid}
               code: {type: string}
               problem: {type: string}
+    PayrollApprover:
+      type: object
+      additionalProperties: false
+      required: [user_id, name, email, role, can_approve, can_pay, can_confirm, linked, suggested, me]
+      properties:
+        user_id: {type: string}
+        name: {type: string}
+        email: {type: string}
+        role: {type: string}
+        can_approve: {type: boolean}
+        can_pay: {type: boolean}
+        can_confirm: {type: boolean, description: 'They have somewhere to get codes (a phone, an email or an authenticator app)'}
+        linked:
+          oneOf:
+          - type: 'null'
+          - type: object
+            additionalProperties: false
+            required: [user_id, name]
+            properties:
+              user_id: {type: string, format: uuid}
+              name: {type: string}
+              since: {type: string}
+        suggested: {type: boolean, description: 'Not linked, with the same email as the person asking'}
+        me: {type: boolean}
     PayrollRun:
       type: object
       additionalProperties: false

@@ -89,6 +89,12 @@ const (
 	// it arrived, and links staff to Payrolla's employees. The owner's
 	// alone unless given to a role: it shows what people earn.
 	PayrollRead = "payroll.read"
+	// PayrollApprove approves, rejects, locks and pays the payroll as the
+	// person's linked Payrolla user, each step that commits money with
+	// Payrolla's own code (P4b; decision 0074), and links the person to
+	// their Payrolla user (P4b-1). Payrolla's role must allow it too. The
+	// owner's alone unless given to a role.
+	PayrollApprove = "payroll.approve"
 	// PageEdit makes and changes the business's pages as drafts, and pins
 	// them; PagePublish shows a draft to those its roles let open it
 	// (decision 0072; docs/spec/pages.md §12). Opening a page needs neither:
@@ -102,7 +108,7 @@ var All = []string{WorkflowRead, WorkflowEdit, WorkflowPublish, RunRead, RunStar
 	RunResolve, ApprovalDecide, PIIReveal, PIIErase, SecretManage, ConnectionManage, MemberManage, AuditRead, GitManage, PolicyManage, ConnectorManage, RoleManage, SCIM, AlertManage,
 	TableRead, TableEdit, StorefrontManage, FormLinks,
 	BillingManage, InvoiceRead, InvoiceManage, KeyManage, PartnerRead, PartnerManage,
-	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, OrderHandle, SavedManage, MoneyPay, PayrollRead, PageEdit, PagePublish}
+	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, OrderHandle, SavedManage, MoneyPay, PayrollRead, PayrollApprove, PageEdit, PagePublish}
 
 // Descriptions say what each permission lets a person do, for the role
 // editor.
@@ -144,6 +150,7 @@ var Descriptions = map[string]string{
 	SavedManage:      "Manage saved things: add, change and remove the business's saved accounts (changing an account number needs a passkey)",
 	MoneyPay:         "Pay people from the business's payments account, each payment with a passkey, within the limits the owner sets (over them, the owner's OK)",
 	PayrollRead:      "See the payroll from Payrolla: each run, what each person is paid and whether it arrived (it shows what people earn)",
+	PayrollApprove:   "Approve and pay the payroll in Taskiem as their own Payrolla account, linked once with a code Payrolla sends them",
 	PageEdit:         "Make and change the business's pages as drafts, and pin them to the menu",
 	PagePublish:      "Publish pages: show a page to the people allowed to open it",
 }

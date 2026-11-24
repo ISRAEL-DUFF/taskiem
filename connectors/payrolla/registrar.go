@@ -31,6 +31,10 @@ type registrar struct {
 	// events are the trigger's own events: the subscription's when the
 	// workflow names none.
 	events []string
+	// all subscribes to every event ("*"): Taskiem's own subscription
+	// per connection (connection_event), which receives events Payrolla
+	// adds later too.
+	all bool
 }
 
 // webhook is Payrolla's WebhookSubscription (the fields Taskiem reads).
@@ -73,6 +77,9 @@ func subscriptionOf(u string) string {
 // eventTypes are what the subscription should receive: the workflow's
 // events, or the trigger's, never Payrolla's ping (sent only on request).
 func (r registrar) eventTypes(spec connector.RemoteSpec) []string {
+	if r.all {
+		return []string{"*"}
+	}
 	from := spec.Events
 	if len(from) == 0 {
 		from = r.events
@@ -94,7 +101,7 @@ func (r registrar) list(ctx context.Context, c connector.RemoteCall) ([]webhook,
 	var out struct {
 		Webhooks []webhook `json:"webhooks"`
 	}
-	if err := r.c.do(ctx, c.Credentials, c.HTTP, http.MethodGet, "/connect/webhooks", nil, &out); err != nil {
+	if err := r.c.do(ctx, c.Request(), http.MethodGet, "/connect/webhooks", nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out.Webhooks, nil
@@ -109,7 +116,7 @@ func (r registrar) Create(ctx context.Context, c connector.RemoteCall, spec conn
 		Webhook webhook `json:"webhook"`
 		Secret  string  `json:"signing_secret"`
 	}
-	if err := r.c.do(ctx, c.Credentials, c.HTTP, http.MethodPost, "/connect/webhooks", map[string]any{"url": spec.URL, "event_types": types}, &out); err != nil {
+	if err := r.c.do(ctx, c.Request(), http.MethodPost, "/connect/webhooks", nil, map[string]any{"url": spec.URL, "event_types": types}, &out); err != nil {
 		return connector.RemoteState{}, err
 	}
 	if out.Webhook.ID == "" || out.Secret == "" {
@@ -181,7 +188,7 @@ func (r registrar) RotateSecret(context.Context, connector.RemoteCall, string) (
 }
 
 func (r registrar) Delete(ctx context.Context, c connector.RemoteCall, id string) error {
-	err := r.c.do(ctx, c.Credentials, c.HTTP, http.MethodDelete, "/connect/webhooks/"+url.PathEscape(id), nil, nil)
+	err := r.c.do(ctx, c.Request(), http.MethodDelete, "/connect/webhooks/"+url.PathEscape(id), nil, nil, nil)
 	if errors.Is(err, connector.ErrNotFound) {
 		return nil // already gone
 	}
