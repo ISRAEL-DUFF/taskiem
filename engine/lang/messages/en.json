@@ -992,7 +992,12 @@
     "menu.more": {
       "text": "More…",
       "reviewed": true,
-      "context": "The last row of the topics list on WhatsApp, for the rest; at most 24 characters"
+      "context": "The last row of the topics list on WhatsApp, and the last button of five on Slack, for the rest; at most 24 characters"
+    },
+    "menu.all": {
+      "text": "All {n}",
+      "reviewed": true,
+      "context": "The last button of a topic's menu on Telegram, after its first five: shows every one of its {n} actions"
     },
     "menu.more_line": {
       "text": "The other topics",

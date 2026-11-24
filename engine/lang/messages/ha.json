@@ -918,6 +918,11 @@
       "reviewed": false,
       "context": "Draft, not reviewed: The last row of the topics list on WhatsApp, for the rest; at most 24 characters"
     },
+    "menu.all": {
+      "text": "Duka {n}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The last button of a topic's menu on Telegram, after its first five: shows every one of its {n} actions"
+    },
     "menu.more_line": {
       "text": "Sauran batutuwa",
       "reviewed": false,

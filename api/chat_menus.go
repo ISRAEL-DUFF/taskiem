@@ -49,8 +49,11 @@ const refSep = " · "
 // the topics), what Taskiem understood, the row it picked with what it
 // took from the message, and the picked row's command as a tip.
 type chatMenuMsg struct {
-	// from is where a list of the topics starts (WhatsApp's second page).
-	from   int
+	// from is where a list of the topics, or of a topic's rows, starts
+	// (WhatsApp's second page of topics; Slack's next five).
+	from int
+	// all: every row at once, as Telegram's "All N" asks.
+	all    bool
 	Topic  string            `json:"topic,omitempty"`
 	Line   string            `json:"line,omitempty"`
 	Pick   string            `json:"pick,omitempty"`
@@ -126,16 +129,26 @@ func (s *Server) sayMenu(ctx context.Context, c *chat, m chatMenuMsg) error {
 			head = c.t("menu.what_do")
 		}
 		head = "*" + section + "*: " + head
-		for _, a := range s.orderedActions(ctx, c, m.Topic, m.Pick) {
+		acts := s.orderedActions(ctx, c, m.Topic, m.Pick)
+		for _, a := range acts[min(m.from, len(acts)):] {
 			rows = append(rows, row{actPrefix + a.ID, a.ID, word(c.lang.Tag, titleWordID(a), a.Title), word(c.lang.Tag, lineWordID(a), a.Line)})
 		}
 	}
 	if len(rows) == 0 {
 		return c.say(ctx, s, notUnderstood(c))
 	}
+	switch ch := c.ch.Name(); {
 	// WhatsApp lists hold ten rows: more topics than that, nine and More.
-	if c.ch.Name() == "whatsapp" && len(rows) > 10 {
+	case ch == "whatsapp" && len(rows) > 10:
 		rows = append(rows[:9:9], row{topicPrefix + topicsMore, topicsMore, c.t("menu.more"), c.t("menu.more_line")})
+	// Slack: five rows at a time, then More… for the next five (§9).
+	case ch == "slack" && len(rows) > menuPage:
+		next := topicsMore + "@" + strconv.Itoa(m.from+menuPage)
+		rows = append(rows[:menuPage:menuPage], row{topicPrefix + m.Topic + ":" + next, next, c.t("menu.more"), ""})
+	// Telegram: a topic's five rows, then All N for every one (§9).
+	case ch == "telegram" && m.Topic != "" && !m.all && len(rows) > menuPage:
+		next := topicsMore + "@all"
+		rows = append(rows[:menuPage:menuPage], row{topicPrefix + m.Topic + ":" + next, next, c.t("menu.all", "n", strconv.Itoa(len(rows))), ""})
 	}
 	st := chatMenuState{Topic: m.Topic, From: m.from}
 	for _, r := range rows {
@@ -163,11 +176,54 @@ func (s *Server) sayMenu(ctx context.Context, c *chat, m chatMenuMsg) error {
 	for _, r := range rows {
 		bs = append(bs, whatsapp.Button{ID: r.id, Title: r.title})
 	}
-	return c.say(ctx, s, text, bs...)
+	if c.note != "" {
+		text, c.note = c.note+"\n\n"+text, ""
+	}
+	msg := whatsapp.Message{Text: c.ch.Prefix(c.tenant.Name) + text, Buttons: bs}
+	// Telegram lays the topics out two to a row (§9).
+	if m.Topic == "" {
+		msg.Columns = 2
+	}
+	_, err := c.ch.Send(ctx, c.addr, msg)
+	return err
 }
 
-// topicsMore is the topics list's last row on WhatsApp, for the rest.
+// topicsMore is the topics list's last row on WhatsApp, for the rest;
+// with "@" and where to go on from ("more@5"), or "@all", the last row
+// of a page on Slack and Telegram.
 const topicsMore = "more"
+
+// menuPage is how many rows a menu shows at once on Slack, and a topic's
+// menu on Telegram, before More… or All N (§9).
+const menuPage = 5
+
+// menuMore shows the rest of a menu from its More… or All N: spec is
+// "more" (WhatsApp's second list of topics, after from), "more@<from>" or
+// "more@all".
+func (s *Server) menuMore(ctx context.Context, c *chat, topic, spec string, from int) error {
+	m := chatMenuMsg{Topic: topic}
+	switch rest, _ := strings.CutPrefix(spec, topicsMore+"@"); {
+	case spec == topicsMore:
+		m.from = from + 9
+	case rest == "all":
+		m.all = true
+	default:
+		n, err := strconv.Atoi(rest)
+		if err != nil || n < 0 || n > 100 {
+			return c.say(ctx, s, notUnderstood(c))
+		}
+		m.from = n
+	}
+	if topic == "" {
+		m.Line = c.t("menu.more_line")
+	} else if len(s.actionsOf(ctx, c, topic)) == 0 {
+		return s.sayMenu(ctx, c, chatMenuMsg{})
+	}
+	return s.sayMenu(ctx, c, m)
+}
+
+// isMoreItem reports whether a menu's item is its More… or All N.
+func isMoreItem(it string) bool { return it == topicsMore || strings.HasPrefix(it, topicsMore+"@") }
 
 // orderedActions are a topic's actions, the picked one first.
 func (s *Server) orderedActions(ctx context.Context, c *chat, topic, pick string) []chatAction {
@@ -211,8 +267,21 @@ func (s *Server) waMenuWords(ctx context.Context, c *chat, text, cmd string) (bo
 		return true, s.formDone(ctx, c, rest)
 	}
 	if id, ok := strings.CutPrefix(c.in.Reply, topicPrefix); ok {
-		if id == topicsMore {
-			return true, s.sayMenu(ctx, c, chatMenuMsg{from: 9, Line: c.t("menu.more_line")})
+		if c.state != stateIdle && c.data.Menu != nil {
+			if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+				return true, err
+			}
+		}
+		// More… and All N: "more", "more@5", or a topic's "riders:more@all".
+		topic, spec, paged := strings.Cut(id, ":")
+		if !paged {
+			topic, spec = "", id
+		}
+		if isMoreItem(spec) {
+			if _, ok := chatTopicByID(topic); topic != "" && !ok {
+				return true, c.say(ctx, s, notUnderstood(c))
+			}
+			return true, s.menuMore(ctx, c, topic, spec, 0)
 		}
 		return true, s.topicMenu(ctx, c, id)
 	}
@@ -230,10 +299,10 @@ func (s *Server) waMenuWords(ctx context.Context, c *chat, text, cmd string) (bo
 		}
 		// A number from it picks; anything else is read as a new message.
 		if n, err := strconv.Atoi(strings.Trim(cmd, " #.")); err == nil && n >= 1 && n <= len(st.Items) {
+			if isMoreItem(st.Items[n-1]) {
+				return true, s.menuMore(ctx, c, st.Topic, st.Items[n-1], st.From)
+			}
 			if st.Topic == "" {
-				if st.Items[n-1] == topicsMore {
-					return true, s.sayMenu(ctx, c, chatMenuMsg{from: st.From + 9, Line: c.t("menu.more_line")})
-				}
 				return true, s.topicMenu(ctx, c, st.Items[n-1])
 			}
 			return true, s.menuAct(ctx, c, st.Items[n-1])

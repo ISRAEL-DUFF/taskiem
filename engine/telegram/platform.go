@@ -109,7 +109,13 @@ func (p *Platform) send(ctx context.Context, addr string, m whatsapp.Message) (s
 		if title == "" {
 			title = b.ID
 		}
-		rows = append(rows, []InlineButton{{Text: title, Data: "c:" + id}})
+		btn := InlineButton{Text: title, Data: "c:" + id}
+		// Two (or more) to a row where the message asks (the topics menu).
+		if n := len(rows); m.Columns > 1 && n > 0 && len(rows[n-1]) < m.Columns {
+			rows[n-1] = append(rows[n-1], btn)
+			continue
+		}
+		rows = append(rows, []InlineButton{btn})
 	}
 	if l := m.Link; l != nil {
 		rows = append(rows, []InlineButton{{Text: l.Title, URL: l.URL, WebApp: l.WebApp}})

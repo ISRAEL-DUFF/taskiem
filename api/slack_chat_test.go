@@ -66,7 +66,7 @@ func TestSlackConversation(t *testing.T) {
 		t.Fatalf("dm: %d", st)
 	}
 	got := w.fake.to("U0OWNER")[before:]
-	if len(got) != 1 || !strings.Contains(got[0]["text"].(string), "Pick a topic") || !strings.Contains(fmt.Sprint(got[0]["blocks"]), "value:topic:staff") {
+	if len(got) != 1 || !strings.Contains(got[0]["text"].(string), "Pick a topic") || !strings.Contains(fmt.Sprint(got[0]["blocks"]), "value:topic:sales") || !strings.Contains(fmt.Sprint(got[0]["blocks"]), "value:topic::more@5") {
 		t.Fatalf("help: %v", got)
 	}
 	// Slack retried it: nothing twice.
@@ -141,5 +141,59 @@ func TestSlackConnect(t *testing.T) {
 	w.srv.WaitBackground()
 	if told := w.fake.to("U0OWNER")[before:]; len(told) != 1 || !strings.Contains(told[0]["text"].(string), "Paystack is connected") {
 		t.Fatalf("told: %v", told)
+	}
+}
+
+// Slack's menus (chat-menus.md §9): five buttons at most, then More…,
+// which shows the next five; for the topics and for a topic's rows; a
+// number picks among the buttons as sent.
+func TestSlackMenuFiveThenMore(t *testing.T) {
+	w := newSlackWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(201, "POST", "/v1/connections", map[string]any{"connector": "slack@1", "environment": "prod", "credentials": map[string]string{"bot_token": "xoxb-acme"}})
+	w.fake.users["owner@acme.test"] = "U0OWNER"
+	w.link(t, owner, "U0OWNER")
+	// buttons are the last message's buttons: their words and values.
+	buttons := func() (titles, values []string) {
+		t.Helper()
+		got := w.fake.to("U0OWNER")
+		blocks, _ := got[len(got)-1]["blocks"].([]any)
+		for _, b := range blocks {
+			if els, ok := b.(map[string]any)["elements"].([]any); ok {
+				for _, e := range els {
+					el := e.(map[string]any)
+					titles = append(titles, el["text"].(map[string]any)["text"].(string))
+					values = append(values, fmt.Sprint(el["value"]))
+				}
+			}
+		}
+		return titles, values
+	}
+	w.event(t, dm("Ev10", "U0OWNER", "help"), slackSecret)
+	titles, values := buttons()
+	if len(titles) != 6 || titles[5] != "More…" || values[5] != "topic::more@5" {
+		t.Fatalf("topics: %v %v", titles, values)
+	}
+	w.click(t, "U0OWNER", "taskiem.reply.5", values[5], slackSecret)
+	next, nextValues := buttons()
+	if len(next) != 6 || next[0] == titles[0] || nextValues[5] != "topic::more@10" {
+		t.Fatalf("the next five topics: %v %v", next, nextValues)
+	}
+	// A topic of seven: five, then More…, then the last two.
+	w.event(t, dm("Ev11", "U0OWNER", "help saved"), slackSecret)
+	titles, values = buttons()
+	if len(titles) != 6 || titles[5] != "More…" || values[5] != "topic:saved:more@5" {
+		t.Fatalf("a topic: %v %v", titles, values)
+	}
+	w.click(t, "U0OWNER", "taskiem.reply.5", values[5], slackSecret)
+	rest, restValues := buttons()
+	if len(rest) != 2 || !strings.HasPrefix(restValues[0], "act:saved.") {
+		t.Fatalf("the rest: %v %v", rest, restValues)
+	}
+	// More… by its number.
+	w.event(t, dm("Ev12", "U0OWNER", "help saved"), slackSecret)
+	w.event(t, dm("Ev13", "U0OWNER", "6"), slackSecret)
+	if again, _ := buttons(); len(again) != 2 || again[0] != rest[0] {
+		t.Fatalf("More… by its number: %v", again)
 	}
 }
