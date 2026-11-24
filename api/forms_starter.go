@@ -155,6 +155,10 @@ func (s *Server) formChoiceAnswer(ctx context.Context, c *chat, text string) (bo
 	}
 	var pressed uuid.UUID
 	pick := ""
+	if strings.HasPrefix(c.in.Reply, formButtonPrefix+"send:") {
+		// A form step's Send as it is (forms_chat.go), not a choice.
+		return false, nil
+	}
 	if rest, ok := strings.CutPrefix(c.in.Reply, choiceReplyPrefix); ok {
 		id, key, _ := strings.Cut(rest, ":")
 		var err error
