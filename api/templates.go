@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -17,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/wdtext"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -62,8 +64,27 @@ type templateView struct {
 	Services [][]string `json:"services,omitempty"`
 	// Callable is, for a template another workflow can use as a step
 	// (decision 0047), its interface: run inputs, outputs and effect.
-	Callable   *callableView   `json:"callable,omitempty"`
+	Callable *callableView `json:"callable,omitempty"`
+	// Tool is, for a recipe (made tools §13), the tool it makes: its name,
+	// what it is for, who uses it, what it answers with, the command it
+	// is called by unless another is chosen, and the schedule installed
+	// with it, if any.
+	Tool       *recipeView     `json:"tool,omitempty"`
 	Definition json.RawMessage `json:"definition,omitempty"`
+}
+
+// recipeView is the tool a recipe makes, as the library shows it.
+type recipeView struct {
+	Name    string `json:"name"`
+	About   string `json:"about"`
+	For     string `json:"for"`
+	Icon    string `json:"icon,omitempty"`
+	Answer  string `json:"answer"` // text | card | list | "" (says it ran)
+	Command string `json:"command"`
+	// Care is how much it asks before it runs: answers (at once), yes or
+	// step_up, worked out from its steps.
+	Care      string `json:"care"`
+	Companion string `json:"companion,omitempty"`
 }
 
 // callableView is a callable template's interface: the run inputs a
@@ -103,6 +124,19 @@ func viewTemplate(t *templates.Template, reg connector.Lookup, full bool) templa
 	if doc, err := t.Instantiate(t.Examples(), ""); err == nil {
 		if def, err := wd.Load(doc); err == nil {
 			v.Steps = wdtext.Describe(def, reg)
+			if t.IsRecipe() && def.Tool != nil {
+				rv := &recipeView{Name: def.Tool.Name, About: def.Tool.About, For: def.Tool.Audience(), Icon: def.Tool.Icon, Command: def.Tool.Command}
+				if def.Tool.Answer != nil {
+					rv.Answer = def.Tool.Answer.Type
+				}
+				if care, err := wdcheck.ToolCare(doc, reg, nil); err == nil {
+					rv.Care = care.Level
+				}
+				if t.Companion != nil {
+					rv.Companion = t.Companion.Name
+				}
+				v.Tool = rv
+			}
 			if t.Callable && def.RawInputs != nil {
 				c := &callableView{Inputs: def.RawInputs.Schema, Params: []string{}, Outputs: t.Outputs, Effect: templates.EffectOf(def, reg)}
 				for _, p := range t.StepParams() {
@@ -146,6 +180,16 @@ func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request) {
 	// A template of a part of Taskiem the business turned off is not offered
 	// (docs/spec/business-areas.md): it would stop at its first step.
 	list = s.templatesOfAreasOn(r.Context(), principalFrom(r.Context()).TenantID, list)
+	if r.URL.Query().Get("tool") == "true" {
+		// The recipes: templates that make a tool (made tools §13, §17).
+		var kept []*templates.Template
+		for _, t := range list {
+			if t.IsRecipe() {
+				kept = append(kept, t)
+			}
+		}
+		list = kept
+	}
 	if r.URL.Query().Get("callable") == "true" {
 		var kept []*templates.Template
 		for _, t := range list {
@@ -210,11 +254,25 @@ func (s *Server) instantiateTemplate(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var wf uuid.UUID
 	var doc []byte
+	var rec *recipeInstall
 	err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		wf, doc, err = s.instantiateTx(r.Context(), tx, p, t, req.Params, req.Name, func(action, target string, detail map[string]any) error {
+		audit := func(action, target string, detail map[string]any) error {
 			return auditTx(r, tx, action, target, detail)
-		})
+		}
+		params := req.Params
+		if t.IsRecipe() {
+			var err error
+			if params, rec, err = s.recipeCommandTx(r.Context(), tx, t, params); err != nil {
+				return err
+			}
+		}
+		var err error
+		if wf, doc, err = s.instantiateTx(r.Context(), tx, p, t, params, req.Name, audit); err != nil {
+			return err
+		}
+		if rec != nil && t.Companion != nil {
+			rec.Companion, err = s.installCompanionTx(r.Context(), tx, p, t, params, audit)
+		}
 		return err
 	})
 	var pe templates.ErrParams
@@ -226,8 +284,110 @@ func (s *Server) instantiateTemplate(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": 1, "state": "draft", "template": t.ID,
-		"problems": nonNil(s.checkFor(r, doc)), "variables": nonNil(t.Variables), "tables": s.templateTables(r, p, t, req.Params)})
+	out := map[string]any{"id": wf, "version": 1, "state": "draft", "template": t.ID,
+		"problems": nonNil(s.checkFor(r, doc)), "variables": nonNil(t.Variables), "tables": s.templateTables(r, p, t, req.Params)}
+	if rec != nil {
+		out["tool"] = rec
+	}
+	writeJSON(w, http.StatusCreated, out)
+}
+
+// recipeInstall is what installing a recipe gave (made tools §5, §13):
+// the command asked for and the one given, the next free one when it was
+// taken ("expense-2"), and the schedule installed with it.
+type recipeInstall struct {
+	Asked     string         `json:"asked"`
+	Command   string         `json:"command"`
+	Changed   bool           `json:"changed"`
+	Companion *companionMade `json:"companion,omitempty"`
+}
+
+// companionMade is the draft workflow installed beside a recipe's tool.
+type companionMade struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+// recipeCommandTx gives a recipe the command asked for (its default when
+// none is), or the next free one when it is taken: one of Taskiem's own
+// words, a deployed tool's in any environment, or another workflow's
+// version's (a recipe installed twice), with -2, -3… after it.
+func (s *Server) recipeCommandTx(ctx context.Context, tx pgx.Tx, t *templates.Template, params map[string]any) (map[string]any, *recipeInstall, error) {
+	cp := t.CommandParam()
+	out := map[string]any{}
+	for k, v := range params {
+		out[k] = v
+	}
+	raw, ok := out[cp.Name]
+	if !ok || raw == nil || raw == "" {
+		raw = cp.Default
+		if raw == nil {
+			raw = cp.Example
+		}
+	}
+	asked, err := cp.Coerce(raw)
+	if err != nil {
+		return nil, nil, templates.ErrParams{{Param: cp.Name, Message: err.Error()}}
+	}
+	base := asked.(string)
+	taken := func(c string) (bool, error) {
+		if wdcheck.ReservedCommand(c) {
+			return true, nil
+		}
+		var used bool
+		err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM workflow_tools WHERE command = $1)
+			OR EXISTS (SELECT 1 FROM workflow_versions WHERE definition->'tool'->>'command' = $1)`, c).Scan(&used)
+		return used, err
+	}
+	given := base
+	for n := 2; ; n++ {
+		used, err := taken(given)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !used {
+			break
+		}
+		if n > 99 {
+			return nil, nil, templates.ErrParams{{Param: cp.Name, Message: "is taken; choose another word"}}
+		}
+		suffix := "-" + strconv.Itoa(n)
+		stem := base
+		if len(stem)+len(suffix) > 24 {
+			stem = strings.TrimRight(stem[:24-len(suffix)], "-")
+		}
+		given = stem + suffix
+	}
+	out[cp.Name] = given
+	return out, &recipeInstall{Asked: base, Command: given, Changed: given != base}, nil
+}
+
+// installCompanionTx saves a recipe's companion (a schedule whose button
+// opens the tool) as a draft workflow of its own, beside the tool's.
+func (s *Server) installCompanionTx(ctx context.Context, tx pgx.Tx, p *Principal, t *templates.Template, params map[string]any,
+	audit func(action, target string, detail map[string]any) error) (*companionMade, error) {
+	raw, err := t.InstantiateCompanion(params)
+	if err != nil || raw == nil {
+		return nil, err
+	}
+	doc, err := canonical(raw)
+	if err != nil {
+		return nil, err
+	}
+	wf, err := s.createWorkflowTx(ctx, tx, p, t.Companion.Name)
+	if err != nil {
+		return nil, err
+	}
+	if err := insertVersionTx(ctx, tx, p.TenantID, wf, 1, doc, nil, p.Actor(), ""); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET template_id = $2 WHERE workflow_id = $1 AND version = 1`, wf, t.ID); err != nil {
+		return nil, err
+	}
+	if err := audit("workflow.create", wf.String(), map[string]any{"name": t.Companion.Name, "template": t.ID, "state": "draft", "companion": true}); err != nil {
+		return nil, err
+	}
+	return &companionMade{ID: wf, Name: t.Companion.Name}, nil
 }
 
 // templateTables makes the data tables a template declares, after its

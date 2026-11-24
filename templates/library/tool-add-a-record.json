@@ -1,0 +1,51 @@
+{
+  "id": "tool-add-a-record",
+  "title": "Add a record from the chat",
+  "summary": "A tool: type its word, what it was and how much, and a row is added to your table, with a sentence back.",
+  "description": "A tool for your team, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word with what it was and an amount (\"/add-sale 2 bags of rice 45000\") and a row is added to your table, with a sentence back saying so. People see what will be added and say yes first. It is fixed to one table, with its own name: what, amount and note. Taskiem makes the table if it does not exist. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (add-sale-2) and says so.",
+  "category": "tools",
+  "tags": ["tool", "record", "data table"],
+  "keywords": ["add", "record", "log", "write down", "note", "row", "table", "tool", "command", "type"],
+  "connectors": ["xenibase@1"],
+  "params": [
+    {"name": "command", "type": "command", "title": "Its word", "description": "What people type to use it, after /. Letters, numbers and dashes.", "required": true, "default": "add-sale", "example": "add-sale"},
+    {"name": "table", "type": "string", "title": "Table", "description": "The table rows are added to. Taskiem makes it if it does not exist.", "required": false, "default": "records", "example": "records", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"}
+  ],
+  "tables": [
+    {"name": "{{table}}", "title": "Records", "description": "Rows added from the chat.", "columns": [
+      {"name": "what", "title": "What", "type": "text", "required": true},
+      {"name": "amount", "title": "Amount", "type": "number"},
+      {"name": "note", "title": "Note", "type": "text"}]}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_toolAddRecord",
+    "version": 1,
+    "name": "Add a record",
+    "description": "Adds a row to one table, with a sentence back.",
+    "trigger": {"type": "manual"},
+    "inputs": {"schema": {"type": "object", "required": ["what"], "properties": {
+      "what": {"type": "string", "title": "What", "minLength": 1, "maxLength": 200},
+      "amount": {"type": "number", "title": "Amount", "minimum": 0},
+      "note": {"type": "string", "title": "Note", "maxLength": 500}}}},
+    "outputs": [
+      {"name": "what", "type": "string", "title": "What", "description": "What was added", "value": "=steps.said.output.what"},
+      {"name": "amount", "type": "string", "title": "Amount", "description": "The amount, as written", "value": "=steps.said.output.amount"}
+    ],
+    "tool": {
+      "name": "Add a record",
+      "command": "{{command}}",
+      "about": "Adds a row to your table",
+      "icon": "list",
+      "for": "members",
+      "answer": {"type": "text", "text": "='Added to ' + {{table}} + (outputs.amount != '' ? ': ' + outputs.amount : '') + '.'"}
+    },
+    "steps": [
+      {"id": "said", "type": "transform", "name": "Read what to add",
+       "config": {"output": {"what": "=trigger.body.what", "amount": "=has(trigger.body.amount) ? string(trigger.body.amount) : ''"}}},
+      {"id": "add", "needs": ["said"], "type": "connector", "name": "Add the row to the table", "connector": "xenibase@1", "action": "insert_rows", "connection": "data_tables",
+       "input": {"table": "{{table}}", "row": {"what": "=trigger.body.what", "amount": "=has(trigger.body.amount) ? double(trigger.body.amount) : 0.0", "note": "=has(trigger.body.note) ? trigger.body.note : ''"}}}
+    ],
+    "settings": {"timeout": "5m"}
+  }
+}

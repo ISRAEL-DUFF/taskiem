@@ -185,7 +185,37 @@ type Template struct {
 	// (decision 0047), with its run inputs and Outputs as its interface.
 	Callable bool     `json:"callable,omitempty"`
 	Outputs  []Output `json:"outputs,omitempty"`
+	// Companion is a second workflow installed with a recipe (made tools
+	// §13): a schedule that tells people, with a button to the recipe's
+	// tool (the daily report, watch and act). It is filled with the same
+	// parameter values, and is never a tool itself.
+	Companion *Companion `json:"companion,omitempty"`
 }
+
+// Companion is a workflow installed alongside a recipe's tool.
+type Companion struct {
+	Name       string          `json:"name"`
+	Definition json.RawMessage `json:"definition"`
+}
+
+// CommandParam is the parameter a recipe takes its tool's command from
+// (type command), nil for a template that makes no tool.
+func (t *Template) CommandParam() *Param {
+	for i := range t.Params {
+		if t.Params[i].Type == "command" {
+			return &t.Params[i]
+		}
+	}
+	return nil
+}
+
+// IsRecipe reports whether the template makes a tool (made tools §13): a
+// recipe, whose command is chosen when it is installed.
+func (t *Template) IsRecipe() bool { return t.CommandParam() != nil }
+
+// ToolCommand is how a tool's command is written: 2 to 24 lower-case
+// letters, digits and dashes, starting with a letter (engine/wd).
+var ToolCommand = regexp.MustCompile(`^[a-z][a-z0-9-]{1,23}$`)
 
 // CapabilityPrefix marks a capability among a template's connectors:
 // capability:pay_bank is any rail that can pay bank accounts.
@@ -232,7 +262,7 @@ var pickers = map[string]bool{"sheet": false, "sheet_tab": true, "table": false,
 // choicesRe is a choice picker's connector and picker ("mailchimp:audiences").
 var choicesRe = regexp.MustCompile(`^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$`)
 
-var paramTypes = map[string]bool{"string": true, "text": true, "integer": true, "number": true, "boolean": true, "time": true, "weekday": true, "connection": true}
+var paramTypes = map[string]bool{"command": true, "string": true, "text": true, "integer": true, "number": true, "boolean": true, "time": true, "weekday": true, "connection": true}
 
 // Load reads every library/*.json file of fsys.
 func Load(fsys fs.FS) (*Library, error) {
@@ -373,7 +403,23 @@ func (t *Template) check() error {
 		}
 	}
 	used := map[string]bool{}
-	for _, m := range marker.FindAllStringSubmatch(string(t.Definition), -1) {
+	marked := string(t.Definition)
+	if t.Companion != nil {
+		if t.Companion.Name == "" || len(t.Companion.Definition) == 0 {
+			return errors.New("a companion has a name and a definition")
+		}
+		marked += string(t.Companion.Definition)
+	}
+	commands := 0
+	for _, p := range t.Params {
+		if p.Type == "command" {
+			commands++
+		}
+	}
+	if commands > 1 || t.Companion != nil && commands == 0 {
+		return errors.New("a recipe has one command parameter, and only a recipe has a companion")
+	}
+	for _, m := range marker.FindAllStringSubmatch(marked, -1) {
 		if !seen[m[1]] {
 			return fmt.Errorf("the definition uses {{%s}}, which is not a parameter", m[1])
 		}
@@ -540,6 +586,18 @@ func (p *Param) Coerce(v any) (any, error) {
 		v = "'" + strings.ReplaceAll(s, "'", "''") + "'"
 	}
 	switch p.Type {
+	case "command":
+		// The word after "/": typed as a person says it ("Add Sale",
+		// "/add sale") and written as a command (add-sale).
+		s, ok := v.(string)
+		if !ok {
+			return nil, errors.New("must be a word")
+		}
+		s = strings.Join(strings.Fields(strings.ToLower(strings.TrimPrefix(s, "/"))), "-")
+		if !ToolCommand.MatchString(s) {
+			return nil, errors.New("must be 2 to 24 letters, digits and dashes, starting with a letter")
+		}
+		return s, nil
 	case "string", "text":
 		s, ok := v.(string)
 		if !ok {
@@ -776,6 +834,19 @@ func (t *Template) Param(name string) (*Param, bool) {
 // must have a value; name, when not empty, replaces the definition's
 // name.
 func (t *Template) Instantiate(values map[string]any, name string) ([]byte, error) {
+	return t.fill(t.Definition, values, name)
+}
+
+// InstantiateCompanion fills a recipe's companion with the same values
+// as its tool (Instantiate); nil when the template has none.
+func (t *Template) InstantiateCompanion(values map[string]any) ([]byte, error) {
+	if t.Companion == nil {
+		return nil, nil
+	}
+	return t.fill(t.Companion.Definition, values, t.Companion.Name)
+}
+
+func (t *Template) fill(def json.RawMessage, values map[string]any, name string) ([]byte, error) {
 	vals, missing, err := t.Resolve(values)
 	if err != nil {
 		return nil, err
@@ -794,7 +865,7 @@ func (t *Template) Instantiate(values map[string]any, name string) ([]byte, erro
 			vals[p.Name], _ = p.Coerce(p.Example)
 		}
 	}
-	doc, err := substitute(t.Definition, func(name, mod string, inExpr, whole bool) (any, error) {
+	doc, err := substitute(def, func(name, mod string, inExpr, whole bool) (any, error) {
 		p, _ := t.Param(name)
 		return render(p, vals[name], mod, inExpr, whole)
 	})

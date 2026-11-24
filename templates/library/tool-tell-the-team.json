@@ -1,0 +1,40 @@
+{
+  "id": "tool-tell-the-team",
+  "title": "Tell the team from the chat",
+  "summary": "A tool: type its word and a message, and everyone with a role hears it on their chat or by email.",
+  "description": "A tool for your team, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word and a message (\"/tell-team shop opens at 10 tomorrow\") and everyone with the role you choose hears it on the WhatsApp or Telegram they linked to Taskiem, or by email. You see the message and say yes first, then hear how many it went to. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (tell-team-2) and says so.",
+  "category": "tools",
+  "tags": ["tool", "team", "message"],
+  "keywords": ["tell", "team", "staff", "everyone", "announce", "broadcast", "message", "notice", "tool", "command"],
+  "connectors": ["notify@1"],
+  "params": [
+    {"name": "command", "type": "command", "title": "Its word", "description": "What people type to use it, after /. Letters, numbers and dashes.", "required": true, "default": "tell-team", "example": "tell-team"},
+    {"name": "role", "type": "string", "title": "Who hears it", "description": "The role whose members hear it, such as staff.", "required": false, "default": "owner", "example": "owner", "picker": "role"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_toolTellTeam",
+    "version": 1,
+    "name": "Tell the team",
+    "description": "A message to everyone with a role.",
+    "trigger": {"type": "manual"},
+    "inputs": {"schema": {"type": "object", "required": ["message"], "properties": {
+      "message": {"type": "string", "title": "Message", "minLength": 1, "maxLength": 1000}}}},
+    "outputs": [
+      {"name": "people", "type": "integer", "title": "People", "description": "How many it went to", "value": "=has(steps.tell.output.people) ? int(steps.tell.output.people) : 0"}
+    ],
+    "tool": {
+      "name": "Tell the team",
+      "command": "{{command}}",
+      "about": "A message to everyone with a role",
+      "icon": "bell",
+      "for": "members",
+      "answer": {"type": "text", "text": "='Sent to ' + string(outputs.people) + ' people.'"}
+    },
+    "steps": [
+      {"id": "tell", "type": "connector", "name": "Tell everyone with the role", "connector": "notify@1", "action": "tell",
+       "input": {"to": "role", "role": "{{role}}", "title": "A message from the team", "message": "=trigger.body.message"}}
+    ],
+    "settings": {"timeout": "5m"}
+  }
+}

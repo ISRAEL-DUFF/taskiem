@@ -38928,6 +38928,11 @@ paths:
         schema:
           type: boolean
         description: Only templates another workflow can use as a step (decision 0047).
+      - name: tool
+        in: query
+        schema:
+          type: boolean
+        description: Only recipes, the templates that make a tool used from the chat (made tools §13).
   /v1/templates/{id}:
     get:
       operationId: getTemplate
@@ -57713,7 +57718,9 @@ components:
           type: string
         type:
           type: string
+          description: command is a recipe's tool's word after / (made tools §13), written as a command (Add Sale is add-sale); installing gives the next free one when it is taken.
           enum:
+          - command
           - string
           - text
           - integer
@@ -57857,6 +57864,41 @@ components:
             type: array
             items:
               type: string
+        tool:
+          type: object
+          description: For a recipe (made tools §13), the tool it makes, used from the chat.
+          required:
+          - name
+          - about
+          - for
+          - answer
+          - command
+          - care
+          properties:
+            name:
+              type: string
+            about:
+              type: string
+            for:
+              type: string
+              enum: [members, customers, linked]
+            icon:
+              type: string
+            answer:
+              type: string
+              enum: [text, card, list, '']
+              description: What it says back; empty when it only says it ran.
+            command:
+              type: string
+              description: The word it is called by unless another is chosen at install.
+            care:
+              type: string
+              enum: [answers, 'yes', step_up]
+              description: How much it asks before it runs, worked out from its steps.
+            companion:
+              type: string
+              description: The schedule installed beside it (the daily report, watch and act), whose button opens the tool.
+          additionalProperties: false
         callable:
           type: object
           description: For a template another workflow can use as a step (decision 0047), its interface.
@@ -58010,6 +58052,35 @@ components:
           type: string
         problems:
           $ref: '#/components/schemas/Problems'
+        tool:
+          type: object
+          description: For a recipe (made tools §13), the command its tool was given, the next free one when the one asked for was taken, and the schedule installed beside it.
+          required:
+          - asked
+          - command
+          - changed
+          properties:
+            asked:
+              type: string
+            command:
+              type: string
+            changed:
+              type: boolean
+              description: The command asked for was taken (one of Taskiem's own words, or another tool's), so it was given the next free one.
+            companion:
+              type: object
+              description: The schedule installed as its own draft workflow, whose button opens the tool.
+              required:
+              - id
+              - name
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+              additionalProperties: false
+          additionalProperties: false
         variables:
           type: array
           description: Variables to set before it runs.

@@ -1,0 +1,51 @@
+{
+  "id": "tool-look-up",
+  "title": "Look something up from the chat",
+  "summary": "A tool: type its word and a name, and get the row of your table that matches, as a card.",
+  "description": "A tool for your team, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word and what you are looking for (\"/find-customer Ada\") and it finds the first row of your table whose column matches, and answers with a card: that row's name and two more of its columns. It only reads, so it answers at once, with what it understood. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (find-customer-2) and says so.",
+  "category": "tools",
+  "tags": ["tool", "look up", "data table"],
+  "keywords": ["look up", "lookup", "find", "search", "check", "card", "tool", "command", "type"],
+  "connectors": ["xenibase@1"],
+  "params": [
+    {"name": "command", "type": "command", "title": "Its word", "description": "What people type to use it, after /. Letters, numbers and dashes.", "required": true, "default": "find-customer", "example": "find-customer"},
+    {"name": "table", "type": "string", "title": "Table", "description": "The table it looks in.", "required": false, "default": "customers", "example": "customers", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"},
+    {"name": "match_column", "type": "string", "title": "Found by", "description": "The column it matches the words against, such as name.", "required": false, "default": "name", "example": "name", "picker": "column", "from": "table"},
+    {"name": "first_column", "type": "string", "title": "Shows first", "description": "A column it shows on the card.", "required": false, "default": "phone", "example": "phone", "picker": "column", "from": "table"},
+    {"name": "second_column", "type": "string", "title": "Shows next", "description": "Another column it shows on the card.", "required": false, "default": "email", "example": "email", "picker": "column", "from": "table"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_toolLookUp",
+    "version": 1,
+    "name": "Look up",
+    "description": "Finds a row of a table by a word and shows it as a card.",
+    "trigger": {"type": "manual"},
+    "inputs": {"schema": {"type": "object", "required": ["word"], "properties": {
+      "word": {"type": "string", "title": "What to look for", "minLength": 1, "maxLength": 100}}}},
+    "outputs": [
+      {"name": "found", "type": "boolean", "title": "Found", "description": "Whether a row matched", "value": "=size(steps.find.output.rows) > 0"},
+      {"name": "title", "type": "string", "title": "Name", "description": "The row's name, or what was not found",
+       "value": "=size(steps.find.output.rows) > 0 && {{match_column}} in steps.find.output.rows[0] ? string(steps.find.output.rows[0][{{match_column}}]) : 'Nothing found'"},
+      {"name": "first", "type": "string", "title": "First", "description": "The first column it shows",
+       "value": "=size(steps.find.output.rows) > 0 && {{first_column}} in steps.find.output.rows[0] ? string(steps.find.output.rows[0][{{first_column}}]) : ''"},
+      {"name": "second", "type": "string", "title": "Next", "description": "The next column it shows",
+       "value": "=size(steps.find.output.rows) > 0 && {{second_column}} in steps.find.output.rows[0] ? string(steps.find.output.rows[0][{{second_column}}]) : ''"}
+    ],
+    "tool": {
+      "name": "Look up",
+      "command": "{{command}}",
+      "about": "Finds a row of your table and shows it",
+      "icon": "search",
+      "for": "members",
+      "answer": {"type": "card", "title": "=outputs.title",
+        "state": {"text": "=outputs.found ? 'Found' : 'Not found'", "tone": "plain"},
+        "lines": [{"label": "{{first_column}}", "value": "=outputs.first"}, {"label": "{{second_column}}", "value": "=outputs.second"}]}
+    },
+    "steps": [
+      {"id": "find", "type": "connector", "name": "Find the row", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables",
+       "input": {"table": "{{table}}", "filters": [{"column": "{{match_column}}", "op": "ilike", "value": "='%' + trigger.body.word + '%'"}], "limit": 1}}
+    ],
+    "settings": {"timeout": "5m"}
+  }
+}

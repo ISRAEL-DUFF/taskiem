@@ -1,0 +1,65 @@
+{
+  "id": "tool-daily-report",
+  "title": "A daily report with a button to the list",
+  "summary": "Every day at a time you choose, how many rows your table had today and their total, with a button that opens today's list.",
+  "description": "Two parts, installed together. Every day at the time you choose, the people with the role you choose hear how many rows were added to your table today and the total of its amount column, with a See the list button. The button opens a tool, also used from the chat on the web, the phone app, WhatsApp, Telegram and Slack by its word (\"/sales-today\"), that lists today's rows. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (sales-today-2) and says so.",
+  "category": "tools",
+  "tags": ["tool", "report", "schedule", "data table"],
+  "keywords": ["daily", "report", "every day", "today", "count", "total", "sum", "summary", "evening", "list", "tool"],
+  "connectors": ["xenibase@1", "notify@1"],
+  "params": [
+    {"name": "command", "type": "command", "title": "Its word", "description": "What people type to see today's list, after /. Letters, numbers and dashes.", "required": true, "default": "sales-today", "example": "sales-today"},
+    {"name": "table", "type": "string", "title": "Table", "description": "The table it counts.", "required": false, "default": "sales", "example": "sales", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"},
+    {"name": "title_column", "type": "string", "title": "Each row shows", "description": "The column each row of the list is named by.", "required": false, "default": "what", "example": "what", "picker": "column", "from": "table"},
+    {"name": "amount_column", "type": "string", "title": "Adds up", "description": "The column of amounts it adds up.", "required": false, "default": "amount", "example": "amount", "picker": "column", "from": "table"},
+    {"name": "send_time", "type": "time", "title": "Time", "description": "When the report is sent each day, Lagos time.", "required": false, "default": "19:00", "example": "19:00"},
+    {"name": "role", "type": "string", "title": "Who hears it", "description": "The role whose members get the report.", "required": false, "default": "owner", "example": "owner", "picker": "role"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_toolDailyList",
+    "version": 1,
+    "name": "Today's list",
+    "description": "Lists the rows added to a table today.",
+    "trigger": {"type": "manual"},
+    "inputs": {"schema": {"type": "object", "properties": {}}},
+    "outputs": [
+      {"name": "rows", "type": "list", "title": "Today", "description": "Today's rows",
+       "value": "=steps.today.output.rows.map(r, {'title': {{title_column}} in r ? string(r[{{title_column}}]) : '', 'amount': {{amount_column}} in r ? string(r[{{amount_column}}]) : ''})"}
+    ],
+    "tool": {
+      "name": "Today's list",
+      "command": "{{command}}",
+      "about": "The rows added to your table today",
+      "icon": "chart",
+      "for": "members",
+      "answer": {"type": "list", "from": "rows", "title": "Today", "empty": "Nothing yet today",
+        "item": {"title": "=item.title", "sub": "=item.amount"}}
+    },
+    "steps": [
+      {"id": "today", "type": "connector", "name": "Read today's rows", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables",
+       "input": {"table": "{{table}}", "filters": [{"column": "created_at", "op": "gte", "value": "=run.started_at.substring(0, 10)"}], "order": [{"column": "created_at", "desc": true}], "limit": 200}}
+    ],
+    "settings": {"timeout": "5m"}
+  },
+  "companion": {
+    "name": "Daily report",
+    "definition": {
+      "schema": "wd/v1",
+      "id": "wf_toolDailyReport",
+      "version": 1,
+      "name": "Daily report",
+      "description": "Every day, counts and adds up today's rows and tells the team, with a button to the list.",
+      "trigger": {"type": "schedule", "config": {"cron": "{{send_time:minute}} {{send_time:hour}} * * *", "timezone": "Africa/Lagos"}},
+      "steps": [
+        {"id": "today", "type": "connector", "name": "Read today's rows", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables",
+         "input": {"table": "{{table}}", "filters": [{"column": "created_at", "op": "gte", "value": "=run.started_at.substring(0, 10)"}], "limit": 1000}},
+        {"id": "tell", "type": "connector", "name": "Tell the team today's count and total", "connector": "notify@1", "action": "tell", "needs": ["today"],
+         "input": {"to": "role", "role": "{{role}}", "title": "Today",
+           "message": "=string(size(steps.today.output.rows)) + ' today, ' + string(sum(steps.today.output.rows.map(r, {{amount_column}} in r ? double(r[{{amount_column}}]) : 0.0))) + ' in all.'",
+           "buttons": [{"label": "See the list", "tool": "{{command}}"}]}}
+      ],
+      "settings": {"timeout": "15m"}
+    }
+  }
+}

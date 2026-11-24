@@ -1,0 +1,48 @@
+{
+  "id": "tool-call-a-system",
+  "title": "Ask another system from the chat",
+  "summary": "A tool for builders: type its word and a value, it asks a web address and shows two chosen fields of the answer.",
+  "description": "A tool for your team that asks another system, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word and a value (\"/check-order AD-12\"): it reads the web address you give, with the value added as q, and shows the two fields of the answer you choose, as a card. It only reads (it never changes anything there), so it answers at once. For someone who knows the other system's address. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (check-order-2) and says so.",
+  "category": "tools",
+  "tags": ["tool", "developer", "look up"],
+  "keywords": ["call", "system", "api", "web address", "check", "status", "look up", "fetch", "tool", "command"],
+  "connectors": [],
+  "params": [
+    {"name": "command", "type": "command", "title": "Its word", "description": "What people type to use it, after /. Letters, numbers and dashes.", "required": true, "default": "check-order", "example": "check-order"},
+    {"name": "address", "type": "string", "title": "Web address", "description": "The address it reads, starting with https.", "required": true, "example": "https://api.example.com/orders", "max_length": 300},
+    {"name": "first_field", "type": "string", "title": "Shows first", "description": "A field of the answer it shows, such as status.", "required": false, "default": "status", "example": "status", "max_length": 60},
+    {"name": "second_field", "type": "string", "title": "Shows next", "description": "Another field of the answer it shows.", "required": false, "default": "updated", "example": "updated", "max_length": 60}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_toolCallSystem",
+    "version": 1,
+    "name": "Ask a system",
+    "description": "Calls a web address and shows chosen fields of what comes back.",
+    "trigger": {"type": "manual"},
+    "inputs": {"schema": {"type": "object", "required": ["value"], "properties": {
+      "value": {"type": "string", "title": "What to ask about", "minLength": 1, "maxLength": 100}}}},
+    "outputs": [
+      {"name": "value", "type": "string", "title": "Asked about", "description": "What was asked about", "value": "=steps.said.output.value"},
+      {"name": "first", "type": "string", "title": "First", "description": "The first field shown",
+       "value": "=type(steps.ask.output.body) == map && {{first_field}} in steps.ask.output.body ? string(steps.ask.output.body[{{first_field}}]) : ''"},
+      {"name": "second", "type": "string", "title": "Next", "description": "The next field shown",
+       "value": "=type(steps.ask.output.body) == map && {{second_field}} in steps.ask.output.body ? string(steps.ask.output.body[{{second_field}}]) : ''"}
+    ],
+    "tool": {
+      "name": "Ask a system",
+      "command": "{{command}}",
+      "about": "Asks another system and shows what it says",
+      "icon": "server",
+      "for": "members",
+      "answer": {"type": "card", "title": "=outputs.value",
+        "lines": [{"label": "{{first_field}}", "value": "=outputs.first"}, {"label": "{{second_field}}", "value": "=outputs.second"}]}
+    },
+    "steps": [
+      {"id": "said", "type": "transform", "name": "Read what to ask about", "config": {"output": {"value": "=trigger.body.value"}}},
+      {"id": "ask", "type": "http", "needs": ["said"], "name": "Ask the other system",
+       "config": {"method": "GET", "url": "{{address}}", "query": {"q": "=trigger.body.value"}}}
+    ],
+    "settings": {"timeout": "5m"}
+  }
+}

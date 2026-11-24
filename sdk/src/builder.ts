@@ -398,7 +398,10 @@ export class Workflow extends Steps {
     if (o.settings !== undefined) def.settings = lowerAt(o.settings, "settings");
     if (o.outputs !== undefined) def.outputs = lowerAt(o.outputs, "outputs");
     if (o.roles !== undefined) def.roles = o.roles;
-    if (o.tool !== undefined) def.tool = o.tool;
+    // A list answer's rows read item, which code writes as a function
+    // (({ item }) => item.title), as it does in a foreach: lowered the same
+    // way, so the tool round-trips to its definition.
+    if (o.tool !== undefined) def.tool = lowerAt(o.tool, "tool");
     return def as unknown as WorkflowDefinition;
   }
 

@@ -1,0 +1,19 @@
+{
+  "schema": "wd-test/v1",
+  "template": "tool-look-up",
+  "params": {},
+  "cases": [
+    {
+      "name": "shows the row it found as a card",
+      "trigger": {"body": {"word": "Ada"}},
+      "mocks": {"find": {"output": {"rows": [{"id": 1, "name": "Ada Obi", "phone": "08031234567", "email": "ada@example.com"}]}}},
+      "expect": {"status": "completed", "answer": {"title": "Ada Obi", "state": {"text": "Found"}, "lines": [{"label": "phone", "value": "08031234567"}, {"label": "email", "value": "ada@example.com"}]}}
+    },
+    {
+      "name": "says when nothing matches",
+      "trigger": {"body": {"word": "Zed"}},
+      "mocks": {"find": {"output": {"rows": []}}},
+      "expect": {"status": "completed", "answer": {"title": "Nothing found", "state": {"text": "Not found"}}}
+    }
+  ]
+}
