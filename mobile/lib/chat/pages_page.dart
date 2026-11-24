@@ -22,7 +22,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../app/auth.dart';
 import '../kit/forms.dart' show errorWords;
-import '../kit/kit.dart' show TkAppLook, TkSmallButton, tkHint;
+import '../kit/kit.dart' show TkAppLook, TkCheckbox, TkSmallButton, tkHint;
 import '../kit/list.dart' show TkEmpty, TkSearchBox;
 import '../kit/look.dart';
 import '../kit/mobile.dart';
@@ -233,6 +233,9 @@ class _PageScreenState extends State<PageScreen> {
   // Rows read with More, by part.
   final _more = <String, PageBlock>{};
   String? _loadingMore;
+  // Cells ticked in place and not yet read back, by part, row and column.
+  final _ticked = <String, bool>{};
+  final _ticking = <String>{};
   // The live notices: the parts named since the last read, and when it was.
   StreamSubscription<SseEvent>? _live;
   Timer? _liveRetry;
@@ -470,6 +473,42 @@ class _PageScreenState extends State<PageScreen> {
       if (mounted) showTkToast(context, errorWords(e), error: true);
     } finally {
       if (mounted) setState(() => _loadingMore = null);
+    }
+  }
+
+  /// Ticks a yes/no cell of a table part in place (pages §7, g-pages-tick):
+  /// the row is changed in its table (`PATCH /v1/tables/{id}/rows/{row}`,
+  /// its own permission, table.edit, and audit), shown at once and the part
+  /// read again. The server sends `ticks` only to a person with table.edit.
+  Future<void> _tick(PageBlock b, PageRow r, int i, bool v) async {
+    final table = b.tableId;
+    final col = (b.columns ?? const <PageBlockColumnsItem>[]).elementAtOrNull(i)?.column;
+    final key = '${b.id}/${r.id}/$i';
+    if (table == null || col == null || _ticking.contains(key)) return;
+    setState(() {
+      _ticking.add(key);
+      _ticked[key] = v;
+    });
+    try {
+      await widget.auth.api.updateTableRow(id: table, row: r.id, body: RowPatch(set: {col: v}));
+      if (!mounted) return;
+      final o = (_more[b.id] ?? b).order;
+      if (o != null || _more.containsKey(b.id)) {
+        // Rows read further or in an order: that part again, as it is.
+        final next = await widget.auth.api.getPageBlock(name: widget.name, block: b.id, order: o?.column, desc: o?.desc == true ? '1' : null, filters: filtersParam(_values));
+        if (mounted) setState(() => _more[b.id] = next);
+      } else {
+        await _load();
+      }
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _ticking.remove(key);
+          _ticked.remove(key);
+        });
+      }
     }
   }
 
@@ -762,11 +801,18 @@ class _PageScreenState extends State<PageScreen> {
           for (final r in rows)
             () {
               final cells = r.cells ?? const <String>[];
+              // A yes/no column ticked in place (table.edit): a box at the
+              // row's end, not a word under it.
+              final ticks = [
+                for (var i = 0; i < (r.ticks?.length ?? 0) && i < cols.length; i++)
+                  if (r.ticks![i] is bool) i,
+              ];
               final sub = [
-                for (var i = 1; i < cells.length && i < cols.length; i++) '${cols[i].label}: ${cells[i].isEmpty ? '—' : cells[i]}',
+                for (var i = 1; i < cells.length && i < cols.length; i++)
+                  if (!ticks.contains(i)) '${cols[i].label}: ${cells[i].isEmpty ? '—' : cells[i]}',
               ].join(' · ');
               final title = cells.isEmpty || cells.first.isEmpty ? '—' : cells.first;
-              return TkListRow(
+              final row = TkListRow(
                 title: title,
                 sub: sub,
                 subLines: 3,
@@ -774,6 +820,24 @@ class _PageScreenState extends State<PageScreen> {
                 semanticsLabel: '$title${sub.isEmpty ? '' : ', $sub'}${_opens(r) ? '. Open' : ''}',
                 onTap: _opens(r) ? () => _open(r, b.id) : null,
               );
+              if (ticks.isEmpty) return row;
+              // The boxes beside the row, not in it: the row's words are
+              // one thing to a screen reader, each box another.
+              return Row(children: [
+                Expanded(child: row),
+                for (final i in ticks)
+                  () {
+                    final key = '${b.id}/${r.id}/$i';
+                    final on = _ticked[key] ?? r.ticks![i] as bool;
+                    return PageTick(
+                      on: on,
+                      label: '${cols[i].label}: $title',
+                      word: ticks.length > 1 ? cols[i].label : null,
+                      onTap: _ticking.contains(key) ? null : () => unawaited(_tick(b, r, i, !on)),
+                    );
+                  }(),
+                const SizedBox(width: 8),
+              ]);
             }(),
         ],
       ));
@@ -937,3 +1001,40 @@ List<PageSummary> placedPages(List<PageSummary> pages, List<String> areas) => [f
 
 /// A tone for a status pill, exported for the tests' words.
 Widget pagePill(String words, String? tone) => CardPill(words, pageTone(tone));
+
+/// A yes/no cell of a page's table that this person may change here
+/// (table.edit): the app's box, 48 px to press, its column's name under it
+/// when a row has more than one.
+class PageTick extends StatelessWidget {
+  const PageTick({super.key, required this.on, required this.label, this.word, this.onTap});
+  final bool on;
+  final String label;
+  final String? word;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Semantics(
+      checked: on,
+      label: label,
+      enabled: onTap != null,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: Opacity(
+            opacity: onTap == null ? 0.6 : 1,
+            child: Column(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+              TkCheckbox(checked: on),
+              if (word != null) Padding(padding: const EdgeInsets.only(top: 3), child: Text(word!, maxLines: 1, style: tkHint(t).copyWith(fontSize: 11))),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}

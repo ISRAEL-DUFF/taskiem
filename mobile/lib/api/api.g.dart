@@ -1983,6 +1983,12 @@ class TaskiemApi {
     await _t.send('POST', '/v1/pages/${Uri.encodeComponent(name)}/refresh');
   }
 
+  /// Update a row (`PATCH /v1/tables/{id}/rows/{row}`)
+  Future<RowWritten> updateTableRow({required RowPatch body, required String id, required String row, String? idempotencyKey}) async {
+    final j = await _t.send('PATCH', '/v1/tables/${Uri.encodeComponent(id)}/rows/${Uri.encodeComponent(row)}', body: body.toJson(), headers: {'Idempotency-Key': ?idempotencyKey});
+    return RowWritten.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Treat a line of a purchase order, and confirm it (`PATCH /v1/stock/purchases/{id}/lines/{position}`)
   Future<SetPurchaseLineResponse> setPurchaseLine({required SetPurchaseLineRequest body, required String id, required String position}) async {
     final j = await _t.send('PATCH', '/v1/stock/purchases/${Uri.encodeComponent(id)}/lines/${Uri.encodeComponent(position)}', body: body.toJson());
@@ -17586,6 +17592,40 @@ class PageActResultTool {
         'inputs': inputs,
         'name': name,
         'once': once,
+      };
+}
+
+class RowPatch {
+  const RowPatch({required this.set});
+
+  final Map<String, dynamic> set;
+
+  factory RowPatch.fromJson(Map<String, dynamic> j) => RowPatch(
+        set: j['set'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'set': set,
+      };
+}
+
+class RowWritten {
+  const RowWritten({required this.affected, required this.replayed, this.row});
+
+  final int affected;
+  final bool replayed;
+  final Object? row;
+
+  factory RowWritten.fromJson(Map<String, dynamic> j) => RowWritten(
+        affected: (j['affected'] as num).toInt(),
+        replayed: j['replayed'] as bool,
+        row: j['row'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'affected': affected,
+        'replayed': replayed,
+        'row': ?row,
       };
 }
 

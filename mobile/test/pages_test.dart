@@ -556,6 +556,74 @@ void main() {
     await t.pump(const Duration(seconds: 4));
   });
 
+  // g-pages-tick: a yes/no column ticked in place, as the web does: the row
+  // changed in its table (PATCH, table.edit), the page read again; a person
+  // the server sends no ticks to sees words and opens the row.
+  testWidgets('A table’s Done is ticked in place on the phone', (t) async {
+    phone(t, 600);
+    final api = _Api();
+    var done = false;
+    Map<String, dynamic> jobs({required bool ticks}) => {
+      'id': 'jobs',
+      'type': 'table',
+      'title': 'Jobs',
+      'size': 'full',
+      'empty': 'Nothing to show',
+      'has_detail': true,
+      'count': 2,
+      'more': null,
+      'table_id': 'tbl-1',
+      'columns': [
+        {'column': 'title', 'label': 'Job', 'naira': false, 'sortable': true},
+        {'column': 'due', 'label': 'Due', 'naira': false, 'sortable': true},
+        {'column': 'done', 'label': 'Done', 'naira': false, 'sortable': true},
+      ],
+      'rows': [
+        {'id': '7', 'cells': ['Fix the gate', '24 Nov', done ? 'Yes' : 'No'], if (ticks) 'ticks': [null, null, done],
+          'detail': {'title': 'Fix the gate', 'lines': <Object>[]}},
+        {'id': '8', 'cells': ['Paint the door', '25 Nov', 'Yes'], if (ticks) 'ticks': [null, null, true],
+          'detail': {'title': 'Paint the door', 'lines': <Object>[]}},
+      ],
+    };
+    var canTick = true;
+    api.routes['GET /v1/pages/jobs/view'] = (_) => {
+      'page': _summary('jobs', 'Jobs'),
+      'draft': false,
+      'can_edit': false,
+      'drawn_at': '2026-11-24T10:00:00Z',
+      'filters': <Object>[],
+      'blocks': [jobs(ticks: canTick)],
+    };
+    api.routes['PATCH /v1/tables/tbl-1/rows/7'] = (r) {
+      done = ((jsonDecode((r as http.Request).body) as Map)['set'] as Map)['done'] as bool;
+      return {'affected': 1, 'replayed': false, 'row': {'id': 7}};
+    };
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'jobs', backLabel: 'Back to Pages')));
+    await settle(t);
+    final box = find.bySemanticsLabel('Done: Fix the gate');
+    expect(box, findsOneWidget);
+    expect(t.getSemantics(box), containsSemantics(isChecked: false));
+    // The column's words are not repeated under the row when it is a box.
+    expect(find.textContaining('Done: No'), findsNothing);
+    await looks(t, 'page-tick');
+
+    await t.tap(box);
+    await settle(t);
+    final patched = api.calls.where((c) => c.method == 'PATCH').single as http.Request;
+    expect(patched.url.path, '/v1/tables/tbl-1/rows/7');
+    expect(jsonDecode(patched.body), {'set': {'done': true}});
+    expect(done, isTrue);
+    expect(t.getSemantics(find.bySemanticsLabel('Done: Fix the gate')), containsSemantics(isChecked: true));
+    expect(api.calls.where((c) => c.url.path == '/v1/pages/jobs/view').length, 2);
+
+    // Without table.edit the server sends no ticks: the words, and the row opens.
+    canTick = false;
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(key: const ValueKey('again'), auth: api.auth(), name: 'jobs', backLabel: 'Back to Pages')));
+    await settle(t);
+    expect(find.bySemanticsLabel('Done: Fix the gate'), findsNothing);
+    expect(find.textContaining('Done: Yes'), findsWidgets);
+  });
+
   // A page as a tab under an area: a section after the area's own, its
   // published pages placed there only.
   testWidgets('pages placed under an area show on its screen', (t) async {
