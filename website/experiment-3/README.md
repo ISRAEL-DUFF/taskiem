@@ -11,7 +11,7 @@ One animated landing page for Taskiem. Its energy comes from [owo.app](https://o
 | `v3/` | v2's home page with a Schools link and a "Running a school?" band, and a second page, `schools.html`: a phone that switches between a parent, the proprietor and the gate; money landing on each child's own account number (Moniepoint, Flutterwave, Paystack); billing the term on the workflow canvas; the reminder ladder; cash approval and the gate; the proprietor's overview. Greenfield College and its figures are examples. Its canvases are drawn as the app draws them, and a test run ticks each step. **Frozen.** Preview: <https://claude.ai/artifact/5B3WC3vWneqTps4W9Gd8hc> |
 | `v4/` | v3 with copy that presents Taskiem as one system, and new parts: trading between businesses with haggling, one order going through the whole business on a phone, the jobs told as two chapters, the phone app, and the canvas showing an order from placed to paid. **Frozen.** Preview: <https://claude.ai/artifact/UbXJKXrs68UGiFfPeFcQ9m> |
 
-Each later version goes in its own folder (`v6/`, …), and no earlier one is edited.
+Each later version goes in its own folder (`v5/`, …), and no earlier one is edited.
 
 ## Opening a version
 
