@@ -70,6 +70,26 @@
         "She tap Agree.",
         "Dem agree for eight hundred and twenty thousand."
       ]
+    },
+    "food-price-list": {
+      "en": [
+        "Ada shares a price list with Rivers Foods.",
+        "A lower price for more.",
+        "Under Party pack.",
+        "From ten packs, forty-three thousand each.",
+        "Save.",
+        "On the product, she sets a lowest price: forty-one thousand, five hundred.",
+        "Save. Staff like Tunde can agree down to it, never under."
+      ],
+      "pcm": [
+        "Ada share price list with Rivers Foods.",
+        "Lower price for more.",
+        "Under Party pack.",
+        "From ten packs, forty-three thousand each.",
+        "Save.",
+        "For the product, she set lowest price: forty-one thousand, five hundred.",
+        "Save. Staff like Tunde fit agree down to am, never under."
+      ]
     }
   }
 }

@@ -1,0 +1,24 @@
+{
+ "_note": "Phone clock for each film when composing (default 13:00, light).",
+ "food-open-your-shop": {
+  "time": "08:00"
+ },
+ "food-put-goods-in": {
+  "time": "08:30"
+ },
+ "food-customer-order": {
+  "time": "13:05"
+ },
+ "food-add-staff": {
+  "time": "09:00"
+ },
+ "food-find-a-supplier": {
+  "time": "10:00"
+ },
+ "food-reorder": {
+  "time": "09:00"
+ },
+ "food-know-your-numbers": {
+  "time": "08:00"
+ }
+}

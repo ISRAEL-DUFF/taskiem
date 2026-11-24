@@ -5,7 +5,118 @@
   "headline": "One working day at *Ada's Kitchen*",
   "sub": "Orders, riders, stock, money and deals, all run alongside her chats.",
   "mood": "build",
-  "reel": [],
+  "reel": [
+    {
+      "film": "food-open-your-shop",
+      "from": 19.8,
+      "to": 31.7,
+      "tag": "Episode 1 · Open your shop",
+      "caption": "Ada signs up and sets up her business in minutes.",
+      "narration": {
+        "en": "Ada signs up and sets up her business in minutes.",
+        "pcm": "Ada sign up and set up her business for few minutes."
+      }
+    },
+    {
+      "film": "food-put-goods-in",
+      "from": 21.9,
+      "to": 33.1,
+      "tag": "Episode 2 · Put your goods in",
+      "caption": "A party pack in every size, each counted.",
+      "narration": {
+        "en": "A party pack in every size, each with its own count.",
+        "pcm": "Party pack for every size, each get im own count."
+      }
+    },
+    {
+      "film": "food-customer-order",
+      "from": 0.0,
+      "to": 14.6,
+      "tag": "Episode 3 · Take orders",
+      "caption": "A WhatsApp order becomes an order card.",
+      "narration": {
+        "en": "When a customer orders on WhatsApp, Taskiem turns it into an order.",
+        "pcm": "When customer order for WhatsApp, Taskiem go turn am to order."
+      }
+    },
+    {
+      "film": "food-match-payment",
+      "from": 8.8,
+      "to": 21.1,
+      "tag": "Episode 4 · Get paid",
+      "caption": "Money arrives and finds its invoice.",
+      "narration": {
+        "en": "When the money arrives, she matches it to the invoice in one tap.",
+        "pcm": "When money enter, she go match am to the invoice with one tap."
+      }
+    },
+    {
+      "film": "food-deliver",
+      "from": 8.2,
+      "to": 20.0,
+      "tag": "Episode 5 · Deliver",
+      "caption": "A rider takes it, and she follows it.",
+      "narration": {
+        "en": "A rider takes the order, and she follows it to the door.",
+        "pcm": "Rider go carry the order, and she go follow am reach door."
+      }
+    },
+    {
+      "film": "food-tasks-and-handover",
+      "from": 21.7,
+      "to": 34.1,
+      "tag": "Episode 6 · Your team",
+      "caption": "Tunde hands the shift over, cash counted.",
+      "narration": {
+        "en": "Tunde hands the shift over, and the cash is counted.",
+        "pcm": "Tunde go hand the shift over, and dem go count the cash."
+      }
+    },
+    {
+      "film": "food-reorder",
+      "from": 0.0,
+      "to": 13.2,
+      "tag": "Episode 7 · Your suppliers",
+      "caption": "Rice running low? Reorder in a few taps.",
+      "narration": {
+        "en": "When the rice runs low, she reorders from Bayo in a few taps.",
+        "pcm": "When rice dey finish, she go reorder from Bayo with few taps."
+      }
+    },
+    {
+      "film": "food-a-deal",
+      "from": 12.2,
+      "to": 26.6,
+      "tag": "Episode 8 · Sell to businesses",
+      "caption": "A deal, within the limits she sets.",
+      "narration": {
+        "en": "Rivers Foods haggles. Tunde deals within her limits, and she approves the rest.",
+        "pcm": "Rivers Foods dey haggle. Tunde go deal inside her limits, and she go approve the rest."
+      }
+    },
+    {
+      "film": "food-know-your-numbers",
+      "from": 0.0,
+      "to": 10.6,
+      "tag": "Episode 9 · Know your numbers",
+      "caption": "Her morning, in one card.",
+      "narration": {
+        "en": "Every morning, her numbers are waiting in one card.",
+        "pcm": "Every morning, her numbers dey wait for one card."
+      }
+    },
+    {
+      "film": "food-approve-a-payment",
+      "from": 8.4,
+      "to": 21.0,
+      "tag": "Episode 10 · Keep it safe",
+      "caption": "Nothing goes out without her OK.",
+      "narration": {
+        "en": "And nothing goes out without her OK.",
+        "pcm": "And nothing go out without her OK."
+      }
+    }
+  ],
   "bridge": {
     "en": "It starts with opening her shop.",
     "pcm": "Everything start with how she go open her shop."
