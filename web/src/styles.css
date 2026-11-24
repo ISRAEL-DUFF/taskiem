@@ -1383,6 +1383,11 @@ th { background: var(--panel-2); }
 .conn-actions .sub.warn { color: var(--tint-warn-text); }
 .template-card .list-icon { margin-bottom: 4px; }
 .template-card strong { font-weight: 600; font-size: 15px; }
+/* Recipes: templates that make a tool used from the chat (made tools §13). */
+.template-kinds { margin-bottom: 12px; }
+.template-card .tool-chip { align-self: flex-start; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.recipe-tool ul { margin: 6px 0 0; padding-left: 18px; }
+.notice.ok { background: color-mix(in srgb, var(--ok) 8%, var(--panel)); border-color: color-mix(in srgb, var(--ok) 28%, transparent); }
 /* Empty states: the icon larger, on the brand's tint. */
 .empty-icon { width: 56px; height: 56px; border-radius: 16px; background: var(--tint); color: var(--tint-text); }
 .empty-icon svg { width: 26px; height: 26px; }
