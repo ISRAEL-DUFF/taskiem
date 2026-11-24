@@ -121,8 +121,8 @@ have. **Check** marks something to verify in the app before filming.
 ### Episode 6: Your team
 - **Goal:** add Dami, give tasks, clock in, hand over a shift.
 - **Shows:** add by phone number from the Taskiem chat, Dami joins from
-  WhatsApp, usual hours; give a task by tagging ("@Dami finish 12 aprons by
-  Friday"); Done from the chat; Clock in; Handover at closing.
+  WhatsApp, usual hours; give a task from Tasks
+  (Give a task: "Finish 12 aprons by Friday"); Done from the chat; Clock in; Handover at closing.
 - **Hero feature:** a task given from Tasks, done on Dami's phone.
 - **Length:** 75 s / 2:00. **Check:** Staff and Tasks pages are pages away from
   the chat; use the chat's views.
