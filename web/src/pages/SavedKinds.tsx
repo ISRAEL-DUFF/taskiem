@@ -21,6 +21,7 @@ import {
   type MadeKind,
   type SavedThing,
 } from "../lib/saved";
+import { SavedRuns } from "./SavedRuns";
 
 // Kinds the owner makes (saved objects S1, part 5; saved-objects §4.2):
 // the sheet that makes or changes one (its name and fields, or a starter
@@ -339,6 +340,7 @@ export function CustomSheet({
         <Field label="Note" hint="Optional, for your own reference.">
           <input value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} />
         </Field>
+        {thing && !mine && <SavedRuns id={thing.id} />}
         {(problem || taken) && (
           <p className="error" role="alert">
             {problem ?? taken}
@@ -499,6 +501,7 @@ export function FileSheet({
             </a>
           </p>
         )}
+        {thing && !mine && <SavedRuns id={thing.id} />}
         {(problem || taken) && (
           <p className="error" role="alert">
             {problem ?? taken}

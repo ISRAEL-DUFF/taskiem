@@ -102,6 +102,7 @@ import {
   type LinkRole,
 } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
+import { PayDiaryState } from "./PayDiary";
 
 // The conversation with a linked business (business links L3; §5.5): the
 // stream of bubbles, theirs on the left and ours on the right, grouped by
@@ -1139,6 +1140,11 @@ function DiaryRun({
             {cardSub(m.card) && (
               <span className="tk-diary-sub"> {cardSub(m.card)}</span>
             )}
+          </>
+        ) : m.payment || m.batch ? (
+          <>
+            {m.body ?? ""}
+            <PayDiaryState payment={m.payment} batch={m.batch} />
           </>
         ) : (
           (m.body ?? "")

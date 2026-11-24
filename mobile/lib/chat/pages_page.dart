@@ -12,6 +12,11 @@
 // (GET /v1/pages/{name}/live): the parts named are read again, at most once
 // in two seconds, a part put in an order or shown further keeping its
 // order and reading its first rows again. Pull to refresh stays.
+// A board (pages G4) shows its columns one under another, each card a row
+// whose menu moves it to another column (the board's move tool opened
+// filled in, as a page's button is: POST /v1/pages/{name}/act with to),
+// opens it or presses its buttons; a chart is drawn natively from the
+// server's figures (page_chart.dart).
 // Making and changing pages is on the web.
 
 import 'dart:async';
@@ -22,7 +27,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../app/auth.dart';
 import '../kit/forms.dart' show errorWords;
-import '../kit/kit.dart' show TkAppLook, TkSmallButton, tkHint;
+import '../kit/kit.dart' show TkAppLook, TkCheckbox, TkSmallButton, tkHint;
 import '../kit/list.dart' show TkEmpty, TkSearchBox;
 import '../kit/look.dart';
 import '../kit/mobile.dart';
@@ -33,9 +38,11 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show ApproveSheet;
 import 'cards.dart' show CardPill;
-import 'groups.dart' show askSure, pickOneOf;
+import 'groups.dart' show askSure, pickAction, pickOneOf;
 import 'invoices_page.dart' show openInvoice;
 import 'made_tools.dart' show showMadeToolSheet;
+import 'page_chart.dart' show PageChart;
+import 'page_starters.dart' show openPageStarters;
 import 'live.dart' show SseEvent, readSse;
 import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'words.dart' show CardTone, whenWords;
@@ -193,7 +200,7 @@ class _PagesPageState extends State<PagesPage> {
       title: 'Pages',
       titleSize: 30,
       backLabel: widget.backLabel,
-      description: 'Screens your business makes for itself from its tables. Pages are made and changed on the web.',
+      description: 'Screens your business makes for itself from its tables. Add one from a starter here; pages are changed on the web.',
       onRefresh: _load,
       children: [
         if (_error != null)
@@ -203,10 +210,28 @@ class _PagesPageState extends State<PagesPage> {
           TkEmpty(
             icon: 'b-table',
             title: 'No pages yet',
-            line: editor ? 'Make one on the web: Show as a page on a table makes one in a tap.' : 'Pages your business shares with you show here.',
+            line: editor ? 'Add one from a starter below, or make one on the web from a table.' : 'Pages your business shares with you show here.',
           ),
         if (pinned.isNotEmpty) TkSection(title: 'Pinned', inset: 56, children: [for (final p in pinned) _row(p, editor)]),
         if (rest.isNotEmpty) TkSection(title: pinned.isEmpty ? null : 'All pages', inset: 56, children: [for (final p in rest) _row(p, editor)]),
+        if (editor && widget.auth.can('table.edit') && widget.auth.can('workflow.edit'))
+          TkSection(
+            title: 'Add a page',
+            inset: 56,
+            children: [
+              TkListRow(
+                title: 'From a starter',
+                sub: 'Tickets desk, Expenses this month, Leave and more, each with its table and tools',
+                subLines: 2,
+                icon: 'b-plus',
+                square: look.lime,
+                onTap: () async {
+                  await openPageStarters(context, widget.auth, backLabel: 'Back to Pages');
+                  if (mounted) unawaited(_load());
+                },
+              ),
+            ],
+          ),
       ],
     );
   }
@@ -215,10 +240,14 @@ class _PagesPageState extends State<PagesPage> {
 // --- a page ---
 
 class PageScreen extends StatefulWidget {
-  const PageScreen({super.key, required this.auth, required this.name, this.backLabel = 'Back'});
+  const PageScreen({super.key, required this.auth, required this.name, this.backLabel = 'Back', this.filters});
   final Auth auth;
   final String name;
   final String backLabel;
+
+  /// The filters it opens with: those a link set (a Tell me message's page
+  /// button, pages H5). The server refuses one the page does not have.
+  final Map<String, String>? filters;
 
   @override
   State<PageScreen> createState() => _PageScreenState();
@@ -230,9 +259,13 @@ class _PageScreenState extends State<PageScreen> {
   final _values = <String, String>{};
   final _search = TextEditingController();
   Timer? _typing;
-  // Rows read with More, by part.
+  // Rows read with More, by part; a board's further cards, by part and column.
   final _more = <String, PageBlock>{};
+  final _laneMore = <String, PageLane>{};
   String? _loadingMore;
+  // Cells ticked in place and not yet read back, by part, row and column.
+  final _ticked = <String, bool>{};
+  final _ticking = <String>{};
   // The live notices: the parts named since the last read, and when it was.
   StreamSubscription<SseEvent>? _live;
   Timer? _liveRetry;
@@ -260,6 +293,7 @@ class _PageScreenState extends State<PageScreen> {
   @override
   void initState() {
     super.initState();
+    _values.addAll(widget.filters ?? const {});
     _search.addListener(_searched);
     unawaited(_load());
     unawaited(_liveOpen());
@@ -389,8 +423,12 @@ class _PageScreenState extends State<PageScreen> {
           _page = r;
           _error = null;
           _more.clear();
+          _laneMore.clear();
           _working();
         });
+        // A search a link set shows in the box.
+        final q = _searchId;
+        if (q != null && _search.text.isEmpty && (_values[q] ?? '').isNotEmpty) _search.text = _values[q]!;
       }
     } on Object catch (e) {
       if (mounted) setState(() => _error = e);
@@ -473,6 +511,42 @@ class _PageScreenState extends State<PageScreen> {
     }
   }
 
+  /// Ticks a yes/no cell of a table part in place (pages §7, g-pages-tick):
+  /// the row is changed in its table (`PATCH /v1/tables/{id}/rows/{row}`,
+  /// its own permission, table.edit, and audit), shown at once and the part
+  /// read again. The server sends `ticks` only to a person with table.edit.
+  Future<void> _tick(PageBlock b, PageRow r, int i, bool v) async {
+    final table = b.tableId;
+    final col = (b.columns ?? const <PageBlockColumnsItem>[]).elementAtOrNull(i)?.column;
+    final key = '${b.id}/${r.id}/$i';
+    if (table == null || col == null || _ticking.contains(key)) return;
+    setState(() {
+      _ticking.add(key);
+      _ticked[key] = v;
+    });
+    try {
+      await widget.auth.api.updateTableRow(id: table, row: r.id, body: RowPatch(set: {col: v}));
+      if (!mounted) return;
+      final o = (_more[b.id] ?? b).order;
+      if (o != null || _more.containsKey(b.id)) {
+        // Rows read further or in an order: that part again, as it is.
+        final next = await widget.auth.api.getPageBlock(name: widget.name, block: b.id, order: o?.column, desc: o?.desc == true ? '1' : null, filters: filtersParam(_values));
+        if (mounted) setState(() => _more[b.id] = next);
+      } else {
+        await _load();
+      }
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _ticking.remove(key);
+          _ticked.remove(key);
+        });
+      }
+    }
+  }
+
   /// Presses a page's button (POST /v1/pages/{name}/act): the server reads
   /// the row again and works out the values. A tool's form opens filled in
   /// (a masked value is left to be asked); a signal asks Yes first; an
@@ -485,14 +559,7 @@ class _PageScreenState extends State<PageScreen> {
       if (!mounted) return;
       switch (r.kind) {
         case 'tool':
-          final pressed = r.tool!;
-          final tool = (await api.listTools()).tools.where((x) => x.command == pressed.command).firstOrNull;
-          if (!mounted) return;
-          if (tool == null) {
-            showTkToast(context, 'This tool is not one of yours.', error: true);
-            return;
-          }
-          await showMadeToolSheet(context, auth: widget.auth, tool: tool, initial: pressed.inputs, button: pressed.button);
+          await _openTool(r.tool!);
         case 'signal':
           final yes = await askSure(context, title: r.asks ?? '${a.label}?', ok: 'Yes, ${a.label.toLowerCase()}');
           if (!yes || !mounted) return;
@@ -509,6 +576,147 @@ class _PageScreenState extends State<PageScreen> {
       if (mounted) showTkToast(context, errorWords(e), error: true);
       if (mounted) unawaited(_load());
     }
+  }
+
+  /// Opens the tool a page's press gave, filled in, with its own care.
+  Future<void> _openTool(PageActResultTool pressed) async {
+    final tool = (await widget.auth.api.listTools()).tools.where((x) => x.command == pressed.command).firstOrNull;
+    if (!mounted) return;
+    if (tool == null) {
+      showTkToast(context, 'This tool is not one of yours.', error: true);
+      return;
+    }
+    await showMadeToolSheet(context, auth: widget.auth, tool: tool, initial: pressed.inputs, button: pressed.button);
+  }
+
+  /// Moves a board's card to another column (pages G4): the server reads
+  /// the card again and gives the board's move tool filled in over it and
+  /// the column it goes to; its form opens, with its own care.
+  Future<void> _moveCard(String block, String row, String to) async {
+    try {
+      final r = await widget.auth.api.actOnPage(name: widget.name, filters: filtersParam(_values), body: PageActRequest(block: block, row: row, action: 0, to: to));
+      if (!mounted) return;
+      final pressed = r.tool;
+      if (pressed != null) await _openTool(pressed);
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    }
+    if (mounted) unawaited(_load());
+  }
+
+  /// A card's menu: open it, move it to each other column, its buttons.
+  Future<void> _cardMenu(PageBlock b, PageLane lane, PageRow r) async {
+    final move = b.move;
+    final canMove = move != null && move.disabled == null;
+    final title = (r.title ?? '').isEmpty ? 'This card' : r.title!;
+    final actions = <(String, String, String, bool)>[
+      if (r.detail != null) ('open', 'Open it', 'b-note', false),
+      if (canMove)
+        for (final l in b.lanes ?? const <PageLane>[])
+          if (l.value != lane.value) ('to:${l.value}', 'Move to ${l.label}', 'b-arrow', false),
+      for (final a in r.actions ?? const <PageAction>[])
+        if (a.disabled == null) ('act:${a.index}', a.label, 'b-tools', false),
+    ];
+    if (actions.isEmpty) return;
+    if (actions.length == 1 && actions.first.$1 == 'open') {
+      _open(r, b.id);
+      return;
+    }
+    final picked = await pickAction(context, title: title, actions: actions, note: move?.disabled);
+    if (picked == null || !mounted) return;
+    if (picked == 'open') {
+      _open(r, b.id);
+    } else if (picked.startsWith('to:')) {
+      await _moveCard(b.id, r.id, picked.substring(3));
+    } else if (picked.startsWith('act:')) {
+      final i = int.parse(picked.substring(4));
+      final a = (r.actions ?? const <PageAction>[]).where((x) => x.index == i).firstOrNull;
+      if (a != null) await _press(b.id, r.id, a);
+    }
+  }
+
+  /// A board column's next cards (More, by its column).
+  Future<void> _showMoreLane(PageBlock b, PageLane lane) async {
+    final cursor = lane.more;
+    if (cursor is! String || _loadingMore != null) return;
+    setState(() => _loadingMore = '${b.id}/${lane.value}');
+    try {
+      final next = await widget.auth.api.getPageBlock(name: widget.name, block: b.id, lane: lane.value, cursor: cursor, filters: filtersParam(_values));
+      final got = (next.lanes ?? const <PageLane>[]).where((l) => l.value == lane.value).firstOrNull;
+      if (got != null && mounted) {
+        setState(() => _laneMore['${b.id}/${lane.value}'] = PageLane(
+              count: got.count,
+              label: lane.label,
+              value: lane.value,
+              more: got.more,
+              rows: [...lane.rows, ...got.rows],
+            ));
+      }
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    } finally {
+      if (mounted) setState(() => _loadingMore = null);
+    }
+  }
+
+  /// A board on a phone: its columns one under another, each a section of
+  /// cards, each card's menu moving it to another column (pages G4).
+  Widget _board(PageBlock b) {
+    final t = TkTheme.tokens(context);
+    final move = b.move;
+    final canMove = move != null && move.disabled == null;
+    final out = <Widget>[
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+        child: Text('${b.title ?? ''}${b.error == null ? '${b.title == null ? '' : ' · '}${rowsWord(b.count ?? 0)}' : ''}', style: tkHint(t)),
+      ),
+    ];
+    if (b.error != null || b.working != null) {
+      out.add(Text(b.error ?? b.working!, style: tkHint(t)));
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: out);
+    }
+    if (canMove) out.add(Padding(padding: const EdgeInsets.fromLTRB(4, 0, 4, 0), child: Text('Tap a card to move it to another column.', style: tkHint(t))));
+    if (move?.disabled != null) out.add(Padding(padding: const EdgeInsets.fromLTRB(4, 0, 4, 0), child: Text(move!.disabled!, style: tkHint(t))));
+    for (final lane0 in b.lanes ?? const <PageLane>[]) {
+      final lane = _laneMore['${b.id}/${lane0.value}'] ?? lane0;
+      out.add(const SizedBox(height: 12));
+      out.add(TkSection(
+        title: lane.label,
+        inset: 16,
+        empty: b.empty ?? 'Nothing here',
+        trailing: Padding(padding: const EdgeInsets.only(right: 6), child: Text('${lane.count}', style: tkText(size: 14, weight: 600, color: t.muted))),
+        children: [
+          for (final r in lane.rows)
+            () {
+              final run = runStatusLine(r.runStatus);
+              final pill = r.state == null && run.isNotEmpty;
+              final sub = [if ((r.sub ?? '').isNotEmpty) r.sub!, if (!pill && run.isNotEmpty) run].join(' · ');
+              final menu = r.detail != null || canMove || (r.actions ?? const <PageAction>[]).any((a) => a.disabled == null);
+              final title = (r.title ?? '').isEmpty ? '—' : r.title!;
+              return TkListRow(
+                title: title,
+                sub: sub,
+                status: pill ? r.runStatus!.words : r.state?.text,
+                statusTone: pageTone(pill ? r.runStatus!.tone : r.state?.tone),
+                chevron: menu,
+                semanticsLabel: [title, if (sub.isNotEmpty) sub, if (r.state != null) r.state!.text, 'in ${lane.label}'].join(', ') + (menu ? (canMove ? '. Open, or move it' : '. Open') : ''),
+                onTap: menu ? () => unawaited(_cardMenu(b, lane, r)) : null,
+              );
+            }(),
+        ],
+      ));
+      if (lane.more is String) {
+        out.add(const SizedBox(height: 8));
+        out.add(Center(
+          child: TkSmallButton(
+            label: _loadingMore == '${b.id}/${lane.value}' ? 'Loading…' : 'Show more',
+            semantics: 'Show more of ${lane.label}',
+            onPressed: _loadingMore != null ? null : () => unawaited(_showMoreLane(b, lane)),
+          ),
+        ));
+      }
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: out);
   }
 
   /// A row's buttons, under its card or its words.
@@ -566,7 +774,12 @@ class _PageScreenState extends State<PageScreen> {
         child: TkSheet(
           title: d.title.isEmpty ? 'Details' : d.title,
           body: TkFormBody(children: [
-            TkFormGroup(children: [TkLines([for (final l in d.lines) (l.label, l.value.isEmpty ? '—' : l.value)])]),
+            TkFormGroup(children: [
+              TkLines([
+                for (final l in d.lines) (l.label, l.value.isEmpty ? '—' : l.value),
+                if (r.runStatus != null) ('Where it is', runStatusLine(r.runStatus)),
+              ]),
+            ]),
             if (actions.isNotEmpty && block != null) _actionButtons(block, r.id, actions, before: () => Navigator.of(sheet).pop()),
           ]),
         ),
@@ -727,15 +940,23 @@ class _PageScreenState extends State<PageScreen> {
           inset: 16,
           children: [
             for (final r in g.rows)
-              TkListRow(
-                title: (r.title ?? '').isEmpty ? '—' : r.title!,
-                sub: r.sub ?? '',
-                status: r.state?.text,
-                statusTone: pageTone(r.state?.tone),
-                chevron: _opens(r),
-                semanticsLabel: [r.title ?? '', if ((r.sub ?? '').isNotEmpty) r.sub!, if (r.state != null) r.state!.text].join(', ') + (_opens(r) ? '. Open' : ''),
-                onTap: _opens(r) ? () => _open(r, b.id) : null,
-              ),
+              () {
+                // Its run's status (H5): the pill when the row has no state
+                // of its own, else a line under it.
+                final run = runStatusLine(r.runStatus);
+                final pill = r.state == null && run.isNotEmpty;
+                final under = pill ? runWaitsFor(r.runStatus) : run;
+                final sub = [if ((r.sub ?? '').isNotEmpty) r.sub!, if (under.isNotEmpty) under].join(' · ');
+                return TkListRow(
+                  title: (r.title ?? '').isEmpty ? '—' : r.title!,
+                  sub: sub,
+                  status: pill ? r.runStatus!.words : r.state?.text,
+                  statusTone: pageTone(pill ? r.runStatus!.tone : r.state?.tone),
+                  chevron: _opens(r),
+                  semanticsLabel: [r.title ?? '', if (sub.isNotEmpty) sub, if (r.state != null) r.state!.text, if (pill) r.runStatus!.words].join(', ') + (_opens(r) ? '. Open' : ''),
+                  onTap: _opens(r) ? () => _open(r, b.id) : null,
+                );
+              }(),
           ],
         ));
       }
@@ -762,18 +983,48 @@ class _PageScreenState extends State<PageScreen> {
           for (final r in rows)
             () {
               final cells = r.cells ?? const <String>[];
+              // A yes/no column ticked in place (table.edit): a box at the
+              // row's end, not a word under it.
+              final ticks = [
+                for (var i = 0; i < (r.ticks?.length ?? 0) && i < cols.length; i++)
+                  if (r.ticks![i] is bool) i,
+              ];
+              final waits = runWaitsFor(r.runStatus);
               final sub = [
-                for (var i = 1; i < cells.length && i < cols.length; i++) '${cols[i].label}: ${cells[i].isEmpty ? '—' : cells[i]}',
+                for (var i = 1; i < cells.length && i < cols.length; i++)
+                  if (!ticks.contains(i)) '${cols[i].label}: ${cells[i].isEmpty ? '—' : cells[i]}',
+                if (waits.isNotEmpty) waits,
               ].join(' · ');
               final title = cells.isEmpty || cells.first.isEmpty ? '—' : cells.first;
-              return TkListRow(
+              final run = r.runStatus?.words ?? '';
+              final row = TkListRow(
                 title: title,
                 sub: sub,
                 subLines: 3,
+                status: run.isEmpty ? null : run,
+                statusTone: pageTone(r.runStatus?.tone),
                 chevron: _opens(r),
-                semanticsLabel: '$title${sub.isEmpty ? '' : ', $sub'}${_opens(r) ? '. Open' : ''}',
+                semanticsLabel: '$title${sub.isEmpty ? '' : ', $sub'}${run.isEmpty ? '' : ', $run'}${_opens(r) ? '. Open' : ''}',
                 onTap: _opens(r) ? () => _open(r, b.id) : null,
               );
+              if (ticks.isEmpty) return row;
+              // The boxes beside the row, not in it: the row's words are
+              // one thing to a screen reader, each box another.
+              return Row(children: [
+                Expanded(child: row),
+                for (final i in ticks)
+                  () {
+                    final key = '${b.id}/${r.id}/$i';
+                    final on = _ticked[key] ?? r.ticks![i] as bool;
+                    return PageTick(
+                      on: on,
+                      label: '${cols[i].label}: $title',
+                      word: ticks.length > 1 ? cols[i].label : null,
+                      onTap: _ticking.contains(key) ? null : () => unawaited(_tick(b, r, i, !on)),
+                    );
+                  }(),
+                const SizedBox(width: 8),
+              ]);
             }(),
         ],
       ));
@@ -840,6 +1091,12 @@ class _PageScreenState extends State<PageScreen> {
           case 'status':
             flush();
             children.add(_status(b));
+          case 'board':
+            flush();
+            children.add(_board(b));
+          case 'chart':
+            flush();
+            children.add(PageChart(key: ValueKey('${b.id}:${p.drawnAt}'), b: b));
           default:
             flush();
             children.add(_rows(b));
@@ -932,8 +1189,111 @@ class _PlacedPagesState extends State<PlacedPages> {
   }
 }
 
+/// The business's pages placed under an area, as tabs after the area's own
+/// (pages §9; build-plan-gaps H5, g-pages-tab): Linked businesses' tab bar
+/// in the app. The first tab is the screen itself; a page's tab opens the
+/// page. Nothing is drawn when no page is placed there.
+class PlacedPageTabs extends StatefulWidget {
+  const PlacedPageTabs({super.key, required this.auth, required this.areas, required this.own, required this.label, this.backLabel = 'Back'});
+  final Auth auth;
+  final List<String> areas;
+
+  /// The screen's own tab ("Your links").
+  final String own;
+
+  /// What the tab bar is, for a screen reader ("Linked businesses").
+  final String label;
+  final String backLabel;
+
+  @override
+  State<PlacedPageTabs> createState() => _PlacedPageTabsState();
+}
+
+class _PlacedPageTabsState extends State<PlacedPageTabs> {
+  List<PageSummary> _pages = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(() async {
+      try {
+        final all = (await widget.auth.api.listPages()).pages;
+        if (mounted) setState(() => _pages = placedPages(all, widget.areas));
+      } on Object {
+        // None shown: the screen stands without them.
+      }
+    }());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_pages.isEmpty) return const SizedBox.shrink();
+    return TkChips<String>(
+      label: widget.label,
+      padding: const EdgeInsets.only(bottom: 12),
+      chips: [('', widget.own), for (final p in _pages) (p.name, p.title)],
+      on: '',
+      onPick: (name) {
+        if (name.isNotEmpty) unawaited(openPage(context, widget.auth, name, backLabel: widget.backLabel));
+      },
+    );
+  }
+}
+
 /// The published pages placed under these areas.
 List<PageSummary> placedPages(List<PageSummary> pages, List<String> areas) => [for (final p in pages) if (p.published && p.place != null && areas.contains(p.place)) p];
 
+/// A row's own status in a line (pages §4; H5): its run's words, and who
+/// it waits for when the server says (run.read): "Waiting: for Ada".
+String runStatusLine(PageRowRunStatus? s) {
+  if (s == null) return '';
+  final who = runWaitsFor(s);
+  return who.isEmpty ? s.words : '${s.words}: ${who.substring(0, 1).toLowerCase()}${who.substring(1)}';
+}
+
+/// Who a row's run waits for, as a line under the row ("For Ada"); '' when
+/// the server says no one (or the viewer may not read runs).
+String runWaitsFor(PageRowRunStatus? s) {
+  final who = [for (final w in s?.waitingFor ?? const <ToolAnswerWait>[]) if (w.you == true) 'you' else w.who];
+  return who.isEmpty ? '' : 'For ${who.join(', ')}';
+}
+
 /// A tone for a status pill, exported for the tests' words.
 Widget pagePill(String words, String? tone) => CardPill(words, pageTone(tone));
+
+/// A yes/no cell of a page's table that this person may change here
+/// (table.edit): the app's box, 48 px to press, its column's name under it
+/// when a row has more than one.
+class PageTick extends StatelessWidget {
+  const PageTick({super.key, required this.on, required this.label, this.word, this.onTap});
+  final bool on;
+  final String label;
+  final String? word;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Semantics(
+      checked: on,
+      label: label,
+      enabled: onTap != null,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: Opacity(
+            opacity: onTap == null ? 0.6 : 1,
+            child: Column(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+              TkCheckbox(checked: on),
+              if (word != null) Padding(padding: const EdgeInsets.only(top: 3), child: Text(word!, maxLines: 1, style: tkHint(t).copyWith(fontSize: 11))),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}

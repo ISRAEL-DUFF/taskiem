@@ -1,0 +1,19 @@
+{
+  "schema": "wd-test/v1",
+  "template": "tool-ask-for-approval",
+  "params": {},
+  "cases": [
+    {
+      "name": "the asker hears it was approved",
+      "trigger": {"body": {"what": "A new printer", "why": "Ours is broken"}},
+      "approvals": {"decide": {"decision": "approved"}},
+      "expect": {"status": "completed", "answer": {"text": "Approved: A new printer"}}
+    },
+    {
+      "name": "the asker hears it was not",
+      "trigger": {"body": {"what": "A new printer", "why": "Ours is broken"}},
+      "approvals": {"decide": {"decision": "rejected"}},
+      "expect": {"status": "completed", "answer": {"text": "Not approved: A new printer"}}
+    }
+  ]
+}

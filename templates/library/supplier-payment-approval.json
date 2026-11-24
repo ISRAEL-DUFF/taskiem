@@ -112,7 +112,8 @@
             "type": "string",
             "minLength": 10,
             "maxLength": 10,
-            "title": "Account number"
+            "title": "Account number",
+            "x-pii": "account_number"
           },
           "amount_naira": {
             "type": "number",
@@ -157,7 +158,9 @@
             "supplier": "=trigger.body.supplier",
             "account_name": "=steps.check_name.output.account_name",
             "amount_naira": "=trigger.body.amount_naira",
-            "invoice": "=trigger.body.invoice_number"
+            "invoice": "=trigger.body.invoice_number",
+            "account_number": "=trigger.body.account_number",
+            "bank_code": "=trigger.body.bank_code"
           }
         }
       },

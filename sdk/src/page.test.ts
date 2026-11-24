@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { approveAction, buttons, figure, heading, list, page, signalAction, status, table, toolAction, type PageBlock } from "./page.js";
+import { approveAction, board, buttons, chart, figure, heading, list, moveAction, page, signalAction, status, table, toolAction, type PageBlock, type PageSource } from "./page.js";
 
 // The page builder (docs/spec/pages.md §12): a page/v1 document written in
 // code, its expressions compiled to CEL, its part kinds those the schema
@@ -10,12 +10,16 @@ interface Schema {
 }
 const schema = JSON.parse(readFileSync(new URL("../../schemas/page-v1.schema.json", import.meta.url), "utf8")) as Schema;
 
-const kinds = { heading: true, figure: true, list: true, table: true, buttons: true, status: true } satisfies Record<PageBlock["type"], true>;
+// Every field a part's source may have, as the SDK's PageSource types it:
+// the schema and the type change together (G5 added saved, coming, within).
+const sourceFields = { filters: true, inputs: true, order: true, output: true, records: true, table: true, tool: true, uses: true, saved: true, coming: true, within: true } satisfies Record<keyof PageSource, true>;
+
+const kinds = { heading: true, figure: true, list: true, table: true, buttons: true, status: true, board: true, chart: true } satisfies Record<PageBlock["type"], true>;
 
 describe("page builder", () => {
   it("has the schema's part kinds and source fields", () => {
     expect(Object.keys(kinds).sort()).toEqual([...schema.$defs.block.properties.type.enum].sort());
-    expect(Object.keys(schema.$defs.source.properties).sort()).toEqual(["filters", "inputs", "order", "output", "records", "table", "tool", "uses"]);
+    expect(Object.keys(schema.$defs.source.properties).sort()).toEqual(Object.keys(sourceFields).sort());
   });
 
   it("writes a page, its expressions as CEL", () => {
@@ -30,6 +34,7 @@ describe("page builder", () => {
           signalAction("Confirm", { workflow: "Confirm deliveries", name: "confirm", to: ({ row }) => row.id }, { when: ({ row }) => row.status === "delivered" }),
           toolAction("Note", "add-note", { ref: ({ row }) => row.id, kind: "delivery" }, { once: true }),
         ],
+        status: { workflow: "Confirm deliveries", to: ({ row }) => row.id },
       }),
       table("all", { source: { table: "tickets" }, columns: [{ column: "title" }, { column: "done", edit: true }], actions: [approveAction("Approve", { workflow: "Refunds", run: "=row.run", step: "ok" })] }),
       buttons("new", [toolAction("New delivery", "new-delivery")]),
@@ -42,7 +47,34 @@ describe("page builder", () => {
     expect(l.actions?.[0]?.signal).toEqual({ workflow: "Confirm deliveries", name: "confirm", to: "=row.id" });
     expect(l.actions?.[0]?.when).toMatch(/^=row\.status == ["']delivered["']$/);
     expect(l.actions?.[1]).toEqual({ label: "Note", tool: "add-note", inputs: { ref: "=row.id", kind: "delivery" }, once: true });
+    expect(l.status).toEqual({ workflow: "Confirm deliveries", to: "=row.id" });
     expect(JSON.parse(JSON.stringify(doc))).toEqual(doc);
+  });
+
+  it("writes a board whose move reads the column a card goes to, and a chart by week (G4)", () => {
+    const doc = page(
+      { name: "desk", title: "Desk" },
+      board("tickets", {
+        source: { table: "tickets" },
+        item: { title: ({ row }) => row.title },
+        column: "status",
+        columns: [{ value: "open", label: "Open" }, { value: "doing" }, { value: "done" }],
+        move: moveAction("Move", "move-ticket", { ref: ({ row }) => row.id, status: ({ to }) => to }),
+      }),
+      chart("spend", { source: { table: "expenses" }, kind: "bars", of: "amount_kobo", by: "spent_on", period: "week", last: 8, naira: true, title: "Spent by week" }),
+      chart("tool", { source: { tool: "spend-by", output: "rows" }, kind: "line", label: ({ item }) => item.week, value: "=item.total" }),
+    );
+    const b = doc.blocks[0] as Extract<PageBlock, { type: "board" }>;
+    expect(b.item.title).toBe("=row.title");
+    expect(b.board).toEqual({
+      column: "status",
+      columns: [{ value: "open", label: "Open" }, { value: "doing" }, { value: "done" }],
+      move: { label: "Move", tool: "move-ticket", inputs: { ref: "=row.id", status: "=to" } },
+    });
+    expect(doc.blocks[1]).toEqual({ id: "spend", type: "chart", source: { table: "expenses" }, title: "Spent by week", naira: true, chart: { kind: "bars", of: "amount_kobo", by: "spent_on", period: "week", last: 8 } });
+    expect((doc.blocks[2] as Extract<PageBlock, { type: "chart" }>).chart).toEqual({ kind: "line", label: "=item.week", value: "=item.total" });
+    // A row's own button reads no to.
+    expect(() => toolAction("Go", "t", { x: ({ to }) => to })).toThrow();
   });
 
   it("refuses an expression that is not one", () => {

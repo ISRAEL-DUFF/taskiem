@@ -19,6 +19,7 @@ import type { ReadyNeed, Readiness } from "../lib/readiness";
 import { NeedsList } from "./Readiness";
 import { MergeDialog } from "./MergeDialog";
 import { ProblemLine } from "../forms/ProblemLine";
+import { lineLabel, type TemplateLine } from "../lib/templates";
 
 // "Build with AI" (docs/ai.md): describe a goal, the server drafts,
 // validates, self-corrects and dry-runs a workflow, and the person reviews
@@ -86,6 +87,8 @@ interface Build {
   proposal: Proposal | null;
   saved_workflow_id: string | null;
   saved_version: number | null;
+  /** The draft in plain steps, its tool after them (Describe it: build plan M6). */
+  read_back?: TemplateLine[];
 }
 
 const STAGES: Record<string, string> = {
@@ -323,7 +326,7 @@ export function AIBuilder({
           </>
         )}
         {!saved && p && build && build.status !== "running" && (
-          <Review proposal={p}>
+          <Review proposal={p} readBack={build.read_back ?? []}>
             {build.status === "proposed" && p.definition && (
               <>
                 <DraftNeeds proposal={p} />
@@ -411,11 +414,16 @@ function DraftNeeds({ proposal: p }: { proposal: Proposal }) {
 
 function Review({
   proposal: p,
+  readBack,
   children,
 }: {
   proposal: Proposal;
+  readBack: TemplateLine[];
   children: ReactNode;
 }) {
+  // A draft that is a tool says so first: how it is called, by whom, and
+  // what it says back (made tools §13, Describe it).
+  const tool = p.definition?.tool as { command: string; name: string } | undefined;
   const graph = useMemo(
     () => (p.definition ? toGraph(p.definition) : { nodes: [], edges: [] }),
     [p.definition],
@@ -479,6 +487,26 @@ function Review({
         </div>
       )}
       {p.summary && <p>{p.summary}</p>}
+      {tool && (
+        <div className="notice recipe-tool" data-testid="draft-tool">
+          <strong>
+            A tool for the chat: /{tool.command} · {tool.name}
+          </strong>{" "}
+          Saved as a draft, it is a tool once it is published.
+        </div>
+      )}
+      {readBack.length > 0 && (
+        <>
+          <h3>In plain steps</h3>
+          <ol className="plain-steps" aria-label="In plain steps">
+            {readBack.map((l, i) => (
+              <li key={i} style={{ marginLeft: `${l.depth * 1.5}em` }}>
+                {lineLabel(l)}
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
       {p.assumptions.length > 0 && (
         <>
           <h3>What the AI assumed</h3>

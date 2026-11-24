@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, get, patch, post, sendWith } from "../api";
 import { useAuth } from "../auth";
@@ -16,6 +16,7 @@ import {
   keyFor,
   priceProblem,
   rowsOf,
+  searchThings,
   statusRequest,
   statusSaid,
   statusSavable,
@@ -31,7 +32,13 @@ import {
   type ThingStatus,
   type ThingsView,
 } from "../lib/things";
-import { knownLabel, labelChoices, type SpendLabel } from "../lib/treat";
+import {
+  knownLabel,
+  labelChoices,
+  type LabelSuggestion,
+  type LabelsView,
+  type SpendLabel,
+} from "../lib/treat";
 import { feeKobo } from "../lib/orders";
 import {
   EmptyState,
@@ -91,11 +98,21 @@ export function ThingsPage() {
     [read, path],
   );
   const [adding, setAdding] = useState(false);
+  const q = params.get("q") ?? "";
   const v = view.data?.path === path ? view.data.v : undefined;
   const rows = v ? rowsOf(v.things, line) : [];
+  // A search keeps the rows it finds, each under its label, with their
+  // own count and cost; the hero stays what the business has.
+  const found = q.trim() ? searchThings(rows, q) : rows;
   // One order line's: its sections and hero of its own rows still had.
-  const groups = v ? byLabel(rows, line ? undefined : v.groups) : [];
+  const groups = v ? byLabel(found, line || q.trim() ? undefined : v.groups) : [];
   const had = line ? hadOf(rows) : v;
+  const setQ = (s: string) => {
+    const next = new URLSearchParams(params);
+    if (s) next.set("q", s);
+    else next.delete("q");
+    setParams(next, { replace: true });
+  };
   return (
     <>
       <PageHeader
@@ -138,15 +155,39 @@ export function ThingsPage() {
                   <input
                     type="checkbox"
                     checked={all}
-                    onChange={(e) => setParams(e.target.checked ? { all: "true" } : {}, { replace: true })}
+                    onChange={(e) => {
+                      const next = new URLSearchParams(params);
+                      if (e.target.checked) next.set("all", "true");
+                      else next.delete("all");
+                      setParams(next, { replace: true });
+                    }}
                   />
                   Show those no longer had
                 </label>
               )}
+              {rows.length > 0 && (
+                <label className="field things-search">
+                  <span className="sr-only">Search Things we have</span>
+                  <input
+                    type="search"
+                    value={q}
+                    placeholder="Search by name, label, supplier or serial"
+                    aria-label="Search Things we have"
+                    data-testid="things-search"
+                    onChange={(e) => setQ(e.target.value)}
+                  />
+                </label>
+              )}
               {groups.length === 0 ? (
-                <EmptyState icon="tag">
-                  Nothing yet. What you buy and keep track of comes here when it arrives, or add something by hand.
-                </EmptyState>
+                q.trim() && rows.length > 0 ? (
+                  <EmptyState icon="search">
+                    Nothing on Things we have matches “{q.trim()}”.
+                  </EmptyState>
+                ) : (
+                  <EmptyState icon="tag">
+                    Nothing yet. What you buy and keep track of comes here when it arrives, or add something by hand.
+                  </EmptyState>
+                )
               ) : (
                 groups.map((g) => (
                   <section key={g.key} aria-label={g.label} data-testid="things-group">
@@ -192,18 +233,69 @@ export function ThingsPage() {
   );
 }
 
+/** The business's suppliers, for From whom. */
+function useSuppliers() {
+  return useLoad(
+    () => get<SuppliersView>("/v1/stock/suppliers").then((v) => v.suppliers, () => []),
+    [],
+  );
+}
+
+/** From whom: one of the business's suppliers, or Not said. */
+function SupplierSelect({
+  value,
+  suppliers,
+  onChange,
+}: {
+  value: string;
+  suppliers: { id: string; name: string }[] | undefined;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Not said</option>
+      {(suppliers ?? []).map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 /** Add something we have: anything bought before Taskiem or outside it. */
 function AddThingModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [f, setF] = useState<ThingForm>(emptyThing);
   const [tried, setTried] = useState(false);
   const labels = useLabels();
-  const suppliers = useLoad(
-    () => get<SuppliersView>("/v1/stock/suppliers").then((v) => v.suppliers, () => []),
-    [],
-  );
+  const suppliers = useSuppliers();
   const act = useAction();
   const today = lagosDate(new Date());
   const problem = thingProblem(f, today);
+  // The label: a suggestion from the name, as the order's question makes
+  // it (GET /v1/money/labels?item=), once the name settles; pre-selected
+  // while the person has not typed or picked one. A new name is made when
+  // the row is added.
+  const [named, setNamed] = useState("");
+  const touched = useRef(false);
+  useEffect(() => {
+    const t = setTimeout(() => setNamed(f.name.trim()), 600);
+    return () => clearTimeout(t);
+  }, [f.name]);
+  const sugg = useLoad(
+    () =>
+      named
+        ? get<LabelsView>(`/v1/money/labels?item=${encodeURIComponent(named)}`).then(
+            (r) => r.suggestions,
+            (): LabelSuggestion[] => [],
+          )
+        : Promise.resolve(undefined),
+    [named],
+  );
+  const first = sugg.data?.[0]?.name ?? "";
+  useEffect(() => {
+    if (!touched.current) setF((x) => ({ ...x, label: first }));
+  }, [first]);
   const set = (p: Partial<ThingForm>) => setF((x) => ({ ...x, ...p }));
   return (
     <Modal title="Add something we have" onClose={onClose}>
@@ -226,18 +318,14 @@ function AddThingModal({ onClose, onAdded }: { onClose: () => void; onAdded: () 
         <LabelPick
           item={f.name.trim() || "it"}
           value={f.label}
-          picks={labelChoices(labels.data, undefined)}
-          onChange={(label) => set({ label })}
+          picks={labelChoices(labels.data, sugg.data)}
+          onChange={(label) => {
+            touched.current = true;
+            set({ label });
+          }}
         />
         <Field label="From whom" hint="Optional">
-          <select value={f.supplierId} onChange={(e) => set({ supplierId: e.target.value })}>
-            <option value="">Not said</option>
-            {(suppliers.data ?? []).map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          <SupplierSelect value={f.supplierId} suppliers={suppliers.data} onChange={(supplierId) => set({ supplierId })} />
         </Field>
         <Field label="What it cost" hint="In naira, like 250,000">
           <input inputMode="decimal" value={f.cost} onChange={(e) => set({ cost: e.target.value })} />
@@ -502,8 +590,10 @@ function DetailsModal({ thing: t, onClose, onSaved }: { thing: Thing; onClose: (
     warranty: (t.warranty_until ?? "").slice(0, 10),
     note: t.note ?? "",
     label: t.label ?? "",
+    supplierId: t.supplier_id ?? "",
   });
   const labels = useLabels();
+  const suppliers = useSuppliers();
   const act = useAction();
   const set = (p: Partial<typeof f>) => setF((x) => ({ ...x, ...p }));
   return (
@@ -529,6 +619,9 @@ function DetailsModal({ thing: t, onClose, onSaved }: { thing: Thing; onClose: (
           picks={labelChoices(labels.data, undefined)}
           onChange={(label) => set({ label })}
         />
+        <Field label="From whom">
+          <SupplierSelect value={f.supplierId} suppliers={suppliers.data} onChange={(supplierId) => set({ supplierId })} />
+        </Field>
         <Field label="Serial number">
           <input value={f.serial} maxLength={100} onChange={(e) => set({ serial: e.target.value })} />
         </Field>

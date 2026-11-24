@@ -22,15 +22,27 @@ import (
 // workflow reads (as written: "price_list" is @price-list): each name's
 // fields under it, those that are absent left out, and the paths of its
 // personal and sensitive values, sealed in the run's history (under the
-// "saved" root: {"saved", name, field}).
-type SavedResolver func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, names []string) (map[string]any, []pii.Path, error)
+// "saved" root: {"saved", name, field}). read says which run reads them,
+// and its steps that do, for the record of each thing's use (build plan
+// H6); its zero value records nothing.
+type SavedResolver func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, read SavedRead, names []string) (map[string]any, []pii.Path, error)
+
+// SavedRead is a run reading saved things at its start: the run, its
+// workflow and version, and for each name the steps reading it
+// (wd.Definition.SavedReaders).
+type SavedRead struct {
+	Run      uuid.UUID
+	Workflow uuid.UUID
+	Version  int
+	Readers  map[string][]string
+}
 
 // SavedNames are the saved things a definition's expressions read, as
 // written, in order.
 func SavedNames(def *wd.Definition) []string { return def.SavedNames() }
 
 // savedInputs are the saved things def reads, for its run's start.
-func (s *Store) savedInputs(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition) (map[string]any, []pii.Path, error) {
+func (s *Store) savedInputs(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition, read SavedRead) (map[string]any, []pii.Path, error) {
 	if s.Saved == nil {
 		return nil, nil, nil
 	}
@@ -38,7 +50,8 @@ func (s *Store) savedInputs(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, de
 	if len(names) == 0 {
 		return nil, nil, nil
 	}
-	got, paths, err := s.Saved(ctx, tx, tenant, names)
+	read.Readers = def.SavedReaders()
+	got, paths, err := s.Saved(ctx, tx, tenant, read, names)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -64,7 +77,7 @@ func (s *Store) forkSaved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def 
 	cats := map[string]map[string]string{}
 	if s.Saved != nil {
 		if names := SavedNames(def); len(names) > 0 {
-			_, fresh, err := s.Saved(ctx, tx, tenant, names)
+			_, fresh, err := s.Saved(ctx, tx, tenant, SavedRead{}, names)
 			if err != nil {
 				return nil, nil, err
 			}

@@ -1,0 +1,44 @@
+{
+  "id": "tool-ask-for-approval",
+  "title": "Ask for approval from the chat",
+  "summary": "A tool: ask for something with a reason; the approver decides with buttons; you are told the answer in the same chat.",
+  "description": "A tool for your team, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word with what you need and why (\"/ask-approval new printer, ours is broken\"). The people with the role you choose get it with Approve and Reject buttons, and whoever asked is told the decision in the chat they asked from. Nothing is paid or bought by it: it only asks. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (ask-approval-2) and says so.",
+  "category": "tools",
+  "tags": ["tool", "approval", "request"],
+  "requires": ["tool", "command", "type", "button"],
+  "keywords": ["ask", "approval", "approve", "permission", "request", "decide", "manager", "tool", "command"],
+  "connectors": [],
+  "params": [
+    {"name": "command", "type": "command", "title": "Its word", "description": "What people type to use it, after /. Letters, numbers and dashes.", "required": true, "default": "ask-approval", "example": "ask-approval"},
+    {"name": "approver_role", "type": "string", "title": "Who approves", "description": "The role that decides, such as manager.", "required": false, "default": "owner", "example": "owner", "picker": "role"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_toolAskApproval",
+    "version": 1,
+    "name": "Ask for approval",
+    "description": "A request with a reason; the approver decides with buttons; the asker is told.",
+    "trigger": {"type": "manual"},
+    "inputs": {"schema": {"type": "object", "required": ["what", "why"], "properties": {
+      "what": {"type": "string", "title": "What you need", "minLength": 1, "maxLength": 200},
+      "why": {"type": "string", "title": "Why", "minLength": 1, "maxLength": 500}}}},
+    "outputs": [
+      {"name": "what", "type": "string", "title": "What", "description": "What was asked for", "value": "=steps.said.output.what"},
+      {"name": "decision", "type": "string", "title": "Decision", "description": "approved or rejected", "value": "=steps.decide.output.decision"}
+    ],
+    "tool": {
+      "name": "Ask for approval",
+      "command": "{{command}}",
+      "about": "Ask for something with a reason, and hear the answer",
+      "icon": "check",
+      "for": "members",
+      "answer": {"type": "text", "text": "=outputs.decision == 'approved' ? 'Approved: ' + outputs.what : 'Not approved: ' + outputs.what"}
+    },
+    "steps": [
+      {"id": "said", "type": "transform", "name": "Read what is asked for", "config": {"output": {"what": "=trigger.body.what"}}},
+      {"id": "decide", "type": "approval", "needs": ["said"], "name": "Approve or reject the request",
+       "config": {"role": "{{approver_role}}", "count": 1, "timeout": "72h", "subject": {"what": "=trigger.body.what", "why": "=trigger.body.why"}}}
+    ],
+    "settings": {"timeout": "96h"}
+  }
+}

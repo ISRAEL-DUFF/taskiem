@@ -25,7 +25,7 @@ import {
   useLiveRefresh,
   useLoad,
 } from "../ui";
-import {
+import { invoicePDF,
   CREDIT_CHOICES,
   CREDIT_TERMS_PATH,
   creditChoice,
@@ -1806,6 +1806,11 @@ export function InvoicePage() {
           <section className="card" aria-labelledby="inv-customer">
             <h2 id="inv-customer">Customer</h2>
             <CustomerDetails c={(revealed ?? x).customer} />
+            <p>
+              <a className="button" href={invoicePDF(x.id, !!revealed)} target="_blank" rel="noopener" data-testid="invoice-pdf">
+                Open the PDF<span className="sr-only"> of invoice {x.number}</span>
+              </a>
+            </p>
             {!revealed && may.reveal && (
               <>
                 <ErrorBox error={reveal.error} />
@@ -2261,6 +2266,12 @@ function CustomerDetails({ c }: { c: CustomerInvoice["customer"] }) {
           <span className="hint">—</span>
         )}
       </dd>
+      {c.address && (
+        <>
+          <dt>Address</dt>
+          <dd data-testid="invoice-customer-address">{c.address}</dd>
+        </>
+      )}
     </dl>
   );
 }

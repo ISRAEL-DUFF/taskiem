@@ -195,14 +195,61 @@ void main() {
     await looks(t, 'pages');
   });
 
-  testWidgets('Pages: none yet says where they are made', (t) async {
+  testWidgets('Pages: none yet says where they are made: a starter here, or the web', (t) async {
     phone(t, 600);
     final api = _Api();
     api.routes['GET /v1/pages'] = (_) => {'pages': <Object>[], 'can_edit': true, 'can_publish': true, 'max_pinned': 5, 'max_pages': 10};
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PagesPage(auth: api.auth())));
     await settle(t);
     expect(find.text('No pages yet'), findsOneWidget);
-    expect(find.textContaining('Show as a page'), findsOneWidget);
+    expect(find.textContaining('from a starter'), findsOneWidget);
+  });
+
+  // G5: a list of the business's saved things of a kind (Generators), in
+  // the order their date comes, each saying when, a private value masked
+  // as the server sent it; drawn as any list.
+  testWidgets('A page of saved things: in the order their date comes, each saying when', (t) async {
+    phone(t, 760);
+    final api = _Api();
+    api.routes['GET /v1/pages/generators/view'] = (_) => {
+      'page': _summary('generators', 'Generators'),
+      'draft': false,
+      'can_edit': false,
+      'drawn_at': '2026-11-24T10:00:00Z',
+      'filters': <Object>[],
+      'blocks': [
+        {'id': 'soon', 'type': 'figure', 'label': 'Due within a week', 'value': 2, 'shown': '2', 'tone': 'warn', 'lead': true, 'naira': false},
+        {
+          'id': 'list',
+          'type': 'list',
+          'title': 'Generators',
+          'size': 'full',
+          'empty': 'None saved yet',
+          'has_detail': true,
+          'count': 3,
+          'more': null,
+          'rows': [
+            {'id': '01a2-office', 'title': 'Office gen', 'sub': '5kVA · ••7766', 'state': {'text': '2 days ago', 'tone': 'bad'},
+              'detail': {'title': 'Office gen', 'lines': [{'label': 'Serial', 'value': '••7766'}, {'label': 'Next service', 'value': '22 Nov 2026'}]}},
+            {'id': '01a2-yard', 'title': 'Yard gen', 'sub': '60kVA · ••4411', 'state': {'text': 'In 3 days', 'tone': 'warn'},
+              'detail': {'title': 'Yard gen', 'lines': [{'label': 'Serial', 'value': '••4411'}, {'label': 'Next service', 'value': '27 Nov 2026'}]}},
+            {'id': '01a2-spare', 'title': 'Spare gen', 'sub': '2kVA', 'state': {'text': 'On 24 Jan 2027', 'tone': 'plain'},
+              'detail': {'title': 'Spare gen', 'lines': [{'label': 'Next service', 'value': '24 Jan 2027'}]}},
+          ],
+        },
+      ],
+    };
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'generators', backLabel: 'Back to Pages')));
+    await settle(t);
+    expect(find.text('Office gen'), findsOneWidget);
+    expect(find.text('2 days ago'), findsOneWidget);
+    expect(find.text('In 3 days'), findsOneWidget);
+    expect(find.textContaining('7766'), findsOneWidget);
+    expect(t.getTopLeft(find.text('Office gen')).dy, lessThan(t.getTopLeft(find.text('Yard gen')).dy));
+    await looks(t, 'page-saved');
+    await t.tap(find.text('Yard gen'));
+    await settle(t);
+    expect(find.text('27 Nov 2026'), findsOneWidget);
   });
 
   testWidgets('A page: its figures, a list in groups, a table as rows, a row’s card, filters sent', (t) async {
@@ -523,8 +570,11 @@ void main() {
             {'id': 'd2', 'title': 'AC-13 · Ngozi', 'sub': 'Yaba · ₦1,200', 'state': {'text': 'on the way', 'tone': 'plain'}},
           ],
         },
+        // Started in an earlier year: drawn as "2 Nov 2025, 09:00" whatever
+        // today is, so the page-buttons picture never changes with the date
+        // (a date this year reads "Yesterday", a weekday or a day).
         {'id': 'state', 'type': 'status', 'title': 'Paying riders', 'run': 'r1', 'status': 'waiting', 'words': 'Waiting', 'tone': 'warn',
-          'started_at': '2026-11-22T09:00:00Z', 'waiting_for': [{'kind': 'approval', 'who': 'an owner'}]},
+          'started_at': '2025-11-02T09:00:00Z', 'waiting_for': [{'kind': 'approval', 'who': 'an owner'}]},
       ],
     };
     api.routes['POST /v1/pages/deliveries/act'] = (r) {
@@ -554,6 +604,138 @@ void main() {
     await settle(t);
     expect(acts.last, {'block': 'list', 'row': 'd1', 'action': 1, 'yes': true});
     await t.pump(const Duration(seconds: 4));
+  });
+
+  // g-pages-notif: a page opened from a Tell me message's link reads its
+  // view with the filters the link set, and shows a search in its box.
+  testWidgets('A page opened from a notification keeps the filters its link set', (t) async {
+    phone(t, 700);
+    final api = _Api();
+    api.routes['GET /v1/pages/tickets/view'] = (_) => _view(more: null);
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'tickets', filters: const {'q': 'jam', 'st': 'open'})));
+    await settle(t);
+    final asked = api.calls.firstWhere((c) => c.url.path == '/v1/pages/tickets/view').url.queryParameters['filters'];
+    expect(jsonDecode(asked!), {'q': 'jam', 'st': 'open'});
+    expect(find.text('jam'), findsOneWidget);
+  });
+
+  // g-pages-rowstatus: each delivery row shows where its run is (the
+  // server's words; who it waits for only for one who may read runs), and
+  // its card says it too.
+  testWidgets('Each delivery shows its run’s status, on the row and its card', (t) async {
+    phone(t, 640);
+    final api = _Api();
+    Map<String, dynamic> delivery(String id, String title, Map<String, dynamic>? run) => {
+      'id': id,
+      'title': title,
+      'sub': 'Lekki · ₦1,500',
+      'detail': {'title': title, 'lines': [{'label': 'Rider', 'value': 'Musa'}]},
+      'run_status': ?run,
+    };
+    api.routes['GET /v1/pages/deliveries/view'] = (_) => {
+      'page': _summary('deliveries', 'Deliveries today'),
+      'draft': false,
+      'can_edit': false,
+      'drawn_at': '2026-11-24T10:00:00Z',
+      'filters': <Object>[],
+      'blocks': [
+        {
+          'id': 'today',
+          'type': 'list',
+          'title': 'Today’s deliveries',
+          'size': 'full',
+          'empty': 'No deliveries',
+          'has_detail': true,
+          'count': 3,
+          'more': null,
+          'rows': [
+            delivery('d1', 'AC-12 · Musa', {'status': 'waiting', 'words': 'Waiting', 'tone': 'warn',
+              'waiting_for': [{'kind': 'signal', 'who': 'a cashier'}]}),
+            delivery('d2', 'AC-13 · Ngozi', {'status': 'completed', 'words': 'Done', 'tone': 'good'}),
+            delivery('d3', 'AC-14 · Tunde', {'words': 'Not started', 'tone': 'plain'}),
+          ],
+        },
+      ],
+    };
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'deliveries', backLabel: 'Back to Pages')));
+    await settle(t);
+    expect(find.text('Waiting'), findsOneWidget);
+    expect(find.text('Lekki · ₦1,500 · For a cashier'), findsOneWidget);
+    expect(find.text('Done'), findsOneWidget);
+    expect(find.text('Not started'), findsOneWidget);
+    await looks(t, 'page-row-status');
+    await t.tap(find.text('AC-12 · Musa'));
+    await settle(t);
+    expect(find.text('Where it is'), findsOneWidget);
+    expect(find.text('Waiting: for a cashier'), findsOneWidget);
+  });
+
+  // g-pages-tick: a yes/no column ticked in place, as the web does: the row
+  // changed in its table (PATCH, table.edit), the page read again; a person
+  // the server sends no ticks to sees words and opens the row.
+  testWidgets('A table’s Done is ticked in place on the phone', (t) async {
+    phone(t, 600);
+    final api = _Api();
+    var done = false;
+    Map<String, dynamic> jobs({required bool ticks}) => {
+      'id': 'jobs',
+      'type': 'table',
+      'title': 'Jobs',
+      'size': 'full',
+      'empty': 'Nothing to show',
+      'has_detail': true,
+      'count': 2,
+      'more': null,
+      'table_id': 'tbl-1',
+      'columns': [
+        {'column': 'title', 'label': 'Job', 'naira': false, 'sortable': true},
+        {'column': 'due', 'label': 'Due', 'naira': false, 'sortable': true},
+        {'column': 'done', 'label': 'Done', 'naira': false, 'sortable': true},
+      ],
+      'rows': [
+        {'id': '7', 'cells': ['Fix the gate', '24 Nov', done ? 'Yes' : 'No'], if (ticks) 'ticks': [null, null, done],
+          'detail': {'title': 'Fix the gate', 'lines': <Object>[]}},
+        {'id': '8', 'cells': ['Paint the door', '25 Nov', 'Yes'], if (ticks) 'ticks': [null, null, true],
+          'detail': {'title': 'Paint the door', 'lines': <Object>[]}},
+      ],
+    };
+    var canTick = true;
+    api.routes['GET /v1/pages/jobs/view'] = (_) => {
+      'page': _summary('jobs', 'Jobs'),
+      'draft': false,
+      'can_edit': false,
+      'drawn_at': '2026-11-24T10:00:00Z',
+      'filters': <Object>[],
+      'blocks': [jobs(ticks: canTick)],
+    };
+    api.routes['PATCH /v1/tables/tbl-1/rows/7'] = (r) {
+      done = ((jsonDecode((r as http.Request).body) as Map)['set'] as Map)['done'] as bool;
+      return {'affected': 1, 'replayed': false, 'row': {'id': 7}};
+    };
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'jobs', backLabel: 'Back to Pages')));
+    await settle(t);
+    final box = find.bySemanticsLabel('Done: Fix the gate');
+    expect(box, findsOneWidget);
+    expect(t.getSemantics(box), isSemantics(isChecked: false));
+    // The column's words are not repeated under the row when it is a box.
+    expect(find.textContaining('Done: No'), findsNothing);
+    await looks(t, 'page-tick');
+
+    await t.tap(box);
+    await settle(t);
+    final patched = api.calls.where((c) => c.method == 'PATCH').single as http.Request;
+    expect(patched.url.path, '/v1/tables/tbl-1/rows/7');
+    expect(jsonDecode(patched.body), {'set': {'done': true}});
+    expect(done, isTrue);
+    expect(t.getSemantics(find.bySemanticsLabel('Done: Fix the gate')), isSemantics(isChecked: true));
+    expect(api.calls.where((c) => c.url.path == '/v1/pages/jobs/view').length, 2);
+
+    // Without table.edit the server sends no ticks: the words, and the row opens.
+    canTick = false;
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(key: const ValueKey('again'), auth: api.auth(), name: 'jobs', backLabel: 'Back to Pages')));
+    await settle(t);
+    expect(find.bySemanticsLabel('Done: Fix the gate'), findsNothing);
+    expect(find.textContaining('Done: Yes'), findsWidgets);
   });
 
   // A page as a tab under an area: a section after the area's own, its

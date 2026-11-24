@@ -17,6 +17,8 @@ export interface InvoiceCustomer {
   name: string;
   phone?: string;
   email?: string;
+  /** Where the customer is, printed on the invoice and its PDF (a saved person's or business's place). */
+  address?: string;
   /** The business's own key for the customer ("student:42"): invoices with the same key are one customer's. */
   key?: string;
 }
@@ -1127,3 +1129,6 @@ export function issuerWords(i: AccountIssuer): string {
 export function accountWords(a: CustomerAccount): string {
   return `${a.account_number}${a.bank_name ? ` · ${a.bank_name}` : ""} (${a.channel}), reference ${a.reference}`;
 }
+
+/** An invoice's PDF (GET /v1/invoices/{id}/pdf): the customer's details shown when revealed. */
+export const invoicePDF = (id: string, reveal = false) => `/v1/invoices/${encodeURIComponent(id)}/pdf${reveal ? "?reveal=true" : ""}`;

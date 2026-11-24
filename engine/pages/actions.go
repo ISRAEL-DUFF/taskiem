@@ -167,6 +167,11 @@ func engineFor(b Block) *expr.Engine {
 	switch {
 	case b.Type == "buttons":
 		return filtersEngine
+	case b.Type == "board" && b.Source != nil && b.Source.Tool != "":
+		// A board's move reads the column a card goes to (to) besides.
+		return toolMoveEngine
+	case b.Type == "board":
+		return moveEngine
 	case b.Source != nil && b.Source.Tool != "":
 		return toolEngine
 	}

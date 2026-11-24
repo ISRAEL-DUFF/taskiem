@@ -47,6 +47,8 @@ import {
 import { StorefrontTabs } from "./Storefront";
 import { BookingActions } from "./StorefrontBookings";
 import { SaveAfter, SavedDone } from "./SaveAfter";
+import { PaySheet } from "./PaySheet";
+import { nairaTyped, PAY_FIELDS } from "../lib/payments";
 import { customerOffer, type SavedThing } from "../lib/saved";
 
 /** The money matched to an order (docs/matching.md), each with how; a wrong match is undone here while the order has not gone on. */
@@ -374,13 +376,14 @@ function WriteInApp({ reference, booking }: { reference: string; booking: boolea
 /** One order (GET /v1/storefront/orders/{reference}), and its customer's details for those who may see them. */
 export function StorefrontOrder() {
   const { reference = "" } = useParams();
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const [revealed, setRevealed] = useState<Order>();
   const [changed, setChanged] = useState("");
   // The customer saved here: said until the page is left.
   const [savedAs, setSavedAs] = useState("");
   const reveal = useAction();
   const refund = useAction();
+  const [payBack, setPayBack] = useState(false);
   const { data, error, reload } = useLoad(
     () =>
       get<{
@@ -450,10 +453,23 @@ export function StorefrontOrder() {
                     Refund through Paystack
                   </button>
                 )}
+                {/* Pay on a refund (paying people H7): the Pay sheet, filled in
+                    with the amount and "a refund", to the customer's account. */}
+                {o.paid_by && o.paid_by !== "card" && can("money.pay") && me?.roles.includes("owner") && (
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={refund.busy}
+                    onClick={() => setPayBack(true)}
+                    data-testid="refund-pay"
+                  >
+                    Pay it back
+                  </button>
+                )}
                 <button
                   type="button"
                   className={
-                    o.paid_by && o.paid_by !== "card" ? "primary" : undefined
+                    o.paid_by && o.paid_by !== "card" && !can("money.pay") ? "primary" : undefined
                   }
                   disabled={refund.busy}
                   onClick={() =>
@@ -476,6 +492,23 @@ export function StorefrontOrder() {
                 </button>
               </div>
               <ErrorBox error={refund.error} />
+              {payBack && (
+                <PaySheet
+                  title={`Pay back ${o.reference}`}
+                  actionId="pay.account"
+                  fields={PAY_FIELDS.account}
+                  initial={{ amount: nairaTyped(o.deposit_kobo ?? o.total_kobo), for: "a refund" }}
+                  orderReference={o.reference}
+                  from="tools"
+                  lead={
+                    <p className="hint" data-testid="refund-pay-lead">
+                      Their account number and bank: the bank's name for it is
+                      checked before you confirm. Then mark the order refunded.
+                    </p>
+                  }
+                  onClose={() => setPayBack(false)}
+                />
+              )}
             </div>
           )}
           {(o.in_app || o.kind === "app") && can("order.handle") && <WriteInApp reference={o.reference} booking={o.kind === "booking"} />}

@@ -22,6 +22,7 @@ import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/polling.dart';
 import '../kit/sheet.dart' show TkKitField, TkSavedTick, TkSheet, showTkSheet;
+import 'pay_sheet.dart' show PaySheet, nairaTyped, refundPayAction;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show dayLabel, formatDuration, lagosDay, lagosTime, whenLabel;
@@ -843,9 +844,30 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
                   await _run(() => _auth.transport.send('POST', '/v1/storefront/orders/$_ref/refund', body: const {}), 'Refunded');
                 },
         ),
+      // Pay on a refund (H7): the Pay sheet filled in with the amount and
+      // "a refund", to the customer's account; then Mark refunded.
+      if (!card && _auth.can('money.pay') && ((_auth.me?.roles as List?)?.contains('owner') ?? false))
+        TkSmallButton(
+          label: 'Pay it back',
+          primary: true,
+          onPressed: _busy
+              ? null
+              : () => unawaited(
+                  showTkSheet<void>(
+                    context,
+                    (_) => PaySheet(
+                      auth: _auth,
+                      action: refundPayAction('${o['reference']}'),
+                      initial: {'amount': nairaTyped(refundKobo), 'for': 'a refund'},
+                      from: 'tools',
+                      orderReference: '${o['reference']}',
+                    ),
+                  ),
+                ),
+        ),
       TkSmallButton(
         label: 'Mark refunded',
-        primary: !card,
+        primary: !card && !_auth.can('money.pay'),
         onPressed: _busy
             ? null
             : () async {

@@ -33,6 +33,23 @@ type Viewer struct {
 	Edit bool
 }
 
+// PhoneForms are the ways a phone column may hold the viewer's number
+// (Mine on a phone column, pages §6): as the account keeps it
+// (+2348012345678), without its plus (a table's phone may be written
+// either way), and, for a Nigerian number, as it is written at home
+// (08012345678).
+func PhoneForms(number string) []string {
+	n := strings.TrimPrefix(strings.TrimSpace(number), "+")
+	if n == "" {
+		return nil
+	}
+	out := []string{"+" + n, n}
+	if rest, ok := strings.CutPrefix(n, "234"); ok && len(rest) == 10 {
+		out = append(out, "0"+rest)
+	}
+	return out
+}
+
 // ticks are a table row's yes/no cells that can be changed here.
 func ticks(b Block, t datatables.Table, raw map[string]any) []*bool {
 	var out []*bool
@@ -262,7 +279,11 @@ func (p *Page) ReadFor(b Block, t datatables.Table, v Values, order *Order) (Rea
 			case col.Type == "email" && v.Viewer.Email != "":
 				r.Filters = append(r.Filters, map[string]any{"column": col.Name, "op": "ilike", "value": likeEscape.Replace(v.Viewer.Email)})
 			case col.Type == "phone" && v.Viewer.Phone != "":
-				r.Filters = append(r.Filters, map[string]any{"column": col.Name, "op": "eq", "value": v.Viewer.Phone})
+				var anyOf []any
+				for _, n := range PhoneForms(v.Viewer.Phone) {
+					anyOf = append(anyOf, map[string]any{"column": col.Name, "op": "eq", "value": n})
+				}
+				r.Filters = append(r.Filters, map[string]any{"any": anyOf})
 			default:
 				r.None = true
 			}
@@ -287,6 +308,25 @@ func (p *Page) HiddenFilter(f Filter, tables []datatables.Table, personal bool) 
 		}
 	}
 	return false
+}
+
+// VisibleFilters is what a viewer set, but for the filters HiddenFilter
+// keeps from them: a value for one is let go before anything reads it
+// (a part's conditions, a tool's values over filters, the page's link),
+// so a viewer without table.read narrows nothing by a personal column.
+func (p *Page) VisibleFilters(set map[string]string, tables []datatables.Table, personal bool) map[string]string {
+	if personal || len(set) == 0 {
+		return set
+	}
+	out := make(map[string]string, len(set))
+	for k, v := range set {
+		i := slices.IndexFunc(p.Filters, func(f Filter) bool { return f.ID == k })
+		if i >= 0 && p.HiddenFilter(p.Filters[i], tables, false) {
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }
 
 // RankedByPersonal says whether part b's rows, read in this order (nil:
@@ -417,6 +457,25 @@ type Shown struct {
 	// Ticks are a table's yes/no cells that can be changed here, as
 	// true or false, by the column's place (nil for the others).
 	Ticks []*bool `json:"ticks,omitempty"`
+	// RunStatus is where the row's run is (the part's status), set by the
+	// API: its words for every viewer, the run itself for one with run.read.
+	RunStatus map[string]any `json:"run_status,omitempty"`
+	// RunID and RunTo name the row's run (the part's status: run, or to),
+	// worked out from the row as this viewer is shown it; never sent.
+	RunID string `json:"-"`
+	RunTo string `json:"-"`
+}
+
+// rowRun works out what names a row's run, for the part's status.
+func (s *Shown) rowRun(b Block, act map[string]any) {
+	if rs := b.RowStatus; rs != nil {
+		if rs.Run != "" {
+			s.RunID = Word(b, rs.Run, act)
+		}
+		if rs.To != "" {
+			s.RunTo = Word(b, rs.To, act)
+		}
+	}
 }
 
 // ShownState is a row's state as drawn.
@@ -458,7 +517,7 @@ func Shape(b Block, t datatables.Table, rows []map[string]any, v Values) []Shown
 		act := map[string]any{"row": row, "filters": filters}
 		s := Shown{ID: shownCell(t, "id", raw["id"])}
 		switch b.Type {
-		case "list":
+		case "list", "board":
 			s.Title = say(b.Item.Title, act)
 			s.Sub = say(b.Item.Sub, act)
 			if st := b.Item.State; st != nil {
@@ -506,6 +565,7 @@ func Shape(b Block, t datatables.Table, rows []map[string]any, v Values) []Shown
 			s.Detail = sd
 		}
 		s.Actions = ShownActions(b, act)
+		s.rowRun(b, act)
 		out = append(out, s)
 	}
 	return out
@@ -752,6 +812,16 @@ func Shows(p *Page, tables []datatables.Table) []string {
 				}
 				continue
 			}
+			if c := b.Chart; c != nil {
+				add(c.By)
+				if c.Of != "" {
+					add(c.Of)
+				}
+				continue
+			}
+			if b.Board != nil {
+				add(b.Board.Column)
+			}
 			if b.Item != nil {
 				reads(b.Item.Title)
 				reads(b.Item.Sub)
@@ -779,6 +849,10 @@ func Shows(p *Page, tables []datatables.Table) []string {
 			line += strings.Join(cols, ", ")
 		}
 		out = append(out, line)
+	}
+	// Saved things of a kind (G5): "Saved Generator things, as their list shows them".
+	for _, k := range p.SavedKinds() {
+		out = append(out, "Saved "+k+" things, as the business's list shows them (what is kept private masked)")
 	}
 	// What tools work out for it (G2): "/spend's answer: total, rows".
 	var tools []string

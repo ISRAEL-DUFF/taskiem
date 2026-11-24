@@ -170,6 +170,10 @@ type Message struct {
 	// Reactions on it, and whether the person reading starred it (see DecorateTx).
 	Reactions []Reaction `json:"reactions,omitempty"`
 	Starred   bool       `json:"starred,omitempty"`
+	// Payment and Batch: the payment (or batch) a diary line on this side
+	// is about (docs/spec/chat-pay-people.md "After"), shown as it stands.
+	Payment *uuid.UUID `json:"payment,omitempty"`
+	Batch   *uuid.UUID `json:"batch,omitempty"`
 }
 
 // Conversation is one linked business's conversation, as the list shows
@@ -193,7 +197,7 @@ type Conversation struct {
 }
 
 const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, COALESCE(m.asked, ''), m.sender_name, m.card, m.attachment, m.forwarded, m.preview, m.mentions, m.read_at, m.created_at,
-	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment`
+	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment, m.payment_id, m.batch_id`
 
 const messageFrom = ` FROM link_messages m LEFT JOIN link_messages q ON q.tenant_id = m.tenant_id AND q.pair_id = m.reply_to`
 
@@ -204,7 +208,7 @@ func scanMessage(r pgx.Row) (Message, error) {
 	var qMine *bool
 	var qKind, qBody *string
 	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.Asked, &m.SenderName, &card, &att, &m.Forwarded, &prev, &ments, &m.ReadAt, &m.CreatedAt,
-		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt); err != nil {
+		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt, &m.Payment, &m.Batch); err != nil {
 		return m, err
 	}
 	if card != nil {
@@ -743,13 +747,20 @@ func CardTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID, mine b
 // chat tool, on this side only. It has no pair on the other side, which
 // never sees it.
 func DiaryTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string, from Sender) (Message, error) {
+	return PaymentDiaryTx(ctx, tx, tenant, link, body, from, nil, nil)
+}
+
+// PaymentDiaryTx is DiaryTx for a payment (or a batch of them) made from
+// this conversation: the line names it, so it shows as the payment
+// stands (paid, failed with Try again).
+func PaymentDiaryTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string, from Sender, payment, batch *uuid.UUID) (Message, error) {
 	body = strings.TrimSpace(body)
 	if body == "" || len([]rune(body)) > 300 {
 		return Message{}, fmt.Errorf("%w: a diary line is 1 to 300 characters", ErrInvalid)
 	}
 	id := uuid.Must(uuid.NewV7())
-	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id)
-		VALUES ($1, $2, $3, $1, true, 'diary', $4, $5, NULLIF($6, ''))`, id, tenant, link, body, from.FirstName, from.ID); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id, payment_id, batch_id)
+		VALUES ($1, $2, $3, $1, true, 'diary', $4, $5, NULLIF($6, ''), $7, $8)`, id, tenant, link, body, from.FirstName, from.ID, payment, batch); err != nil {
 		return Message{}, err
 	}
 	row := tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.id = $2`, tenant, id)

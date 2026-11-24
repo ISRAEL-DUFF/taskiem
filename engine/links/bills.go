@@ -577,6 +577,15 @@ type Payments struct{ Pool *pgxpool.Pool }
 // payout step's completion, that the rail took the money of the payment
 // run is paying (runtime.Store.PayoutSent).
 func (p *Payments) PayoutSent(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID, payoutRef string) error {
+	// A payment to a person (api/payments.go) learns its payout as the
+	// rail takes it, so the money log's entry for the payout, whenever it
+	// is heard, says what the payment was for (paying people H7).
+	if payoutRef != "" {
+		if _, err := tx.Exec(ctx, `UPDATE payments SET payout_ref = $3 WHERE tenant_id = $1 AND run_id = $2 AND payout_ref IS DISTINCT FROM $3`,
+			tenant, run, payoutRef); err != nil {
+			return err
+		}
+	}
 	return MarkPayoutSentTx(ctx, tx, tenant, run, payoutRef)
 }
 

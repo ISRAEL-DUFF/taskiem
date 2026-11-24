@@ -992,7 +992,12 @@
     "menu.more": {
       "text": "More…",
       "reviewed": true,
-      "context": "The last row of the topics list on WhatsApp, for the rest; at most 24 characters"
+      "context": "The last row of the topics list on WhatsApp, and the last button of five on Slack, for the rest; at most 24 characters"
+    },
+    "menu.all": {
+      "text": "All {n}",
+      "reviewed": true,
+      "context": "The last button of a topic's menu on Telegram, after its first five: shows every one of its {n} actions"
     },
     "menu.more_line": {
       "text": "The other topics",
@@ -3804,6 +3809,16 @@
       "reviewed": true,
       "context": "Keep track of it for more than 200: it cannot be, and is just recorded"
     },
+    "wa.treat.uses": {
+      "text": "*{stock}* is counted in {unit}. How many {unit} is one {one}? Say a number, like 1000.",
+      "reviewed": true,
+      "context": "Add to stock into a stock item counted in another unit (grams, yards): how many of the stock item one of the line bought is ({one} is the line's unit, like bag, or the item's name). Asked once; remembered with the item"
+    },
+    "wa.treat.uses_reminder": {
+      "text": "Say how many {unit} one {one} is, as a number, like 50.",
+      "reviewed": true,
+      "context": "The answer to how many of the stock item one of the line is was not a number: said again before the question"
+    },
     "wa.treat.which_item": {
       "text": "Which stock item does *{item}* go into? Pick one, or type its name.",
       "reviewed": true,
@@ -3984,6 +3999,36 @@
       "reviewed": true,
       "context": "Why an answer was refused (fills {reason} in wa.run.does_not_fit)"
     },
+    "wa.field.send_location": {
+      "text": "Send your location here for {label}: attach, then Location. Why: {why}",
+      "reviewed": true,
+      "context": "Asks for a tool's location input in chat (device fields, build-plan-gaps H3): it is sent as WhatsApp's or Telegram's own location message; {label} is the input's title and {why} why it is asked, in the tenant's words"
+    },
+    "wa.field.send_photo": {
+      "text": "Send a photo here for {label}. Why: {why}",
+      "reviewed": true,
+      "context": "Asks for a tool's photo input in chat: a photo sent in the chat; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.type_code": {
+      "text": "Type the code for {label}: a chat cannot scan one. Why: {why}",
+      "reviewed": true,
+      "context": "Asks for a tool's scan input in chat, where nothing can scan: the code is typed; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.not_location": {
+      "text": "That is not a location. Send it as one: attach, then Location.",
+      "reviewed": true,
+      "context": "A tool asked for a location in chat and got words, or a location that did not come through"
+    },
+    "wa.field.not_photo": {
+      "text": "That is not a photo. Send the photo itself.",
+      "reviewed": true,
+      "context": "A tool asked for a photo in chat and got words"
+    },
+    "wa.field.photo_lost": {
+      "text": "The photo did not come through. Send it again.",
+      "reviewed": true,
+      "context": "A photo sent for a tool's input in chat could not be fetched from WhatsApp or Telegram"
+    },
     "wa.form.gone": {
       "text": "That form is no longer needed. Send *run* and a workflow's name to start again.",
       "reviewed": true,
@@ -3993,6 +4038,26 @@
       "text": "{workflow} needs {count} input(s). Tap *{cta}* to enter them; you confirm before it starts. Send *cancel* to stop.",
       "reviewed": true,
       "context": "The message carrying an inputs form; {cta} is button.fill_in"
+    },
+    "wa.form.code_now": {
+      "text": "Type the code as your next message here ({why}).",
+      "reviewed": true,
+      "context": "A form step put to the person in WhatsApp or Telegram asks a code (a scan field, build-plan-gaps H3 g-scan-wa): only their next message there is taken as the code; {why} is why it is asked, in the tenant's words"
+    },
+    "wa.form.code_then": {
+      "text": "Then type the code, when asked ({why}).",
+      "reviewed": true,
+      "context": "A form step in WhatsApp or Telegram asks a code after its location and photo: asked once they are sent; {why} is why it is asked"
+    },
+    "wa.form.code_next": {
+      "text": "Got it, for {title}. Now type the code as your next message ({why}).",
+      "reviewed": true,
+      "context": "A form step's location and photo are in; its code is asked now, and only the person's next message there is taken as it; {title} is the question's title and {why} why the code is asked"
+    },
+    "wa.form.code_scan_only": {
+      "text": "A code that must be scanned cannot be given in a chat: it is left out.",
+      "reviewed": true,
+      "context": "A form step in WhatsApp or Telegram has a code that must be scanned (typing not allowed): it cannot be given there"
     },
     "wa.form.invalid": {
       "text": "That form is not valid any more.",
@@ -4863,6 +4928,11 @@
       "text": "Open the page: {link}",
       "reviewed": true,
       "context": "A page's short form in a chat app: the link to open the page"
+    },
+    "wa.page.cannot_open": {
+      "text": "This page is not one you can open.",
+      "reviewed": true,
+      "context": "A Tell me message's button that opens a page, pressed by someone the page's roles do not let open it (or the page is gone)"
     },
     "wa.tool.list_empty": {
       "text": "Nothing to show.",
@@ -7424,6 +7494,201 @@
       "reviewed": true,
       "context": "Read-back: the last of a list of days; {list} is comma-separated"
     },
+    "wd.change.name": {
+      "text": "It is now called {name}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: its name; {name} is the business's"
+    },
+    "wd.change.tool_new": {
+      "text": "It is now a tool: {command}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: it became a tool people call from the chat; {command} is like /expense"
+    },
+    "wd.change.tool_gone": {
+      "text": "It is no longer a tool ({command} is gone)",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: it is no longer a tool; {command} is like /expense"
+    },
+    "wd.change.tool_name": {
+      "text": "The tool is now called {name}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: the tool's name; {name} is the business's"
+    },
+    "wd.change.tool_command": {
+      "text": "Its command is now {command} (it was {was})",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: the tool's command; {command} and {was} are like /expense"
+    },
+    "wd.change.tool_about": {
+      "text": "It now says it is for: {about}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: the line saying what the tool is for; {about} is the business's"
+    },
+    "wd.change.says_added": {
+      "text": "It now also says '{phrase}'",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: a phrase that finds the tool from a message was added; {phrase} is the business's, like spent"
+    },
+    "wd.change.says_removed": {
+      "text": "It no longer says '{phrase}'",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: a phrase that found the tool was removed; {phrase} is the business's"
+    },
+    "wd.change.for_customers": {
+      "text": "Customers can now use it",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: the business's customers may now use its tool"
+    },
+    "wd.change.for_members": {
+      "text": "Only your own people can use it now",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: only the business's own people may use its tool now"
+    },
+    "wd.change.for_linked": {
+      "text": "Businesses you are linked with can now use it",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: businesses linked with this one may now use its tool"
+    },
+    "wd.change.tool_icon": {
+      "text": "Its icon changed",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: the tool's picture"
+    },
+    "wd.change.answer_now": {
+      "text": "It now answers with {kind}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: what its tool answers with when it ends; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.change.answer_gone": {
+      "text": "It no longer answers: it only says it started",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: its tool no longer answers, it only says it started"
+    },
+    "wd.change.answer_changed": {
+      "text": "What it answers has changed",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: what its tool's answer shows"
+    },
+    "wd.change.answer.text": {
+      "text": "words",
+      "reviewed": true,
+      "context": "Fills {kind} in wd.change.answer_now: an answer that is a few words"
+    },
+    "wd.change.answer.card": {
+      "text": "a card",
+      "reviewed": true,
+      "context": "Fills {kind} in wd.change.answer_now: an answer that is a card with lines"
+    },
+    "wd.change.answer.list": {
+      "text": "a list",
+      "reviewed": true,
+      "context": "Fills {kind} in wd.change.answer_now: an answer that is a list of rows"
+    },
+    "wd.tool.called": {
+      "text": "Use it from the chat with {command}: {name}",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps (Describe it, the template library): it is a tool called from the chat; {command} is like /add-sale, {name} the tool's name"
+    },
+    "wd.tool.for_members": {
+      "text": "Your own people can use it",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: its tool is for the business's own people"
+    },
+    "wd.tool.for_customers": {
+      "text": "Your customers can use it, and see only what it marks for them",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: its tool is for the business's customers, whose answer shows only the outputs marked public"
+    },
+    "wd.tool.asks": {
+      "text": "It asks for: {fields}",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: what its tool asks for when it is called; {fields} is a list of field names"
+    },
+    "wd.tool.answers": {
+      "text": "It answers with {kind}",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: what its tool says back; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.tool.says_ran": {
+      "text": "It says only that it ran",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: its tool has no answer, so it only says it ran"
+    },
+    "wd.tool.for_linked": {
+      "text": "Businesses you are linked with can use it",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: its tool is for the businesses linked with this one"
+    },
+    "wd.tool.for_roles": {
+      "text": "Only these can use it, besides the owners: {roles}",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: only members with these roles may use its tool (owners always may); {roles} is a list of role names"
+    },
+    "wd.tool.companion": {
+      "text": "It comes with {name}, a schedule whose button opens it, saved as a draft beside it",
+      "reviewed": true,
+      "context": "A drafted tool read back: the recipe it started from brings a schedule, saved as a draft beside it, whose button opens the tool; {name} is the schedule's name"
+    },
+    "wa.build.warn_customer_output": {
+      "text": "Every customer who uses it would see {output}, which comes from something you keep to yourself. Check it is meant for them.",
+      "reviewed": true,
+      "context": "Before saving a drafted tool for customers: an output it shows every customer is read from something the business keeps (a saved thing, a setting, a table's rows); {output} is the output's name"
+    },
+    "wa.build.tool_taken": {
+      "text": "{asked} was taken, so it is called with {command}.",
+      "reviewed": true,
+      "context": "After saving a drafted tool: the command it asked for was taken (one of Taskiem's words, another tool's or a page's), so it was given the next free one; {asked} and {command} are like /prices"
+    },
+    "wa.build.tool_companion": {
+      "text": "Its schedule, {name}, was saved as a draft too.",
+      "reviewed": true,
+      "context": "After saving a drafted tool started from a recipe: the recipe's schedule was saved as a draft too; {name} is its name"
+    },
+    "wd.change.roles": {
+      "text": "Only these roles can start it now: {roles}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: who may start it by hand; {roles} are the business's role names"
+    },
+    "wd.change.roles_all": {
+      "text": "Everyone who can start workflows can start it now",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: anyone who may start workflows may start it again"
+    },
+    "wd.change.trigger": {
+      "text": "It now starts: {trigger}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: how it starts; {trigger} is a read-back line like Every Monday at 9:00"
+    },
+    "wd.change.inputs": {
+      "text": "What it asks for changed",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: what it asks for when started"
+    },
+    "wd.change.outputs": {
+      "text": "What it gives back changed",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: what it gives back when it ends"
+    },
+    "wd.change.settings": {
+      "text": "Its description or settings changed",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: its description or settings"
+    },
+    "wd.change.step_added": {
+      "text": "Added: {step}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: a step added; {step} is a read-back line"
+    },
+    "wd.change.step_removed": {
+      "text": "Removed: {step}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: a step removed; {step} is a read-back line"
+    },
+    "wd.change.step_changed": {
+      "text": "Changed: {step}",
+      "reviewed": true,
+      "context": "What changed in a new version of a workflow: a step changed; {step} is a read-back line"
+    },
     "wd.approval": {
       "text": "Wait for approval",
       "reviewed": true,
@@ -9808,6 +10073,61 @@
       "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
       "reviewed": true,
       "context": "The supplier has Money turned off, so no account number can be had"
+    },
+    "wa.pay.payee.paid": {
+      "text": "{business} paid you {amount} for {for} on {date}, to your account ending {last4}.",
+      "reviewed": true,
+      "context": "A payment told to the person paid (a rider, a staff member) once the bank confirmed it: who paid, how much, what for, the day, their account's last four digits. Never who approved, the balance or the fee"
+    },
+    "wa.pay.payee.back": {
+      "text": "The {amount} {business} paid you on {date} did not reach your account: the bank sent it back. They have been told.",
+      "reviewed": true,
+      "context": "A payment the person paid was told of did not reach them: the bank sent it back"
+    },
+    "wa.pay.result.reversed": {
+      "text": "The {amount} to {to} came back from the bank: it is in your balance again.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat was paid and later sent back by the bank: who and how much"
+    },
+    "wa.pay.result.receipt": {
+      "text": "Their receipt, to send them: {link}",
+      "reviewed": true,
+      "context": "After a payment's result: the link to its receipt, to send to the person paid (Send them a receipt)"
+    },
+    "wa.pay.wallet": {
+      "text": "Taskiem wallet · arrives at once, no fee.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat goes Taskiem wallet to Taskiem wallet: at once, with no fee"
+    },
+    "wa.pay.fee": {
+      "text": "{amount} + {fee} fee.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat, before it is confirmed: the amount and the fee the payments account quoted (the business pays the fee)"
+    },
+    "wa.pay.fee_after": {
+      "text": "The fee shows after paying.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat whose payments account quotes no fee before paying"
+    },
+    "wa.pay.balance_after": {
+      "text": "Balance after: {amount}.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat: the balance once it and its fee are paid"
+    },
+    "wa.pay.fwd.ask": {
+      "text": "Pay {name} ({bank} {account}) how much, and for what?",
+      "reviewed": true,
+      "context": "Answer to a forwarded message (or a reply of pay) with account details: the bank's name for the account, the bank and the last four digits; asks the amount and what for"
+    },
+    "wa.pay.fwd.saved": {
+      "text": "That is {name}'s account. Pay {name} how much?",
+      "reviewed": true,
+      "context": "Answer to a forwarded message with the account of one of the business's saved accounts: paid by its name; asks the amount"
+    },
+    "wa.pay.fwd.staff": {
+      "text": "Staff pay the business's saved accounts only: ask an owner to save this one first.",
+      "reviewed": true,
+      "context": "A staff member forwarded account details not saved: staff pay the business's saved accounts only"
     }
   }
 }

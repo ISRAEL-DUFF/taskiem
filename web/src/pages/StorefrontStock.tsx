@@ -62,6 +62,9 @@ import {
   type StockView,
 } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
+import { THINGS_PATH, thingsCount, type ThingsView } from "../lib/things";
+import { naira } from "../lib/invoices";
+import { useAuth } from "../auth";
 import { sizesWords } from "../lib/variants";
 import { CountsCard } from "./StockCounts";
 import { PurchasesCard } from "./StockPurchases";
@@ -219,6 +222,7 @@ export function StorefrontStock() {
           </section>
           <PurchasesCard onChanged={reload} />
           <CountsCard items={v.items} onChanged={reload} />
+          <ThingsCard />
           <section className="card" aria-labelledby="stock-items">
             <h2 id="stock-items" style={{ marginTop: 0 }}>
               What you count
@@ -427,6 +431,39 @@ export function StorefrontStock() {
 
 /** Today's sales (docs/stock.md "Sales"): the total in a pine card with
  * Record a sale, the terminal's sales with no items, then each sale. */
+/** Things we have, from the Stock page (what a business buys §5.3): what
+ * the business keeps track of rather than counts, how many and what they
+ * cost, for those who may see them (table.read). */
+function ThingsCard() {
+  const { can } = useAuth();
+  const read = can("table.read");
+  const view = useLoad(
+    () => (read ? get<ThingsView>(THINGS_PATH).catch(() => undefined) : Promise.resolve(undefined)),
+    [read],
+  );
+  if (!read) return null;
+  const v = view.data;
+  return (
+    <section className="card" aria-labelledby="stock-things" data-testid="stock-things">
+      <h2 id="stock-things" style={{ marginTop: 0 }}>
+        Things we have
+      </h2>
+      <p className="hint">
+        {v
+          ? v.count === 0
+            ? "What you keep track of rather than count, one row each, like machines and tools. Nothing yet."
+            : `${thingsCount(v.count)} you keep track of, one row each, that cost ${naira(v.total_kobo)}.`
+          : "What you keep track of rather than count, one row each, like machines and tools."}
+      </p>
+      <div className="toolbar">
+        <Link className="button small" to="/money/things">
+          See Things we have
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 function SalesToday({
   day,
   onSell,

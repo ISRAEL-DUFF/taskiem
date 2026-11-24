@@ -249,3 +249,64 @@ test("search everywhere from the chats' head", async ({ page }) => {
   await page.getByRole("link", { name: "Search everything" }).click();
   await expect(page.getByTestId("search-everywhere")).toBeVisible();
 });
+
+// Search everywhere finds saved things and services (menus-everywhere.md
+// §6, g-search-saved): a saved thing by its name, the person's own and the
+// business's, shown by its kind and whose it is and never what it holds;
+// three in All, Show more for the rest; a service with its price and
+// minutes. Axe in both themes, nothing wider than the screen.
+for (const width of [390, 360])
+  test(`search everywhere finds saved things and services, ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await signUp(page);
+    const post = async (path: string, data: object) => {
+      const r = await page.request.post(path, { headers: H, data });
+      expect(r.status(), await r.text()).toBe(201);
+    };
+    await post("/v1/me/saved", { name: "mum", title: "Mum Adebayo", bank_name: "Guaranty Trust Bank", account_number: "2222222222" });
+    await post("/v1/saved", { name: "mum-shop", kind: "place", title: "Mum's shop", details: { line: "4 Allen Avenue", area: "Ikeja" } });
+    await post("/v1/saved", { name: "mum-store", kind: "text", title: "Store note", details: { body: "Back door code 4471" } });
+    await post("/v1/saved", { name: "mums-pharmacy", kind: "place", title: "Pharmacy", details: { line: "9 Opebi Road", area: "Ikeja" } });
+    // A service: the e2e server has no tables to hold services, so the
+    // server's answer for them stands in (its search is tested in Go,
+    // chat_refs_saved_test.go).
+    await page.route(/\/v1\/chat-refs\?/, async (route) => {
+      if (new URL(route.request().url()).searchParams.get("kind") !== "service") return route.continue();
+      await route.fulfill({
+        json: {
+          refs: [{ kind: "service", id: "svc-1", name: "Mum's haircut", when: "0001-01-01T00:00:00Z", total_kobo: 300000, minutes: 30, status: "available" }],
+          cursor: "",
+        },
+      });
+    });
+    await page.goto("/search");
+    const box = page.getByRole("searchbox", { name: "Search everything" });
+    await box.fill("mum");
+    const saved = page.getByTestId("search-saved");
+    await expect(saved.getByRole("link")).toHaveCount(3);
+    // Newest first, the person's own and the business's merged by date: @mum, saved first, is behind Show more.
+    await expect(saved.getByRole("link", { name: /@mums-pharmacy.*A place · The business's/ })).toBeVisible();
+    await expect(saved.getByRole("button", { name: "Show more Saved" })).toBeVisible();
+    const services = page.getByTestId("search-service");
+    await expect(services.getByRole("link", { name: /Mum's haircut.*30 min/ })).toBeVisible();
+    // Never what a saved thing holds, nor its title.
+    for (const secret of ["Adebayo", "2222", "Allen", "4471", "Store note"]) await expect(page.getByText(secret)).toHaveCount(0);
+    if (width === 390) await page.screenshot({ path: "test-results/search-saved-phone.png", fullPage: true });
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const vs = await axe(page);
+      expect(vs, describe(`search saved (${scheme})`, vs)).toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    // Show more: the Saved chip, every one.
+    await saved.getByRole("button", { name: "Show more Saved" }).click();
+    await expect(page.getByRole("group", { name: "Kinds" }).getByRole("button", { name: "Saved", pressed: true })).toBeVisible();
+    await expect(saved.getByRole("link")).toHaveCount(4);
+    await expect(page.getByTestId("search-service")).toHaveCount(0);
+    // A saved thing of one's own opens where it is kept, beside the business's.
+    await saved.getByRole("link", { name: /@mum\b.*Yours/ }).click();
+    await expect(page).toHaveURL(/\/settings\/saved$/);
+    await expect(page.getByTestId("my-saved").getByText("@mum", { exact: true }).first()).toBeVisible();
+  });

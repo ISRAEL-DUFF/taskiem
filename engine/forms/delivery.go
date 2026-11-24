@@ -247,7 +247,7 @@ func (s *Service) sendToMembers(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		if _, err := tx.Exec(ctx, `UPDATE form_requests SET sent_at = now() WHERE id = $1`, p.id); err != nil {
 			return nil, err
 		}
-		ask := &ChatAsk{Tenant: tenant, Role: role, From: p.business, Request: p.id, Title: p.title, Schema: p.schema}
+		ask := &ChatAsk{Tenant: tenant, Role: role, From: p.business, Request: p.id, Title: p.title, Schema: p.schema, Asking: tenant}
 		if member != "" {
 			u, err := uuid.Parse(member)
 			if err != nil {

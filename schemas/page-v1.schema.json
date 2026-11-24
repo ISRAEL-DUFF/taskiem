@@ -112,16 +112,19 @@
       }
     },
     "source": {
-      "description": "A data table, a view of Taskiem's own records, or a made tool that answers at once: the rows whose conditions all hold, in an order, narrowed by the page's filters the block uses (a tool: its output, given its values).",
+      "description": "A data table, a view of Taskiem's own records, a made tool that answers at once, or the business's saved things of one made-up kind: the rows whose conditions all hold, in an order, narrowed by the page's filters the block uses (a tool: its output, given its values).",
       "type": "object",
       "additionalProperties": false,
-      "oneOf": [{ "required": ["table"] }, { "required": ["records"] }, { "required": ["tool", "output"] }],
+      "oneOf": [{ "required": ["table"] }, { "required": ["records"] }, { "required": ["tool", "output"] }, { "required": ["saved"] }],
       "properties": {
         "table": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$" },
         "records": { "description": "One of Taskiem's own record views, read only: orders, invoices, deliveries, customers or staff.", "type": "string", "pattern": "^[a-z][a-z_]{1,30}$" },
         "tool": { "description": "A made tool that answers at once, by its command (G2): the part shows one of its outputs.", "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
         "inputs": { "description": "The tool's values: words, or an expression over filters.", "type": "object", "maxProperties": 20 },
         "output": { "description": "The tool's output the part shows (a figure) or lists (a list).", "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" },
+        "saved": { "description": "The business's saved things of one kind it made (Generator), by the kind's name (G5).", "type": "string", "minLength": 1, "maxLength": 40 },
+        "coming": { "description": "Saved things: a date field's key; the things in the order that date comes, soonest first, each saying when (row.coming).", "type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+        "within": { "description": "Saved things with coming: only those whose date is within this many days, or past.", "type": "integer", "minimum": 1, "maximum": 366 },
         "filters": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/condition" } },
         "order": {
           "type": "array",
@@ -204,10 +207,22 @@
       }
     },
     "rowActions": { "type": "array", "maxItems": 2, "items": { "$ref": "#/$defs/action" } },
+    "rowStatus": {
+      "description": "Each row shows where a run of the workflow is: the run a column names (run), the run that waits or last waited under what the row names (to), or, with neither, the run the page's address names (?run=).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workflow"],
+      "not": { "required": ["run", "to"] },
+      "properties": {
+        "workflow": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "run": { "$ref": "#/$defs/value" },
+        "to": { "$ref": "#/$defs/value" }
+      }
+    },
     "block": {
       "type": "object",
       "required": ["id", "type"],
-      "properties": { "type": { "enum": ["heading", "figure", "list", "table", "buttons", "status"] } },
+      "properties": { "type": { "enum": ["heading", "figure", "list", "table", "buttons", "status", "board", "chart"] } },
       "oneOf": [
         {
           "additionalProperties": false,
@@ -271,6 +286,7 @@
             },
             "detail": { "$ref": "#/$defs/detail" },
             "actions": { "$ref": "#/$defs/rowActions" },
+            "status": { "$ref": "#/$defs/rowStatus" },
             "empty": { "type": "string", "minLength": 1, "maxLength": 120 }
           }
         },
@@ -301,6 +317,7 @@
             },
             "detail": { "$ref": "#/$defs/detail" },
             "actions": { "$ref": "#/$defs/rowActions" },
+            "status": { "$ref": "#/$defs/rowStatus" },
             "empty": { "type": "string", "minLength": 1, "maxLength": 120 }
           }
         },
@@ -322,6 +339,77 @@
             "type": { "const": "status" },
             "title": { "type": "string", "minLength": 1, "maxLength": 60 },
             "workflow": { "description": "The workflow whose run it shows: the one the page's address names (?run=), else its latest.", "type": "string", "minLength": 1, "maxLength": 200 }
+          }
+        },
+        {
+          "description": "A board (G4): a list in columns by a choice (Open, Doing, Done), fed by a business table or a tool's list; a card moved to another column opens the move tool's form, filled in over the row (or item) and to, the column it goes to.",
+          "additionalProperties": false,
+          "required": ["id", "type", "source", "item", "board"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "type": { "const": "board" },
+            "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+            "size": { "enum": ["full", "half"] },
+            "source": { "allOf": [{ "$ref": "#/$defs/source" }, { "not": { "required": ["records"] } }] },
+            "item": { "$ref": "#/$defs/item" },
+            "board": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["column", "columns"],
+              "properties": {
+                "column": { "description": "The choice a card's column is read from: a table's text column, or the field of a tool's row.", "$ref": "#/$defs/column" },
+                "columns": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 6,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["value"],
+                    "properties": {
+                      "value": { "type": "string", "minLength": 1, "maxLength": 100 },
+                      "label": { "type": "string", "minLength": 1, "maxLength": 30 }
+                    }
+                  }
+                },
+                "move": {
+                  "description": "The tool a card moved runs: its values read row (or item), filters and to. Never once, never when.",
+                  "allOf": [{ "$ref": "#/$defs/action" }, { "required": ["tool"] }, { "not": { "required": ["once"] } }, { "not": { "required": ["when"] } }]
+                }
+              }
+            },
+            "detail": { "$ref": "#/$defs/detail" },
+            "actions": { "$ref": "#/$defs/rowActions" },
+            "status": { "$ref": "#/$defs/rowStatus" },
+            "empty": { "type": "string", "minLength": 1, "maxLength": 120 }
+          }
+        },
+        {
+          "description": "A chart (G4): bars or a line, one measure over time (by, a date column, and period) or by a group (by, a column of words), added up (of) or counted from a business table; or, from a tool's list, each row's label and value. The server works out every figure; clients only draw.",
+          "additionalProperties": false,
+          "required": ["id", "type", "source", "chart"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "type": { "const": "chart" },
+            "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+            "size": { "enum": ["full", "half"] },
+            "naira": { "type": "boolean" },
+            "empty": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "source": { "allOf": [{ "$ref": "#/$defs/source" }, { "not": { "required": ["records"] } }, { "not": { "required": ["uses"] } }] },
+            "chart": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind"],
+              "properties": {
+                "kind": { "enum": ["bars", "line"] },
+                "of": { "$ref": "#/$defs/column" },
+                "by": { "$ref": "#/$defs/column" },
+                "period": { "enum": ["day", "week", "month"] },
+                "last": { "type": "integer", "minimum": 2, "maximum": 12 },
+                "label": { "$ref": "#/$defs/value" },
+                "value": { "$ref": "#/$defs/value" }
+              }
+            }
           }
         }
       ]

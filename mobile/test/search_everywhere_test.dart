@@ -1,7 +1,8 @@
 // Search everywhere (docs/spec/menus-everywhere.md §6, E4): one box; the
 // results in groups, three of each, "Show more" to the group's chip;
-// invoices, orders and customers searched on the server; an action done as
-// from Today; a chat opened by its path.
+// invoices, orders, customers, services and saved things searched on the
+// server; a saved thing shown by its name, kind and owner only; an action
+// done as from Today; a chat opened by its path.
 
 import 'dart:convert';
 
@@ -9,6 +10,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
+import 'package:taskiem/chat/saved_accounts.dart' show SavedAccountsPage;
 import 'package:taskiem/chat/search_everywhere.dart';
 import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
@@ -37,6 +39,19 @@ final _catalogue = {
     },
   ],
 };
+
+/// Saved things as the server answers a search: name, kind and owner only.
+Map<String, dynamic> _saved(String id, String name, String kind, String owner, {String? kindName}) => {
+  'kind': 'saved', 'id': id, 'name': name, 'when': '2026-11-20T10:00:00Z', 'saved_kind': kind, 'owner': owner, 'kind_name': ?kindName,
+};
+
+final _found = [
+  _saved('m1', 'mum', 'bank_account', 'mine'),
+  _saved('m2', 'mum-shop', 'place', 'business'),
+  _saved('m3', 'mum-generator', 'custom', 'business', kindName: 'Generator'),
+  _saved('m4', 'mums-pharmacy', 'place', 'business'),
+  {'kind': 'service', 'id': 's1', 'name': "Mum's haircut", 'when': '0001-01-01T00:00:00Z', 'total_kobo': 300000, 'minutes': 30, 'status': 'available'},
+];
 
 Map<String, dynamic> _inv(int i) => {
   'kind': 'invoice', 'id': 'i$i', 'name': 'INV-${(100 + i).toString().padLeft(4, '0')}', 'party': 'Ada Rice',
@@ -70,7 +85,10 @@ void main() {
         if (req.method == 'GET' && req.url.path == '/v1/chat-refs' && req.url.query.isNotEmpty) {
           asked.add(req.url.query);
           final q = req.url.queryParameters['q'] ?? '';
-          final all = [for (var i = 0; i < 9; i++) _inv(i)].where((r) => '${r['name']} ${r['party']}'.toLowerCase().contains(q.toLowerCase())).toList();
+          final kinds = (req.url.queryParameters['kind'] ?? '').split(',');
+          final all = [for (var i = 0; i < 9; i++) _inv(i)]
+              .where((r) => kinds.contains(r['kind']) && '${r['name']} ${r['party']}'.toLowerCase().contains(q.toLowerCase()))
+              .toList();
           return http.Response(jsonEncode({'refs': all, 'cursor': ''}), 200);
         }
         if (req.method == 'POST' && req.url.path == '/v1/chat/actions/riders.list/run') {
@@ -115,5 +133,59 @@ void main() {
     await settle(t);
     expect(find.byType(TkSheet), findsOneWidget);
     expect(find.text('Musa is free. Bola is out.'), findsOneWidget);
+  });
+
+  testWidgets('saved things and services: by name, kind and owner; three, then Show more; a saved thing opens its list', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chats');
+    final kinds = <String>[];
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.method == 'GET' && req.url.path == '/v1/chat/actions') {
+          return http.Response(jsonEncode({'topics': []}), 200);
+        }
+        if (req.method == 'GET' && req.url.path == '/v1/chat-refs' && req.url.query.isNotEmpty) {
+          final kind = req.url.queryParameters['kind'] ?? '';
+          kinds.add(kind);
+          final q = (req.url.queryParameters['q'] ?? '').toLowerCase();
+          final refs = _found.where((r) => kind.split(',').contains(r['kind']) && '${r['name']}'.toLowerCase().contains(q)).toList();
+          return http.Response.bytes(utf8.encode(jsonEncode({'refs': refs, 'cursor': ''})), 200, headers: {'content-type': 'application/json; charset=utf-8'});
+        }
+        if (req.method == 'GET' && req.url.path == '/v1/me/saved') {
+          return http.Response(jsonEncode({'saved': [], 'limit': 500}), 200);
+        }
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: SearchEverywhere(chats: chats, onPath: (_) {}, debounce: Duration.zero)));
+    await settle(t);
+    await t.enterText(find.byType(EditableText), 'mum');
+    await settle(t);
+    // All asks the refs, the services and the saved things each on its own.
+    expect(kinds, containsAll(['invoice,bill,order,purchase,customer', 'service', 'saved']));
+    expect(find.text('Services'), findsWidgets);
+    expect(find.text("Mum's haircut"), findsOneWidget);
+    expect(find.text('₦3,000 · 30 min'), findsOneWidget);
+    expect(find.text('@mum'), findsOneWidget);
+    expect(find.text('A bank account · Yours'), findsOneWidget);
+    expect(find.text('A place · The business’s'), findsOneWidget);
+    expect(find.text('A generator · The business’s'), findsOneWidget);
+    expect(find.text('@mums-pharmacy'), findsNothing, reason: 'three in All');
+    await looks(t, 'search-everywhere-saved');
+    // Show more: the Saved chip, every one.
+    await t.ensureVisible(find.bySemanticsLabel('Show more Saved'));
+    await t.tap(find.bySemanticsLabel('Show more Saved'));
+    await settle(t);
+    expect(kinds.last, 'saved');
+    expect(find.text('@mums-pharmacy'), findsOneWidget);
+    expect(find.text("Mum's haircut"), findsNothing);
+    // A saved thing of one's own opens one's own saved things.
+    await t.tap(find.text('@mum'));
+    await settle(t);
+    expect(find.byType(SavedAccountsPage), findsOneWidget);
+    expect(t.widget<SavedAccountsPage>(find.byType(SavedAccountsPage)).mine, isTrue);
   });
 }

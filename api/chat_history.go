@@ -463,8 +463,55 @@ type TaskiemMessage struct {
 	Text    string          `json:"text"`
 	Buttons []TaskiemButton `json:"buttons,omitempty"`
 	// Link is a page Taskiem's answer opens (Telegram's link button).
-	Link      *whatsapp.LinkButton `json:"-"`
-	CreatedAt time.Time            `json:"created_at"`
+	Link *whatsapp.LinkButton `json:"-"`
+	// Payment and Batch: the payment (or batch) a diary line, a receipt
+	// or a "paid you" card is about, shown as it stands now (paid, failed
+	// with Try again); docs/spec/chat-pay-people.md "After".
+	Payment *uuid.UUID `json:"payment,omitempty"`
+	Batch   *uuid.UUID `json:"batch,omitempty"`
+	// PaymentStatus: on a "paid you" card, how the payment stands now, so
+	// one the bank sent back says so (paying people H7, Settled 6) to a
+	// person who may not read payments.
+	PaymentStatus string    `json:"payment_status,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// attachPaymentStatus says, on each "paid you" card, how its payment
+// stands now.
+func attachPaymentStatus(ctx context.Context, tx pgx.Tx, msgs []TaskiemMessage) error {
+	var ids []uuid.UUID
+	for _, m := range msgs {
+		if m.Kind == "paid_you" && m.Payment != nil {
+			ids = append(ids, *m.Payment)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT id, status FROM payments WHERE id = ANY ($1)`, ids)
+	if err != nil {
+		return err
+	}
+	status := map[uuid.UUID]string{}
+	for rows.Next() {
+		var id uuid.UUID
+		var st string
+		if err := rows.Scan(&id, &st); err != nil {
+			rows.Close()
+			return err
+		}
+		status[id] = st
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for i := range msgs {
+		if msgs[i].Kind == "paid_you" && msgs[i].Payment != nil {
+			msgs[i].PaymentStatus = status[*msgs[i].Payment]
+		}
+	}
+	return nil
 }
 
 // webLive collects what Taskiem says to the person while their message
@@ -710,7 +757,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	err := s.tx(r, func(tx pgx.Tx) error {
-		sql := `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done FROM chat_history
+		sql := `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done, payment_id, batch_id FROM chat_history
 			WHERE tenant_id = $1 AND user_id = $2 AND expires_at > now()`
 		args := []any{p.TenantID, p.UserID}
 		order := ` ORDER BY created_at DESC, id DESC LIMIT 50`
@@ -735,7 +782,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		got, err := pgx.CollectRows(rows, func(rr pgx.CollectableRow) (row, error) {
 			var x row
-			err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done)
+			err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done, &x.m.Payment, &x.m.Batch)
 			return x, err
 		})
 		if err != nil {
@@ -757,6 +804,9 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 			}
 			out.Messages = append(out.Messages, x.m)
 		}
+		if err := attachPaymentStatus(r.Context(), tx, out.Messages); err != nil {
+			return err
+		}
 		return s.attachLiveButtons(r.Context(), tx, p, out.Messages)
 	})
 	if err != nil {
@@ -773,7 +823,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 // after a time, oldest first (the live stream's look): the same rows and
 // words as GET /v1/taskiem-chat.
 func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, since time.Time, limit int) ([]TaskiemMessage, error) {
-	rows, err := tx.Query(ctx, `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done FROM chat_history
+	rows, err := tx.Query(ctx, `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done, payment_id, batch_id FROM chat_history
 		WHERE tenant_id = $1 AND user_id = $2 AND expires_at > now() AND created_at > $3 ORDER BY created_at, id LIMIT $4`, p.TenantID, p.UserID, since, limit)
 	if err != nil {
 		return nil, err
@@ -786,7 +836,7 @@ func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, sinc
 	}
 	got, err := pgx.CollectRows(rows, func(rr pgx.CollectableRow) (row, error) {
 		var x row
-		err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done)
+		err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done, &x.m.Payment, &x.m.Batch)
 		return x, err
 	})
 	if err != nil {
@@ -808,6 +858,9 @@ func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, sinc
 			x.m.Buttons = append(x.m.Buttons, TaskiemButton{Title: b})
 		}
 		out = append(out, x.m)
+	}
+	if err := attachPaymentStatus(ctx, tx, out); err != nil {
+		return nil, err
 	}
 	return out, s.attachLiveButtons(ctx, tx, p, out)
 }

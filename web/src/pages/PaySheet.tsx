@@ -32,6 +32,9 @@ import { toast } from "../toast";
 import { AIReadOffer, PhotoReadButton, readingPhoto, usePhotoAI } from "./PhotoRead";
 import {
   accountDigits,
+  balanceAfter,
+  beneficiaryName,
+  feeWords,
   outcomeWords,
   payAmountKobo,
   payBody,
@@ -41,6 +44,7 @@ import {
   paymentStatus,
   purposeOf,
   purposeWords,
+  type PayBalance,
   type PayField,
   type Payment,
 } from "../lib/payments";
@@ -71,6 +75,24 @@ export function PayCheck({ x }: { x: Payment }) {
           <dt>What for</dt>
           <dd>{purposeWords(x)}</dd>
         </div>
+        {x.status === "prepared" && (
+          <div>
+            <dt>{x.route === "wallet" ? "How" : "Fee"}</dt>
+            <dd data-testid="pay-fee">{feeWords(x)}</dd>
+          </div>
+        )}
+        {x.status === "prepared" && balanceAfter(x) !== null && (
+          <div>
+            <dt>Balance after</dt>
+            <dd data-testid="pay-balance-after">{naira(balanceAfter(x) ?? 0)}</dd>
+          </div>
+        )}
+        {x.status !== "prepared" && x.route === "wallet" && (
+          <div>
+            <dt>How</dt>
+            <dd>Taskiem wallet</dd>
+          </div>
+        )}
         {x.note && (
           <div>
             <dt>On their statement</dt>
@@ -110,6 +132,8 @@ interface Ask {
 export function usePayConfirm(
   x: Payment | undefined,
   onConfirmed: (p: Payment) => void,
+  /** What else goes with the confirmation: the sheet's ticks. */
+  extra?: () => Record<string, unknown>,
 ) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
@@ -125,7 +149,7 @@ export function usePayConfirm(
   const send = (proof: Record<string, unknown>) =>
     post<{ payment: Payment }>(
       `/v1/payments/${encodeURIComponent(x?.id ?? "")}/confirm`,
-      { ...proof, again: yes.current },
+      { ...(extra?.() ?? {}), ...proof, again: yes.current },
     );
 
   const run = async (fn: () => Promise<void>) => {
@@ -239,15 +263,162 @@ export const payWords = (x: Payment, again: boolean) =>
   again ? `Pay ${naira(x.amount_kobo)} again` : `Pay ${naira(x.amount_kobo)}`;
 
 /** Where it went, in a few words, after it was confirmed. */
-function Sent({ x }: { x: Payment }) {
+function Sent({ x: first, where }: { x: Payment; where?: string }) {
+  // Followed while it is on its way, so it turns to "Received by the
+  // bank" here, with its receipt.
+  const [x, setX] = useState(first);
+  useEffect(() => setX(first), [first]);
+  useEffect(() => {
+    if (!["sending", "unknown"].includes(x.status)) return;
+    const t = window.setTimeout(() => {
+      get<{ payment: Payment }>(`/v1/payments/${encodeURIComponent(x.id)}`)
+        .then((r) => setX(r.payment))
+        .catch(() => undefined);
+    }, 3000);
+    return () => window.clearTimeout(t);
+  }, [x]);
   const st = paymentStatus(x.status);
   return (
     <div className="pay-sent" role="status" data-testid="pay-sent">
       <span className={`badge sf-status ${st.tone}`}>
-        {x.status === "waiting_ok" ? "Sent for the owner's OK" : st.label}
+        {x.status === "waiting_ok" ? "Sent for the owner's OK" : x.status === "paid" ? "Received by the bank" : st.label}
       </span>
       <p>{outcomeWords(x)}</p>
+      {x.status !== "paid" && x.route !== "wallet" && x.fee_quote_kobo == null && (
+        <p className="pay-foot-hint">The fee shows after paying.</p>
+      )}
+      {x.status === "paid" && <ReceiptActions x={x} where={where} />}
       <Link to={`/payments/${encodeURIComponent(x.id)}`}>See the payment</Link>
+    </div>
+  );
+}
+
+/** A paid payment's receipt: its PDF to keep or send, and sent back into
+ * the chat it was paid from (the person who sent the account details
+ * sees it was paid). */
+export function ReceiptActions({ x, where }: { x: Pick<Payment, "id">; where?: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const [sent, setSent] = useState(false);
+  const pdf = `/v1/payments/${encodeURIComponent(x.id)}/receipt/pdf`;
+  const share = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      // The receipt's own link, for a chat outside Taskiem (WhatsApp).
+      const r = await get<{ url: string }>(`/v1/payments/${encodeURIComponent(x.id)}/receipt`);
+      const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
+      if (r.url && nav.share) await nav.share({ title: "Receipt", url: r.url });
+      else if (r.url && navigator.clipboard) {
+        await navigator.clipboard.writeText(r.url);
+        toast("The receipt's link is copied: paste it in their chat.", "success");
+      }
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === "AbortError")) setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const toChat = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await post(`/v1/payments/${encodeURIComponent(x.id)}/share`, { where: where ?? "taskiem" });
+      setSent(true);
+      toast("The receipt is in the chat.", "success");
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="pay-receipt" data-testid="pay-receipt">
+      <span className="pay-receipt-acts">
+        <a className="tk-btn soft" href={pdf} target="_blank" rel="noreferrer" data-testid="pay-receipt-pdf">
+          Receipt (PDF)
+        </a>
+        <button type="button" className="tk-btn soft" onClick={() => void share()} disabled={busy} data-testid="pay-receipt-send">
+          Send them the receipt
+        </button>
+        {!sent && (
+          <button type="button" className="tk-btn soft" onClick={() => void toChat()} disabled={busy} data-testid="pay-receipt-chat">
+            Put it in the chat
+          </button>
+        )}
+      </span>
+      <ErrorBox error={error} />
+    </div>
+  );
+}
+
+/** What people are paid from, at the top of the Pay sheet (Settled 2):
+ * the balance, and Add money: the Taskiem wallet's own account number. */
+export function PayBalanceLine() {
+  const [b, setB] = useState<PayBalance | null>();
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let live = true;
+    get<PayBalance>("/v1/payments/balance").then(
+      (r) => live && setB(r),
+      () => live && setB(null),
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!b || !b.from) return null;
+  return (
+    <div className="pay-balance" data-testid="pay-balance">
+      <span className="pay-balance-line">
+        <span>
+          {b.available_kobo != null ? (
+            <>
+              Balance <strong data-testid="pay-balance-amount">{naira(b.available_kobo)}</strong>
+            </>
+          ) : (
+            "Paid from"
+          )}{" "}
+          <span className="pay-balance-from">· {b.from}</span>
+        </span>
+        {b.add_money && (
+          <button type="button" className="link" aria-expanded={open} onClick={() => setOpen(!open)} data-testid="pay-add-money">
+            Add money
+          </button>
+        )}
+      </span>
+      {open && b.add_money && (
+        <div className="pay-add" data-testid="pay-add-details">
+          <p>Send money from your bank to your Taskiem wallet:</p>
+          <dl className="pay-check-facts">
+            <div>
+              <dt>Bank</dt>
+              <dd>{b.add_money.bank_name}</dd>
+            </div>
+            <div>
+              <dt>Account number</dt>
+              <dd>
+                <strong>{b.add_money.account_number}</strong>{" "}
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() =>
+                    void navigator.clipboard
+                      ?.writeText(b.add_money?.account_number ?? "")
+                      .then(() => toast("Account number copied.", "success"))
+                  }
+                >
+                  Copy
+                </button>
+              </dd>
+            </div>
+            <div>
+              <dt>Name</dt>
+              <dd>{b.add_money.account_name}</dd>
+            </div>
+          </dl>
+        </div>
+      )}
     </div>
   );
 }
@@ -670,6 +841,8 @@ export function PaySheet({
   lead,
   expectName: said,
   saidIn: saidWhere = "message",
+  where,
+  orderReference,
 }: {
   title: string;
   actionId: string;
@@ -687,8 +860,23 @@ export function PaySheet({
   expectName?: string;
   /** Where that name was read: a message, or a photo. */
   saidIn?: SaidIn;
+  /** The chat its diary line goes to: a linked business's (its link);
+   * the person's Taskiem chat when none is given. */
+  where?: string;
+  /** An order whose refund this pays back (Pay it back): the server caps
+   * it at what is owed and marks the order refunded once paid. */
+  orderReference?: string;
 }) {
   const [start, setStart] = useState<Record<string, string>>(initial);
+  const { can } = useAuth();
+  // The sheet's ticks (Settled 6), and Save as a beneficiary for an
+  // account typed or read (on by default, with a name to call them by).
+  const [tell, setTell] = useState(true);
+  const [receipt, setReceipt] = useState(false);
+  const [saveAs, setSaveAs] = useState(true);
+  const [saveName, setSaveName] = useState("");
+  const tickRef = useRef({ tell, receipt });
+  tickRef.current = { tell, receipt };
   const [values, setValues] = useState<Record<string, string>>(initial);
   // The name read for the account, and where: a photo read here replaces
   // the message's.
@@ -722,11 +910,43 @@ export function PaySheet({
   const other =
     fields.some((f) => f.key === "for") &&
     purposeOf(values.for ?? "") === "other";
-  const pay = usePayConfirm(prepared, (x) => {
-    setSent(x);
-    setPrepared(undefined);
-    onPaid?.(x);
-  });
+  const newAccount =
+    !!prepared &&
+    !prepared.saved_id &&
+    !prepared.rider_id &&
+    !prepared.staff_id &&
+    !prepared.personal &&
+    /^\d{10}$/.test(accountDigits(values.number ?? "")) &&
+    can("saved.manage");
+  const pay = usePayConfirm(
+    prepared,
+    (x) => {
+      setSent(x);
+      setPrepared(undefined);
+      onPaid?.(x);
+      // Saved as a beneficiary: the bank, the number and the checked name,
+      // so next time it is one tap.
+      if (newAccount && saveAs && saveName.trim())
+        void post("/v1/saved", {
+          kind: "bank_account",
+          name: saveName.trim().replace(/^@/, ""),
+          title: x.account_name || x.payee,
+          bank_name: (values.bank ?? "").trim() || x.bank_name,
+          account_number: accountDigits(values.number ?? ""),
+        }).then(
+          () => toast(`Saved as @${saveName.trim().replace(/^@/, "")}.`, "success"),
+          (e: unknown) =>
+            toast(e instanceof Error ? `Not saved: ${e.message}` : "Not saved.", "error"),
+        );
+    },
+    // Only a tick changed from how it was prepared goes with it.
+    () => {
+      const out: Record<string, unknown> = {};
+      if (prepared?.may_tell && tickRef.current.tell !== (prepared.tell_payee ?? true)) out.tell_payee = tickRef.current.tell;
+      if (!prepared?.may_tell && tickRef.current.receipt !== (prepared?.send_receipt ?? false)) out.send_receipt = tickRef.current.receipt;
+      return out;
+    },
+  );
 
   const prepare = async () => {
     setTried(true);
@@ -736,9 +956,16 @@ export function PaySheet({
     try {
       const r = await post<{ payment: Payment }>(
         "/v1/payments",
-        payBody(values, from),
+        {
+          ...payBody(values, from, where),
+          // Paying back an order's refund: the server holds it to the order.
+          ...(orderReference ? { order_reference: orderReference } : {}),
+        },
       );
       setPrepared(r.payment);
+      setTell(r.payment.tell_payee ?? true);
+      setReceipt(r.payment.send_receipt ?? false);
+      setSaveName((cur) => cur || beneficiaryName(r.payment.account_name));
     } catch (e) {
       setError(e);
     } finally {
@@ -814,7 +1041,7 @@ export function PaySheet({
       <Sheet title={title} from={rect} onClose={onClose} testid="pay-sheet">
         <div className="tk-form-body">
           <PayCheck x={sent} />
-          <Sent x={sent} />
+          <Sent x={sent} where={where} />
         </div>
         <div className="tk-sheet-foot">
           <button type="button" className="tk-cta" onClick={onClose}>
@@ -844,6 +1071,44 @@ export function PaySheet({
               {nameWarning(expectName, prepared.account_name, saidIn)}
             </div>
           )}
+          <fieldset className="pay-ticks">
+            <legend className="sr-only">After paying</legend>
+            {prepared.may_tell ? (
+              <label className="tk-check">
+                <input type="checkbox" checked={tell} onChange={(e) => setTell(e.target.checked)} data-testid="pay-tell" />
+                <span>
+                  Tell them in the chat
+                  <span className="tk-field-hint">Once the bank has it: the amount, what for and the day. Never your balance or the fee.</span>
+                </span>
+              </label>
+            ) : (
+              <label className="tk-check">
+                <input type="checkbox" checked={receipt} onChange={(e) => setReceipt(e.target.checked)} data-testid="pay-send-receipt" />
+                <span>
+                  Send them a receipt
+                  <span className="tk-field-hint">For someone not on Taskiem: a receipt to send them once it is paid.</span>
+                </span>
+              </label>
+            )}
+            {newAccount && (
+              <label className="tk-check">
+                <input type="checkbox" checked={saveAs} onChange={(e) => setSaveAs(e.target.checked)} data-testid="pay-save-as" />
+                <span>Save as a beneficiary</span>
+              </label>
+            )}
+            {newAccount && saveAs && (
+              <KitField label="Call them" hint="Such as chidi or rider-chidi: next time, pay @chidi in one tap.">
+                <input
+                  value={saveName}
+                  maxLength={32}
+                  autoCapitalize="none"
+                  autoComplete="off"
+                  onChange={(e) => setSaveName(e.target.value)}
+                  data-testid="pay-save-name"
+                />
+              </KitField>
+            )}
+          </fieldset>
           {pay.view}
         </div>
         <div className="tk-sheet-foot">
@@ -883,6 +1148,7 @@ export function PaySheet({
         }}
       >
         <fieldset className="tk-sheet-list tk-form-body">
+          <PayBalanceLine />
           {lead}
           {offerPhoto && (
             <PhotoReadButton

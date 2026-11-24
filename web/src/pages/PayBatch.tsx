@@ -59,6 +59,7 @@ import {
   batchTag,
   confirmWords,
   draftTotal,
+  batchMoney,
   footWords,
   heldOnto,
   listTag,
@@ -909,6 +910,7 @@ export function BatchPage() {
   );
   const pct =
     b.total_kobo > 0 ? Math.round((b.paid_kobo / b.total_kobo) * 100) : 0;
+  const money = batchMoney(b);
   const changeList = () =>
     void act.run(async () => {
       await post(`/v1/payment-batches/${encodeURIComponent(b.id)}/cancel`);
@@ -964,8 +966,29 @@ export function BatchPage() {
               {progressWords(b)}
             </dd>
           </div>
+          {prepared && (
+            <div>
+              <dt>Fees</dt>
+              <dd className="hero-foot-words" data-testid="batch-fees">
+                {money.fees}
+              </dd>
+            </div>
+          )}
+          {prepared && money.after && (
+            <div>
+              <dt>Balance after</dt>
+              <dd className="hero-foot-words" data-testid="batch-balance-after">
+                {money.after}
+              </dd>
+            </div>
+          )}
         </dl>
       </section>
+      {prepared && money.short && (
+        <div className="pay-warn warn batch-short" role="alert" data-testid="batch-short">
+          {money.short}
+        </div>
+      )}
 
       {prepared && (
         <div className="toolbar">

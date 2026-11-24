@@ -206,11 +206,14 @@ void main() {
     // The question (§6): never ordered before, asked; Ofada rice is a
     // stock item's name? No: just recorded, labelled by hand.
     expect(find.text('How should we treat it?'), findsOneWidget);
+    // The server's first suggestion for the name is pre-selected (H2
+    // g-label-pre): Packaging, the business's own.
+    expect(find.text('Packaging'), findsOneWidget);
     await t.tap(find.bySemanticsLabel(RegExp('^Keep track of it: Ofada rice')));
     await t.pump();
     await t.tap(find.bySemanticsLabel(RegExp('^Label for Ofada rice')));
     await settle(t);
-    await t.tap(find.text('Packaging').first);
+    await t.tap(find.text('Packaging').last);
     await settle(t);
     await t.tap(find.bySemanticsLabel('Place order'));
     await settle(t);

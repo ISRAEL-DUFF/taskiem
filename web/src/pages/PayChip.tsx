@@ -241,6 +241,7 @@ export function PayFromMessages({
           expectName={fill.expectName}
           saidIn={paying.saidIn}
           from="chat"
+          where={chat?.kind === "link" ? chat.id : undefined}
           rect={paying.from}
           onClose={() => setPaying(undefined)}
           onPaid={() => {

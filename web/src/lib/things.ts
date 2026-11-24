@@ -269,14 +269,39 @@ export function statusSaid(name: string, status: ThingStatus, priceKobo?: number
 /** PATCH /v1/things/{id} for its details: only what changed (an empty
  * warranty clears it). */
 export function detailsRequest(
-  t: Pick<Thing, "serial" | "warranty_until" | "note">,
-  f: { serial: string; warranty: string; note: string },
+  t: Pick<Thing, "serial" | "warranty_until" | "note" | "supplier_id">,
+  f: { serial: string; warranty: string; note: string; supplierId?: string },
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (f.serial.trim() !== (t.serial ?? "")) out.serial = f.serial.trim();
   if (f.warranty !== (t.warranty_until ?? "").slice(0, 10)) out.warranty_until = f.warranty;
   if (f.note.trim() !== (t.note ?? "")) out.note = f.note.trim();
+  // From whom: one of the business's suppliers, or none (clear_supplier).
+  if (f.supplierId !== undefined && f.supplierId !== (t.supplier_id ?? "")) {
+    if (f.supplierId) out.supplier_id = f.supplierId;
+    else out.clear_supplier = true;
+  }
   return out;
+}
+
+/** Whether Money is only Things we have for someone: they may see stock
+ * (table.read) but not invoices, so the menu gives them Things we have
+ * and Money shows them only that (build-plan-gaps H2, g-things-menu). */
+export const thingsOnly = (can: (perm: string) => boolean) =>
+  can("table.read") && !can("invoice.read");
+
+/** The rows a search keeps: its words each in the name, label, supplier,
+ * serial, note or the order's number, without case. */
+export function searchThings(things: Thing[], q: string): Thing[] {
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return things;
+  return things.filter((t) => {
+    const text = [t.name, t.label, t.supplier, t.serial, t.note, t.order_reference]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return words.every((w) => text.includes(w));
+  });
 }
 
 // --- spending by label (GET /v1/money/spending) ---

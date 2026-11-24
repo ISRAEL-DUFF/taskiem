@@ -24,6 +24,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/stock"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 const (
@@ -35,8 +36,21 @@ const (
 	refSearchLimit = 20
 )
 
-// refKinds are the kinds that may be searched, in the picker's order.
-var refKinds = []string{"invoice", "bill", "order", "purchase", "customer"}
+// refKinds are the kinds that may be searched, in the picker's order;
+// services and saved things (search everywhere, g-search-saved) only when
+// asked for by name.
+var (
+	refKinds        = []string{"invoice", "bill", "order", "purchase", "customer", "service", "saved"}
+	refDefaultKinds = refKinds[:5]
+)
+
+// refKindWords are a kind as typed, so "account" or "service" finds it.
+var refKindWords = map[string]string{"invoice": "invoice", "bill": "bill", "order": "order", "purchase": "purchase order", "customer": "customer",
+	"service": "service", "saved": "saved"}
+
+// savedKindSearchWords are a saved thing's kind as typed.
+var savedKindSearchWords = map[string]string{"bank_account": "bank account", "person": "person people", "place": "place address",
+	"text": "text note", "file": "file photo document", "provider_account": "provider account bill"}
 
 // refStatusWords are a status as the picker says it, so "unpaid" or
 // "overdue" typed finds it.
@@ -50,12 +64,16 @@ var refStatusWords = map[string]string{
 
 // refWordsOf is what a ref's words are matched against.
 func refWordsOf(r chatRef) string {
-	kind := map[string]string{"invoice": "invoice", "bill": "bill", "order": "order", "purchase": "purchase order", "customer": "customer"}[r.Kind]
+	kind := refKindWords[r.Kind]
 	status := refStatusWords[r.Status]
 	if status == "" {
 		status = strings.ReplaceAll(r.Status, "_", " ")
 	}
-	return strings.ToLower(strings.Join([]string{r.Name, r.Party, r.find, kind, status}, " "))
+	words := []string{r.Name, r.Party, r.find, kind, status}
+	if r.Kind == "saved" {
+		words = append(words, savedKindSearchWords[r.SavedKind], r.KindName, map[string]string{"mine": "mine yours", "business": "business"}[r.Owner])
+	}
+	return strings.ToLower(strings.Join(words, " "))
 }
 
 // refMatches is whether every word typed is in the ref's words: at the
@@ -115,7 +133,7 @@ func refSearchOf(r *http.Request) (refSearch, bool, error) {
 		}
 	}
 	if len(s.kinds) == 0 {
-		s.kinds = refKinds
+		s.kinds = refDefaultKinds
 	}
 	if c := v.Get("cursor"); c != "" {
 		for part := range strings.SplitSeq(c, ",") {
@@ -238,8 +256,10 @@ func searchRefs(ctx context.Context, tx pgx.Tx, s refSearch, pages map[string]re
 	return out, strings.Join(cursor, ","), nil
 }
 
-// allRefPages are the Taskiem chat's lists, of what the person may see.
-func (s *Server) allRefPages(p *Principal) map[string]refPage {
+// allRefPages are the Taskiem chat's lists, of what the person may see;
+// own are the person's own saved things that may match words, read before
+// (nil: saved things were not asked for).
+func (s *Server) allRefPages(p *Principal, own *[]chatRef, words []string) map[string]refPage {
 	tenant := p.TenantID
 	pages := map[string]refPage{}
 	if p.Can(PermInvoiceRead) && s.Invoices != nil {
@@ -288,6 +308,30 @@ func (s *Server) allRefPages(p *Principal) map[string]refPage {
 			}
 			return out, err
 		}
+	}
+	// Our services, as their list (GET /v1/storefront/services).
+	if p.Can(PermStorefrontManage) {
+		var all []chatRef
+		read := false
+		pages["service"] = func(ctx context.Context, tx pgx.Tx, offset int) ([]chatRef, error) {
+			if !read {
+				read = true
+				items, err := storefront.Services(ctx, tx, tenant)
+				if err != nil {
+					return nil, err
+				}
+				for _, it := range items {
+					all = append(all, chatRef{Kind: "service", ID: it.ID, Name: it.Name, TotalKobo: it.PriceKobo, Minutes: it.DurationMinutes,
+						Status: map[bool]string{true: "available", false: "hidden"}[it.Available]})
+				}
+			}
+			return pageOf(all, offset), nil
+		}
+	}
+	// Saved things: the person's own (read before this transaction; own
+	// nil when not asked) and their business's, by name and kind only.
+	if person := savedSearcher(p); person != uuid.Nil && own != nil {
+		pages["saved"] = savedPage(*own, tenant, person, words)
 	}
 	if p.Can(PermOrders) {
 		pages["customer"] = func(ctx context.Context, tx pgx.Tx, offset int) ([]chatRef, error) {

@@ -431,3 +431,25 @@ func TestMatchTreat(t *testing.T) {
 		}
 	}
 }
+
+// A translation still in English is caught unless it says it is the same
+// on purpose (build-plan-gaps H8).
+func TestEnglishLeftInATranslationIsCaught(t *testing.T) {
+	en := &lang.File{Language: lang.EN, Reviewed: true, Messages: map[string]lang.Entry{
+		"a.save": {Text: "Save", Reviewed: true}, "a.left": {Text: "Saved {name}.", Reviewed: true}}}
+	pcm := &lang.File{Language: lang.PCM, Messages: map[string]lang.Entry{
+		"a.save": {Text: "Save", Same: true}, "a.left": {Text: "Saved {name}."}}}
+	c, err := lang.FromFiles(en, pcm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range c.Check() {
+		if p.Language == lang.PCM && p.Kind == "english" {
+			got = append(got, p.ID)
+		}
+	}
+	if !slices.Equal(got, []string{"a.left"}) {
+		t.Errorf("english left: %v", got)
+	}
+}

@@ -97,6 +97,14 @@ func SetPublic(h http.Header) {
 	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self), payment=(), usb=()")
 }
 
+// SetPublicCamera lets a public page use the camera itself: only a form
+// step's one-time page that asks a code, scanned at the person's tap where
+// the browser has a barcode reader (device fields, build-plan-gaps H3).
+// The rest of the public policy is unchanged.
+func SetPublicCamera(h http.Header) {
+	h.Set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(self), payment=(), usb=()")
+}
+
 // PublicEmbedCSP is PublicCSP for a public /embed/ page: framed only by
 // ancestors, the organisation's verified websites (docs/embed-sites.md).
 // With none, nobody may frame it.

@@ -251,5 +251,96 @@
       "enweghị akara",
       "akara ọ dịghị"
     ]
+  },
+  "topics": {
+    "sales": [
+      "rere",
+      "erere",
+      "rerela",
+      "ahịa"
+    ],
+    "stock": [
+      "ngwa ahịa",
+      "katọn",
+      "akpa",
+      "fọdụrụ",
+      "gwụchara",
+      "mebiri"
+    ],
+    "products": [
+      "ọnụahịa",
+      "foto",
+      "ngwaahịa"
+    ],
+    "page": [
+      "peeji",
+      "ụlọ ahịa",
+      "oge emeghe"
+    ],
+    "orders": [
+      "ọda",
+      "iwu",
+      "nkwụghachi"
+    ],
+    "riders": [
+      "okada",
+      "keke",
+      "onye na-ebuga",
+      "nnyefe"
+    ],
+    "bookings": [
+      "nhọpụta",
+      "oge nzukọ",
+      "ụbọchị ezumike"
+    ],
+    "buying": [
+      "onye na-enye anyị ngwa",
+      "zụtara",
+      "nnata"
+    ],
+    "money": [
+      "ego",
+      "mmefu",
+      "mefuru",
+      "dizel"
+    ],
+    "pay": [
+      "kwụọ",
+      "zipu"
+    ],
+    "owe": [
+      "ụgwọ",
+      "ji m",
+      "na-eji"
+    ],
+    "staff": [
+      "onye ọrụ",
+      "ndị ọrụ"
+    ],
+    "lists": [
+      "ndepụta",
+      "tebụl",
+      "ndekọ"
+    ],
+    "auto": [
+      "chetara m",
+      "kwa ụbọchị",
+      "kwa izu"
+    ],
+    "saved": [
+      "chekwaa",
+      "debe"
+    ],
+    "school": [
+      "nwa akwụkwọ",
+      "ụlọ akwụkwọ",
+      "nne na nna"
+    ],
+    "account": [
+      "asụsụ",
+      "okwuntughe",
+      "banye",
+      "atụmatụ m"
+    ]
   }
 }

@@ -113,6 +113,35 @@ func TestTemplatesInstantiateCheckDryRunAndRoundTrip(t *testing.T) {
 				}
 			}
 			walk(def.Steps)
+			// A recipe's companion (made tools §13) is installed with it and
+			// uses the connectors the template declares too.
+			if comp, err := tpl.InstantiateCompanion(tpl.Examples()); err != nil {
+				t.Fatalf("companion: %v", err)
+			} else if comp != nil {
+				if probs := wdcheck.Check(comp, reg); len(probs) > 0 {
+					t.Fatalf("companion's publishing checks: %v\n%s", probs, comp)
+				}
+				cdef, err := wd.Load(comp)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if cdef.IsTool() {
+					t.Errorf("a companion is never a tool itself")
+				}
+				walk(cdef.Steps)
+				_, results, err := builder.DryRun(comp, reg, nil, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, r := range results {
+					if !r.Passed {
+						t.Errorf("companion's dry run %s: %s %v", r.Name, r.Status, r.Failures)
+					}
+				}
+			}
+			if tpl.IsRecipe() && (!def.IsTool() || def.Tool.Command != tpl.Examples()[tpl.CommandParam().Name]) {
+				t.Errorf("a recipe makes a tool called by its command parameter: %+v", def.Tool)
+			}
 			if ref, ok := def.Trigger.Config["connector"].(string); ok {
 				used[ref] = true
 			}
@@ -560,7 +589,9 @@ func TestEveryDetailIsOwnerShaped(t *testing.T) {
 		if err := json.Unmarshal(tp.Definition, &head); err != nil {
 			t.Fatal(err)
 		}
-		if head.Trigger.Type == "webhook" {
+		// A recipe for someone technical (call a system: a web address
+		// checked as https) needs a developer as well.
+		if head.Trigger.Type == "webhook" || contains(tp.Tags, "developer") {
 			continue
 		}
 		for _, p := range tp.Params {

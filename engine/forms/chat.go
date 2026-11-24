@@ -214,7 +214,9 @@ func (s *Service) ChatAdd(ctx context.Context, q ChatQuestion, user uuid.UUID, f
 		if err != nil {
 			return err
 		}
-		sealed, err := pii.Seal(ctx, s.Vault, tx, q.Tenant, plain, pii.SchemaPaths(q.Schema, nil), pii.Taint{})
+		// A location under the person who sent it (device fields §5).
+		paths := pii.LocationsOwnedBy(pii.SchemaPaths(q.Schema, nil), &pii.Owner{Category: "member", Value: user.String()})
+		sealed, err := pii.Seal(ctx, s.Vault, tx, q.Tenant, plain, paths, pii.Taint{})
 		if err != nil {
 			return err
 		}

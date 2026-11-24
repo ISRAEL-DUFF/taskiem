@@ -29,6 +29,7 @@ If your phone has no internet when you open Taskiem, or a page of it, you see a 
 - **Pull down from the top of a page** to load it again with the latest figures, in the app on your home screen. In a browser tab, the browser's own pull to refresh does the same.
 - **Tabs that do not fit**, such as Money's Overview, Leaks, Upload statement, Cash and expenses and Fees, slide sideways. The one you are on is always in view.
 - **The (i) button** beside a page's title says what the page is for. It is folded away on a phone so the page opens on what it shows.
+- **Search** (the magnifier at the top of Home and of Chats) finds anything in one box: what Taskiem can do ("add rider"), your chats, products, services, invoices, orders, customers and saved things. A saved thing is found by its name or its kind ("mum", "bank account"), yours and your business's, and shows only its name, its kind and whose it is: never the account number or anything else it holds. Three of each show; **Show more** shows them all.
 
 ## Home and Money
 

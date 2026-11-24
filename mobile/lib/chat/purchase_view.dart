@@ -236,6 +236,7 @@ class _PurchaseViewState extends State<PurchaseView> {
                       item: ordered[i]['item'] as String? ?? '',
                       supplier: _supplier,
                       quantity: _int(ordered[i]['quantity']),
+                      unit: ordered[i]['unit'] as String?,
                       value: _chosen[i] ?? Treat.ofLine(ordered[i], _choices),
                       choices: _choices,
                       asked: ordered[i]['unconfirmed'] == true,

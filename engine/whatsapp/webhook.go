@@ -66,6 +66,18 @@ type Inbound struct {
 	// (WhatsApp's context.id; Telegram's reply_to_message): a reply in a
 	// linked business's conversation (business links L3).
 	Quoted string
+	// QuotedText is the quoted message's own words, where the channel
+	// sends them with the reply (Telegram's reply_to_message); "" where it
+	// sends only the id.
+	QuotedText string
+	// Forwarded: the person forwarded this message to Taskiem (WhatsApp's
+	// context.forwarded, Telegram's forward_origin, Slack's shared
+	// message): its words are someone else's, such as account details to
+	// pay (paying people H7).
+	Forwarded bool
+	// Ref is the id a reply to this message names (Quoted), when it is not
+	// ID: Slack's message ts; "" means ID.
+	Ref string
 	// ProfileName is the name the sender gave WhatsApp (contacts.profile),
 	// as WhatsApp sends it with the message: what a business's customer is
 	// called until its own book names them.
@@ -121,7 +133,9 @@ func Parse(body []byte) ([]Inbound, error) {
 						From    string `json:"from"`
 						Type    string `json:"type"`
 						Context struct {
-							ID string `json:"id"`
+							ID                  string `json:"id"`
+							Forwarded           bool   `json:"forwarded"`
+							FrequentlyForwarded bool   `json:"frequently_forwarded"`
 						} `json:"context"`
 						Text struct {
 							Body string `json:"body"`
@@ -184,7 +198,8 @@ func Parse(body []byte) ([]Inbound, error) {
 				continue
 			}
 			for _, m := range c.Value.Messages {
-				in := Inbound{ID: m.ID, From: m.From, PhoneNumberID: c.Value.Metadata.PhoneNumberID, Type: m.Type, Quoted: m.Context.ID}
+				in := Inbound{ID: m.ID, From: m.From, PhoneNumberID: c.Value.Metadata.PhoneNumberID, Type: m.Type, Quoted: m.Context.ID,
+					Forwarded: m.Context.Forwarded || m.Context.FrequentlyForwarded}
 				for _, k := range c.Value.Contacts {
 					if k.WaID == m.From {
 						in.ProfileName = k.Profile.Name

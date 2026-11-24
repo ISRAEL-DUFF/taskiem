@@ -637,6 +637,9 @@ func (f *Fake) serveSchemaApply(w http.ResponseWriter, p *project, tok Token, bo
 			}
 			nt.Columns = append(nt.Columns, col.Name)
 			nt.Types[col.Name] = col.Type
+			if strings.EqualFold(col.Default, "now()") {
+				nt.Now = append(nt.Now, col.Name)
+			}
 			if col.PrimaryKey {
 				nt.Key = append(nt.Key, col.Name)
 			}

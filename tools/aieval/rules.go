@@ -40,6 +40,62 @@ var rules = map[string]rule{
 	"opted_in_only":           ruleOptedInOnly,
 	"invoice_copied_once":     ruleInvoiceCopiedOnce,
 	"books_by_capability":     ruleBooksByCapability,
+	// Tools used from the chat (made tools §17, build plan M6).
+	"tool_declared":        ruleToolDeclared,
+	"customer_tool_public": ruleCustomerToolPublic,
+	"reads_saved":          ruleReadsSaved,
+}
+
+// The draft is a tool: started by a person, with a command, and an answer
+// drawn from outputs it declares (the publishing checks hold the rest).
+func ruleToolDeclared(def *wd.Definition, _ connector.Lookup) (bool, string) {
+	switch {
+	case def.Tool == nil:
+		return false, "the draft is not a tool"
+	case def.Trigger.Type != "manual":
+		return false, "a tool starts by hand, not by " + def.Trigger.Type
+	case def.Tool.Answer == nil:
+		return false, "the tool says nothing back"
+	case len(def.Outputs) == 0:
+		return false, "the tool declares no outputs to answer from"
+	}
+	return true, ""
+}
+
+// A tool for customers whose answer shows public outputs only, and which
+// the builder does not warn shows something the business keeps (made
+// tools §11, §17).
+func ruleCustomerToolPublic(def *wd.Definition, reg connector.Lookup) (bool, string) {
+	if def.Tool == nil || def.Tool.Audience() != wd.ToolForCustomers {
+		return false, "the draft is not a tool for customers"
+	}
+	public := 0
+	for _, o := range def.Outputs {
+		if o.Public {
+			public++
+		}
+	}
+	if public == 0 {
+		return false, "no output is marked public, so a customer sees nothing"
+	}
+	// The answer reading only public outputs is a check every definition
+	// passes to load (wd's tool rules); what is left is the builder's
+	// warning.
+	for _, f := range builder.PolicyFindings(def, reg) {
+		if f.Rule == builder.RuleCustomerToolPrivate {
+			return false, f.Message
+		}
+	}
+	return true, ""
+}
+
+// The draft reads a saved thing by its name (saved objects S3), the way
+// a goal names one with @, and none by an expression.
+func ruleReadsSaved(def *wd.Definition, _ connector.Lookup) (bool, string) {
+	if len(def.SavedNames()) == 0 {
+		return false, "no saved thing is read by name"
+	}
+	return true, ""
 }
 
 // hygiene rules apply to every case.

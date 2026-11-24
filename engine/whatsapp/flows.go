@@ -105,6 +105,12 @@ func FlowForm(title string, fields []Field, errs map[string]string) (map[string]
 	if len(fields) > FlowSlots {
 		return nil, ErrFlowUnsupported
 	}
+	for _, f := range fields {
+		if f.Device == "location" || f.Device == "photo" {
+			// Sent as the chat's own location or photo message.
+			return nil, ErrFlowUnsupported
+		}
+	}
 	d := map[string]any{"title": clip(title, 80), "intro": "Fill in the details, then tap Continue. You confirm in the chat before anything starts.",
 		"error": "", "has_error": false}
 	for i := range FlowSlots {

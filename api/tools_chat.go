@@ -115,16 +115,25 @@ func (s *Server) waMadeTool(ctx context.Context, c *chat, text string) (bool, er
 	if err != nil {
 		return true, err
 	}
+	// The optional inputs too, for the words after it (H6, g-ct-chip).
+	all, err := s.toolFieldsOf(ctx, c.tenant.ID, t.Workflow, t.Version)
+	if err != nil {
+		return true, err
+	}
 	data := chatData{Workflow: t.Workflow, Name: t.Name, Version: t.Version, Environment: t.Environment, Inputs: map[string]any{}, Tool: t.Command}
-	if len(fields) == 0 {
+	if len(fields) == 0 && (rest == "" || len(all) == 0) {
 		return true, s.waAskConfirm(ctx, c, data)
 	}
-	if len(fields) > 1 && rest != "" {
+	// Several inputs, or only optional ones: the words are read for them.
+	if (len(all) > 1 || len(fields) == 0 && len(all) >= 1) && rest != "" {
 		// Words after it for several inputs: read by the model, shown
 		// filled in before anything runs (made tools M3, tools_read.go).
-		if values := s.chatToolWords(ctx, c, t, fields, rest); len(values) > 0 {
-			return true, s.waToolFill(ctx, c, data, fields, values)
+		if values := s.chatToolWords(ctx, c, t, all, rest); len(values) > 0 {
+			return true, s.waToolFill(ctx, c, data, fields, all, values)
 		}
+	}
+	if len(fields) == 0 {
+		return true, s.waAskConfirm(ctx, c, data)
 	}
 	if len(fields) == 1 && rest != "" {
 		// One input: the rest of the message is it, read as an answer.
@@ -148,7 +157,7 @@ func (s *Server) waToolReady(ctx context.Context, c *chat, data chatData) (bool,
 	if err != nil || t == nil {
 		return t == nil && err == nil, err
 	}
-	if t.Asks() != wdcheck.CareAnswers {
+	if t.AsksFor(data.Inputs) != wdcheck.CareAnswers {
 		return false, nil
 	}
 	data.Nonce = uuid.NewString()
@@ -160,7 +169,7 @@ func (s *Server) waToolReady(ctx context.Context, c *chat, data chatData) (bool,
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return true, err
 	}
-	lines, err := s.maskedLines(ctx, c.tenant.ID, data.Inputs, 12)
+	lines, err := s.maskedLines(ctx, c.tenant.ID, chatInputWords(data.Inputs), 12)
 	if err != nil {
 		return true, err
 	}
@@ -235,6 +244,10 @@ func (s *Server) waToolRun(ctx context.Context, c *chat, t toolRow, data chatDat
 	}
 	if input == nil {
 		input = map[string]any{}
+	}
+	if d, err := s.definitionFor(t.Workflow, t.Version, def); err == nil {
+		// A signature, which a chat cannot draw, unavailable (tools_device_chat.go).
+		chatDeviceInputs(d, input, c.ch.Name())
 	}
 	raw, _ := json.Marshal(input)
 	if probs := s.inputProblems(t.Workflow, t.Version, def, raw); len(probs) > 0 {
