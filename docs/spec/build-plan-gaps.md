@@ -126,6 +126,13 @@ The specs are [made tools](made-tools.md) and [saved objects](saved-objects.md).
 
 **Done when** (each checked 24 November 2026): a customer's answer stays in their chat after a reload on the web; "log 4500 diesel at Total" fills an optional "where" input; **menu** on WhatsApp lists only the business's customers' tools, each answering, and no public-menu settings remain; a review of a changed tool says "now also says 'spent'"; a wd-test fails when the answer changes; a weekly workflow emails `@price-list`; a saved thing's page lists the runs that read it; and `invoice @acme 250k` prints Acme's address.
 
+**Two loose ends H6 left (24 November 2026), to finish before H7 is called done:**
+
+| Task | Details |
+| --- | --- |
+| **The app opens an invoice's PDF** | `GET /v1/invoices/{id}/pdf` exists and the web opens it; the app's invoice screen gets **Open the PDF** too (masked; revealed with the same rule as the web). |
+| **The changes report says tool changes in plain words** | `api/reports.go` still uses `wddiff`; use `wdtext.Changes` there as the version history and Approvals do. |
+
 ## 9. Phase H7: paying one person, finished
 
 The spec is [paying people from the chat](chat-pay-people.md). The first item is against the spec, and its own test for the phase expects the payment recorded. This is the largest of the H phases; it may be two pull requests, server first.
