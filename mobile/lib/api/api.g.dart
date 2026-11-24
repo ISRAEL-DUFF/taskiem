@@ -18898,7 +18898,9 @@ class PageBundleMadeToolsItem {
   final bool changed;
   final String command;
   final String name;
-  /// draft, published, pending_approval, not_ready or in_the_app.
+  /// draft, published, pending_approval (four-eyes asks another person),
+  /// not_ready, in_the_app (published through Git) or forbidden (four-eyes, and
+  /// the caller is no person).
   final String state;
   final String workflow;
 
