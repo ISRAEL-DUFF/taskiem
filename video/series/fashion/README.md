@@ -191,11 +191,12 @@ have. **Check** marks something to verify in the app before filming.
 5. **Flow clips:** 3 to 5 per episode (the first and last beat, reactions).
 6. **Kit:** the Next card, chapter tags, a Fashion accent.
 
-## 5. Order of work
+## 5. How it is delivered
 
-1. You approve this outline, the cast, and the checks.
-2. I build the demo world and record Episodes 1 to 3 as a first pass.
-3. Narration (English, then Pidgin review) and Flow clips for 1 to 3.
-4. Assemble Episodes 1 to 3 as a test of the pattern (recap, episode, bridge,
-   Next card) before making the rest.
-5. Episodes 4 to 10, then Episode 0 last.
+One zip for the whole series (`../PACKAGE.md`): the footage, captions, cards,
+music, scripts and Flow prompts for every episode, to be finished in the
+owner's own editor. No second pass.
+
+Order of work: the app data and footage for Episodes 1 to 10, then Episode 0
+last from their footage; scripts and prompts as each episode lands; cards and
+music; the zip.
