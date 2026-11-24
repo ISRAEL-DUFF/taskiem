@@ -135,3 +135,22 @@ func TestTakenValuesReadAnOrdersChip(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
+
+// The topics' words are in each language's word lists (chat-menus.md
+// §8.3, g-menu-words): every topic has English words, and each language
+// names only the catalogue's topics, with words for every one.
+func TestTopicWordsInTheWordLists(t *testing.T) {
+	for _, tag := range lang.Tags() {
+		words := lang.TopicWords(tag)
+		for id := range words {
+			if _, ok := chatTopicByID(id); !ok {
+				t.Errorf("%s: words for %q, which is no topic", tag, id)
+			}
+		}
+		for _, tp := range chatTopics {
+			if len(words[tp.ID]) == 0 {
+				t.Errorf("%s: no words for %s", tag, tp.ID)
+			}
+		}
+	}
+}

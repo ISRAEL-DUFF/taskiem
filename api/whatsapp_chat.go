@@ -230,6 +230,9 @@ type chat struct {
 	// understood is that this message is a command the model gave
 	// (chat_understand.go): read once, never put to the model again.
 	understood bool
+	// typedSeen: the message was looked at as a typed command (chat_typed.go),
+	// once, whatever reads it again; unread: nothing read it as a command.
+	typedSeen, unread bool
 	// uses are the person's uses of the menus' actions, read once for a
 	// message (chat_menus.go).
 	uses map[string]int
@@ -825,7 +828,7 @@ func normalizeCommand(s string) string {
 	return strings.Trim(strings.ToLower(strings.Join(strings.Fields(s), " ")), " ?!.")
 }
 
-func (s *Server) waCommand(ctx context.Context, c *chat) error {
+func (s *Server) waCommand(ctx context.Context, c *chat) (err error) {
 	text := c.in.Text
 	if c.in.Reply != "" {
 		text = c.in.Reply
@@ -834,6 +837,15 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// Commands in the person's language and in English (engine/lang);
 	// yes, no and cancel are only ever matched from the word lists.
 	m, matched := lang.MatchIntent(text, c.lang.Match())
+	// A catalogue's command typed in full is a use of its action (most
+	// used first, chat-menus.md §6.1), once it was read as that command.
+	if id, ok := s.typedUse(ctx, c, text, m, matched); ok {
+		defer func() {
+			if err == nil && !c.unread {
+				s.actionUsed(ctx, c, id)
+			}
+		}()
+	}
 	if matched {
 		switch m.Intent {
 		case lang.IntentCancel:
@@ -1309,6 +1321,8 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.state == stateStepUp {
 		return c.say(ctx, s, c.t("wa.stepup_waiting", "step", c.data.Step))
 	}
+	// Nothing below reads it as a command typed (chat_typed.go).
+	c.unread = true
 	// Not recognised: a typed request for a tool, read by the model, is
 	// answered with its form, filled in (chat_tool_requests.go).
 	if c.state == stateIdle && !matched && !c.understood {

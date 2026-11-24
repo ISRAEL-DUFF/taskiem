@@ -1229,7 +1229,13 @@ func (s *Server) waTaskWords(ctx context.Context, c *chat, text, cmd string) (bo
 		return true, s.waTaskCant(ctx, c, nil, m[1])
 	}
 	if strings.HasPrefix(strings.TrimSpace(text), "@") && c.p.Can(taskGive) {
-		return s.waTaskSaid(ctx, c, text)
+		done, err := s.waTaskSaid(ctx, c, text)
+		// Typed in full, a use of Give someone a task (chat-menus.md §6.1);
+		// its command has no words of its own for chat_typed.go to know.
+		if done && err == nil && !c.understood && c.in.Reply == "" {
+			s.actionUsed(ctx, c, "staff.give")
+		}
+		return done, err
 	}
 	return false, nil
 }
