@@ -12,6 +12,11 @@
 // (GET /v1/pages/{name}/live): the parts named are read again, at most once
 // in two seconds, a part put in an order or shown further keeping its
 // order and reading its first rows again. Pull to refresh stays.
+// A board (pages G4) shows its columns one under another, each card a row
+// whose menu moves it to another column (the board's move tool opened
+// filled in, as a page's button is: POST /v1/pages/{name}/act with to),
+// opens it or presses its buttons; a chart is drawn natively from the
+// server's figures (page_chart.dart).
 // Making and changing pages is on the web.
 
 import 'dart:async';
@@ -33,9 +38,10 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show ApproveSheet;
 import 'cards.dart' show CardPill;
-import 'groups.dart' show askSure, pickOneOf;
+import 'groups.dart' show askSure, pickAction, pickOneOf;
 import 'invoices_page.dart' show openInvoice;
 import 'made_tools.dart' show showMadeToolSheet;
+import 'page_chart.dart' show PageChart;
 import 'live.dart' show SseEvent, readSse;
 import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'words.dart' show CardTone, whenWords;
@@ -234,8 +240,9 @@ class _PageScreenState extends State<PageScreen> {
   final _values = <String, String>{};
   final _search = TextEditingController();
   Timer? _typing;
-  // Rows read with More, by part.
+  // Rows read with More, by part; a board's further cards, by part and column.
   final _more = <String, PageBlock>{};
+  final _laneMore = <String, PageLane>{};
   String? _loadingMore;
   // Cells ticked in place and not yet read back, by part, row and column.
   final _ticked = <String, bool>{};
@@ -397,6 +404,7 @@ class _PageScreenState extends State<PageScreen> {
           _page = r;
           _error = null;
           _more.clear();
+          _laneMore.clear();
           _working();
         });
         // A search a link set shows in the box.
@@ -532,14 +540,7 @@ class _PageScreenState extends State<PageScreen> {
       if (!mounted) return;
       switch (r.kind) {
         case 'tool':
-          final pressed = r.tool!;
-          final tool = (await api.listTools()).tools.where((x) => x.command == pressed.command).firstOrNull;
-          if (!mounted) return;
-          if (tool == null) {
-            showTkToast(context, 'This tool is not one of yours.', error: true);
-            return;
-          }
-          await showMadeToolSheet(context, auth: widget.auth, tool: tool, initial: pressed.inputs, button: pressed.button);
+          await _openTool(r.tool!);
         case 'signal':
           final yes = await askSure(context, title: r.asks ?? '${a.label}?', ok: 'Yes, ${a.label.toLowerCase()}');
           if (!yes || !mounted) return;
@@ -556,6 +557,147 @@ class _PageScreenState extends State<PageScreen> {
       if (mounted) showTkToast(context, errorWords(e), error: true);
       if (mounted) unawaited(_load());
     }
+  }
+
+  /// Opens the tool a page's press gave, filled in, with its own care.
+  Future<void> _openTool(PageActResultTool pressed) async {
+    final tool = (await widget.auth.api.listTools()).tools.where((x) => x.command == pressed.command).firstOrNull;
+    if (!mounted) return;
+    if (tool == null) {
+      showTkToast(context, 'This tool is not one of yours.', error: true);
+      return;
+    }
+    await showMadeToolSheet(context, auth: widget.auth, tool: tool, initial: pressed.inputs, button: pressed.button);
+  }
+
+  /// Moves a board's card to another column (pages G4): the server reads
+  /// the card again and gives the board's move tool filled in over it and
+  /// the column it goes to; its form opens, with its own care.
+  Future<void> _moveCard(String block, String row, String to) async {
+    try {
+      final r = await widget.auth.api.actOnPage(name: widget.name, filters: filtersParam(_values), body: PageActRequest(block: block, row: row, action: 0, to: to));
+      if (!mounted) return;
+      final pressed = r.tool;
+      if (pressed != null) await _openTool(pressed);
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    }
+    if (mounted) unawaited(_load());
+  }
+
+  /// A card's menu: open it, move it to each other column, its buttons.
+  Future<void> _cardMenu(PageBlock b, PageLane lane, PageRow r) async {
+    final move = b.move;
+    final canMove = move != null && move.disabled == null;
+    final title = (r.title ?? '').isEmpty ? 'This card' : r.title!;
+    final actions = <(String, String, String, bool)>[
+      if (r.detail != null) ('open', 'Open it', 'b-note', false),
+      if (canMove)
+        for (final l in b.lanes ?? const <PageLane>[])
+          if (l.value != lane.value) ('to:${l.value}', 'Move to ${l.label}', 'b-arrow', false),
+      for (final a in r.actions ?? const <PageAction>[])
+        if (a.disabled == null) ('act:${a.index}', a.label, 'b-tools', false),
+    ];
+    if (actions.isEmpty) return;
+    if (actions.length == 1 && actions.first.$1 == 'open') {
+      _open(r, b.id);
+      return;
+    }
+    final picked = await pickAction(context, title: title, actions: actions, note: move?.disabled);
+    if (picked == null || !mounted) return;
+    if (picked == 'open') {
+      _open(r, b.id);
+    } else if (picked.startsWith('to:')) {
+      await _moveCard(b.id, r.id, picked.substring(3));
+    } else if (picked.startsWith('act:')) {
+      final i = int.parse(picked.substring(4));
+      final a = (r.actions ?? const <PageAction>[]).where((x) => x.index == i).firstOrNull;
+      if (a != null) await _press(b.id, r.id, a);
+    }
+  }
+
+  /// A board column's next cards (More, by its column).
+  Future<void> _showMoreLane(PageBlock b, PageLane lane) async {
+    final cursor = lane.more;
+    if (cursor is! String || _loadingMore != null) return;
+    setState(() => _loadingMore = '${b.id}/${lane.value}');
+    try {
+      final next = await widget.auth.api.getPageBlock(name: widget.name, block: b.id, lane: lane.value, cursor: cursor, filters: filtersParam(_values));
+      final got = (next.lanes ?? const <PageLane>[]).where((l) => l.value == lane.value).firstOrNull;
+      if (got != null && mounted) {
+        setState(() => _laneMore['${b.id}/${lane.value}'] = PageLane(
+              count: got.count,
+              label: lane.label,
+              value: lane.value,
+              more: got.more,
+              rows: [...lane.rows, ...got.rows],
+            ));
+      }
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    } finally {
+      if (mounted) setState(() => _loadingMore = null);
+    }
+  }
+
+  /// A board on a phone: its columns one under another, each a section of
+  /// cards, each card's menu moving it to another column (pages G4).
+  Widget _board(PageBlock b) {
+    final t = TkTheme.tokens(context);
+    final move = b.move;
+    final canMove = move != null && move.disabled == null;
+    final out = <Widget>[
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+        child: Text('${b.title ?? ''}${b.error == null ? '${b.title == null ? '' : ' · '}${rowsWord(b.count ?? 0)}' : ''}', style: tkHint(t)),
+      ),
+    ];
+    if (b.error != null || b.working != null) {
+      out.add(Text(b.error ?? b.working!, style: tkHint(t)));
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: out);
+    }
+    if (canMove) out.add(Padding(padding: const EdgeInsets.fromLTRB(4, 0, 4, 0), child: Text('Tap a card to move it to another column.', style: tkHint(t))));
+    if (move?.disabled != null) out.add(Padding(padding: const EdgeInsets.fromLTRB(4, 0, 4, 0), child: Text(move!.disabled!, style: tkHint(t))));
+    for (final lane0 in b.lanes ?? const <PageLane>[]) {
+      final lane = _laneMore['${b.id}/${lane0.value}'] ?? lane0;
+      out.add(const SizedBox(height: 12));
+      out.add(TkSection(
+        title: lane.label,
+        inset: 16,
+        empty: b.empty ?? 'Nothing here',
+        trailing: Padding(padding: const EdgeInsets.only(right: 6), child: Text('${lane.count}', style: tkText(size: 14, weight: 600, color: t.muted))),
+        children: [
+          for (final r in lane.rows)
+            () {
+              final run = runStatusLine(r.runStatus);
+              final pill = r.state == null && run.isNotEmpty;
+              final sub = [if ((r.sub ?? '').isNotEmpty) r.sub!, if (!pill && run.isNotEmpty) run].join(' · ');
+              final menu = r.detail != null || canMove || (r.actions ?? const <PageAction>[]).any((a) => a.disabled == null);
+              final title = (r.title ?? '').isEmpty ? '—' : r.title!;
+              return TkListRow(
+                title: title,
+                sub: sub,
+                status: pill ? r.runStatus!.words : r.state?.text,
+                statusTone: pageTone(pill ? r.runStatus!.tone : r.state?.tone),
+                chevron: menu,
+                semanticsLabel: [title, if (sub.isNotEmpty) sub, if (r.state != null) r.state!.text, 'in ${lane.label}'].join(', ') + (menu ? (canMove ? '. Open, or move it' : '. Open') : ''),
+                onTap: menu ? () => unawaited(_cardMenu(b, lane, r)) : null,
+              );
+            }(),
+        ],
+      ));
+      if (lane.more is String) {
+        out.add(const SizedBox(height: 8));
+        out.add(Center(
+          child: TkSmallButton(
+            label: _loadingMore == '${b.id}/${lane.value}' ? 'Loading…' : 'Show more',
+            semantics: 'Show more of ${lane.label}',
+            onPressed: _loadingMore != null ? null : () => unawaited(_showMoreLane(b, lane)),
+          ),
+        ));
+      }
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: out);
   }
 
   /// A row's buttons, under its card or its words.
@@ -930,6 +1072,12 @@ class _PageScreenState extends State<PageScreen> {
           case 'status':
             flush();
             children.add(_status(b));
+          case 'board':
+            flush();
+            children.add(_board(b));
+          case 'chart':
+            flush();
+            children.add(PageChart(key: ValueKey('${b.id}:${p.drawnAt}'), b: b));
           default:
             flush();
             children.add(_rows(b));

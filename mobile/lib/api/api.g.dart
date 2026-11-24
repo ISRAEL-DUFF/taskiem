@@ -1997,8 +1997,8 @@ class TaskiemApi {
   }
 
   /// More rows of a part (`GET /v1/pages/{name}/blocks/{block}`)
-  Future<PageBlock> getPageBlock({required String name, required String block, String? cursor, String? order, String? desc, String? draft, String? filters}) async {
-    final j = await _t.send('GET', '/v1/pages/${Uri.encodeComponent(name)}/blocks/${Uri.encodeComponent(block)}', query: {'cursor': ?cursor, 'order': ?order, 'desc': ?desc, 'draft': ?draft, 'filters': ?filters});
+  Future<PageBlock> getPageBlock({required String name, required String block, String? cursor, String? order, String? lane, String? desc, String? draft, String? filters}) async {
+    final j = await _t.send('GET', '/v1/pages/${Uri.encodeComponent(name)}/blocks/${Uri.encodeComponent(block)}', query: {'cursor': ?cursor, 'order': ?order, 'lane': ?lane, 'desc': ?desc, 'draft': ?draft, 'filters': ?filters});
     return PageBlock.fromJson(j as Map<String, dynamic>);
   }
 

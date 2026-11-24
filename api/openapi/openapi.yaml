@@ -41687,6 +41687,11 @@ paths:
         schema:
           type: string
         description: A column the table part shows
+      - name: lane
+        in: query
+        schema:
+          type: string
+        description: "A board's column (G4, its value): that column's next cards, with cursor. A board takes no order."
       - name: desc
         in: query
         schema:
