@@ -9,14 +9,15 @@ import type { StockItemRow, StockItemsView } from "../lib/stock";
 import {
   NEW_STOCK,
   TREATMENTS,
+  askUses,
   choiceProblem,
   billLineOf,
   choiceWords,
   fromLine,
   knownLabel,
   labelChoices,
-  labelName,
   lineBody,
+  lineLabel,
   lineLocked,
   lineMark,
   madeStockItem,
@@ -24,6 +25,8 @@ import {
   suggestChoice,
   trackAskOf,
   trackAskWords,
+  usesProblem,
+  usesQuestion,
   type Choice,
   type LabelsView,
   type LineBody,
@@ -146,9 +149,13 @@ export function TreatQuestion({
   locked = false,
   rememberable = true,
   suggested,
+  unit,
 }: {
   item: string;
   supplier: string;
+  /** The unit the line is bought in ("bag"), for how many of a stock item
+   * counted in another unit one of it is. */
+  unit?: string;
   category?: string;
   data: TreatData;
   /** What the business remembers of the item, or what the order line
@@ -166,6 +173,9 @@ export function TreatQuestion({
   suggested?: Choice;
 }) {
   const id = useId();
+  // How many of the stock item one is, as typed (Choice.uses holds it
+  // once it is a number).
+  const [usesText, setUsesText] = useState(value?.uses ? String(value.uses) : "");
   const open = !locked && (!memory || !!value);
   const sugg = useLoad(
     () =>
@@ -234,6 +244,11 @@ export function TreatQuestion({
     );
   const c = value;
   const set = (patch: Partial<Choice>) => onChange({ ...c, ...patch });
+  // The chosen stock item's unit (none for a new one, made in the line's).
+  const stockUnit =
+    c.treatment === "stock" && c.stockItemId && c.stockItemId !== NEW_STOCK
+      ? data.stockItems?.find((s) => s.id === c.stockItemId)?.unit
+      : undefined;
   const problem = choiceProblem(c);
   const picks = labelChoices(data.labels, sugg.data);
   return (
@@ -287,6 +302,26 @@ export function TreatQuestion({
               <option value={NEW_STOCK}>A new stock item…</option>
             </select>
           </label>
+          {stockUnit !== undefined && askUses(unit, stockUnit) && (
+            <label className="field" data-testid="treat-uses">
+              <span>{usesQuestion(stockUnit, unit, item)}</span>
+              <input
+                inputMode="numeric"
+                value={usesText}
+                placeholder="Like 1000"
+                aria-describedby={`${id}-uses-hint`}
+                onChange={(e) => {
+                  setUsesText(e.target.value);
+                  const t = e.target.value.trim().replace(/,/g, "");
+                  set({ uses: !usesProblem(t) && t !== "" ? Number(t) : undefined });
+                }}
+              />
+              <small className="hint" id={`${id}-uses-hint`}>
+                {usesProblem(usesText) ||
+                  `${stockName(c.stockItemId ?? "") ?? "It"} is counted in ${stockUnit}. Said once, it is remembered for this item.`}
+              </small>
+            </label>
+          )}
           {c.stockItemId === NEW_STOCK && (
             <>
               <label className="field">
@@ -437,11 +472,13 @@ export function LineTreatMark({
   labels,
 }: {
   line: Pick<PurchaseLine, "treatment" | "label_id"> &
-    Partial<Pick<PurchaseLine, "id" | "received">>;
+    Partial<Pick<PurchaseLine, "id" | "received" | "label">>;
   labels: SpendLabel[] | undefined;
 }) {
   const mark = lineMark(line.treatment);
-  const name = labelName(labels, line.label_id) || "Not labelled";
+  // The server names the label kept, so a label merged since shows as
+  // the one it was merged into.
+  const name = lineLabel(line, labels) || "Not labelled";
   const { can } = useAuth();
   // Kept track of and come: its rows on Things we have, for those who may
   // see them (table.read); words only for the rest.
@@ -589,6 +626,7 @@ export function OrderLinesTreat({
             <TreatQuestion
               key={k}
               item={l.item}
+              unit={l.unit}
               supplier={purchase.supplier}
               data={treat.data}
               memory={l.unconfirmed ? undefined : own}

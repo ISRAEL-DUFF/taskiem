@@ -814,6 +814,7 @@ export function OrderSheet({
                 <TreatQuestion
                   key={l.item.item_id}
                   item={l.item.name}
+                  unit={l.item.unit}
                   supplier={business}
                   category={lineProduct(l.item).category}
                   data={treat.data}

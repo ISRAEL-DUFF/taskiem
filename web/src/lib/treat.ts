@@ -102,17 +102,67 @@ export const fromMemory = (m: Remembered): Choice => ({
   label: m.label ?? "",
 });
 
-/** A line of an order as an answer (its label's name from the business's
- * labels). */
+/** A line of an order as an answer (its label's name as the server sends
+ * it, a merged label's the one kept; else from the business's labels). */
 export const fromLine = (
-  l: Pick<PurchaseLine, "treatment" | "stock_item_id" | "uses" | "label_id">,
+  l: Pick<PurchaseLine, "treatment" | "stock_item_id" | "uses" | "label_id" | "label">,
   labels: SpendLabel[] | undefined,
 ): Choice => ({
   treatment: l.treatment ?? "record",
   stockItemId: l.treatment === "stock" ? l.stock_item_id : undefined,
   uses: (l.uses ?? 1) > 1 ? l.uses : undefined,
-  label: labelName(labels, l.label_id),
+  label: lineLabel(l, labels),
 });
+
+/** A line's label as cards show it: the server's name of the label kept
+ * (so a label merged since shows as the one kept), else its id looked up
+ * among the business's labels; "" for none. */
+export const lineLabel = (
+  l: Pick<PurchaseLine, "label_id" | "label">,
+  labels: SpendLabel[] | undefined,
+): string => l.label || labelName(labels, l.label_id);
+
+/** The units that count things one by one: one bought is one of the stock
+ * item. As stock.AskUses. */
+const COUNT_UNITS = new Set(["", "piece", "pc", "unit", "item", "each", "one", "no"]);
+
+/** A unit word for one: bags, bag; boxes, box (stock.Singular). */
+export function singular(u: string): string {
+  const l = u.toLowerCase();
+  if (l.length > 3 && l.endsWith("ies")) return u.slice(0, -3) + "y";
+  if (["xes", "ches", "shes", "sses"].some((s) => l.endsWith(s))) return u.slice(0, -2);
+  if (l.length > 2 && l.endsWith("s") && !l.endsWith("ss")) return u.slice(0, -1);
+  return u;
+}
+
+const unitKey = (u: string | undefined) => singular((u ?? "").trim()).toLowerCase();
+
+/** Whether a line bought in lineUnit, going into a stock item counted in
+ * stockUnit, asks how many of the stock item one of it is (g-uses-ask):
+ * counted in another unit (grams, yards) with nothing saying it yet. The
+ * server's stock.AskUses, and the app's askUses, by the same rule. */
+export function askUses(
+  lineUnit: string | undefined,
+  stockUnit: string | undefined,
+  uses?: number,
+): boolean {
+  if ((uses ?? 1) > 1) return false;
+  const s = unitKey(stockUnit);
+  return !COUNT_UNITS.has(s) && unitKey(lineUnit) !== s;
+}
+
+/** The uses question: "How many g is one bag?" (one of the item when the
+ * line has no unit). */
+export const usesQuestion = (stockUnit: string, lineUnit: string | undefined, item: string) =>
+  `How many ${stockUnit} is one ${lineUnit?.trim() ? singular(lineUnit.trim()) : item}?`;
+
+/** Why a uses typed will be refused, or "" (empty is 1). */
+export function usesProblem(s: string): string {
+  const t = s.trim().replace(/,/g, "");
+  if (t === "") return "";
+  if (!/^\d+$/.test(t) || Number(t) < 1 || Number(t) > 1_000_000) return "A whole number, like 1000.";
+  return "";
+}
 
 /** A label's name by its id ("" when none or not among them). */
 export const labelName = (
