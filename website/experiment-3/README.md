@@ -10,8 +10,9 @@ One animated landing page for Taskiem. Its energy comes from [owo.app](https://o
 | `v2/` | Brand colours only (pine, lime, mist, white, with a little mint and amber). The hero phone switches between Taskiem chat, WhatsApp and Telegram sales; an endless strip of the connectors' logos; a workflow canvas that builds and runs itself; one sale traced step by step; animated job cards; a PIN approval; the experiment-2 site's footer. **Frozen.** Preview: <https://claude.ai/artifact/72teAue6hJYHpD9Bs6ksyH> |
 | `v3/` | v2's home page with a Schools link and a "Running a school?" band, and a second page, `schools.html`: a phone that switches between a parent, the proprietor and the gate; money landing on each child's own account number (Moniepoint, Flutterwave, Paystack); billing the term on the workflow canvas; the reminder ladder; cash approval and the gate; the proprietor's overview. Greenfield College and its figures are examples. Its canvases are drawn as the app draws them, and a test run ticks each step. **Frozen.** Preview: <https://claude.ai/artifact/5B3WC3vWneqTps4W9Gd8hc> |
 | `v4/` | v3 with copy that presents Taskiem as one system, and new parts: trading between businesses with haggling, one order going through the whole business on a phone, the jobs told as two chapters, the phone app, and the canvas showing an order from placed to paid. **Frozen.** Preview: <https://claude.ai/artifact/UbXJKXrs68UGiFfPeFcQ9m> |
+| `v5/` | A short page: hero, logos, an interactive control room, trade, the canvas, the schools band, the close. The control room is an orbit of eight jobs (sell, stock, expenses, payments, reconcile, payroll, leaks, reports) around the Taskiem core, beside a phone that plays each in Taskiem's own chat: tools, sheets, forms, cards, diary lines, the briefing and a chart. **Frozen.** Preview: <https://claude.ai/artifact/1jLSAeTUw5vhy4cpmH1hLm> |
 
-Each later version goes in its own folder (`v5/`, …), and no earlier one is edited.
+Each later version goes in its own folder (`v6/`, …), and no earlier one is edited.
 
 ## Opening a version
 
