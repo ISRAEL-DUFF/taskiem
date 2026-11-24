@@ -17434,10 +17434,13 @@ class PageDrawing {
 /// size, empty, count, rows, more and has_detail (a list groups, a table
 /// columns and order). G2 adds buttons (title, actions), a status (title, run,
 /// status, words, tone, started_at, ended_at, waiting_for) and parts a tool
-/// works out (from_tool; worked_at, or working while it runs). broken, error or
+/// works out (from_tool; worked_at, or working while it runs). G4 adds a board
+/// (title, size, empty, count, has_detail, lanes, move) and a chart (title,
+/// size, naira, empty, kind, points, ticks, zero, label_head, value_head,
+/// summary, over), every figure of which the server works out. broken, error or
 /// unavailable replace the rest.
 class PageBlock {
-  const PageBlock({this.actions, this.alert, this.broken, this.change, this.columns, this.count, this.empty, this.endedAt, this.error, this.fromTool, this.groups, this.hasDetail, required this.id, this.label, this.lead, this.more, this.naira, this.order, this.over, this.rows, this.run, this.shown, this.size, this.startedAt, this.status, this.tableId, this.text, this.title, this.tone, required this.type, this.unavailable, this.value, this.waitingFor, this.words, this.workedAt, this.working});
+  const PageBlock({this.actions, this.alert, this.broken, this.change, this.columns, this.count, this.empty, this.endedAt, this.error, this.fromTool, this.groups, this.hasDetail, required this.id, this.kind, this.label, this.labelHead, this.lanes, this.lead, this.more, this.move, this.naira, this.order, this.over, this.points, this.rows, this.run, this.shown, this.size, this.startedAt, this.status, this.summary, this.tableId, this.text, this.ticks, this.title, this.tone, required this.type, this.unavailable, this.value, this.valueHead, this.waitingFor, this.words, this.workedAt, this.working, this.zero});
 
   /// The page's own buttons (a buttons part).
   final List<PageAction>? actions;
@@ -17458,14 +17461,29 @@ class PageBlock {
   final List<PageBlockGroupsItem>? groups;
   final bool? hasDetail;
   final String id;
+  /// A chart's kind (G4).
+  final String? kind;
   final String? label;
+  /// The head of the chart's table's first column (Week, Kind).
+  final String? labelHead;
+  /// A board's columns (G4), in order, each with its first cards (as a list's
+  /// rows), how many it holds and the cursor for its next cards (GET
+  /// /v1/pages/{name}/blocks/{block}?lane=).
+  final List<PageLane>? lanes;
   final bool? lead;
   /// The cursor for the next rows; null at the end.
   final Object? more;
+  /// A board's move (G4): moving a card to another column opens this tool's
+  /// form, filled in (POST /v1/pages/{name}/act with to). disabled says why the
+  /// caller may not use it (its roles).
+  final PageBlockMove? move;
   final bool? naira;
   final PageBlockOrder? order;
   /// Said when a sum stopped at its first 5,000 rows.
   final String? over;
+  /// A chart's bars or a line's points, in order, each placed on the scale by
+  /// the server (share, 0 at the scale's foot, 1 at its top).
+  final List<PageChartPoint>? points;
   final List<PageRow>? rows;
   /// A status part's run, with its times and who it waits for, only for a
   /// caller with run.read (status and words are for every viewer).
@@ -17477,10 +17495,15 @@ class PageBlock {
   /// A status part's run's state (queued, running, waiting, completed, failed,
   /// cancelled).
   final String? status;
+  /// The chart in words, its accessible name ("Highest ₦4,500 (Week of 16
+  /// November); latest ₦1,200 (Week of 23 November), 4 in all.").
+  final String? summary;
   /// A table part with yes/no columns the caller may tick here, its table
   /// (PATCH /v1/tables/{id}/rows/{row}).
   final String? tableId;
   final String? text;
+  /// A chart's scale marks, from its foot to its top.
+  final List<PageBlockTicksItem>? ticks;
   final String? title;
   final String? tone;
   final String type;
@@ -17488,6 +17511,8 @@ class PageBlock {
   /// this caller ("You cannot see orders.", or the area is turned off).
   final String? unavailable;
   final double? value;
+  /// The head of the chart's table's figures (Amount, How many).
+  final String? valueHead;
   final List<ToolAnswerWait>? waitingFor;
   /// A status part's state in plain words.
   final String? words;
@@ -17495,6 +17520,8 @@ class PageBlock {
   final DateTime? workedAt;
   /// The tool has not answered yet ("Still working…"); read the page again.
   final String? working;
+  /// Where nought is on a chart's scale (the bars' foot), 0 to 1.
+  final double? zero;
 
   factory PageBlock.fromJson(Map<String, dynamic> j) => PageBlock(
         actions: j['actions'] == null ? null : (j['actions'] as List).map((e) => PageAction.fromJson(e as Map<String, dynamic>)).toList(),
@@ -17510,29 +17537,38 @@ class PageBlock {
         groups: j['groups'] == null ? null : (j['groups'] as List).map((e) => PageBlockGroupsItem.fromJson(e as Map<String, dynamic>)).toList(),
         hasDetail: j['has_detail'] == null ? null : j['has_detail'] as bool,
         id: j['id'] as String,
+        kind: j['kind'] == null ? null : j['kind'] as String,
         label: j['label'] == null ? null : j['label'] as String,
+        labelHead: j['label_head'] == null ? null : j['label_head'] as String,
+        lanes: j['lanes'] == null ? null : (j['lanes'] as List).map((e) => PageLane.fromJson(e as Map<String, dynamic>)).toList(),
         lead: j['lead'] == null ? null : j['lead'] as bool,
         more: j['more'],
+        move: j['move'] == null ? null : PageBlockMove.fromJson(j['move'] as Map<String, dynamic>),
         naira: j['naira'] == null ? null : j['naira'] as bool,
         order: j['order'] == null ? null : PageBlockOrder.fromJson(j['order'] as Map<String, dynamic>),
         over: j['over'] == null ? null : j['over'] as String,
+        points: j['points'] == null ? null : (j['points'] as List).map((e) => PageChartPoint.fromJson(e as Map<String, dynamic>)).toList(),
         rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => PageRow.fromJson(e as Map<String, dynamic>)).toList(),
         run: j['run'] == null ? null : j['run'] as String,
         shown: j['shown'] == null ? null : j['shown'] as String,
         size: j['size'] == null ? null : j['size'] as String,
         startedAt: j['started_at'] == null ? null : DateTime.parse(j['started_at'] as String),
         status: j['status'] == null ? null : j['status'] as String,
+        summary: j['summary'] == null ? null : j['summary'] as String,
         tableId: j['table_id'] == null ? null : j['table_id'] as String,
         text: j['text'] == null ? null : j['text'] as String,
+        ticks: j['ticks'] == null ? null : (j['ticks'] as List).map((e) => PageBlockTicksItem.fromJson(e as Map<String, dynamic>)).toList(),
         title: j['title'] == null ? null : j['title'] as String,
         tone: j['tone'] == null ? null : j['tone'] as String,
         type: j['type'] as String,
         unavailable: j['unavailable'] == null ? null : j['unavailable'] as String,
         value: j['value'] == null ? null : (j['value'] as num).toDouble(),
+        valueHead: j['value_head'] == null ? null : j['value_head'] as String,
         waitingFor: j['waiting_for'] == null ? null : (j['waiting_for'] as List).map((e) => ToolAnswerWait.fromJson(e as Map<String, dynamic>)).toList(),
         words: j['words'] == null ? null : j['words'] as String,
         workedAt: j['worked_at'] == null ? null : DateTime.parse(j['worked_at'] as String),
         working: j['working'] == null ? null : j['working'] as String,
+        zero: j['zero'] == null ? null : (j['zero'] as num).toDouble(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -17549,29 +17585,38 @@ class PageBlock {
         'groups': ?groups?.map((e) => e.toJson()).toList(),
         'has_detail': ?hasDetail,
         'id': id,
+        'kind': ?kind,
         'label': ?label,
+        'label_head': ?labelHead,
+        'lanes': ?lanes?.map((e) => e.toJson()).toList(),
         'lead': ?lead,
         'more': ?more,
+        'move': ?move?.toJson(),
         'naira': ?naira,
         'order': ?order?.toJson(),
         'over': ?over,
+        'points': ?points?.map((e) => e.toJson()).toList(),
         'rows': ?rows?.map((e) => e.toJson()).toList(),
         'run': ?run,
         'shown': ?shown,
         'size': ?size,
         'started_at': ?startedAt?.toUtc().toIso8601String(),
         'status': ?status,
+        'summary': ?summary,
         'table_id': ?tableId,
         'text': ?text,
+        'ticks': ?ticks?.map((e) => e.toJson()).toList(),
         'title': ?title,
         'tone': ?tone,
         'type': type,
         'unavailable': ?unavailable,
         'value': ?value,
+        'value_head': ?valueHead,
         'waiting_for': ?waitingFor?.map((e) => e.toJson()).toList(),
         'words': ?words,
         'worked_at': ?workedAt?.toUtc().toIso8601String(),
         'working': ?working,
+        'zero': ?zero,
       };
 }
 
@@ -17675,20 +17720,32 @@ class PageBlockGroupsItem {
       };
 }
 
-class PageBlockOrder {
-  const PageBlockOrder({required this.column, required this.desc});
+/// One of a board's columns as drawn (G4).
+class PageLane {
+  const PageLane({required this.count, required this.label, this.more, required this.rows, required this.value});
 
-  final String column;
-  final bool desc;
+  final int count;
+  final String label;
+  /// The cursor for this column's next cards (with lane); null at the end.
+  final Object? more;
+  final List<PageRow> rows;
+  /// The value its cards hold; send it as to to move a card here.
+  final String value;
 
-  factory PageBlockOrder.fromJson(Map<String, dynamic> j) => PageBlockOrder(
-        column: j['column'] as String,
-        desc: j['desc'] as bool,
+  factory PageLane.fromJson(Map<String, dynamic> j) => PageLane(
+        count: (j['count'] as num).toInt(),
+        label: j['label'] as String,
+        more: j['more'],
+        rows: (j['rows'] as List).map((e) => PageRow.fromJson(e as Map<String, dynamic>)).toList(),
+        value: j['value'] as String,
       );
 
   Map<String, dynamic> toJson() => {
-        'column': column,
-        'desc': desc,
+        'count': count,
+        'label': label,
+        'more': ?more,
+        'rows': rows.map((e) => e.toJson()).toList(),
+        'value': value,
       };
 }
 
@@ -17838,6 +17895,102 @@ class PageRowState {
       };
 }
 
+/// A board's move (G4): moving a card to another column opens this tool's form,
+/// filled in (POST /v1/pages/{name}/act with to). disabled says why the caller
+/// may not use it (its roles).
+class PageBlockMove {
+  const PageBlockMove({this.disabled, required this.label, required this.tool});
+
+  final String? disabled;
+  final String label;
+  final String tool;
+
+  factory PageBlockMove.fromJson(Map<String, dynamic> j) => PageBlockMove(
+        disabled: j['disabled'] == null ? null : j['disabled'] as String,
+        label: j['label'] as String,
+        tool: j['tool'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'disabled': ?disabled,
+        'label': label,
+        'tool': tool,
+      };
+}
+
+class PageBlockOrder {
+  const PageBlockOrder({required this.column, required this.desc});
+
+  final String column;
+  final bool desc;
+
+  factory PageBlockOrder.fromJson(Map<String, dynamic> j) => PageBlockOrder(
+        column: j['column'] as String,
+        desc: j['desc'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'column': column,
+        'desc': desc,
+      };
+}
+
+/// One of a chart's bars or a line's points (G4).
+class PageChartPoint {
+  const PageChartPoint({required this.label, required this.long, required this.share, required this.shown, required this.tick, required this.value});
+
+  /// Its words under the axis.
+  final String label;
+  /// Its words in the table and for a screen reader ("Week of 17 November").
+  final String long;
+  /// Its place on the scale, 0 to 1.
+  final double share;
+  /// The value as written (naira, or a count).
+  final String shown;
+  /// Whether its label is drawn under the axis (some are left to the table when
+  /// there are many).
+  final bool tick;
+  final double value;
+
+  factory PageChartPoint.fromJson(Map<String, dynamic> j) => PageChartPoint(
+        label: j['label'] as String,
+        long: j['long'] as String,
+        share: (j['share'] as num).toDouble(),
+        shown: j['shown'] as String,
+        tick: j['tick'] as bool,
+        value: (j['value'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'long': long,
+        'share': share,
+        'shown': shown,
+        'tick': tick,
+        'value': value,
+      };
+}
+
+class PageBlockTicksItem {
+  const PageBlockTicksItem({required this.share, required this.shown, required this.value});
+
+  final double share;
+  final String shown;
+  final double value;
+
+  factory PageBlockTicksItem.fromJson(Map<String, dynamic> j) => PageBlockTicksItem(
+        share: (j['share'] as num).toDouble(),
+        shown: j['shown'] as String,
+        value: (j['value'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'share': share,
+        'shown': shown,
+        'value': value,
+      };
+}
+
 class PageFilter {
   const PageFilter({required this.id, required this.label, this.options, required this.type, required this.value});
 
@@ -17883,12 +18036,16 @@ class PageFilterOptionsItem {
 }
 
 class PageActRequest {
-  const PageActRequest({required this.action, required this.block, this.row, this.yes});
+  const PageActRequest({required this.action, required this.block, this.row, this.to, this.yes});
 
   final int action;
   final String block;
   /// The row's id as drawn (none for the page's own buttons).
   final String? row;
+  /// A board's card moved to this column (G4): the board's move tool is given
+  /// filled in over the card and to, as a row's tool button is (action is not
+  /// read).
+  final String? to;
   /// The person said Yes to a signal.
   final bool? yes;
 
@@ -17896,6 +18053,7 @@ class PageActRequest {
         action: (j['action'] as num).toInt(),
         block: j['block'] as String,
         row: j['row'] == null ? null : j['row'] as String,
+        to: j['to'] == null ? null : j['to'] as String,
         yes: j['yes'] == null ? null : j['yes'] as bool,
       );
 
@@ -17903,6 +18061,7 @@ class PageActRequest {
         'action': action,
         'block': block,
         'row': ?row,
+        'to': ?to,
         'yes': ?yes,
       };
 }

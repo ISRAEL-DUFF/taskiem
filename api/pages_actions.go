@@ -437,6 +437,13 @@ func (s *Server) drawToolPart(ctx context.Context, pc *pageCtx, b pages.Block, o
 		}
 		return out
 	}
+	switch b.Type {
+	case "board":
+		return s.drawToolBoard(ctx, pc, b, got.outputs, out) // pages_g4.go
+	case "chart":
+		chartHead(b, out)
+		return chartOut(pages.ChartFromTool(b, got.outputs, pc.values), out)
+	}
 	rows, n := pages.ShapeTool(b, got.outputs, pc.values)
 	out["rows"], out["count"], out["more"] = rows, n, nil
 	s.markRows(ctx, pc, out)
@@ -644,6 +651,8 @@ type pageActReq struct {
 	Action int    `json:"action"`
 	// Yes: the person said yes to a signal.
 	Yes bool `json:"yes,omitempty"`
+	// To: a board's card moved to this column (G4): the board's move tool.
+	To string `json:"to,omitempty"`
 }
 
 // actPage is POST /v1/pages/{name}/act (?filters= as the view had them):
@@ -659,6 +668,10 @@ func (s *Server) actPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	i := slices.IndexFunc(pc.page.Blocks, func(b pages.Block) bool { return b.ID == req.Block })
+	if i >= 0 && req.To != "" {
+		s.actMove(w, r, pc, i, req) // pages_g4.go
+		return
+	}
 	if i < 0 || req.Action < 0 || req.Action >= len(pc.page.Blocks[i].Actions) {
 		writeErr(w, http.StatusNotFound, "this page has no such button")
 		return
@@ -702,7 +715,7 @@ func (s *Server) pageRowAct(ctx context.Context, pc *pageCtx, b pages.Block, row
 	switch {
 	case b.Type == "buttons":
 		return pages.FiltersAct(pc.values), nil
-	case b.Type != "list" && b.Type != "table":
+	case b.Type != "list" && b.Type != "table" && b.Type != "board":
 		return nil, fmt.Errorf("%w: this part has no buttons", pgx.ErrNoRows)
 	case row == "":
 		return nil, fmt.Errorf("%w: say which row the button was pressed on", errBadRequest)
@@ -856,6 +869,12 @@ func pageButtonPlace(version int, b pages.Block, req pageActReq, stored map[stri
 		ident = map[string]any{"row": req.Row}
 	default:
 		ident = map[string]any{"inputs": stored}
+	}
+	if req.To != "" {
+		// A board's card moved: once a row and the column it goes to.
+		ident["to"] = req.To
+		sum := sha256.Sum256(canonicalJSON(ident))
+		return fmt.Sprintf("v%d/%s/move/%x", version, b.ID, sum[:12])
 	}
 	sum := sha256.Sum256(canonicalJSON(ident))
 	return fmt.Sprintf("v%d/%s/%d/%x", version, b.ID, req.Action, sum[:12])

@@ -728,6 +728,8 @@ type pageCtx struct {
 	// the run the page's address names, for a status part.
 	tools map[string]*toolRow
 	run   uuid.UUID
+	// lane: the board column More reads (G4).
+	lane string
 }
 
 // openPage loads a page for drawing for the caller: the draft for an
@@ -933,9 +935,16 @@ func (s *Server) pageBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b := pc.page.Blocks[i]
-	if b.Type != "list" && b.Type != "table" {
-		writeErr(w, http.StatusBadRequest, "only a list or a table has more rows")
+	if b.Type != "list" && b.Type != "table" && b.Type != "board" {
+		writeErr(w, http.StatusBadRequest, "only a list, a table or a board has more rows")
 		return
+	}
+	if b.Type == "board" {
+		// A board's More reads one column (?lane=), in the part's own order.
+		if pc.lane = pages.LaneOf(b, r.URL.Query().Get("lane")); pc.lane == "" || r.URL.Query().Get("order") != "" {
+			writeErr(w, http.StatusBadRequest, "say which of the board's columns (lane), in the board's own order")
+			return
+		}
 	}
 	if why, off := pc.off[i]; off {
 		writeJSON(w, http.StatusOK, map[string]any{"id": b.ID, "type": b.Type, "unavailable": why})
@@ -1087,44 +1096,16 @@ func (s *Server) drawPart(ctx context.Context, pc *pageCtx, b pages.Block, curso
 				"up": v > pv, "down": v < pv}
 		}
 		return out
+	case "board":
+		return s.drawBoard(ctx, pc, b, t, read, readRows, cursor, out) // pages_g4.go
+	case "chart":
+		return s.drawChart(ctx, pc, b, t, read, readRows, out)
 	}
 	// A list or a table.
 	partHead(pc, b, t, order, out)
-	shown := []pages.Shown{}
-	var more any
-	count := int64(0)
-	if !read.None {
-		ranked := pages.RankedByPersonal(b, t, order, pc.values.Viewer.Personal)
-		in := map[string]any{"filters": read.Filters, "order": read.Order, "limit": pages.RowsShown, "count": "exact"}
-		if ranked {
-			in["limit"] = cursor.Skip + pages.RowsShown
-		} else if cursor.After != "" {
-			in["cursor"] = cursor.After
-		}
-		res, err := readRows(in)
-		if err != nil {
-			return failed(err)
-		}
-		var rows []map[string]any
-		for _, row := range rowsOf(res) {
-			if m, ok := row.(map[string]any); ok {
-				rows = append(rows, m)
-			}
-		}
-		if ranked {
-			rows = rows[min(cursor.Skip, len(rows)):]
-		}
-		shown = pages.Shape(b, t, rows, pc.values)
-		count = countOf(res)
-		if c, _ := res["next_cursor"].(string); c != "" {
-			next := pages.Cursor{Order: pages.OrderKey(order), After: c}
-			if ranked {
-				next = pages.Cursor{Order: pages.OrderKey(order), Skip: cursor.Skip + pages.RowsShown}
-			}
-			if !ranked || next.Skip <= pages.MaxSkip {
-				more = next.String()
-			}
-		}
+	shown, count, more, err := s.readPartRows(b, t, read, readRows, cursor, order, pc.values)
+	if err != nil {
+		return failed(err)
 	}
 	out["rows"], out["more"], out["count"] = shown, more, count
 	if b.Type == "list" && b.Group != nil {

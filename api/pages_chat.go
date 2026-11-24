@@ -116,6 +116,9 @@ func (s *Server) pageShortForm(ctx context.Context, name string, set map[string]
 
 	var figures []string
 	var list []string
+	// A board's columns and their counts, and a chart's latest points
+	// (G4), a line each under the figures.
+	var lines []string
 	more := 0
 	listed := false
 	for i, b := range pc.page.Blocks {
@@ -126,6 +129,10 @@ func (s *Server) pageShortForm(ctx context.Context, name string, set map[string]
 			continue
 		}
 		switch {
+		case b.Type == "board" || b.Type == "chart":
+			if line := g4ShortLine(b, s.drawBlock(ctx, pc, b, pages.Cursor{}, nil)); line != "" {
+				lines = append(lines, line)
+			}
 		case b.Type == "figure":
 			out := s.drawBlock(ctx, pc, b, pages.Cursor{}, nil)
 			if shown, ok := out["shown"].(string); ok && out["unavailable"] == nil && out["error"] == nil {
@@ -163,6 +170,9 @@ func (s *Server) pageShortForm(ctx context.Context, name string, set map[string]
 	b.WriteString("*" + pc.page.Title + "*")
 	if len(figures) > 0 {
 		b.WriteString("\n" + strings.Join(figures, " · "))
+	}
+	if len(lines) > 0 {
+		b.WriteString("\n" + strings.Join(lines, "\n"))
 	}
 	if len(list) > 0 {
 		b.WriteString("\n\n" + strings.Join(list, "\n"))

@@ -111,9 +111,9 @@ func checkToolSource(ps *problems, at, name string, b Block, env Env, pageRoles 
 		if b.Naira && typ != "integer" && typ != "number" {
 			ps.add(at+"/naira", "%s shows %s as money, but it is not a number.", name, s.Output)
 		}
-	case "list":
+	case "list", "board", "chart":
 		if typ != "list" {
-			ps.add(at+"/source/output", "%s lists rows, and %s's %s is not a list.", name, t.Name, s.Output)
+			ps.add(at+"/source/output", "%s shows rows, and %s's %s is not a list.", name, t.Name, s.Output)
 		}
 	}
 	if len(t.Inputs) > 0 || len(s.Inputs) > 0 {

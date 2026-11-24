@@ -86,7 +86,7 @@ func TestRefusals(t *testing.T) {
 		{"bad name", "/name", "2 to 24 small letters", func(m map[string]any) { m["name"] = "Tickets!" }, false},
 		{"no title", "/title", "needs a name", func(m map[string]any) { m["title"] = " " }, false},
 		{"unknown field", "/", "does not know", func(m map[string]any) { m["colour"] = "red" }, false},
-		{"unknown kind", "/blocks/0/type", "does not draw a part of the kind \"board\"", func(m map[string]any) { block(m, 0)["type"] = "board" }, false},
+		{"unknown kind", "/blocks/0/type", "does not draw a part of the kind \"carousel\"", func(m map[string]any) { block(m, 0)["type"] = "carousel" }, false},
 		{"two leads", "/blocks", "Only one figure", func(m map[string]any) { block(m, 2)["lead"] = true }, false},
 		{"five figures", "/blocks/5", "At most 4 figures", func(m map[string]any) {
 			bs := m["blocks"].([]any)

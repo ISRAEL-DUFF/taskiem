@@ -106,6 +106,9 @@ func Check(p *Page, env Env) []Problem {
 			for j, a := range b.Actions {
 				checkActionEnv(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, env)
 			}
+			if b.Board != nil && b.Board.Move != nil {
+				checkActionEnv(&ps, at+"/board/move", *b.Board.Move, env)
+			}
 			continue
 		}
 		for j, a := range b.Actions {
@@ -173,6 +176,15 @@ func Check(p *Page, env Env) []Problem {
 					checkReads(&ps, at+"/item/state/text", b.Item.State.Text, t, name)
 				}
 			}
+		case "board", "chart":
+			if b.Item != nil {
+				checkReads(&ps, at+"/item/title", b.Item.Title, t, name)
+				checkReads(&ps, at+"/item/sub", b.Item.Sub, t, name)
+				if b.Item.State != nil {
+					checkReads(&ps, at+"/item/state/text", b.Item.State.Text, t, name)
+				}
+			}
+			checkG4Env(&ps, at, name, b, t, env)
 		case "table":
 			for j, c := range b.Columns {
 				found, ok := col(fmt.Sprintf("%s/columns/%d/column", at, j), c.Column, "shows the column")

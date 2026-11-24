@@ -517,7 +517,7 @@ func Shape(b Block, t datatables.Table, rows []map[string]any, v Values) []Shown
 		act := map[string]any{"row": row, "filters": filters}
 		s := Shown{ID: shownCell(t, "id", raw["id"])}
 		switch b.Type {
-		case "list":
+		case "list", "board":
 			s.Title = say(b.Item.Title, act)
 			s.Sub = say(b.Item.Sub, act)
 			if st := b.Item.State; st != nil {
@@ -811,6 +811,16 @@ func Shows(p *Page, tables []datatables.Table) []string {
 					add(b.Of)
 				}
 				continue
+			}
+			if c := b.Chart; c != nil {
+				add(c.By)
+				if c.Of != "" {
+					add(c.Of)
+				}
+				continue
+			}
+			if b.Board != nil {
+				add(b.Board.Column)
 			}
 			if b.Item != nil {
 				reads(b.Item.Title)

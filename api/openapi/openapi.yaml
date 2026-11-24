@@ -63346,6 +63346,9 @@ components:
         'yes':
           type: boolean
           description: The person said Yes to a signal.
+        to:
+          type: string
+          description: "A board's card moved to this column (G4): the board's move tool is given filled in over the card and to, as a row's tool button is (action is not read)."
       additionalProperties: false
     PageActResult:
       type: object
@@ -63387,14 +63390,66 @@ components:
       additionalProperties: false
     PageBlock:
       type: object
-      description: One part as drawn. A heading has title and text; a figure label, value, shown, tone, lead, naira and maybe change and over; a list or table title, size, empty, count, rows, more and has_detail (a list groups, a table columns and order). G2 adds buttons (title, actions), a status (title, run, status, words, tone, started_at, ended_at, waiting_for) and parts a tool works out (from_tool; worked_at, or working while it runs). broken, error or unavailable replace the rest.
+      description: One part as drawn. A heading has title and text; a figure label, value, shown, tone, lead, naira and maybe change and over; a list or table title, size, empty, count, rows, more and has_detail (a list groups, a table columns and order). G2 adds buttons (title, actions), a status (title, run, status, words, tone, started_at, ended_at, waiting_for) and parts a tool works out (from_tool; worked_at, or working while it runs). G4 adds a board (title, size, empty, count, has_detail, lanes, move) and a chart (title, size, naira, empty, kind, points, ticks, zero, label_head, value_head, summary, over), every figure of which the server works out. broken, error or unavailable replace the rest.
       required: [id, type]
       properties:
         id:
           type: string
         type:
           type: string
-          enum: [heading, figure, list, table, buttons, status]
+          enum: [heading, figure, list, table, buttons, status, board, chart]
+        lanes:
+          type: array
+          description: A board's columns (G4), in order, each with its first cards (as a list's rows), how many it holds and the cursor for its next cards (GET /v1/pages/{name}/blocks/{block}?lane=).
+          items:
+            $ref: '#/components/schemas/PageLane'
+        move:
+          type: object
+          description: "A board's move (G4): moving a card to another column opens this tool's form, filled in (POST /v1/pages/{name}/act with to). disabled says why the caller may not use it (its roles)."
+          required: [label, tool]
+          properties:
+            label:
+              type: string
+            tool:
+              type: string
+            disabled:
+              type: string
+          additionalProperties: false
+        kind:
+          type: string
+          enum: [bars, line]
+          description: A chart's kind (G4).
+        points:
+          type: array
+          description: A chart's bars or a line's points, in order, each placed on the scale by the server (share, 0 at the scale's foot, 1 at its top).
+          items:
+            $ref: '#/components/schemas/PageChartPoint'
+        ticks:
+          type: array
+          description: A chart's scale marks, from its foot to its top.
+          items:
+            type: object
+            required: [value, shown, share]
+            properties:
+              value:
+                type: number
+              shown:
+                type: string
+              share:
+                type: number
+            additionalProperties: false
+        zero:
+          type: number
+          description: Where nought is on a chart's scale (the bars' foot), 0 to 1.
+        label_head:
+          type: string
+          description: The head of the chart's table's first column (Week, Kind).
+        value_head:
+          type: string
+          description: The head of the chart's table's figures (Amount, How many).
+        summary:
+          type: string
+          description: The chart in words, its accessible name ("Highest ₦4,500 (Week of 16 November); latest ₦1,200 (Week of 23 November), 4 in all.").
         actions:
           type: array
           description: The page's own buttons (a buttons part).
@@ -63539,6 +63594,51 @@ components:
         unavailable:
           type: string
           description: In place of a part over Taskiem's own records, why it is not drawn for this caller ("You cannot see orders.", or the area is turned off).
+      additionalProperties: false
+    PageLane:
+      type: object
+      description: One of a board's columns as drawn (G4).
+      required: [value, label, count, rows]
+      properties:
+        value:
+          type: string
+          description: The value its cards hold; send it as to to move a card here.
+        label:
+          type: string
+        count:
+          type: integer
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageRow'
+        more:
+          type:
+          - string
+          - 'null'
+          description: The cursor for this column's next cards (with lane); null at the end.
+      additionalProperties: false
+    PageChartPoint:
+      type: object
+      description: One of a chart's bars or a line's points (G4).
+      required: [label, long, value, shown, share, tick]
+      properties:
+        label:
+          type: string
+          description: Its words under the axis.
+        long:
+          type: string
+          description: Its words in the table and for a screen reader ("Week of 17 November").
+        value:
+          type: number
+        shown:
+          type: string
+          description: The value as written (naira, or a count).
+        share:
+          type: number
+          description: Its place on the scale, 0 to 1.
+        tick:
+          type: boolean
+          description: Whether its label is drawn under the axis (some are left to the table when there are many).
       additionalProperties: false
     PageDrawing:
       type: object

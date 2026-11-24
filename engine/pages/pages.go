@@ -136,6 +136,11 @@ type Block struct {
 	// RowStatus: a list's or a table's rows each show where a run of a
 	// workflow is (§4, a row's own status).
 	RowStatus *RowStatus `json:"status,omitempty"`
+	// Board: a board's columns by a choice, and the tool a card moved
+	// runs (G4, g4.go).
+	Board *Board `json:"board,omitempty"`
+	// Chart: what a chart shows (G4, g4.go).
+	Chart *Chart `json:"chart,omitempty"`
 	// Every part but a heading, buttons and a status.
 	Source *Source `json:"source,omitempty"`
 }
@@ -288,7 +293,7 @@ func (b Block) partName(i int) string {
 	case b.Label != "":
 		return fmt.Sprintf("%q", b.Label)
 	}
-	kind := map[string]string{"heading": "heading", "figure": "figure", "list": "list", "table": "table", "buttons": "buttons", "status": "status"}[b.Type]
+	kind := map[string]string{"heading": "heading", "figure": "figure", "list": "list", "table": "table", "buttons": "buttons", "status": "status", "board": "board", "chart": "chart"}[b.Type]
 	if kind == "" {
 		kind = "part"
 	}
@@ -550,11 +555,21 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 		if fromTool {
 			ps.add(at+"/source/tool", "%s shows a table's rows: a tool's answer is shown as a list or a figure.", name)
 		}
+	case "board":
+		b.checkBoard(name, at, rowEngine, fromTool, ps)
+	case "chart":
+		b.checkChart(name, at, fromTool, ps)
 	default:
 		needsSource = false
-		ps.add(at+"/type", "Taskiem does not draw a part of the kind %q: a page has headings, figures, lists, tables, buttons and a status.", b.Type)
+		ps.add(at+"/type", "Taskiem does not draw a part of the kind %q: a page has headings, figures, lists, tables, buttons, a status, boards and charts.", b.Type)
 	}
-	if b.Type == "list" || b.Type == "table" {
+	if b.Type != "board" && b.Board != nil {
+		ps.add(at+"/board", "Only a board has columns of cards.")
+	}
+	if b.Type != "chart" && b.Chart != nil {
+		ps.add(at+"/chart", "Only a chart shows bars or a line.")
+	}
+	if b.Type == "list" || b.Type == "table" || b.Type == "board" {
 		if len(b.Actions) > MaxRowActions {
 			ps.add(at+"/actions", "Each row of %s has at most %d buttons.", name, MaxRowActions)
 		}
@@ -605,6 +620,9 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 	}
 	if n > 1 {
 		ps.add(at+"/source", "%s shows one table, Taskiem's own records or a tool's answer: one of them.", name)
+	}
+	if s.Records != "" && (b.Type == "board" || b.Type == "chart") {
+		ps.add(at+"/source/records", "%s shows one of the business's own tables or a tool's answer, not Taskiem's own records.", name)
 	}
 	if s.Tool != "" {
 		if s.Output == "" {
