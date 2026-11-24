@@ -13,7 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/paystack"
+	"github.com/israel-duff/taskiem/engine/ai"
+	"github.com/israel-duff/taskiem/engine/lang"
 )
 
 // event posts an Events API delivery as Slack does, signed with secret,
@@ -66,7 +69,7 @@ func TestSlackConversation(t *testing.T) {
 		t.Fatalf("dm: %d", st)
 	}
 	got := w.fake.to("U0OWNER")[before:]
-	if len(got) != 1 || !strings.Contains(got[0]["text"].(string), "Pick a topic") || !strings.Contains(fmt.Sprint(got[0]["blocks"]), "value:topic:staff") {
+	if len(got) != 1 || !strings.Contains(got[0]["text"].(string), "Pick a topic") || !strings.Contains(fmt.Sprint(got[0]["blocks"]), "value:topic:sales") || !strings.Contains(fmt.Sprint(got[0]["blocks"]), "value:topic::more@5") {
 		t.Fatalf("help: %v", got)
 	}
 	// Slack retried it: nothing twice.
@@ -141,5 +144,109 @@ func TestSlackConnect(t *testing.T) {
 	w.srv.WaitBackground()
 	if told := w.fake.to("U0OWNER")[before:]; len(told) != 1 || !strings.Contains(told[0]["text"].(string), "Paystack is connected") {
 		t.Fatalf("told: %v", told)
+	}
+}
+
+// Slack's menus (chat-menus.md §9): five buttons at most, then More…,
+// which shows the next five; for the topics and for a topic's rows; a
+// number picks among the buttons as sent.
+func TestSlackMenuFiveThenMore(t *testing.T) {
+	w := newSlackWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(201, "POST", "/v1/connections", map[string]any{"connector": "slack@1", "environment": "prod", "credentials": map[string]string{"bot_token": "xoxb-acme"}})
+	w.fake.users["owner@acme.test"] = "U0OWNER"
+	w.link(t, owner, "U0OWNER")
+	// buttons are the last message's buttons: their words and values.
+	buttons := func() (titles, values []string) {
+		t.Helper()
+		got := w.fake.to("U0OWNER")
+		blocks, _ := got[len(got)-1]["blocks"].([]any)
+		for _, b := range blocks {
+			if els, ok := b.(map[string]any)["elements"].([]any); ok {
+				for _, e := range els {
+					el := e.(map[string]any)
+					titles = append(titles, el["text"].(map[string]any)["text"].(string))
+					values = append(values, fmt.Sprint(el["value"]))
+				}
+			}
+		}
+		return titles, values
+	}
+	w.event(t, dm("Ev10", "U0OWNER", "help"), slackSecret)
+	titles, values := buttons()
+	if len(titles) != 6 || titles[5] != "More…" || values[5] != "topic::more@5" {
+		t.Fatalf("topics: %v %v", titles, values)
+	}
+	w.click(t, "U0OWNER", "taskiem.reply.5", values[5], slackSecret)
+	next, nextValues := buttons()
+	if len(next) != 6 || next[0] == titles[0] || nextValues[5] != "topic::more@10" {
+		t.Fatalf("the next five topics: %v %v", next, nextValues)
+	}
+	// A topic of seven: five, then More…, then the last two.
+	w.event(t, dm("Ev11", "U0OWNER", "help saved"), slackSecret)
+	titles, values = buttons()
+	if len(titles) != 6 || titles[5] != "More…" || values[5] != "topic:saved:more@5" {
+		t.Fatalf("a topic: %v %v", titles, values)
+	}
+	w.click(t, "U0OWNER", "taskiem.reply.5", values[5], slackSecret)
+	rest, restValues := buttons()
+	if len(rest) != 2 || !strings.HasPrefix(restValues[0], "act:saved.") {
+		t.Fatalf("the rest: %v %v", rest, restValues)
+	}
+	// More… by its number.
+	w.event(t, dm("Ev12", "U0OWNER", "help saved"), slackSecret)
+	w.event(t, dm("Ev13", "U0OWNER", "6"), slackSecret)
+	if again, _ := buttons(); len(again) != 2 || again[0] != rest[0] {
+		t.Fatalf("More… by its number: %v", again)
+	}
+}
+
+// A topic's More… on Slack after the model picked a row (review of H4):
+// the picked row first, then the next page goes on from there, so no row
+// is skipped and none shown twice; the same by its number.
+func TestSlackMenuMoreKeepsThePick(t *testing.T) {
+	w := newSlackWorld(t)
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN}, Model: &ai.Fake{Respond: func(req ai.Request) (*ai.Response, error) {
+		return &ai.Response{Text: `{"kind":"topic","id":"saved","pick":"saved.import","values":[],"command":"","reply":""}`}, nil
+	}}}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(201, "POST", "/v1/connections", map[string]any{"connector": "slack@1", "environment": "prod", "credentials": map[string]string{"bot_token": "xoxb-acme"}})
+	w.fake.users["owner@acme.test"] = "U0OWNER"
+	w.link(t, owner, "U0OWNER")
+	values := func() []string {
+		t.Helper()
+		got := w.fake.to("U0OWNER")
+		blocks, _ := got[len(got)-1]["blocks"].([]any)
+		var out []string
+		for _, b := range blocks {
+			if els, ok := b.(map[string]any)["elements"].([]any); ok {
+				for _, e := range els {
+					out = append(out, fmt.Sprint(e.(map[string]any)["value"]))
+				}
+			}
+		}
+		return out
+	}
+	for i, more := range []func(more string){
+		func(more string) { w.click(t, "U0OWNER", "taskiem.reply.5", more, slackSecret) },
+		func(string) { w.event(t, dm("Ev31", "U0OWNER", "6"), slackSecret) },
+	} {
+		w.event(t, dm(fmt.Sprintf("Ev2%d", i), "U0OWNER", "my saved stuff is a mess"), slackSecret)
+		first := values()
+		if len(first) != 6 || first[0] != "act:saved.import" || first[5] != "topic:saved:more@5~saved.import" {
+			t.Fatalf("the first page: %v", first)
+		}
+		more(first[5])
+		rest := values()
+		seen := map[string]bool{}
+		for _, v := range append(first[:5], rest...) {
+			if seen[v] {
+				t.Fatalf("%s twice: %v then %v", v, first, rest)
+			}
+			seen[v] = true
+		}
+		if len(rest) != 2 || len(seen) != 7 {
+			t.Fatalf("a row skipped: %v then %v", first, rest)
+		}
 	}
 }

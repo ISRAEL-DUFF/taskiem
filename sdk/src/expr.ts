@@ -5,7 +5,7 @@
 // step, never guessed at.
 
 /** The variables an expression can read (wd/v1 rule 10). */
-export const ROOTS = ["trigger", "steps", "run", "env", "secrets", "item", "index"] as const;
+export const ROOTS = ["trigger", "steps", "run", "env", "secrets", "saved", "item", "index"] as const;
 export type Root = (typeof ROOTS)[number];
 
 export class ExpressionError extends Error {

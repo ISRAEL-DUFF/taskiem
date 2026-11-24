@@ -124,6 +124,9 @@ export interface LinkMessage {
   reactions?: Reaction[];
   /** You starred it (a star is yours alone). */
   starred?: boolean;
+  /** The payment (or batch) a diary line on our side is about. */
+  payment?: string;
+  batch?: string;
   /** Only in the browser: a message still being sent, or not sent (Retry). */
   local?: "sending" | "failed";
   /** Why a local message was not sent, in words. */

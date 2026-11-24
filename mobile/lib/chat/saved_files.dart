@@ -24,6 +24,7 @@ import 'groups.dart' show pickAction;
 import 'my_chat.dart' show sayFailure;
 import 'saved_accounts.dart' show SavedApi, cleanSavedName, savedNameProblem;
 import 'tags.dart' show TagSuggestion;
+import 'saved_runs.dart' show SavedRunsSection;
 
 /// A saved file as lists name it: its upload's id, name, type and size.
 typedef SavedFileMeta = ({String id, String name, String type, int size});
@@ -183,6 +184,7 @@ class _SavedFileSheetState extends State<SavedFileSheet> {
             TkKitField(label: 'Note', hint: 'Optional, for your own reference', child: TkTextBox(controller: _note, max: 200)),
           ],
         ),
+        if (_x != null && !widget.api.mine) SavedRunsSection(auth: widget.api.auth, id: _x.id),
         if (_error != null) TkCallout(leading: TkSquare('b-warn', color: look.red), title: _error!, color: look.red),
       ],
     );

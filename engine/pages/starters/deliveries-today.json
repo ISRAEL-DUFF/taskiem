@@ -1,0 +1,40 @@
+{
+  "id": "deliveries-today",
+  "title": "Deliveries today",
+  "about": "Deliveries by where each one is, with how many wait, On the way and Delivered on each, and a button to add one.",
+  "icon": "place",
+  "tables": [
+    {"name": "deliveries", "title": "Deliveries", "columns": [
+      {"name": "customer", "title": "Customer", "type": "text", "required": true},
+      {"name": "address", "title": "Address", "type": "text"},
+      {"name": "phone", "title": "Phone", "type": "phone"},
+      {"name": "rider", "title": "Rider", "type": "text"},
+      {"name": "due", "title": "Due", "type": "date"},
+      {"name": "status", "title": "Status", "type": "text"}]}
+  ],
+  "tools": [
+    {"command": "add-delivery", "name": "Add a delivery", "about": "Adds a delivery, waiting to go out", "kind": "add", "table": "deliveries",
+     "asks": ["customer", "address", "phone", "rider", "due"], "sets": {"status": "waiting"}, "icon": "truck"},
+    {"command": "delivery-status", "name": "Move a delivery", "about": "Says a delivery is on the way or delivered", "kind": "change", "table": "deliveries",
+     "asks": ["status"], "icon": "truck"}
+  ],
+  "page": {"page": "page/v1", "name": "deliveries-today", "title": "Deliveries today", "icon": "place", "about": "Today's deliveries and where each one is",
+    "filters": [{"id": "when", "type": "dates", "column": "due", "label": "Due"}, {"id": "q", "type": "search", "columns": ["customer", "rider", "address"]}],
+    "blocks": [
+      {"id": "waiting", "type": "figure", "label": "Waiting", "value": "count", "tone": "warn", "lead": true,
+       "source": {"table": "deliveries", "filters": [{"column": "status", "op": "eq", "value": "waiting"}]}},
+      {"id": "out", "type": "figure", "label": "On the way", "value": "count",
+       "source": {"table": "deliveries", "filters": [{"column": "status", "op": "eq", "value": "on the way"}]}},
+      {"id": "done", "type": "figure", "label": "Delivered", "value": "count", "tone": "good",
+       "source": {"table": "deliveries", "filters": [{"column": "status", "op": "eq", "value": "delivered"}]}},
+      {"id": "add", "type": "buttons", "actions": [{"label": "Add a delivery", "tool": "add-delivery"}]},
+      {"id": "list", "type": "list", "title": "Deliveries", "source": {"table": "deliveries", "order": [{"column": "due"}], "uses": ["when", "q"]},
+       "item": {"title": "=row.customer", "sub": "=row.address", "state": {"text": "=row.status", "tones": {"waiting": "warn", "on the way": "plain", "delivered": "good"}}},
+       "group": {"column": "status", "order": ["waiting", "on the way", "delivered"]},
+       "detail": {"title": "=row.customer", "lines": [{"label": "Address", "value": "=row.address"}, {"label": "Phone", "value": "=row.phone"}, {"label": "Rider", "value": "=row.rider"}, {"label": "Due", "value": "=row.due"}]},
+       "actions": [
+         {"label": "On the way", "tool": "delivery-status", "inputs": {"ref": "=row.id", "status": "on the way"}, "when": "=row.status == 'waiting'"},
+         {"label": "Delivered", "tool": "delivery-status", "inputs": {"ref": "=row.id", "status": "delivered"}, "when": "=row.status != 'delivered'"}],
+       "empty": "No deliveries"}
+    ]}
+}

@@ -261,7 +261,9 @@ class _PayChipState extends State<PayChip> {
     }
     final (:action, :initial) = fill;
     _opening = true;
-    final paid = await showTkSheet<Payment>(context, (_) => PaySheet(auth: widget.auth, action: action, initial: initial, from: 'message', said: r.name ?? ''));
+    // From a linked business's chat: its diary line goes there (H7).
+    final where = widget.from?.kind == 'link' ? widget.from!.chat : null;
+    final paid = await showTkSheet<Payment>(context, (_) => PaySheet(auth: widget.auth, action: action, initial: initial, from: 'message', said: r.name ?? '', where: where));
     _opening = false;
     if (paid == null || !mounted) return;
     // Read again: the chip says it was paid.

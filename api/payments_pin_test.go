@@ -131,12 +131,17 @@ func TestPayByPin(t *testing.T) {
 	}
 	pinAge(t, w, owner, "2 days")
 
-	// Wrong PINs are counted with the approvals': five lock it.
+	// Wrong PINs are counted with the approvals': five lock it. A wrong
+	// PIN changes nothing of the payment, the sheet's ticks neither (H7).
 	for i := range 4 {
-		if st, e := confirm(small, map[string]any{"pin": fmt.Sprintf("00000%d", i)}); st != 403 || e["code"] != "pin_wrong" ||
+		if st, e := confirm(small, map[string]any{"pin": fmt.Sprintf("00000%d", i), "tell_payee": false, "send_receipt": true}); st != 403 || e["code"] != "pin_wrong" ||
 			!strings.Contains(fmt.Sprint(e["error"]), fmt.Sprintf("%d tries left", 4-i)) {
 			t.Fatalf("wrong %d: %d %v", i, st, e)
 		}
+	}
+	var tell, receipt bool
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT tell_payee, send_receipt FROM payments WHERE id = $1`, small).Scan(&tell, &receipt); err != nil || !tell || receipt {
+		t.Fatalf("a wrong PIN changed the ticks: %v %v %v", tell, receipt, err)
 	}
 	if _, e := confirm(small, map[string]any{"pin": "000009"}); e["code"] != "pin_locked" {
 		t.Fatalf("the fifth: %v", e)

@@ -113,6 +113,9 @@ func sameJSON(a, b any) bool {
 }
 
 func andList(words []string) string {
+	if len(words) == 0 {
+		return "nothing"
+	}
 	if len(words) == 1 {
 		return words[0]
 	}
@@ -363,6 +366,9 @@ func Missing(p *Page, tables []datatables.Table, areaOn func(area string) bool) 
 		}
 	}
 	for _, name := range names {
+		if IsSaved(name) {
+			continue // a kind the business lacks is Check's to say
+		}
 		if view, ok := strings.CutPrefix(name, RecordsPrefix); ok {
 			v, known := RecordViewNamed(view)
 			switch {

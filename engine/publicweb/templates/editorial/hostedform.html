@@ -1,5 +1,6 @@
 {{define "hfield"}}<div class="ln field{{if .Error}} has-error{{end}}">
-{{- if eq .Widget "checkbox"}}
+{{- if .Device}}{{template "hdevice" .}}
+{{- else if eq .Widget "checkbox"}}
 <label class="check"><input id="{{.ID}}" type="checkbox" name="{{.Input}}" value="true"{{if .Checked}} checked{{end}}> {{.Label}}</label>
 {{- else if eq .Widget "consent"}}
 <label class="check"><input id="{{.ID}}" type="checkbox" name="{{.Input}}" value="true" required{{if .Checked}} checked{{end}}> {{.Consent}}</label>
@@ -28,7 +29,9 @@
 {{with .Error}}<p class="field-error">{{.}}</p>{{end}}
 </div>
 {{end}}
-{{- template "fhead" .}}{{if .Embed}}<script src="{{asset "form-embed.js"}}" defer></script>
+{{- template "fhead" .}}{{if .Device}}<link rel="stylesheet" href="{{asset "form-device.css"}}">
+<script src="{{asset "form-device.js"}}" defer></script>
+{{end}}{{if .Embed}}<script src="{{asset "form-embed.js"}}" defer></script>
 {{end}}{{template "fbody" .}}
 {{if .Embed}}<div hidden data-embed data-origins="{{.Origins}}"></div>
 {{end}}<p class="kicker">From {{.Business}}</p>

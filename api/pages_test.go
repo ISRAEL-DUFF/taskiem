@@ -224,7 +224,7 @@ func TestPagesFromATable(t *testing.T) {
 		t.Errorf("reserved: %d %v", s, out)
 	}
 	if out := owner.must(200, "POST", "/v1/pages/validate", map[string]any{"document": map[string]any{"page": "page/v1", "name": "x1", "title": "X",
-		"blocks": []any{map[string]any{"id": "b", "type": "board"}}}}); !strings.Contains(mustString(t, out), "does not draw a part") {
+		"blocks": []any{map[string]any{"id": "b", "type": "carousel"}}}}); !strings.Contains(mustString(t, out), "does not draw a part") {
 		t.Errorf("validate: %v", out)
 	}
 

@@ -291,5 +291,121 @@
       "no label",
       "no put label"
     ]
+  },
+  "topics": {
+    "sales": [
+      "don sell",
+      "sell am",
+      "market sell",
+      "customer buy",
+      "patronize"
+    ],
+    "stock": [
+      "goods",
+      "remain",
+      "don finish",
+      "carton",
+      "bag",
+      "spoil",
+      "how many we get"
+    ],
+    "products": [
+      "product",
+      "price",
+      "how much be",
+      "item",
+      "foto"
+    ],
+    "page": [
+      "my page",
+      "shop link",
+      "open shop",
+      "close shop",
+      "website"
+    ],
+    "orders": [
+      "order",
+      "deliver am",
+      "refund"
+    ],
+    "riders": [
+      "okada",
+      "keke",
+      "rider",
+      "dispatch",
+      "bike man",
+      "delivery boy"
+    ],
+    "bookings": [
+      "booking",
+      "appointment",
+      "book am"
+    ],
+    "buying": [
+      "supplier",
+      "restock",
+      "depot",
+      "wholesale",
+      "go market buy"
+    ],
+    "money": [
+      "money",
+      "cash",
+      "spend",
+      "spent",
+      "chop money",
+      "expense",
+      "diesel",
+      "fuel"
+    ],
+    "pay": [
+      "pay am",
+      "send money",
+      "transfer give"
+    ],
+    "owe": [
+      "dey owe",
+      "owe me",
+      "owing",
+      "debt",
+      "credit",
+      "gbese"
+    ],
+    "staff": [
+      "worker",
+      "staff",
+      "apprentice",
+      "task",
+      "work wey"
+    ],
+    "lists": [
+      "list",
+      "record",
+      "table"
+    ],
+    "auto": [
+      "remind",
+      "every day",
+      "every week",
+      "automat"
+    ],
+    "saved": [
+      "save am",
+      "keep am",
+      "remember"
+    ],
+    "school": [
+      "pikin",
+      "school",
+      "fees",
+      "student",
+      "parent"
+    ],
+    "account": [
+      "language",
+      "password",
+      "login",
+      "my plan"
+    ]
   }
 }

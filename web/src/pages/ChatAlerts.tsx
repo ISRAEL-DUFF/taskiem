@@ -456,6 +456,14 @@ function ProofOf({
           </a>
         )}
         {w.photo && <span>{w.photo}</span>}
+        {w.signed &&
+          (proof.signature_url ? (
+            <a href={proof.signature_url} target="_blank" rel="noreferrer">
+              {w.signed}
+            </a>
+          ) : (
+            <span>{w.signed}</span>
+          ))}
       </span>
     </span>
   );

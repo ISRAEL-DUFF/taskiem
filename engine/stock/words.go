@@ -1,6 +1,7 @@
 package stock
 
 import (
+	"math/big"
 	"regexp"
 	"slices"
 	"strconv"
@@ -32,6 +33,85 @@ func Singular(u string) string {
 		return u[:len(u)-1]
 	}
 	return u
+}
+
+// countUnits count things one by one: a stock item counted in one of them
+// (or in none) takes one of it for each one bought.
+var countUnits = map[string]bool{"": true, "piece": true, "pc": true, "unit": true, "item": true, "each": true, "one": true, "no": true}
+
+// measureUnits measure rather than count: a line bought with no unit of
+// its own, into a stock item counted in one of them, asks how much one is.
+var measureUnits = map[string]bool{"g": true, "gram": true, "kg": true, "kilo": true, "kilogram": true, "mg": true, "ml": true, "cl": true, "l": true,
+	"litre": true, "yard": true, "metre": true, "meter": true, "m": true, "cm": true, "mm": true, "inch": true, "foot": true, "feet": true,
+	"ft": true, "lb": true, "oz": true}
+
+// unitKey is a unit as AskUses compares it: lower case, for one.
+func unitKey(u string) string { return strings.ToLower(Singular(strings.TrimSpace(u))) }
+
+// AskUses reports whether a line bought in lineUnit ("bag", or "" when
+// none was said), going into a stock item counted in stockUnit, asks how
+// many of the stock item one of it is (what a business buys §6;
+// build-plan-gaps H2, g-uses-ask): the stock item is counted in another
+// unit (a bag into grams) and nothing says it yet (uses, a product's own,
+// is 1). A line with no unit asks only of a stock item measured (grams,
+// yards), not of one counted in bags or cartons. The web (lib/treat.ts
+// askUses) and the app (treat_line.dart askUses) ask by the same rule.
+func AskUses(lineUnit, stockUnit string, uses int64) bool {
+	if uses > 1 {
+		return false
+	}
+	s, l := unitKey(stockUnit), unitKey(lineUnit)
+	if countUnits[s] || l == s {
+		return false
+	}
+	return l != "" || measureUnits[s]
+}
+
+// convert is each measure's size in its kind's smallest unit (mg, ml,
+// mm): "50 kg" into a stock item counted in g is 50,000.
+var convert = map[string]struct {
+	kind string
+	size int64
+}{
+	"mg": {"mass", 1}, "g": {"mass", 1000}, "gram": {"mass", 1000}, "kg": {"mass", 1_000_000}, "kilo": {"mass", 1_000_000}, "kilogram": {"mass", 1_000_000},
+	"ml": {"volume", 1}, "cl": {"volume", 10}, "l": {"volume", 1000}, "litre": {"volume", 1000},
+	"mm": {"length", 1}, "cm": {"length", 10}, "m": {"length", 1000}, "metre": {"length", 1000}, "meter": {"length", 1000},
+}
+
+var usesRe = regexp.MustCompile(`^\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?\s*([A-Za-z]+)?\s*\.?\s*$`)
+
+// ParseUses reads how many of a stock item counted in stockUnit one of a
+// line is, from an answer (g-uses-ask): a whole number ("50000",
+// "50,000"), or a number followed by the stock unit itself or one that
+// converts to it ("50 kg" into g is 50,000; "1.5 l" into ml is 1,500). A
+// decimal is taken only when it makes whole stock units, and commas only
+// as thousands ("2,5" is not a number). Anything else ("1 bag = 50,000g",
+// "a lot") is not an answer: ok is false. The result is 1 to MaxDelta.
+func ParseUses(text, stockUnit string) (int64, bool) {
+	m := usesRe.FindStringSubmatch(text)
+	if m == nil {
+		return 0, false
+	}
+	n, ok := new(big.Rat).SetString(strings.ReplaceAll(m[1], ",", "") + "." + m[2] + "0")
+	if !ok {
+		return 0, false
+	}
+	if u := unitKey(m[3]); u != "" && u != unitKey(stockUnit) {
+		from, okFrom := convert[u]
+		to, okTo := convert[unitKey(stockUnit)]
+		if !okFrom || !okTo || from.kind != to.kind {
+			return 0, false
+		}
+		n.Mul(n, big.NewRat(from.size, to.size))
+	}
+	if !n.IsInt() || !n.Num().IsInt64() {
+		return 0, false
+	}
+	v := n.Num().Int64()
+	if v < 1 || v > MaxDelta {
+		return 0, false
+	}
+	return v, true
 }
 
 func isUnit(w string) bool {

@@ -49,13 +49,14 @@ const RUN_FIELDS: Record<SavedKind, [string, string][]> = {
   file: [
     ["file_name", "File name"],
     ["file_type", "File type"],
+    ["file", "The file, for a message to send"],
     ["note", "Note"],
   ],
 };
 
-/** The fields every saved thing has, which a made-up kind's field of the
- * same key is read beside as field_<key>. */
-const RESERVED = new Set(["name", "title", "kind", "note"]);
+/** The fields every saved thing has (and a saved file's file), which a
+ * made-up kind's field of the same key is read beside as field_<key>. */
+const RESERVED = new Set(["name", "title", "kind", "note", "file"]);
 
 /** The key a run reads a made-up kind's field by. */
 export const customFieldKey = (key: string) => (RESERVED.has(key) ? `field_${key}` : key);

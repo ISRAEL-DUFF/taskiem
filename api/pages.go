@@ -57,6 +57,9 @@ func (s *Server) pageRoutes(r chi.Router) {
 	r.Post("/pages/{name}/act", s.actPage)                               // pages_actions.go
 	r.Post("/pages/{name}/refresh", s.refreshPage)                       // pages_actions.go
 	r.With(s.need(PermPageEdit)).Get("/page-records", s.listPageRecords) // pages_records.go
+	r.With(s.need(PermPageEdit)).Get("/page-choices", s.listPageChoices) // the editor's tools and workflows (pages_choices.go)
+	s.pageStarterRoutes(r)                                               // starters (pages_starters.go)
+	s.pageDescribeRoutes(r)                                              // Describe it (pages_describe.go)
 	s.pageVersionRoutes(r)                                               // versions, export and import (pages_versions.go)
 }
 
@@ -107,6 +110,17 @@ func mayOpenPage(p *Principal, pg pageRow) bool {
 		return true
 	}
 	return pg.Version != nil && mayStart(p, pg.Roles)
+}
+
+// viewerPhone is the person's own phone number (their account's, as they
+// sign in by it), for Mine on a phone column; "" for an API key or a
+// person with none (pages §6).
+func (s *Server) viewerPhone(ctx context.Context, p *Principal) string {
+	if p.UserID == uuid.Nil {
+		return ""
+	}
+	n, _ := s.phoneOf(ctx, p.UserID).(string)
+	return n
 }
 
 // lockPageNames holds the business's page names and count for the rest of
@@ -268,6 +282,18 @@ func (s *Server) getPage(w http.ResponseWriter, r *http.Request) {
 			env = &e
 		}
 		out = pageDetail(p, pg, env)
+		if p.Can(PermPageEdit) {
+			// The page's settings: about how many runs its tools start a
+			// day (the draft's tools, as it is being changed).
+			doc := pg.Draft
+			if doc == nil {
+				doc = pg.Published
+			}
+			page, _ := pages.Parse(doc)
+			if out["runs"], err = s.pageRunsEstimate(r.Context(), tx, p.TenantID, pg.ID, page); err != nil {
+				return err
+			}
+		}
 		return nil
 	}); err != nil {
 		s.fail(w, r, err)
@@ -489,56 +515,19 @@ func (s *Server) publishPage(w http.ResponseWriter, r *http.Request) {
 	var refused []pages.Problem
 	var nothing bool
 	err := s.tx(r, func(tx pgx.Tx) error {
-		// The draft and who saved it are read under the row's lock, so a
-		// draft saved by someone else between the two reads cannot be
-		// published as another person's (four-eyes).
-		if _, err := tx.Exec(r.Context(), `SELECT 1 FROM pages WHERE name = $1 FOR UPDATE`, chi.URLParam(r, "name")); err != nil {
+		var err error
+		var env *pages.Env
+		refused, nothing, env, err = s.publishPageTx(r.Context(), tx, p, chi.URLParam(r, "name"), func(action, target string, detail map[string]any) error {
+			return auditTx(r, tx, action, target, detail)
+		})
+		if err != nil || refused != nil || nothing {
 			return err
 		}
 		pg, err := loadPage(r.Context(), tx, chi.URLParam(r, "name"))
 		if err != nil {
 			return err
 		}
-		if pg.Draft == nil {
-			nothing = true
-			return nil
-		}
-		page, ps := pages.Parse(pg.Draft)
-		env, err := s.pageEnv(r.Context(), tx, pg.ID)
-		if err != nil {
-			return err
-		}
-		if len(ps) == 0 {
-			ps = pages.Check(page, env)
-		}
-		if len(ps) > 0 {
-			refused = ps
-			return nil
-		}
-		if err := pagePublishFourEyes(r.Context(), tx, p, pg.ID); err != nil {
-			return err
-		}
-		version := 1
-		if pg.Version != nil {
-			version = *pg.Version + 1
-		}
-		doc := page.Marshal()
-		if _, err := tx.Exec(r.Context(), `INSERT INTO page_versions (page_id, tenant_id, version, document, published_by) VALUES ($1, $2, $3, $4, $5)`,
-			pg.ID, p.TenantID, version, doc, p.Actor()); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(r.Context(), `UPDATE pages SET published_version = $2, published_at = now(), title = $3, icon = $4, roles = $5,
-			draft = NULL, draft_by = NULL, draft_at = NULL, updated_at = now() WHERE id = $1`, pg.ID, version, page.Title, page.Icon, nonNil(page.Roles)); err != nil {
-			return err
-		}
-		shows := pages.Shows(page, env.Tables)
-		if err := auditTx(r, tx, "page.publish", pg.Name, map[string]any{"version": version, "roles": nonNil(page.Roles), "shows": shows}); err != nil {
-			return err
-		}
-		if pg, err = loadPage(r.Context(), tx, pg.Name); err != nil {
-			return err
-		}
-		out = pageDetail(p, pg, &env)
+		out = pageDetail(p, pg, env)
 		return nil
 	})
 	switch {
@@ -551,6 +540,58 @@ func (s *Server) publishPage(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusOK, out)
 	}
+}
+
+// publishPageTx publishes a page's draft by p, once it has no problem
+// left: under four-eyes, by another person than the one who saved it.
+// Who may open it and what it shows are audited (§8). It gives the
+// problems that refuse it, or nothing when there is no draft.
+func (s *Server) publishPageTx(ctx context.Context, tx pgx.Tx, p *Principal, name string, audit func(action, target string, detail map[string]any) error) (refused []pages.Problem, nothing bool, env *pages.Env, err error) {
+	// The draft and who saved it are read under the row's lock, so a
+	// draft saved by someone else between the two reads cannot be
+	// published as another person's (four-eyes).
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM pages WHERE name = $1 FOR UPDATE`, name); err != nil {
+		return nil, false, nil, err
+	}
+	pg, err := loadPage(ctx, tx, name)
+	if err != nil {
+		return nil, false, nil, err
+	}
+	if pg.Draft == nil {
+		return nil, true, nil, nil
+	}
+	page, ps := pages.Parse(pg.Draft)
+	e, err := s.pageEnv(ctx, tx, pg.ID)
+	if err != nil {
+		return nil, false, nil, err
+	}
+	if len(ps) == 0 {
+		ps = pages.Check(page, e)
+	}
+	if len(ps) > 0 {
+		return ps, false, &e, nil
+	}
+	if err := pagePublishFourEyes(ctx, tx, p, pg.ID); err != nil {
+		return nil, false, nil, err
+	}
+	version := 1
+	if pg.Version != nil {
+		version = *pg.Version + 1
+	}
+	doc := page.Marshal()
+	if _, err := tx.Exec(ctx, `INSERT INTO page_versions (page_id, tenant_id, version, document, published_by) VALUES ($1, $2, $3, $4, $5)`,
+		pg.ID, p.TenantID, version, doc, p.Actor()); err != nil {
+		return nil, false, nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE pages SET published_version = $2, published_at = now(), title = $3, icon = $4, roles = $5,
+		draft = NULL, draft_by = NULL, draft_at = NULL, updated_at = now() WHERE id = $1`, pg.ID, version, page.Title, page.Icon, nonNil(page.Roles)); err != nil {
+		return nil, false, nil, err
+	}
+	shows := pages.Shows(page, e.Tables)
+	if err := audit("page.publish", pg.Name, map[string]any{"version": version, "roles": nonNil(page.Roles), "shows": shows}); err != nil {
+		return nil, false, nil, err
+	}
+	return nil, false, &e, nil
 }
 
 // pagePublishFourEyes holds publishing a page to four-eyes where the
@@ -704,6 +745,8 @@ type pageCtx struct {
 	// the run the page's address names, for a status part.
 	tools map[string]*toolRow
 	run   uuid.UUID
+	// lane: the board column More reads (G4).
+	lane string
 }
 
 // openPage loads a page for drawing for the caller: the draft for an
@@ -778,6 +821,7 @@ func (s *Server) openPage(w http.ResponseWriter, r *http.Request) (*pageCtx, boo
 		s.fail(w, r, err)
 		return nil, false
 	}
+	viewer.Phone = s.viewerPhone(r.Context(), p)
 	viewer.Personal = p.Can(PermTableRead)
 	viewer.Edit = p.Can(PermTableEdit)
 	if run := r.URL.Query().Get("run"); run != "" {
@@ -804,6 +848,9 @@ func (s *Server) openPage(w http.ResponseWriter, r *http.Request) (*pageCtx, boo
 			}
 		}
 	}
+	// A filter hidden from this viewer is applied for no one's values but
+	// those who may see it (review of H5).
+	set = pc.page.VisibleFilters(set, pc.tables, viewer.Personal)
 	vals, ps := pc.page.FilterValues(set, viewer, time.Now())
 	if len(ps) > 0 {
 		pageProblems(w, http.StatusBadRequest, ps[0].Message, ps)
@@ -843,6 +890,9 @@ func (s *Server) viewPage(w http.ResponseWriter, r *http.Request) {
 	pc, ok := s.openPage(w, r)
 	if !ok {
 		return
+	}
+	if !pc.draft {
+		s.countPageView(r.Context(), principalFrom(r.Context()), pc.row.ID) // pages_runs.go
 	}
 	blocks := []map[string]any{}
 	for i, b := range pc.page.Blocks {
@@ -902,9 +952,16 @@ func (s *Server) pageBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b := pc.page.Blocks[i]
-	if b.Type != "list" && b.Type != "table" {
-		writeErr(w, http.StatusBadRequest, "only a list or a table has more rows")
+	if b.Type != "list" && b.Type != "table" && b.Type != "board" {
+		writeErr(w, http.StatusBadRequest, "only a list, a table or a board has more rows")
 		return
+	}
+	if b.Type == "board" {
+		// A board's More reads one column (?lane=), in the part's own order.
+		if pc.lane = pages.LaneOf(b, r.URL.Query().Get("lane")); pc.lane == "" || r.URL.Query().Get("order") != "" {
+			writeErr(w, http.StatusBadRequest, "say which of the board's columns (lane), in the board's own order")
+			return
+		}
 	}
 	if why, off := pc.off[i]; off {
 		writeJSON(w, http.StatusOK, map[string]any{"id": b.ID, "type": b.Type, "unavailable": why})
@@ -940,7 +997,7 @@ func (s *Server) pageBlock(w http.ResponseWriter, r *http.Request) {
 	}
 	var cur pages.Cursor
 	var err error
-	if b.Source.Records != "" {
+	if b.Source.Records != "" || b.Source.Saved != "" {
 		cur, err = pages.ReadRecordCursor(r.URL.Query().Get("cursor"), order)
 	} else {
 		ranked := pages.RankedByPersonal(b, pc.table(b), order, pc.values.Viewer.Personal)
@@ -966,6 +1023,9 @@ func (s *Server) drawPart(ctx context.Context, pc *pageCtx, b pages.Block, curso
 	if b.Type == "heading" {
 		out["title"], out["text"] = b.Title, b.Text
 		return out
+	}
+	if b.Source != nil && b.Source.Saved != "" {
+		return s.drawSaved(ctx, pc, b, cursor, out) // pages_saved.go
 	}
 	t := pc.table(b)
 	read, err := pc.page.ReadFor(b, t, pc.values, order)
@@ -1056,44 +1116,16 @@ func (s *Server) drawPart(ctx context.Context, pc *pageCtx, b pages.Block, curso
 				"up": v > pv, "down": v < pv}
 		}
 		return out
+	case "board":
+		return s.drawBoard(ctx, pc, b, t, read, readRows, cursor, out) // pages_g4.go
+	case "chart":
+		return s.drawChart(ctx, pc, b, t, read, readRows, out)
 	}
 	// A list or a table.
 	partHead(pc, b, t, order, out)
-	shown := []pages.Shown{}
-	var more any
-	count := int64(0)
-	if !read.None {
-		ranked := pages.RankedByPersonal(b, t, order, pc.values.Viewer.Personal)
-		in := map[string]any{"filters": read.Filters, "order": read.Order, "limit": pages.RowsShown, "count": "exact"}
-		if ranked {
-			in["limit"] = cursor.Skip + pages.RowsShown
-		} else if cursor.After != "" {
-			in["cursor"] = cursor.After
-		}
-		res, err := readRows(in)
-		if err != nil {
-			return failed(err)
-		}
-		var rows []map[string]any
-		for _, row := range rowsOf(res) {
-			if m, ok := row.(map[string]any); ok {
-				rows = append(rows, m)
-			}
-		}
-		if ranked {
-			rows = rows[min(cursor.Skip, len(rows)):]
-		}
-		shown = pages.Shape(b, t, rows, pc.values)
-		count = countOf(res)
-		if c, _ := res["next_cursor"].(string); c != "" {
-			next := pages.Cursor{Order: pages.OrderKey(order), After: c}
-			if ranked {
-				next = pages.Cursor{Order: pages.OrderKey(order), Skip: cursor.Skip + pages.RowsShown}
-			}
-			if !ranked || next.Skip <= pages.MaxSkip {
-				more = next.String()
-			}
-		}
+	shown, count, more, err := s.readPartRows(b, t, read, readRows, cursor, order, pc.values)
+	if err != nil {
+		return failed(err)
 	}
 	out["rows"], out["more"], out["count"] = shown, more, count
 	if b.Type == "list" && b.Group != nil {

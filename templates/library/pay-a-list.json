@@ -327,7 +327,8 @@
             "people": "=size(steps.check.output.people)",
             "total_naira": "=double(steps.totals.output.total_kobo) / 100.0",
             "balance_naira": "=double(steps.balance.output.available_kobo) / 100.0",
-            "not_paid": "=steps.check.output.refused.map(r, r.name + ': ' + r.reason)"
+            "not_paid": "=steps.check.output.refused.map(r, r.name + ': ' + r.reason)",
+            "accounts": "=steps.check.output.people.map(p, {'account_number': p.account_number, 'bank_code': p.bank_code})"
           }
         }
       },

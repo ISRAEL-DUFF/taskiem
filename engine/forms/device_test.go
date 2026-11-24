@@ -140,14 +140,18 @@ func TestDeviceAnswers(t *testing.T) {
 		}
 	}
 
-	// The form host's page asks no device yet: all unavailable, even when
-	// something was sent for them.
+	// The form host's page asks every kind now (build-plan-gaps H3): one
+	// left out is not made up; one read in the browser is the device's.
 	answers = map[string]any{}
 	if why := deviceAnswers(schema, answers, Submission{Channel: "direct"}, at); why != "" {
 		t.Fatal(why)
 	}
-	if len(answers) != 4 || answers["where"].(map[string]any)["state"] != "unavailable" {
-		t.Fatalf("form host: %v", answers)
+	if len(answers) != 0 {
+		t.Fatalf("form host, nothing sent: %v", answers)
+	}
+	answers = map[string]any{"where": map[string]any{"lat": 6.45, "lng": 3.39}}
+	if why := deviceAnswers(schema, answers, Submission{Channel: "direct"}, at); why != "" || answers["where"].(map[string]any)["source"] != "device" {
+		t.Fatalf("form host: %q %v", why, answers)
 	}
 	// A required location left out on the app is not made up: the
 	// schema's required check refuses it.

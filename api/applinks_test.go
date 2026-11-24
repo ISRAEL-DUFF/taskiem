@@ -72,4 +72,11 @@ func TestWellKnownAppFiles(t *testing.T) {
 		!strings.Contains(string(body), `{"/":"/you/discover/*"}`) || !strings.Contains(string(body), `{"/":"/you/people/*"}`) || strings.Contains(string(body), `/you/settings`) {
 		t.Errorf("apple: %d %s", code, body)
 	}
+	// A page by its name opens the app; anything past it (its editor) is
+	// excluded first, so it stays on the web (pages H5 review).
+	s := string(body)
+	ex, pg := strings.Index(s, `{"/":"/pages/*/*","exclude":true}`), strings.Index(s, `{"/":"/pages/*"}`)
+	if ex < 0 || pg < 0 || ex > pg {
+		t.Errorf("apple: a page's editor must be excluded before /pages/*: %s", s)
+	}
 }

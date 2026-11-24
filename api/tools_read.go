@@ -6,8 +6,8 @@ package api
 // (paying, saving, money, stock, orders, building…); a tool's command or a
 // phrase it says; then the model, which is told Taskiem's commands, the
 // saved things' names and kinds, and after them the business's tools the
-// person may use (command, name, about, inputs; at most 40, the nearest by
-// words), as data. It may answer with one tool and the values it heard,
+// person may use (command, name, about, inputs, the optional ones too, each
+// marked required or not; at most 40, the nearest by words), as data. It may answer with one tool and the values it heard,
 // or none. It never starts a run and never says yes: the values are
 // always shown first, through the tool's own way in (the echo for a tool
 // that only reads, yes for one that writes, the app or the web for one
@@ -40,6 +40,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/saved"
+	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -54,7 +55,8 @@ type chatToolPick struct {
 }
 
 // toolInfoOf is a tool as the model is told it: its command, name, about
-// and the inputs its form asks (fields).
+// and its inputs (fields: the required ones, then the optional ones a chat
+// carries, each marked).
 func toolInfoOf(t toolRow, fields []whatsapp.Field) understand.ToolInfo {
 	info := understand.ToolInfo{Command: t.Command, Name: t.Name, About: t.About}
 	for _, f := range fields {
@@ -83,7 +85,7 @@ func (s *Server) modelTools(ctx context.Context, c *chat) []understand.ToolInfo 
 		if !mayStart(c.p, t.Roles) {
 			continue
 		}
-		fields, err := s.waFieldsOf(ctx, c.tenant.ID, t.Workflow, t.Version)
+		fields, err := s.toolFieldsOf(ctx, c.tenant.ID, t.Workflow, t.Version)
 		if err != nil {
 			continue // inputs a chat cannot ask: not offered here
 		}
@@ -244,19 +246,31 @@ func (s *Server) waToolChosen(ctx context.Context, c *chat, t toolRow, rest stri
 	if err != nil {
 		return err
 	}
+	// The optional inputs too: what the words give them is shown with the
+	// rest before anything runs; none is ever asked.
+	all, err := s.toolFieldsOf(ctx, c.tenant.ID, t.Workflow, t.Version)
+	if err != nil {
+		return err
+	}
 	data := chatData{Workflow: t.Workflow, Name: t.Name, Version: t.Version, Environment: t.Environment, Inputs: map[string]any{}, Tool: t.Command}
-	if len(fields) == 0 {
+	if len(all) == 0 {
 		return s.waAskConfirm(ctx, c, data)
 	}
 	if values == nil && rest != "" {
-		if len(fields) == 1 {
-			// One input: the rest of the message is it, read as an answer.
+		// One required input and nothing else the words could fill (or no
+		// model to read them): the rest of the message is it, read as an
+		// answer.
+		one := len(fields) == 1 && (len(all) == 1 || s.chatModel() == nil)
+		if !one {
+			values = s.chatToolWords(ctx, c, t, all, rest)
+			one = len(values) == 0 && len(fields) == 1
+		}
+		if one {
 			c.state, c.data = stateCollecting, data
 			return s.waCollect(ctx, c, rest)
 		}
-		values = s.chatToolWords(ctx, c, t, fields, rest)
 	}
-	return s.waToolFill(ctx, c, data, fields, values)
+	return s.waToolFill(ctx, c, data, fields, all, values)
 }
 
 // chatToolWords are the values the words after a tool's command give its
@@ -307,15 +321,17 @@ func (s *Server) readToolWords(ctx context.Context, tenant uuid.UUID, p *Princip
 	return vals
 }
 
-// waToolFill puts what was heard into a tool's inputs, each read as its
-// question would read it (a saved thing by @name looked up here), then:
-// every input filled, the tool's care (the echo, or what will run and
-// yes); else what was read, and the first input still to give.
-func (s *Server) waToolFill(ctx context.Context, c *chat, data chatData, fields []whatsapp.Field, values map[string]string) error {
+// waToolFill puts what was heard into a tool's inputs (all: the required
+// fields, then the optional ones), each read as its question would read it
+// (a saved thing by @name looked up here), then: every required input
+// filled, the tool's care (the echo, or what will run and yes); else what
+// was read, and the first required input still to give (fields).
+func (s *Server) waToolFill(ctx context.Context, c *chat, data chatData, fields, all []whatsapp.Field, values map[string]string) error {
 	var notes []string
-	for _, f := range fields {
+	for _, f := range all {
 		raw, ok := values[f.Name]
-		if !ok {
+		if !ok || f.Device == wd.DeviceLocation || f.Device == wd.DevicePhoto {
+			// A location or a photo is sent as one, never read from words.
 			continue
 		}
 		v, note, err := s.toolValueOf(ctx, c.tenant.ID, c.p, c.lang.Tag, f, raw)
@@ -564,7 +580,7 @@ func (s *Server) readToolRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := map[string]any{"command": t.Command, "values": map[string]any{}, "notes": []string{}}
-	fields, err := s.waFieldsOf(r.Context(), p.TenantID, t.Workflow, t.Version)
+	fields, err := s.toolFieldsOf(r.Context(), p.TenantID, t.Workflow, t.Version)
 	if err != nil || text == "" || len(fields) == 0 {
 		// Inputs a form reads but words cannot: nothing proposed.
 		writeJSON(w, http.StatusOK, out)
@@ -575,10 +591,19 @@ func (s *Server) readToolRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	heard := map[string]string{}
-	if len(fields) == 1 {
-		heard[fields[0].Name] = text
-	} else {
+	required := 0
+	for _, f := range fields {
+		if f.Required {
+			required++
+		}
+	}
+	if len(fields) > 1 {
 		heard = s.readToolWords(r.Context(), p.TenantID, p, lang.EN, toolInfoOf(t, fields), text)
+	}
+	if len(heard) == 0 && (len(fields) == 1 || required == 1 && fields[0].Required) {
+		// One input (or one required, with nothing read for the rest): the
+		// words are it.
+		heard = map[string]string{fields[0].Name: text}
 	}
 	values := map[string]any{}
 	var notes []string

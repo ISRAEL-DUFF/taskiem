@@ -1,0 +1,71 @@
+{
+  "id": "tool-watch-and-act",
+  "title": "Watch a table and act from the message",
+  "summary": "Every day, rows of your table at or below a level are told to the team, with a button that marks one handled.",
+  "description": "Two parts, installed together. Every day at the time you choose, Taskiem looks for rows of your table whose number column is at or below the level you set (stock running low, a balance too small) and, when it finds some, tells the people with the role you choose, with a Deal with it button. The button opens a tool, also used from the chat on the web, the phone app, WhatsApp, Telegram and Slack by its word (\"/handle\"), that marks the row handled once they say yes. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (handle-2) and says so.",
+  "category": "tools",
+  "tags": ["tool", "watch", "alert", "schedule", "data table"],
+  "requires": ["tool", "command", "type", "button"],
+  "keywords": ["watch", "threshold", "act", "button", "handled", "deal with it", "tool"],
+  "connectors": ["xenibase@1", "notify@1"],
+  "params": [
+    {"name": "command", "type": "command", "title": "Its word", "description": "What people type to mark a row handled, after /. Letters, numbers and dashes.", "required": true, "default": "handle", "example": "handle"},
+    {"name": "roles", "type": "roles", "title": "Who can use it", "description": "The roles whose people may use it from the chat; owners always may. It reads your table, so keep it to those who may see it.", "required": false, "default": ["owner", "manager"], "example": ["owner", "manager"]},
+    {"name": "table", "type": "string", "title": "Table", "description": "The table it watches.", "required": false, "default": "items", "example": "items", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"},
+    {"name": "title_column", "type": "string", "title": "Each row is called", "description": "The column a row is named by in the message.", "required": false, "default": "name", "example": "name", "picker": "column", "from": "table"},
+    {"name": "watch_column", "type": "string", "title": "Watches", "description": "The number column it watches, such as quantity.", "required": false, "default": "quantity", "example": "quantity", "picker": "column", "from": "table"},
+    {"name": "level", "type": "number", "title": "Tells you at or below", "description": "The level at or below which a row is told.", "required": false, "default": 5, "example": 5},
+    {"name": "state_column", "type": "string", "title": "State column", "description": "The column the button sets.", "required": false, "default": "status", "example": "status", "picker": "column", "from": "table"},
+    {"name": "handled_state", "type": "string", "title": "The button makes it", "description": "What the button sets the state to.", "required": false, "default": "handled", "example": "handled", "max_length": 40},
+    {"name": "check_time", "type": "time", "title": "Time", "description": "When it looks each day, Lagos time.", "required": false, "default": "08:00", "example": "08:00"},
+    {"name": "role", "type": "string", "title": "Who hears it", "description": "The role whose members are told.", "required": false, "default": "owner", "example": "owner", "picker": "role"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_toolHandleRow",
+    "version": 1,
+    "name": "Mark it handled",
+    "description": "Marks one row of a table handled.",
+    "trigger": {"type": "manual"},
+    "roles": "{{roles}}",
+    "inputs": {"schema": {"type": "object", "required": ["row"], "properties": {
+      "row": {"type": "integer", "title": "Row", "minimum": 1}}}},
+    "outputs": [
+      {"name": "marked", "type": "integer", "title": "Marked", "description": "How many rows were marked", "value": "=has(steps.mark.output.affected) ? int(steps.mark.output.affected) : 0"}
+    ],
+    "tool": {
+      "name": "Mark it handled",
+      "command": "{{command}}",
+      "about": "Marks a row of your table handled",
+      "icon": "wrench",
+      "for": "members",
+      "answer": {"type": "text", "text": "=outputs.marked > 0 ? 'Marked handled.' : 'That row was not found.'"}
+    },
+    "steps": [
+      {"id": "mark", "type": "connector", "name": "Mark the row handled", "connector": "xenibase@1", "action": "update_rows", "connection": "data_tables",
+       "input": {"table": "{{table}}", "filters": [{"column": "id", "op": "eq", "value": "=trigger.body.row"}], "max_affected": 1, "set": {"{{state_column}}": "{{handled_state}}"}}}
+    ],
+    "settings": {"timeout": "5m"}
+  },
+  "companion": {
+    "name": "Watch the table",
+    "definition": {
+      "schema": "wd/v1",
+      "id": "wf_toolWatch",
+      "version": 1,
+      "name": "Watch the table",
+      "description": "Every day, tells the team about rows at or below a level, with a button to deal with the first.",
+      "trigger": {"type": "schedule", "config": {"cron": "{{check_time:minute}} {{check_time:hour}} * * *", "timezone": "Africa/Lagos"}},
+      "steps": [
+        {"id": "low", "type": "connector", "name": "Find the rows at or below the level", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables",
+         "input": {"table": "{{table}}", "filters": [{"column": "{{watch_column}}", "op": "lte", "value": "{{level}}"}, {"column": "{{state_column}}", "op": "neq", "value": "{{handled_state}}"}], "limit": 20}},
+        {"id": "tell", "type": "connector", "name": "Tell the team, with a button", "connector": "notify@1", "action": "tell", "needs": ["low"],
+         "when": "=size(steps.low.output.rows) > 0",
+         "input": {"to": "role", "role": "{{role}}", "title": "Needs you",
+           "message": "=steps.low.output.rows.map(r, {{title_column}} in r ? string(r[{{title_column}}]) : 'A row').join(', ') + ': at or below ' + string({{level}}) + '.'",
+           "buttons": [{"label": "Deal with it", "tool": "{{command}}", "inputs": {"row": "=size(steps.low.output.rows) > 0 && 'id' in steps.low.output.rows[0] ? int(steps.low.output.rows[0]['id']) : 0"}, "once": true}]}}
+      ],
+      "settings": {"timeout": "15m"}
+    }
+  }
+}

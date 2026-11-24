@@ -36,6 +36,11 @@ const (
 	AppTelegram = "telegram"
 )
 
+// ChannelAPI is a start that is no person's in the app or the web: an API
+// key's, a run's. What it says of a device is a claim: never `device` or
+// `camera`.
+const ChannelAPI = "api"
+
 // ClockSlack is how far a device's clock may be from the server's before
 // an answer is marked clock_differs. An answer made offline may have been
 // made any time before it was received, so only a clock ahead of the
@@ -93,7 +98,9 @@ func clip(s string, n int) string {
 // (§3); the form host's page asks no device yet.
 func answerable(kind, channel string) bool {
 	switch channel {
-	case "app":
+	case "app", "direct", "embed":
+		// The member API; the form host's page asks every kind too
+		// (build-plan-gaps H3, publicweb formdevice.go).
 		return true
 	case AppWhatsApp, AppTelegram:
 		return kind == wd.DeviceLocation || kind == wd.DevicePhoto
@@ -110,8 +117,16 @@ func chatName(channel string) string {
 
 // deviceSource is how a channel got a device answer: never what the
 // answer's body says.
+//
+// The trust model (docs/spec/device-fields.md §17): `device` and
+// `camera` are said only of a person answering in the app or the web
+// (the member API, its client's word for which app it is, the phone
+// app's camera only from the phone app's own session); a chat's pin and
+// photo are `sent`; anything an API key or a run sends is `sent` or
+// `typed` (channel api); a code on the one-time page is `typed`, its
+// format kept (the page's own scan cannot be told from a code typed).
 func deviceSource(kind string, sub Submission, typed bool) string {
-	chat := sub.Channel == AppWhatsApp || sub.Channel == AppTelegram
+	chat := sub.Channel == AppWhatsApp || sub.Channel == AppTelegram || sub.Channel == ChannelAPI
 	switch kind {
 	case wd.DeviceLocation:
 		switch {
@@ -127,7 +142,7 @@ func deviceSource(kind string, sub Submission, typed bool) string {
 		}
 		return "sent"
 	case wd.DeviceScan:
-		if typed || chat {
+		if typed || chat || sub.Channel == "direct" || sub.Channel == "embed" {
 			return "typed"
 		}
 		return "camera"

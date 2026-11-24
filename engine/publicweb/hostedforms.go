@@ -173,6 +173,9 @@ type hformData struct {
 	Report      string
 	Home        string // none: a form has no page behind it
 	Purpose     string // the description, as the privacy notice's purpose
+	// Device: the form asks a device, and the page loads its script
+	// (formdevice.go, static/form-device.js).
+	Device bool
 }
 
 // hdoneData is the thank-you, result and status pages' input.
@@ -524,6 +527,11 @@ func (s *Server) serveFormRequest(w http.ResponseWriter, r *http.Request, token,
 		if hf.hint == "" {
 			hf.hint = "the phone or email this link was sent to"
 		}
+	}
+	if hf.hasScan() {
+		// A code may be scanned with the camera, at the tap, where the
+		// browser has a barcode reader (formdevice.go).
+		httpsec.SetPublicCamera(w.Header())
 	}
 	s.serveHosted(w, r, hf, sub, hf.reqView.Prefill)
 }
@@ -914,7 +922,7 @@ func (hf *hform) shownAnswers(st *hstate, upTo int) map[string]any {
 			break
 		}
 		for _, f := range hf.pageFields(p) {
-			if v, ok := st.Answers[f.Name]; ok && f.Widget != "file" {
+			if v, ok := st.Answers[f.Name]; ok && (f.Widget != "file" || f.Device != "") {
 				out[f.Name] = v
 			}
 		}
@@ -991,7 +999,7 @@ func (s *Server) showHosted(w http.ResponseWriter, r *http.Request, status int, 
 	d := hformData{pageData: pageData{Title: hf.title, Lang: "en", Look: s.lookFor(r.Context(), hf.tenant, hf.business)}, Business: hf.business, Description: hf.description,
 		Action: hf.base, CodeAction: hf.base + "/code", Token: token, State: base64.RawURLEncoding.EncodeToString(sealed), Honeypot: formguard.HoneypotField,
 		Error: errMsg, Notice: notice, Channel: hf.verify, Hint: hf.hint, Fixed: hf.fixed, Embed: hf.embed, Origins: strings.Join(hf.origins, " "),
-		Report: hf.report, Multipart: hf.hasFiles(), Purpose: strings.TrimRight(strings.TrimSpace(hf.description), ".")}
+		Report: hf.report, Multipart: hf.hasFiles(), Purpose: strings.TrimRight(strings.TrimSpace(hf.description), "."), Device: hf.hasDevice()}
 	switch {
 	case hf.verify != "" && st.Verified == nil && st.Pending == nil:
 		d.Step = "verify"
@@ -1018,6 +1026,9 @@ func (s *Server) showHosted(w http.ResponseWriter, r *http.Request, status int, 
 			}
 			if h, ok := st.Files[f.Name]; ok {
 				g.Held = h.Name
+			}
+			if g.Device != "" {
+				g.deviceShow(st.Answers[f.Name])
 			}
 			d.Fields = append(d.Fields, &g)
 		}
@@ -1201,6 +1212,17 @@ func (hf *hform) readPage(st *hstate, v url.Values, r *http.Request, now time.Ti
 	for _, f := range hf.pageFields(st.current()) {
 		g := *f
 		g.Options = slices.Clone(f.Options)
+		if g.Device != "" {
+			// A location, a photo, a signature or a code (formdevice.go).
+			if msg := hf.readDevice(st, &g, v, r, &carried); msg != "" && strict {
+				g.Error = msg
+				if first == "" {
+					first = msg
+				}
+			}
+			out = append(out, &g)
+			continue
+		}
 		if g.Widget == "file" {
 			msg := hf.readFile(st, &g, r, &carried)
 			if h, ok := st.Files[g.Name]; ok {
@@ -1600,13 +1622,25 @@ func (hf *hform) validate(st *hstate, answers map[string]any) string {
 		if f.Hidden {
 			onShown[name] = true
 		}
-		if _, ok := st.Files[name]; ok && f.Widget == "file" && onShown[name] {
+		if _, ok := st.Files[name]; ok && f.Widget == "file" && onShown[name] && probe[name] == nil {
 			probe[name] = "file"
 		}
 	}
 	root := map[string]any{}
 	for k, v := range hf.schema {
 		root[k] = v
+	}
+	if props, ok := hf.schema["properties"].(map[string]any); ok && hf.hasDevice() {
+		// A device field is read by engine/forms; here it must only be
+		// there when it is required (its widget checked its shape).
+		np := map[string]any{}
+		for k, p := range props {
+			if wd.DeviceKind(p) != "" {
+				p = map[string]any{}
+			}
+			np[k] = p
+		}
+		root["properties"] = np
 	}
 	if req, ok := hf.schema["required"].([]any); ok {
 		var keep []any

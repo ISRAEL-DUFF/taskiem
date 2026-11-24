@@ -873,6 +873,7 @@ export function SupplierPricesPage() {
                 <TreatQuestion
                   key={it.item_id}
                   item={it.name}
+                  unit={it.unit}
                   supplier={p.business}
                   category={it.category}
                   data={treat.data}

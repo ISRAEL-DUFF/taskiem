@@ -48,7 +48,7 @@ func TestMasker(t *testing.T) {
 	if !reflect.DeepEqual(back, want) {
 		t.Errorf("unmasked: %v", back)
 	}
-	if r := m.Restored(); r["s:Pay Adaeze Okafor by +2348031234567; [[other_9]] stays"] != "name" || r["n:22123456789"] != "bvn" {
+	if r := m.Restored(); r["s:Pay Adaeze Okafor by +2348031234567; [[other_9]] stays"].Category != "name" || r["n:22123456789"].Category != "bvn" {
 		t.Errorf("restored: %v", r)
 	}
 	if m.Masked() < 5 {
@@ -86,7 +86,7 @@ func TestMaskerMasksKeys(t *testing.T) {
 	if back["Adaeze Okafor"] != "owes" || back["Note for ada@example.com"] != "late" {
 		t.Errorf("unmasked keys: %v", back)
 	}
-	if m.Restored()["s:Adaeze Okafor"] != "name" {
+	if m.Restored()["s:Adaeze Okafor"].Category != "name" {
 		t.Errorf("restored: %v", m.Restored())
 	}
 }

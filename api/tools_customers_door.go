@@ -65,7 +65,7 @@ type customerTool struct {
 	Icon    string         `json:"icon,omitempty"`
 	Inputs  map[string]any `json:"inputs,omitempty"`
 	// Answer is text, card or list when the tool answers; empty when it
-	// tells only that it started (a public menu's entry).
+	// declares no answer and tells only that it started.
 	Answer string `json:"answer,omitempty"`
 }
 

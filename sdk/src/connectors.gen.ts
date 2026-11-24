@@ -1658,6 +1658,8 @@ export interface NotifyMessageInput {
   about?: Val<string>;
   /** Their email address: used when they cannot be reached by phone */
   email?: Val<string>;
+  /** One of the business's saved files to send with it, written =saved.price_list (or =saved.price_list.file; nothing else names one; build plan H6): its name and a short link to it, made when the message is sent and good for a week, go at the end of the message, kept whole wherever the message is cut (by chat, SMS or email alike). Which saved file it is comes from the run's start, from the business's saved things only, never a person's own */
+  file?: Value;
   /** The message */
   message: Val<string>;
   /** Payrolla's id of the employee it is about: a staff member an owner linked to that employee hears it on their own chat with the business (or by email) instead */
@@ -1668,8 +1670,10 @@ export interface NotifyMessageInput {
   title?: Val<string>;
 }
 export interface NotifyTellInput {
-  /** Up to three buttons (decision 0073, made tools §10), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles: never running it by itself. once: the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them */
+  /** Up to three buttons (decision 0073, made tools §10; pages §9), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles (never running it by itself), or one of the business's pages with its filters set (page, filters), for whoever presses it if the page's roles let them open it: its short form in the chat and its link, which opens in the app and on the web. once (a tool's): the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them */
   buttons?: Value;
+  /** One of the business's saved files to send with it, written =saved.price_list (or =saved.price_list.file; nothing else names one; build plan H6): its name and a short link to it, made when the message is sent and good for a week, go at the end of the message, kept whole wherever the message is cut (by chat, SMS or email alike). Which saved file it is comes from the run's start, from the business's saved things only, never a person's own */
+  file?: Value;
   /** With to: members, their sign-in emails */
   members?: Value;
   /** The message */
@@ -1859,6 +1863,10 @@ export interface PaymentsCheckInput {
   bank_code: Val<string>;
   needs_ok: Val<boolean>;
   payment_id: Val<string>;
+  /** How the run pays it: bank (the default) or wallet */
+  route?: Val<"bank" | "wallet">;
+  /** The Taskiem wallet paid */
+  wallet_id?: Val<string>;
 }
 export interface PaymentsFinishInput {
   /** The bank's name for the account */
@@ -1867,6 +1875,8 @@ export interface PaymentsFinishInput {
   payment_id: Val<string>;
   payout_id?: Val<string>;
   reason?: Val<string>;
+  /** How it went: a bank transfer (the default), or Taskiem wallet to Taskiem wallet */
+  route?: Val<"bank" | "wallet">;
   status: Val<"paid" | "failed" | "unknown" | "rejected">;
 }
 export interface PaymentsPrepareInput {
@@ -4325,6 +4335,20 @@ export type CapabilityPayWalletOutput = {
   reason?: string;
   status: "settled" | "pending" | "failed";
 };
+/** Quote a payout's fee: input */
+export interface CapabilityQuoteFeeInput {
+  amount_kobo: Val<number>;
+  /** The bank's NIP code (list_banks), where the fee depends on it */
+  bank_code?: Val<string>;
+  currency?: Val<string>;
+  /** The wallet or account the payout would come from, on rails that hold several */
+  source?: Val<string>;
+}
+/** Quote a payout's fee: output */
+export type CapabilityQuoteFeeOutput = {
+  currency?: string;
+  fee_kobo: number;
+};
 /** Refund a payment: input */
 export interface CapabilityRefundInput {
   /** Part of the payment; the whole when left out */
@@ -4423,6 +4447,8 @@ export const rail = {
   list_banks: (input: CapabilityListBanksInput, extra?: CapabilityExtra): StepSpec => capability("list_banks", input, extra),
   /** List money paid into customers' account numbers */
   list_credits: (input: CapabilityListCreditsInput, extra?: CapabilityExtra): StepSpec => capability("list_credits", input, extra),
+  /** Quote a payout's fee */
+  quote_fee: (input: CapabilityQuoteFeeInput, extra?: CapabilityExtra): StepSpec => capability("quote_fee", input, extra),
   /** Refund a payment */
   refund: (input: CapabilityRefundInput, extra?: CapabilityExtra): StepSpec => capability("refund", input, extra),
   /** Find the name on a bank account */
@@ -4466,6 +4492,7 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
   pay_many: "pay.many",
   pay_mobile_money: "pay.mobile_money",
   pay_wallet: "pay.wallet",
+  quote_fee: "rail.quote_fee",
   refund: "rail.refund",
   resolve_account: "rail.resolve_account",
   virtual_account: "rail.virtual_account",
@@ -4494,6 +4521,7 @@ export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
   pay_many: [],
   pay_mobile_money: [],
   pay_wallet: ["anchor@1", "iswallet@1"],
+  quote_fee: [],
   refund: ["paystack@1"],
   resolve_account: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
   virtual_account: ["flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],

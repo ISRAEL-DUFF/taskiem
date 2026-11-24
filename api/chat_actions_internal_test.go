@@ -135,3 +135,60 @@ func TestTakenValuesReadAnOrdersChip(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
+
+// The topics' words are in each language's word lists (chat-menus.md
+// §8.3, g-menu-words): every topic has English words, and each language
+// names only the catalogue's topics, with words for every one.
+func TestTopicWordsInTheWordLists(t *testing.T) {
+	for _, tag := range lang.Tags() {
+		words := lang.TopicWords(tag)
+		for id := range words {
+			if _, ok := chatTopicByID(id); !ok {
+				t.Errorf("%s: words for %q, which is no topic", tag, id)
+			}
+		}
+		for _, tp := range chatTopics {
+			if len(words[tp.ID]) == 0 {
+				t.Errorf("%s: no words for %s", tag, tp.ID)
+			}
+		}
+	}
+}
+
+// Topic words (review of H4): a short word is a whole word ("obi" is not
+// "obinrin", "ego" not "egosi", "iwu" not "iwuri"), with an ending in
+// English ("owes", "tasks"); a longer one starts a word ("riders"); and a
+// weak match in the person's language does not beat a stronger one in
+// English.
+func TestTopicFromWords(t *testing.T) {
+	yo, ig, en := []lang.Tag{lang.YO, lang.EN}, []lang.Tag{lang.IG, lang.EN}, []lang.Tag{lang.EN}
+	for _, c := range []struct {
+		text string
+		tags []lang.Tag
+		want string // "" for none
+	}{
+		{"owo", yo, "money"},
+		{"owó mi dà", yo, "money"},
+		{"obinrin mi", yo, ""},
+		{"ọmọ obìnrin náà wá", yo, ""},
+		{"ego", ig, "money"},
+		{"egosi ya", ig, ""},
+		{"iwuri", ig, ""},
+		{"oru nke a", ig, ""},
+		{"ndị ọrụ m", ig, "staff"},
+		{"who owes me", en, "owe"},
+		{"my rider issue", en, "riders"},
+		{"my tasks", en, "staff"},
+		{"payment came", en, ""},
+		{"cashier is late", en, ""},
+		// Yoruba's àkókò (bookings) once, English's staff words three times: staff.
+		{"àkókò for my staff team worker", yo, "staff"},
+		// One each: a tie between the languages goes to the person's.
+		{"àkókò for staff", yo, "bookings"},
+	} {
+		got, ok := topicFromWords(c.text, c.tags, chatTopics)
+		if (c.want == "") == ok || (ok && got.ID != c.want) {
+			t.Errorf("%q (%v): %q %v, want %q", c.text, c.tags, got.ID, ok, c.want)
+		}
+	}
+}

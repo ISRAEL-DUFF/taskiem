@@ -7,9 +7,10 @@ import { axe, describe } from "./a11y";
 // customers (Order status, whose answer is a card of public outputs with a
 // button to Track an order) and one for its members; a person in their
 // chat with it opens the tools button, sees Their tools (never the
-// members' one), fills a form, says Yes and gets the answer, with nothing
-// the business did not make public; its button opens the other tool
-// filled in. axe in both themes, nothing wider than a phone. The person's
+// members' one), fills a form, says Yes, and the sheet closes: the answer
+// lands in the conversation, with nothing the business did not make
+// public, and is still there after a reload (build plan H6); its button
+// opens the other tool filled in. axe in both themes, nothing wider than a phone. The person's
 // code goes out on Taskiem's WhatsApp number to a fake Graph API on the
 // port customer-chat.spec.ts uses, so this file runs one test at a time
 // and apart from them.
@@ -170,21 +171,33 @@ test("a customer uses a business's tools in their chat: a form, Yes, the answer 
   await check(page, "their tool's yes", 390);
   await sheet.getByRole("button", { name: "Yes, go ahead" }).click();
 
-  // The answer: the card, from what the business made public only.
-  const card = sheet.getByTestId("tool-answer");
+  // The sheet closes; the answer comes into the conversation, from what
+  // the business made public only (build plan H6).
+  await expect(sheet).toHaveCount(0);
+  const run = page.getByTestId("their-run").last();
+  const card = run.getByTestId("tool-answer");
   await expect(card).toHaveAttribute("data-status", "completed", { timeout: 30_000 });
   await expect(card).toContainText("On its way");
   await expect(card).toContainText("A-100");
-  await expect(sheet).not.toContainText("SECRET");
-  await expect(sheet).toContainText("Your reference is");
-  await check(page, "their tool's answer", 390);
+  await expect(page.locator("main, body").first()).not.toContainText("SECRET");
+  await expect(run).toContainText("Your reference is");
+  await check(page, "their tool's answer in the chat", 390);
   await page.screenshot({ path: "test-results/their-tool-answer.png" });
 
-  // Its button opens Track an order, filled in.
-  await card.getByRole("button", { name: "Track it" }).click();
-  await expect(sheet.getByRole("heading", { name: "Track an order" })).toBeVisible();
-  await expect(sheet.getByLabel("Order number")).toHaveValue("A-100");
-  await sheet.getByRole("button", { name: "Next" }).click();
-  await sheet.getByRole("button", { name: "Yes, go ahead" }).click();
-  await expect(sheet.getByTestId("tool-answer")).toContainText("Tracking A-100", { timeout: 30_000 });
+  // Kept on a reload: still in the conversation, read again.
+  await page.reload();
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  const kept = page.getByTestId("their-run").last();
+  await expect(kept.getByTestId("tool-answer")).toContainText("On its way", { timeout: 30_000 });
+
+  // Its button opens Track an order, filled in; its answer joins the chat.
+  await kept.getByTestId("tool-answer").getByRole("button", { name: "Track it" }).click();
+  const again = page.getByTestId("their-tool-sheet");
+  await expect(again.getByRole("heading", { name: "Track an order" })).toBeVisible();
+  await expect(again.getByLabel("Order number")).toHaveValue("A-100");
+  await again.getByRole("button", { name: "Next" }).click();
+  await again.getByRole("button", { name: "Yes, go ahead" }).click();
+  await expect(again).toHaveCount(0);
+  await expect(page.getByTestId("their-run")).toHaveCount(2);
+  await expect(page.getByTestId("their-run").last().getByTestId("tool-answer")).toContainText("Tracking A-100", { timeout: 30_000 });
 });

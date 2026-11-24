@@ -132,7 +132,11 @@ func TestPastTheReplayWindowLooksTheKeyUpFirst(t *testing.T) {
 		t.Errorf("recorded transfer: %v %v", r.Output, err)
 	}
 	// Not yet terminal: wait, never resend.
-	if _, err := call(t, "transfer", transferIn, old, "request_transfer_pending"); effects.Classify(err) != effects.KindRetryable {
+	// Not final yet: its outcome unknown, never a failure (paying people H7:
+	// a pay_wallet step that failed would pay the bank too), so the write
+	// parks once its retries run out rather than going on to on_error.
+	if _, err := call(t, "transfer", transferIn, old, "request_transfer_pending"); effects.Classify(err) != effects.KindUnknownOutcome ||
+		!effects.IdempotentWrite.MayHaveApplied(effects.Classify(err)) {
 		t.Errorf("pending transfer: %v", err)
 	}
 	// A key recorded for another kind of request is for a person to check.

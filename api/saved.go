@@ -240,6 +240,7 @@ func (s *Server) savedRoutes(r chi.Router) {
 	r.With(s.need(PermSavedManage), s.tenantWide).Post("/saved/check", s.checkAllSaved)
 	r.With(s.need(PermSavedManage), s.tenantWide).Post("/saved/import", s.savedHandler(false, s.importSaved))
 	r.Get("/saved/{id}", s.savedHandler(false, s.getSaved))
+	r.With(s.need(PermRunRead)).Get("/saved/{id}/runs", s.savedRuns) // the runs that read it (saved_uses.go)
 	r.With(s.need(PermSavedManage), s.tenantWide).Put("/saved/{id}", s.savedHandler(false, s.changeSaved))
 	r.With(s.need(PermSavedManage), s.tenantWide).Delete("/saved/{id}", s.savedHandler(false, s.removeSaved))
 	r.With(s.need(PermSavedManage), s.tenantWide).Post("/saved/{id}/reveal", s.savedHandler(false, s.revealSaved))

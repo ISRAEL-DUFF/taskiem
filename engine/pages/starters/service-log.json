@@ -1,0 +1,34 @@
+{
+  "id": "service-log",
+  "title": "Service log",
+  "about": "Every service done and when the next is due, services by month, and a button to log one.",
+  "icon": "reports",
+  "tables": [
+    {"name": "services", "title": "Services", "columns": [
+      {"name": "what", "title": "What", "type": "text", "required": true},
+      {"name": "done_on", "title": "Done on", "type": "date", "required": true},
+      {"name": "by", "title": "By", "type": "text"},
+      {"name": "cost", "title": "Cost", "type": "number"},
+      {"name": "next_due", "title": "Next due", "type": "date"},
+      {"name": "note", "title": "Note", "type": "text"}]}
+  ],
+  "tools": [
+    {"command": "log-service", "name": "Log a service", "about": "Writes down a service done, and when the next is due", "kind": "add", "table": "services", "icon": "wrench"}
+  ],
+  "page": {"page": "page/v1", "name": "service-log", "title": "Service log", "icon": "reports", "about": "Every service done, and when the next is due",
+    "filters": [{"id": "q", "type": "search", "columns": ["what", "by"]}, {"id": "when", "type": "dates", "column": "done_on", "label": "Done"}],
+    "blocks": [
+      {"id": "month", "type": "figure", "label": "Services this month", "value": "count", "lead": true, "change": {"column": "done_on", "period": "month"}, "source": {"table": "services"}},
+      {"id": "cost", "type": "figure", "label": "Spent this month", "value": "sum", "of": "cost", "change": {"column": "done_on", "period": "month"}, "source": {"table": "services"}},
+      {"id": "log", "type": "buttons", "actions": [{"label": "Log a service", "tool": "log-service"}]},
+      {"id": "next", "type": "table", "title": "Next due",
+       "source": {"table": "services", "filters": [{"column": "next_due", "op": "not_null"}], "order": [{"column": "next_due"}]},
+       "columns": [{"column": "what", "label": "What"}, {"column": "next_due", "label": "Next due"}, {"column": "done_on", "label": "Last done"}],
+       "empty": "Nothing due"},
+      {"id": "rows", "type": "list", "title": "Services", "source": {"table": "services", "order": [{"column": "done_on", "desc": true}], "uses": ["q", "when"]},
+       "item": {"title": "=row.what", "sub": "=row.done_on + ' · ' + row.by"},
+       "detail": {"title": "=row.what", "lines": [{"label": "Done on", "value": "=row.done_on"}, {"label": "By", "value": "=row.by"}, {"label": "Cost", "value": "=row.cost"}, {"label": "Next due", "value": "=row.next_due"}, {"label": "Note", "value": "=row.note"}]},
+       "empty": "No services logged yet"},
+      {"id": "by_month", "type": "chart", "title": "Services by month", "source": {"table": "services"}, "chart": {"kind": "bars", "by": "done_on", "period": "month", "last": 6}}
+    ]}
+}

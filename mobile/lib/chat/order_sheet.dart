@@ -246,7 +246,7 @@ class _OrderSheetState extends State<OrderSheet> {
   /// Taskiem guesses.
   Treat _treatOf(PriceItem it) {
     final m = _memory(it.id);
-    return _treat[it.id] ?? (m != null ? Treat.ofMemory(m) : _choices.suggest(it.name));
+    return _treat[it.id] ?? (m != null ? Treat.ofMemory(m) : _choices.suggest(it.name, unit: it.unit));
   }
 
   /// Whether the line is sent with its treatment: not remembered, or
@@ -300,7 +300,7 @@ class _OrderSheetState extends State<OrderSheet> {
       final lines = <Map<String, Object?>>[];
       for (final l in bag.lines) {
         // A label typed as new is made first.
-        final tr = _treat[l.item.id] = await _choices.made(_treatOf(l.item));
+        final tr = _treat[l.item.id] = await _choices.madeOrNone(_treatOf(l.item));
         if (_remember.contains(l.item.id) && _memory(l.item.id) != null) {
           // Changed and remembered: from now on, for this order too.
           await widget.chats.auth.api.putItemLink(
@@ -644,6 +644,7 @@ class _OrderSheetState extends State<OrderSheet> {
               item: l.item.name,
               supplier: _biz,
               quantity: l.quantity,
+              unit: l.item.unit,
               value: _treatOf(l.item),
               choices: _choices,
               asked: _memory(l.item.id) == null,

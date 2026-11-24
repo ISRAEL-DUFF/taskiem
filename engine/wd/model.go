@@ -648,10 +648,11 @@ func (d *Definition) ValidateInputs(body []byte) []string {
 		if len(d.RawTypes) > 0 {
 			root["types"] = d.RawTypes
 		}
-		if name, _, ok := ScanInput(d); ok {
-			// A scan input takes the code typed, or as the phone read it.
-			if props, ok := root["properties"].(map[string]any); ok {
-				props[name] = scanInputSchema()
+		if props, ok := root["properties"].(map[string]any); ok {
+			for name, kind := range DeviceInputs(d) {
+				// A scan input takes the code typed, or as the phone read
+				// it; a location, a photo and a signature their answers.
+				props[name] = deviceInputSchema(kind)
 			}
 		}
 		raw, _ := json.Marshal(root)

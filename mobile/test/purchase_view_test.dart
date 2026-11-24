@@ -131,7 +131,8 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Confirm the order'));
     await settle(t);
-    expect(r.sent.single, 'POST /v1/stock/purchases/P1/confirm-proposed {"lines":[{"treatment":"record"}]}');
+    // The server's first label suggestion was pre-selected (H2 g-label-pre).
+    expect(r.sent.single, 'POST /v1/stock/purchases/P1/confirm-proposed {"lines":[{"treatment":"record","label_id":"lb-pack"}]}');
   });
 
   testWidgets('delivered: all came, or how many did', (t) async {

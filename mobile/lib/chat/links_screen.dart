@@ -25,6 +25,7 @@ import '../kit/modal.dart';
 import '../theme/theme.dart';
 import 'attachments.dart' show handOffFile;
 import 'chats.dart';
+import 'pages_page.dart' show PlacedPageTabs;
 import 'profile_screen.dart' show photoPath;
 import 'words.dart';
 
@@ -179,6 +180,9 @@ class _LinksScreenState extends State<LinksScreen> {
           ),
           children: [
             if ((_error ?? _d.error) != null) TkErrorBox((_error ?? _d.error)!),
+            // The business's own pages placed under Linked businesses, as
+            // tabs after this screen's own (pages H5).
+            PlacedPageTabs(auth: _d.auth, areas: const ['links'], own: 'Links', label: 'Linked businesses', backLabel: 'Back to Linked businesses'),
             TkTopCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

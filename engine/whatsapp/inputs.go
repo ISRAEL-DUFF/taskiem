@@ -29,16 +29,38 @@ type Field struct {
 	// fields of its schema; a data table's columns may be optional, and a
 	// form leaves those blank.
 	Required bool
-	schema   *schemacheck.Schema
+	// Device is a tool's device input (build-plan-gaps H3): location or
+	// photo, answered by the chat's own location or photo message, or
+	// scan, a code typed; Why is the input's why, said when it is asked.
+	Device string
+	Why    string
+	schema *schemacheck.Schema
 }
 
 // ErrInputsUnsupported: the inputs need something chat cannot collect yet
 // (nested objects, lists).
 var ErrInputsUnsupported = errors.New("this workflow's inputs cannot be collected in chat yet")
 
+// errSkipField: an input a chat never asks (a signature, which needs a
+// pad); the start sends it unavailable.
+var errSkipField = errors.New("not asked in a chat")
+
 // InputFields lists the required fields of an inputs schema, in the order
 // it lists them. types are the definition's types, for $ref.
 func InputFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Field, error) {
+	return inputFields(schema, types, false)
+}
+
+// ToolFields are InputFields, then the optional fields a chat can carry
+// (words, numbers, yes or no, a choice), by name: what the reader may
+// fill from a person's words (made tools §6, "log 4500 diesel at Total"
+// fills an optional "where"). An optional field a chat cannot carry is
+// left out, never a reason to refuse the tool.
+func ToolFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Field, error) {
+	return inputFields(schema, types, true)
+}
+
+func inputFields(schema json.RawMessage, types map[string]json.RawMessage, optional bool) ([]Field, error) {
 	if len(schema) == 0 {
 		return nil, nil
 	}
@@ -73,15 +95,25 @@ func InputFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Fi
 	}
 	props, _ := root["properties"].(map[string]any)
 	req, _ := root["required"].([]any)
-	var out []Field
-	for _, r := range req {
-		name, _ := r.(string)
+	field := func(name string, required bool) (Field, error) {
 		raw, _ := json.Marshal(props[name])
 		ps, err := resolve(raw)
 		if err != nil {
-			return nil, err
+			return Field{}, err
 		}
-		f := Field{Name: name, Title: str(ps, "title"), Description: str(ps, "description"), Type: str(ps, "type"), PII: str(ps, "x-pii"), Required: true}
+		f := Field{Name: name, Title: str(ps, "title"), Description: str(ps, "description"), Type: str(ps, "type"), PII: str(ps, "x-pii"), Required: required}
+		switch f.Type {
+		case "signature":
+			// No pad in a chat: the start sends it unavailable.
+			return Field{}, errSkipField
+		case "location", "photo":
+			f.Device, f.Why, f.Type, f.PII = f.Type, str(ps, "why"), "", ""
+			return f, nil
+		case "scan":
+			// A code typed: WhatsApp has no scanner.
+			f.Device, f.Why, f.Type = "scan", str(ps, "why"), "string"
+			ps = map[string]any{"type": "string", "minLength": 1, "maxLength": 2000}
+		}
 		if e, ok := ps["enum"].([]any); ok {
 			f.Enum = e
 		}
@@ -89,10 +121,10 @@ func InputFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Fi
 		case "string", "integer", "number", "boolean":
 		case "":
 			if f.Enum == nil {
-				return nil, ErrInputsUnsupported
+				return Field{}, ErrInputsUnsupported
 			}
 		default:
-			return nil, ErrInputsUnsupported
+			return Field{}, ErrInputsUnsupported
 		}
 		// The field's own schema, with the definition's types for $ref.
 		own := map[string]any{}
@@ -104,7 +136,36 @@ func InputFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Fi
 		}
 		doc, _ := json.Marshal(own)
 		f.schema = schemacheck.New("https://schemas.taskiem.dev/chat-input/"+name+".json", doc)
+		return f, nil
+	}
+	var out []Field
+	asked := map[string]bool{}
+	for _, r := range req {
+		name, _ := r.(string)
+		f, err := field(name, true)
+		asked[name] = true
+		if errors.Is(err, errSkipField) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
 		out = append(out, f)
+	}
+	if !optional {
+		return out, nil
+	}
+	names := make([]string, 0, len(props))
+	for name := range props {
+		if !asked[name] {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		if f, err := field(name, false); err == nil {
+			out = append(out, f)
+		}
 	}
 	return out, nil
 }
@@ -128,6 +189,12 @@ func (f Field) PromptIn(t lang.Tag) string {
 	tr := lang.Default().Text
 	var s string
 	switch {
+	case f.Device == "location":
+		s = tr(t, "wa.field.send_location", "label", label, "why", f.Why)
+	case f.Device == "photo":
+		s = tr(t, "wa.field.send_photo", "label", label, "why", f.Why)
+	case f.Device == "scan":
+		s = tr(t, "wa.field.type_code", "label", label, "why", f.Why)
 	case len(f.Enum) > 0:
 		opts := make([]string, len(f.Enum))
 		for i, e := range f.Enum {
@@ -158,6 +225,12 @@ func (f Field) Parse(text string) (any, error) { return f.ParseIn(text, lang.EN)
 // schema's own refusals stay in English).
 func (f Field) ParseIn(text string, t lang.Tag) (any, error) {
 	text = strings.TrimSpace(text)
+	switch f.Device {
+	case "location":
+		return nil, errors.New(lang.Default().Text(t, "wa.field.not_location"))
+	case "photo":
+		return nil, errors.New(lang.Default().Text(t, "wa.field.not_photo"))
+	}
 	var v any
 	switch f.Type {
 	case "integer":
@@ -205,6 +278,9 @@ func (f Field) ParseIn(text string, t lang.Tag) (any, error) {
 // Check checks a value against the field's schema; the error says what is
 // wrong.
 func (f Field) Check(v any) error {
+	if f.schema == nil {
+		return nil // a location or a photo: read by the run, not here
+	}
 	doc, _ := json.Marshal(v)
 	if probs := f.schema.Validate(doc); len(probs) > 0 {
 		msg := probs[0]

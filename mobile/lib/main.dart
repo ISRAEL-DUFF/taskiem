@@ -678,7 +678,9 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       case RouteScreen.payroll:
         nav.push(TkRoute<void>(pageBuilder: (_, _, _) => id.isEmpty ? PayrollPage(auth: auth) : PayrollRunPage(auth: auth, run: id)));
       case RouteScreen.pages:
-        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => id.isEmpty ? PagesPage(auth: auth) : PageScreen(auth: auth, name: id)));
+        // A page, with the filters its link set (a Tell me message's button).
+        final pg = pageRouteOf(id, pageFiltersOf);
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => id.isEmpty ? PagesPage(auth: auth) : PageScreen(auth: auth, name: pg.name, filters: pg.filters)));
       case RouteScreen.you:
         nav.push(TkRoute<void>(pageBuilder: (_, _, _) => MyChatScreen(data: MyChatData(auth, id, prefs: widget.prefs), notify: widget.notify)));
       case RouteScreen.youPage:

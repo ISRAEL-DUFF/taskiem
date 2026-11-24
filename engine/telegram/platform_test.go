@@ -3,6 +3,7 @@ package telegram_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -164,6 +165,18 @@ func TestSendAndCallbacks(t *testing.T) {
 		if got, ok, err := p.ResolveCallback(ctx, c.id, c.data); err != nil || ok || got != "" {
 			t.Errorf("%d %q resolves: %q %v %v", c.id, c.data, got, ok, err)
 		}
+	}
+	// Two to a row where the message asks (the topics menu, chat-menus §9):
+	// five buttons are rows of two, two and one.
+	var five []whatsapp.Button
+	for i := range 5 {
+		five = append(five, whatsapp.Button{ID: fmt.Sprintf("topic:%d", i), Title: fmt.Sprintf("Topic %d", i)})
+	}
+	if _, err := p.Send(ctx, telegram.Address(777), whatsapp.Message{Text: "Topics", Buttons: five, Columns: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if s := bot.Last(t, 777); len(s.Keyboard) != 3 || len(s.Keyboard[0]) != 2 || len(s.Keyboard[2]) != 1 || s.Keyboard[0][1].Text != "Topic 1" || s.Keyboard[2][0].Text != "Topic 4" {
+		t.Fatalf("two to a row: %+v", s.Keyboard)
 	}
 	if _, err := p.Send(ctx, "+2348012345678", whatsapp.Message{Text: "hi"}); err == nil {
 		t.Error("sent to a phone number")

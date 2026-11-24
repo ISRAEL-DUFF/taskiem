@@ -186,6 +186,54 @@ func (s *Server) waUnderstand(ctx context.Context, c *chat, text string) (bool, 
 	return true, c.say(ctx, s, c.t("wa.understood.confirm", "command", whatsapp.SafeText(res.Command)), understoodButtons(c)...)
 }
 
+// modelAnswer reads, with the model, a reply to a question Taskiem asked
+// that its own words did not recognise (the buying question, what a
+// business buys §6: "add 10 bags of rice" in reply to How should we treat
+// it? is Add to stock). The model is given the question and the answers it
+// takes in place of the commands, within the plan's AI feature, the
+// business's budget and the chat's hourly limit, as waUnderstand; it
+// answers one of them as a command. "" when the model is not there, gives
+// none, or gives what it may not (yes, no, cancel).
+func (s *Server) modelAnswer(ctx context.Context, c *chat, text, question string, answers []string) string {
+	model := s.chatModel()
+	if model == nil || c.p == nil || strings.TrimSpace(text) == "" || !s.aiOnPlan(ctx, c) {
+		return ""
+	}
+	if limit, used, err := s.aiBudget(ctx, c.tenant.ID); err != nil || (limit > 0 && used >= limit) {
+		return ""
+	}
+	if !s.limiter("wa-understand:"+c.tenant.ID.String()+":"+c.addr, time.Hour/understandPerHour, understandPerHour).Allow() {
+		return ""
+	}
+	info, _ := lang.Lookup(c.lang.Tag)
+	if info.Tag == "" {
+		info, _ = lang.Lookup(lang.EN)
+	}
+	commands := "The person was just asked this question, and their message answers it:\n<question>\n" + question + "\n</question>\n" +
+		"Its answers, as commands (write the one the message means, in this shape, in English):\n- " + strings.Join(answers, "\n- ") +
+		"\nIf the message is not an answer to the question, answer cannot."
+	release, err := s.reserveAI(ctx, c.tenant.ID, "understand", understand.Request(text, commands, nil, info, 0).Estimate(), chatAIReservation)
+	if err != nil {
+		return ""
+	}
+	defer release()
+	res, resp, err := (&understand.Helper{Provider: model}).Understand(ctx, text, commands, nil, info)
+	outcome, errText := "valid", ""
+	switch {
+	case errors.Is(err, understand.ErrUnusable):
+		outcome = "unparseable"
+	case err != nil:
+		outcome, errText = "error", err.Error()
+	case res.Kind != understand.Command || understoodRefused(c, res.Command):
+		outcome = "refused"
+	}
+	s.recordModelCall(ctx, c, "understand", "answer", model, resp, outcome, errText)
+	if outcome != "valid" {
+		return ""
+	}
+	return res.Command
+}
+
 func understoodButtons(c *chat) []whatsapp.Button {
 	return []whatsapp.Button{{ID: "yes", Title: c.t("button.yes")}, {ID: "no", Title: c.t("button.no")}}
 }

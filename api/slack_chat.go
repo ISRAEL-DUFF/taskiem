@@ -119,9 +119,16 @@ func (s *Server) slackEvents(w http.ResponseWriter, r *http.Request) {
 			BotID       string `json:"bot_id"`
 			User        string `json:"user"`
 			Text        string `json:"text"`
+			TS          string `json:"ts"`
+			ThreadTS    string `json:"thread_ts"`
 			Files       []struct {
 				Name string `json:"name"`
 			} `json:"files"`
+			// A message shared into the DM (Slack's forward): its words.
+			Attachments []struct {
+				IsShare bool   `json:"is_share"`
+				Text    string `json:"text"`
+			} `json:"attachments"`
 		} `json:"event"`
 	}
 	_ = json.Unmarshal(body, &ev)
@@ -145,7 +152,20 @@ func (s *Server) slackEvents(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if fresh {
 			team, user, text := ev.TeamID, ev.Event.User, ev.Event.Text
-			in := whatsapp.Inbound{ID: ev.EventID, Type: "text", Text: strings.TrimSpace(text)}
+			in := whatsapp.Inbound{ID: ev.EventID, Type: "text", Text: strings.TrimSpace(text), Ref: ev.Event.TS}
+			// A reply in a thread quotes the thread's first message.
+			if ev.Event.ThreadTS != "" && ev.Event.ThreadTS != ev.Event.TS {
+				in.Quoted = ev.Event.ThreadTS
+			}
+			// A message shared into the DM: forwarded, its words read as the
+			// message (paying people H7), after any the person added.
+			for _, a := range ev.Event.Attachments {
+				if a.IsShare && strings.TrimSpace(a.Text) != "" {
+					in.Forwarded = true
+					in.Text = strings.TrimSpace(strings.TrimSpace(in.Text) + "\n" + strings.TrimSpace(a.Text))
+					break
+				}
+			}
 			if ev.Event.Subtype == "file_share" {
 				// A file: not read without the files:read scope, so the
 				// conversation answers with the web's import (no-sheet R2).

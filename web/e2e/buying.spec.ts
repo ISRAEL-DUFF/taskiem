@@ -297,13 +297,17 @@ test("what is remembered, changed and forgotten on the Suppliers page", async ({
   const q = dialog.getByTestId("treat");
   await q.getByRole("radio", { name: /Add to stock/ }).check();
   await q.getByLabel("Which stock item?").selectOption("si-fabric");
+  // Fabric is counted in yards: how many one is must be said first.
+  const save = dialog.getByRole("button", { name: `Save ${machine.name}` });
+  await expect(save).toBeDisabled();
+  await q.getByLabel(`How many yard is one ${machine.name}?`).fill("2");
   await axeAt(page, "a supplier's item changed");
-  await dialog.getByRole("button", { name: `Save ${machine.name}` }).click();
+  await save.click();
   await expect.poll(() => writes.length).toBe(1);
   expect(writes[0]).toEqual({
     method: "PUT",
     path: "/v1/item-links/l1",
-    body: { seller_item_id: "sm", treatment: "stock", stock_item_id: "si-fabric", label_id: "lab-m" },
+    body: { seller_item_id: "sm", treatment: "stock", stock_item_id: "si-fabric", uses: 2, label_id: "lab-m" },
   });
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
 
@@ -523,4 +527,135 @@ test("an order's lines saved part way, asked first, are not said saved", async (
     { treatment: "track", label_id: "lab-p" },
     { treatment: "record", label_id: "lab-p" },
   ]);
+});
+
+// H2 g-label-merge: a line whose label was merged since shows the label
+// kept, as the server names it with the line, not Not labelled.
+test("an old order's line labelled Snacks, merged into Staff welfare, shows Staff welfare", async ({ page }) => {
+  await signUp(page);
+  // Snacks is merged: the business's labels no longer list it.
+  labelsServer(page, [
+    { id: "lab-snacks", name: "Snacks", uses: 2, merged_into: "lab-w", created_by: "user:ada", created_at: now },
+    { id: "lab-w", name: "Staff welfare", uses: 5, created_by: "user:ada", created_at: now },
+  ]);
+  await stockAndThings(page);
+  const purchase = {
+    id: "p9", reference: "PO-0090", supplier_id: "s1", supplier: "Corner shop", total_kobo: 200_000, status: "received",
+    drafted_by: "user:ada", approved_by: "user:ada", sent_at: now, confirmed_at: now, confirmed_how: "owner", counter: null, counter_at: null,
+    received_at: now, cancelled_at: null, received_kobo: 200_000, paid_kobo: 0, owed_kobo: 200_000, created_at: now,
+    lines: [
+      { id: "a", position: 0, item_id: "a", item: "Biscuits", unit: "", quantity: 4, cost_kobo: 50_000, received: 4, uses: 1, treatment: "record", label_id: "lab-snacks", label: "Staff welfare" },
+    ],
+  };
+  await page.route("**/v1/stock/purchases/p9", (route) => route.fulfill(json({ purchase })));
+  await page.goto("/purchases/p9");
+  const mark = page.getByTestId("line-mark");
+  await expect(mark).toHaveText(/Staff welfare/);
+  await expect(mark).not.toContainText("Not labelled");
+  await expect(page.getByTestId("treat")).toContainText("Just record it · Staff welfare");
+  await axeAt(page, "an order line with a merged label");
+});
+
+// H2 g-uses-ask: rice bought in bags, into the stock item Rice counted in
+// grams, asks how many grams one bag is; the answer goes with the line and
+// is remembered, so the next order asks nothing.
+test("rice in bags into a stock item counted in grams asks how many grams one bag is, once", async ({ page }) => {
+  await signUp(page);
+  labelsServer(page, [{ id: "lab-s", name: "Stock bought", uses: 9, created_by: "user:ada", created_at: now }]);
+  await stockAndThings(page);
+  await page.route("**/v1/stock/stock-items", (route) =>
+    route.fulfill(
+      json({
+        keeps_stock: true, value_kobo: 0, low: 0,
+        items: [
+          { id: "si-rice", name: "Rice", unit: "g", category: "", count: 0, cost_kobo: null, low_level: null, target_level: null, supplier_id: null, supplier: "", group_of: "", group_name: "", low: false, suggest: null, value_kobo: 0, retired: false, sold_as: [] },
+          { id: "si-fabric", name: "Ankara fabric", unit: "yard", category: "", count: 40, cost_kobo: 150_000, low_level: 10, target_level: 60, supplier_id: null, supplier: "", group_of: "", group_name: "", low: false, suggest: null, value_kobo: 6_000_000, retired: false, sold_as: [] },
+        ],
+      }),
+    ),
+  );
+  const rice = { item_id: "rc", name: "Rice", unit: "bag", category: "Food", price_kobo: 7_500_000, min_quantity: 1, available: true };
+  const memory: Record<string, unknown>[] = [];
+  const orders: { lines: Record<string, unknown>[] }[] = [];
+  await page.route("**/v1/supplier-prices?**", (route) =>
+    route.fulfill(json({ suppliers: [{ link: "l1", business: "Dangote Stores", name: "Trade prices", updated_at: now, items: [rice] }] })),
+  );
+  await page.route("**/v1/item-links/l1", (route) => route.fulfill(json({ item_links: memory })));
+  await page.route("**/v1/supplier-prices/l1/order", async (route) => {
+    const body = route.request().postDataJSON() as { lines: Record<string, unknown>[] };
+    orders.push(body);
+    for (const l of body.lines)
+      if (l.treatment && !memory.some((m) => m.seller_item_id === l.seller_item_id))
+        memory.push({ link_id: "l1", seller_item_id: l.seller_item_id, name: rice.name, treatment: l.treatment, stock_item_id: l.stock_item_id, stock_item: "Rice", uses: l.uses ?? 1, label_id: l.label_id, label: "Stock bought", updated_by: "user:ada", updated_at: now });
+    return route.fulfill(json({ purchase: { id: `p${orders.length}`, lines: [] } }, 201));
+  });
+  await page.route("**/v1/stock/purchases/p*", (route) => route.fulfill(json({ error: "not found" }, 404)));
+
+  await page.goto("/storefront/suppliers/l1/prices");
+  await page.getByLabel("How many Rice").fill("10");
+  const q = page.getByTestId("treat");
+  // A stock item of its name: Add to stock into Rice, and the question.
+  await expect(q.getByRole("radio", { name: /Add to stock/ })).toBeChecked();
+  await expect(q.getByLabel("Which stock item?")).toHaveValue("si-rice");
+  const uses = q.getByLabel("How many g is one bag?");
+  await expect(uses).toBeVisible();
+  await expect(q.getByTestId("treat-uses")).toContainText("Rice is counted in g.");
+  const draft = page.getByRole("button", { name: "Draft the order" });
+  // Review fix 2: asked, it waits for an answer, and a bad one stops it.
+  await expect(draft).toBeDisabled();
+  await uses.fill("2,5");
+  await expect(q.getByTestId("treat-uses")).toContainText("A whole number, like 1000.");
+  await expect(draft).toBeDisabled();
+  await uses.fill("50,000");
+  await expect(draft).toBeEnabled();
+  // Review fix 3: another stock item drops it; asked again of that one.
+  await q.getByLabel("Which stock item?").selectOption("si-fabric");
+  await expect(q.getByLabel("How many yard is one bag?")).toHaveValue("");
+  await expect(draft).toBeDisabled();
+  await q.getByLabel("Which stock item?").selectOption("si-rice");
+  await expect(uses).toHaveValue("");
+  await uses.fill("50,000");
+  await q.getByLabel("Label", { exact: true }).fill("Stock bought");
+  await axeAt(page, "how many grams one bag is");
+  await page.getByRole("button", { name: "Draft the order" }).click();
+  await expect(page).toHaveURL(/\/purchases\/p1$/);
+  expect(orders[0]).toEqual({ lines: [{ seller_item_id: "rc", quantity: 10, treatment: "stock", stock_item_id: "si-rice", uses: 50_000, label_id: "lab-s" }] });
+
+  // Remembered: the next order asks nothing.
+  await page.goto("/storefront/suppliers/l1/prices");
+  await page.getByLabel("How many Rice").fill("2");
+  await expect(q).toContainText("Add to stock: Rice (50000 each) · Stock bought");
+  await expect(q.getByLabel("How many g is one bag?")).toHaveCount(0);
+  await page.getByRole("button", { name: "Draft the order" }).click();
+  await expect(page).toHaveURL(/\/purchases\/p2$/);
+  expect(orders[1]).toEqual({ lines: [{ seller_item_id: "rc", quantity: 2 }] });
+});
+
+// H2 review fix 5: someone who may order but not make labels: the new
+// label is refused, and the line goes without it, not the order failing.
+test("a new label refused: the line goes without it", async ({ page }) => {
+  await signUp(page);
+  labelsServer(page);
+  await stockAndThings(page);
+  await page.route("**/v1/money/labels", (route) =>
+    route.request().method() === "POST" ? route.fulfill(json({ error: "requires table.edit" }, 403)) : route.fallback(),
+  );
+  const orders: unknown[] = [];
+  await page.route("**/v1/supplier-prices?**", (route) =>
+    route.fulfill(json({ suppliers: [{ link: "l1", business: "Singer Ltd", name: "Trade prices", updated_at: now, items: [machine] }] })),
+  );
+  await page.route("**/v1/item-links/l1", (route) => route.fulfill(json({ item_links: [] })));
+  await page.route("**/v1/supplier-prices/l1/order", async (route) => {
+    orders.push(route.request().postDataJSON());
+    return route.fulfill(json({ purchase: { id: "p1", lines: [] } }, 201));
+  });
+  await page.route("**/v1/stock/purchases/p*", (route) => route.fulfill(json({ error: "not found" }, 404)));
+  await page.goto("/storefront/suppliers/l1/prices");
+  await page.getByLabel(`How many ${machine.name}`).fill("1");
+  const q = page.getByTestId("treat");
+  await q.getByRole("radio", { name: /Keep track of it/ }).check();
+  await q.getByLabel("Label", { exact: true }).fill("Big machines");
+  await page.getByRole("button", { name: "Draft the order" }).click();
+  await expect(page).toHaveURL(/\/purchases\/p1$/);
+  expect(orders[0]).toEqual({ lines: [{ seller_item_id: "sm", quantity: 1, treatment: "track" }] });
 });

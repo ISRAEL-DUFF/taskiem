@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,10 +25,9 @@ import (
 
 // Customers' tools (made tools T5, decision 0073 point 6; the build plan's
 // M5). A business offers its customers the tools it deploys in prod with
-// tool.for "customers", and the entries of its public menu, carried over
-// as tools by migration 00569 (each named by its label, with a command
-// made from it; a workflow that declares a customers' tool is that tool
-// instead). A customer reaches them in two places only: the business's own
+// tool.for "customers": its customer menu is those tools and nothing else
+// (the separate public menu was retired, migration 00640). A customer
+// reaches them in two places only: the business's own
 // WhatsApp number (menu, then a number) and their chat with the business
 // in the app (the customer door). Whatever their care, they always ask
 // yes; their inputs come by form only (flat, ten at most); a tool whose
@@ -45,15 +42,13 @@ import (
 func customerAppActor(person uuid.UUID) string { return "customer:" + person.String() }
 
 // customerWAActor is who a customer's run on the business's own WhatsApp
-// number is started by (the public menu's actor, kept).
+// number is started by (the actor of the menu on that number).
 func customerWAActor(number string) string { return "whatsapp_public:" + number }
 
-// customerToolsTx are the customers' tools of the business in tx's scope,
-// in prod: its deployed customers' tools, then its public menu's entries
-// whose workflow is deployed and declares no tool (one that declares a
-// tool for customers is that tool; one for members is its members' alone),
-// by name. A tool whose workflow names roles is left out here when the
-// index says so, and always by customerDefinition: a customer holds none.
+// customerToolsTx are the customers' tools of the business in tx's scope:
+// the tools it deploys in prod for customers, by name. A tool whose
+// workflow names roles is left out here when the index says so, and
+// always by customerDefinition: a customer holds none.
 func customerToolsTx(ctx context.Context, tx pgx.Tx) ([]toolRow, error) {
 	rows, err := tx.Query(ctx, `SELECT `+toolCols+` FROM workflow_tools WHERE environment = 'prod' AND audience = 'customers'`)
 	if err != nil {
@@ -63,22 +58,8 @@ func customerToolsTx(ctx context.Context, tx pgx.Tx) ([]toolRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err = tx.Query(ctx, `SELECT p.workflow_id, d.version, p.command, p.label FROM whatsapp_public_workflows p
-		JOIN deployments d ON d.workflow_id = p.workflow_id AND d.environment = 'prod'
-		WHERE NOT EXISTS (SELECT 1 FROM workflow_tools t WHERE t.environment = 'prod' AND (t.workflow_id = p.workflow_id OR t.command = p.command))`)
-	if err != nil {
-		return nil, err
-	}
-	menu, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (toolRow, error) {
-		t := toolRow{Environment: "prod", Audience: wd.ToolForCustomers, Says: []string{}, Roles: []string{}, Care: wdcheck.Care{Level: wdcheck.CareYes}, Menu: true}
-		err := row.Scan(&t.Workflow, &t.Version, &t.Command, &t.Name)
-		return t, err
-	})
-	if err != nil {
-		return nil, err
-	}
 	out := []toolRow{}
-	for _, t := range append(tools, menu...) {
+	for _, t := range tools {
 		if len(t.Roles) == 0 {
 			out = append(out, t)
 		}
@@ -284,7 +265,7 @@ func pressCustomerButton(ctx context.Context, tx pgx.Tx, id uuid.UUID, actor str
 		return toolRow{}, nil, err
 	}
 	for _, t := range tools {
-		if t.Workflow != wf || t.Menu {
+		if t.Workflow != wf {
 			continue
 		}
 		in := map[string]any{}
@@ -299,35 +280,6 @@ func pressCustomerButton(ctx context.Context, tx pgx.Tx, id uuid.UUID, actor str
 		return t, in, nil
 	}
 	return toolRow{}, nil, gone
-}
-
-// --- the public menu's entries, as customers' tools ---
-
-var menuCommandWords = regexp.MustCompile(`[^a-z0-9]+`)
-
-// menuCommand is the command a public menu's label is given (as migration
-// 00569 gave those carried over): its words joined by dashes, starting
-// with a letter, then -2, -3… past those taken, and past Taskiem's own
-// words in any language (as a tool's command is, wdcheck.ReservedCommand,
-// which reserves the routes' "buttons" too).
-func menuCommand(label string, taken func(string) bool) string {
-	used := func(c string) bool { return taken(c) || wdcheck.ReservedCommand(c) }
-	base := strings.Trim(menuCommandWords.ReplaceAllString(strings.ToLower(label), "-"), "-")
-	if base == "" || base[0] < 'a' || base[0] > 'z' {
-		base = strings.Trim("menu-"+base, "-")
-	}
-	if len(base) > 21 {
-		base = base[:21]
-	}
-	base = strings.Trim(base, "-")
-	if len(base) < 2 {
-		base = "item"
-	}
-	c := base
-	for n := 2; used(c); n++ {
-		c = base + "-" + strconv.Itoa(n)
-	}
-	return c
 }
 
 // eraseCustomerToolWatches deletes the business's rows of answers waiting
