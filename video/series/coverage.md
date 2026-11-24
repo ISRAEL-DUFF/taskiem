@@ -107,7 +107,7 @@ alone. Checked against the code and the branches:
 wallet-to-wallet transfers, NGN bank payouts, a name check before paying a new
 account, the bank list, permanent account numbers (each school student's) and
 one-time account numbers, and opening a wallet for a business that has none
-("Open a Taskiem wallet"). A connection is **Live (real money)** or **Test
+("Open a Taskiem wallet"). A connection is **Live (real money, open for months)** or **Test
 (practice, marked "Test: no real money")**. Taskiem never holds money itself.
 I wrongly wrote that no real wallet existed; it does.
 
@@ -116,12 +116,15 @@ How we film money features:
   (`web/e2e/serve.sh`: `TASKIEM_ISWALLET_URL`, `TASKIEM_ISWALLET_TEST_URL`), so
   the demo world can run against it, or against iswallet's **Test** mode if we
   have test credentials. Nothing moves real money while we record.
-- **What the film says:** it shows real Taskiem steps. It does not claim a live
-  payment happened. Before a public launch, the build plan's D6 (the provider in
-  test mode for end-to-end tests) and D7 (a security review of saved accounts
-  and paying) should be done; ask the product team whether Live is open.
-- **Questions for the product team:** is Live open to businesses today, and are
-  test credentials available for our recordings?
+- **What the film says:** iswallet has been **live for months** (founder,
+  24 November 2026), and **Payrolla already pays its customers' staff through
+  it**. So the films can say plainly that Taskiem pays through iswallet, and
+  payroll through Payrolla. We still record in the demo, so no real money moves
+  on camera.
+- **One check before a public "pay from Taskiem" film:** the build plan's D7, a
+  security review of saved accounts and paying together, is meant to be done
+  before launch. I do not know if it has been; ask the product team. The same
+  for the Taskiem-side limits and passkey steps being on for every business.
 
 ### New chapters for the spine (proposed)
 
