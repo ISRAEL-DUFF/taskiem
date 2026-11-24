@@ -8,8 +8,7 @@ self-hosting side. Audit of 24 November 2026, from `docs/*.md`, `web/src/pages`,
 `mobile/lib`, `connectors/` and `templates/`.
 
 Key: **Covered** = has an episode. **Partly** = touched, not taught.
-**Not covered** = no episode. **Wait** = not built, or only built against fakes,
-so we must not film it as working.
+**Not covered** = no episode. **Wait** = not built yet, so we must not film it as working.
 
 ## 1. Running a business (the chat, phone and web)
 
@@ -35,7 +34,7 @@ so we must not film it as working.
 | Saved things (`@name`), made tools, pages, device fields (scan, sign) | Built (made tools M0-M5, pages, saved) | **Proposed** | "Episode 11: Automate the rest" (replan 9) |
 | Schools (fees, account numbers, clearance, gate) | Built | **Covered (series 4)** | `series/schools` |
 | People chat, groups, ordering together | Built | **Draft** | `series/everyone` |
-| **Paying people**: pay a bill by transfer, pay one person (limits, passkey), pay from a message, batches of up to 100, saved accounts, reading account details from a photo | Built (web, app, server; the bank connection is a stand-in in the demo) | **Not covered, film it** | New chapter "Pay people" (section 7) |
+| **Paying people**: pay a bill by transfer, pay one person (limits, passkey), pay from a message, batches of up to 100, saved accounts, reading account details from a photo | Built (web, app, server; money moves through **iswallet**, Taskiem's wallet, in Live or Test mode) | **Not covered, film it** | New chapter "Pay people" (section 7) |
 | **Payroll on Payrolla** (connect in one step, staff and pay from Taskiem, this month's payroll approved and locked) | **On the way**: P4b-1 to P4b-3 built on branch `ccr-87497aa3-gf060z`, not yet on main (decision 0074 accepted 24 Nov) | **Not covered, film when merged** | In "Pay people" or its own episode |
 | **Stock apart from products** (stock items you count but never sell; purchases of anything with a label and a use; receiving; "Things we have") | **Built** (S1a, S1b, S2 web and app, U1, U2a web; decision 0070) | **Not covered, film it** | New chapter "What you buy" (section 7) |
 | Updates (Status and Channels, as WhatsApp's) | **Not built, deliberately**: the founder deferred it on 12 November ("not built for now"), no code on main or any branch | Wait | Film when it is built |
@@ -99,14 +98,30 @@ alone. Checked against the code and the branches:
 
 | I said | The code says |
 | --- | --- |
-| Paying people and payroll: wait, "against fakes" | The web pages (`Payments`, `PayBatch`, `PayByTransfer`, `PayCollect`, `Payroll`), the app screens (`pay_*`, `payroll_page`) and the API (`api/payments*.go`, `payment_batches.go`) exist. Only the **bank connection** is a stand-in, as the demo's WhatsApp and SMS already are. We can film it in the demo world. Payroll's next slices are on a branch, not yet on main |
+| Paying people and payroll: wait, "against fakes" | The web pages (`Payments`, `PayBatch`, `PayByTransfer`, `PayCollect`, `Payroll`), the app screens (`pay_*`, `payroll_page`) and the API (`api/payments*.go`, `payment_batches.go`) exist. The money rail is iswallet (Live or Test). Our recordings can use the e2e fake iswallet or its Test mode. We can film it. Payroll's next slices are on a branch, not yet on main |
 | Stock apart from products: not built | **Built.** Migrations 00501 (stock items), 00503 (purchase lines), 00504 (receipts), 00590 (barcode); the app has `stock_items`, `purchases_page`, `purchase_view`. The doc I read said "not built" because it was written before the build |
 | Updates (Status and Channels): spec only | **Still not built**, and the founder said so: "not built for now" (12 November). There is no code for it on main or on any branch I can find. If you have a branch I have missed, tell me |
 
-**One caution on payments:** filming payments in the demo is fine. A *public*
-film that says "pay your suppliers from Taskiem" should wait until a real
-wallet is connected (the build plan's D6 and D7 before launch); the narration
-says "in the demo" or stays on the steps, not on live money, until then.
+**Money and iswallet.** Taskiem has its own wallet infrastructure, **iswallet**
+(iSpend's wallet platform, `docs/integrations/iswallet.md`): wallet balances,
+wallet-to-wallet transfers, NGN bank payouts, a name check before paying a new
+account, the bank list, permanent account numbers (each school student's) and
+one-time account numbers, and opening a wallet for a business that has none
+("Open a Taskiem wallet"). A connection is **Live (real money)** or **Test
+(practice, marked "Test: no real money")**. Taskiem never holds money itself.
+I wrongly wrote that no real wallet existed; it does.
+
+How we film money features:
+- **Recording:** the browser tests already run a **fake iswallet**
+  (`web/e2e/serve.sh`: `TASKIEM_ISWALLET_URL`, `TASKIEM_ISWALLET_TEST_URL`), so
+  the demo world can run against it, or against iswallet's **Test** mode if we
+  have test credentials. Nothing moves real money while we record.
+- **What the film says:** it shows real Taskiem steps. It does not claim a live
+  payment happened. Before a public launch, the build plan's D6 (the provider in
+  test mode for end-to-end tests) and D7 (a security review of saved accounts
+  and paying) should be done; ask the product team whether Live is open.
+- **Questions for the product team:** is Live open to businesses today, and are
+  test credentials available for our recordings?
 
 ### New chapters for the spine (proposed)
 

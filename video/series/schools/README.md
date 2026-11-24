@@ -58,9 +58,11 @@ pages are the second surface.
   Chat parts (briefing, approval card, tools) can still be recorded from the web.
 - **The demo world has no school.** It needs `seed-school.ts`: classes, a current
   term, students and families, fees, invoices, payments, debtors, a gate user.
-  **Check:** a student's own account number needs an issuing connection (a bank
-  rail); the demo has none, so a stand-in is needed or we show the setup without
-  a live number.
+  A student's own account number is issued by **iswallet**
+  (permanent virtual accounts). The browser tests run a fake iswallet
+  (`web/e2e/serve.sh`, `accounts.spec.ts`), so the demo world can issue numbers
+  against it, or against iswallet Test mode. The school's wallet setup itself
+  is web-only.
 - **Personal data is sealed**: names, phones and dates of birth are masked unless
   someone with permission shows them. Demo names are fictional; the safety
   episode shows the masking on purpose.
@@ -138,7 +140,7 @@ pages are the second surface.
   the Taskiem chat (or on WhatsApp);
   receipts with a QR code that checks as Valid.
 - **Hero feature:** a transfer lands on the right child with no one asked.
-- **Length:** 75 s / 2:00. **Check:** account numbers need the issuing connection.
+- **Length:** 75 s / 2:00. Account numbers come from iswallet (the fake or Test mode when recording).
 - **Recap:** "The bills are out."
 - **Bridge:** "Some parents have not paid. Who, and how late?"
 - **Next card:** Episode 7: Chase what is owed.

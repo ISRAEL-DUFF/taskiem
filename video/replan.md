@@ -167,7 +167,7 @@ Merged main again (407 more commits). Sources: `docs/store/google-play/listing.m
 | **Made tools** (decision 0073, accepted 23 Nov) | Any workflow declares itself a **tool in the chat**: a tile, a `/` command, a form, cards and buttons, a question inside a run, tools for customers | M0 to M5 **built** (T0 to T5). M6 (recipes and the AI builder) **not built** | Yes, the built parts. It is the "automate the rest" story |
 | **Pages** (decision 0072, accepted) | A business's own screens, drawn from its tables (heading, figure, list, table, row detail card), with buttons | G0 to G3 **built** | Yes, as part of "automate the rest" |
 | **Saved objects** (decision 0071, proposed) | Things kept and called up by `@name`: bank accounts, people, places, text. "deliver to @warehouse", "invoice @acme 250k", "remind me when @car insurance is due"; shared as cards | S0 to S3 **built** (web, app, chat apps) | Yes |
-| **Payments** | Pay a bill by transfer in the chat; pay one person safely (limits, passkey); pay from a message; batches of up to 100; payroll (Payrolla) | Built **against fakes, not on a real wallet** | **No**, not as a working feature, until a real wallet is connected |
+| **Payments** | Pay a bill by transfer in the chat; pay one person safely (limits, passkey); pay from a message; batches of up to 100; payroll (Payrolla) | Built; money moves through **iswallet**, Taskiem's wallet (Live or Test mode) | **Yes.** Record against the e2e fake iswallet or iswallet's Test mode; say nothing about live money until the product team confirms Live is open |
 | **Device fields** | Scan a barcode, sign, location and photo in a form; a stock item's barcode; the app reads text from a photo on the phone (account details) | D0 to D2 **built** | Yes (barcode scan suits shops) |
 | **Schools in the chat** | School figures in the briefing, approval cards, school tools | Built | In the Schools series |
 | **Stock apart from products** (decision 0070) | Count things a business buys but never sells (fabric, flour, diesel) | Accepted, **not built** | No |
@@ -189,9 +189,9 @@ Merged main again (407 more commits). Sources: `docs/store/google-play/listing.m
    - **Fashion and Food:** deliver to `@warehouse`, `@mum`'s address for a
      customer's order; a signature on a delivery.
    - **Every series:** a reminder "remind me when @car insurance is due".
-4. **Do not show payments as live.** "Pay Alhaja Sade in the chat" is built
-   against fakes. The series use matching incoming money (live) and approvals
-   (live); outgoing payments wait.
+4. **Film payments too** (correction, 24 Nov): "Pay Alhaja Sade in the chat" is built
+   on iswallet. Record it in the demo with the fake or Test iswallet. See
+   `series/coverage.md` section 7 for the wording rule.
 5. **Positioning:** the founder's amendment to decision 0068 (19 November) says
    exactly what you told me: Taskiem is not a chat-app replacement; it automates
    businesses alongside their conversations. The store listing follows it, and
