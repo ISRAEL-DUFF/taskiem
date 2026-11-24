@@ -217,3 +217,49 @@ test("a page sits as a tab under Linked businesses", async ({ page }) => {
   await expect(page).toHaveURL(/\/pages\/trade-today$/);
   await expect(page.getByText("Orders to and from linked businesses")).toBeVisible();
 });
+
+// g-pages-notif and g-pages-rowstatus: a page opened from a notification's
+// link is read with the filters it set; each delivery shows its run's
+// status, on its row and its card. Drawn from a stand-in for the view
+// (api/pages_h5_test.go and api/pages_records_more_test.go draw it for real).
+test("a notification's link opens a page filtered to today, each row with its run", async ({ page }) => {
+  await signIn(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const asked: string[] = [];
+  const drawn = {
+    page: { name: "deliveries", title: "Deliveries today", icon: "tables", about: "", roles: [], pinned: false, published: true, has_draft: false, version: 1, updated_at: "2026-11-24T10:00:00Z" },
+    draft: false,
+    can_edit: false,
+    drawn_at: "2026-11-24T10:00:00Z",
+    filters: [{ id: "dates", type: "dates", label: "When", value: "today" }],
+    blocks: [
+      {
+        id: "today",
+        type: "list",
+        title: "Today's deliveries",
+        size: "full",
+        empty: "None",
+        has_detail: true,
+        count: 2,
+        more: null,
+        rows: [
+          { id: "d1", title: "AC-12 · Musa", sub: "B•••", run_status: { status: "waiting", words: "Waiting", tone: "warn", waiting_for: [{ kind: "signal", who: "a cashier" }] }, detail: { title: "AC-12 · Musa", lines: [{ label: "Rider", value: "Musa" }] } },
+          { id: "d2", title: "AC-13 · Ngozi", sub: "C•••", run_status: { status: "completed", words: "Done", tone: "good" }, detail: { title: "AC-13 · Ngozi", lines: [] } },
+        ],
+      },
+    ],
+  };
+  await page.route("**/v1/pages/deliveries/view*", (r) => {
+    asked.push(new URL(r.request().url()).searchParams.get("filters") ?? "");
+    return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(drawn) });
+  });
+  await page.route("**/v1/pages/deliveries/live*", (r) => r.fulfill({ status: 404, body: "" }));
+  await page.goto(`/pages/deliveries?filters=${encodeURIComponent(JSON.stringify({ dates: "today" }))}`);
+  await expect(page.getByText("Waiting: for a cashier")).toBeVisible();
+  expect(JSON.parse(asked[0] ?? "{}")).toEqual({ dates: "today" });
+  await expect(page.getByTestId("page-row-run")).toHaveCount(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await axeBoth(page, "/pages/deliveries (row status)");
+  await page.getByRole("button", { name: /AC-12 · Musa/ }).click();
+  await expect(page.getByTestId("page-detail-run")).toContainText("Waiting: for a cashier");
+});
