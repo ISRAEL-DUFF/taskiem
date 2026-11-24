@@ -249,6 +249,9 @@ type target struct {
 	def      *wd.Definition
 	endpoint *uuid.UUID
 	request  *uuid.UUID
+	// recipient is a form step's request's own `to`, as stored (sealed
+	// where personal): who a one-time link was sent to.
+	recipient map[string]any
 }
 
 // Process records a submission and starts its run, or answers its form
@@ -307,7 +310,16 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 		// A location is sealed under the person who answered it, so
 		// erasing them erases where they were, here and in every copy the
 		// run makes of it (device fields §5).
-		paths := pii.LocationsOwnedBy(pii.SchemaPaths(tg.schema, tg.types), RespondentOwner(r))
+		owner := RespondentOwner(r)
+		if r.Kind == "request" {
+			// The one-time page says nothing of who answered: the person is
+			// the one the link was sent to, from the request itself, never
+			// from the page.
+			if owner, err = s.recipientOwner(ctx, tx, in.Tenant, tg.recipient); err != nil {
+				return err
+			}
+		}
+		paths := pii.LocationsOwnedBy(pii.SchemaPaths(tg.schema, tg.types), owner)
 		sealedAnswers, err := pii.Seal(ctx, s.Vault, tx, in.Tenant, plainAnswers, paths, pii.Taint{})
 		if err != nil {
 			return err
@@ -428,8 +440,9 @@ func (s *Service) target(ctx context.Context, tx pgx.Tx, in Incoming) (target, e
 	}
 	var raw []byte
 	var status string
-	if err := tx.QueryRow(ctx, `SELECT run_id, step_id, environment, schema, status FROM form_requests WHERE id = $1`, *in.Request).
-		Scan(&t.run, &t.step, &t.env, &raw, &status); err != nil {
+	var to []byte
+	if err := tx.QueryRow(ctx, `SELECT run_id, step_id, environment, schema, status, recipient FROM form_requests WHERE id = $1`, *in.Request).
+		Scan(&t.run, &t.step, &t.env, &raw, &status, &to); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return t, ErrNoRequest
 		}
@@ -452,6 +465,9 @@ func (s *Service) target(ctx context.Context, tx pgx.Tx, in Incoming) (target, e
 	}
 	t.schema, _ = v.(map[string]any)
 	t.request = in.Request
+	if rv, err := expr.DecodeJSON(to); err == nil {
+		t.recipient, _ = rv.(map[string]any)
+	}
 	return t, nil
 }
 
@@ -806,6 +822,26 @@ func RespondentOwner(r Respondent) *pii.Owner {
 		return &pii.Owner{Category: "member", Value: r.MemberID}
 	}
 	return nil
+}
+
+// recipientOwner is who a form step's one-time link went to, as what a
+// location answered through it is sealed under: the request's own `to`
+// (its phone, else its email), opened. Nil when it names neither.
+func (s *Service) recipientOwner(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, to map[string]any) (*pii.Owner, error) {
+	if to == nil {
+		return nil, nil
+	}
+	m, err := s.open(ctx, tx, tenant, to)
+	if err != nil {
+		return nil, err
+	}
+	if p, _ := m["phone"].(string); p != "" {
+		return &pii.Owner{Category: "phone", Value: p}, nil
+	}
+	if e, _ := m["email"].(string); e != "" {
+		return &pii.Owner{Category: "email", Value: e}, nil
+	}
+	return nil, nil
 }
 
 func respondentMap(r Respondent) map[string]any {
