@@ -9,8 +9,9 @@ One animated landing page for Taskiem. Its energy comes from [owo.app](https://o
 | `v1/` | **Frozen.** The first version, kept unchanged as the reference while we iterate. Preview: <https://claude.ai/artifact/8tcV54JwwbvdXLoZK6uaWw> |
 | `v2/` | Brand colours only (pine, lime, mist, white, with a little mint and amber). The hero phone switches between Taskiem chat, WhatsApp and Telegram sales; an endless strip of the connectors' logos; a workflow canvas that builds and runs itself; one sale traced step by step; animated job cards; a PIN approval; the experiment-2 site's footer. **Frozen.** Preview: <https://claude.ai/artifact/72teAue6hJYHpD9Bs6ksyH> |
 | `v3/` | v2's home page with a Schools link and a "Running a school?" band, and a second page, `schools.html`: a phone that switches between a parent, the proprietor and the gate; money landing on each child's own account number (Moniepoint, Flutterwave, Paystack); billing the term on the workflow canvas; the reminder ladder; cash approval and the gate; the proprietor's overview. Greenfield College and its figures are examples. Its canvases are drawn as the app draws them, and a test run ticks each step. **Frozen.** Preview: <https://claude.ai/artifact/5B3WC3vWneqTps4W9Gd8hc> |
+| `v4/` | v3 with copy that presents Taskiem as one system, and new parts: trading between businesses with haggling, one order going through the whole business on a phone, the jobs told as two chapters, the phone app, and the canvas showing an order from placed to paid. **Frozen.** Preview: <https://claude.ai/artifact/UbXJKXrs68UGiFfPeFcQ9m> |
 
-Each later version goes in its own folder (`v5/`, …), and no earlier one is edited.
+Each later version goes in its own folder (`v6/`, …), and no earlier one is edited.
 
 ## Opening a version
 
@@ -29,7 +30,7 @@ The logo strip in v2 uses each service's own site icon, or a one-colour mark for
 | `index.html` | The page, with the logo SVGs from `docs/brand/relay` inlined |
 | `src.html` | The same page with `{{MARK}}`, `{{WORD}}` and `{{WORDREV}}` where the logos go (`mark.svg`, `wordmark.svg`, `wordmark-reversed.svg`) |
 
-v3 has two pages, so it is built rather than copied: `home-src.html` and `schools-src.html` are the sources, and `python3 website/experiment-3/v3/build.py` writes `index.html` and `schools.html`. The schools page takes the home page's styles, footer, logos and three of its rail logos from `home-src.html`, so a change there reaches both pages. `schools.html` is a full document of its own; only `index.html` needs the viewer's wrapper.
+v3 and v4 have two pages, so they are built rather than copied: `home-src.html` and `schools-src.html` are the sources, and `python3 website/experiment-3/<version>/build.py` writes `index.html` and `schools.html`. The schools page takes the home page's styles, footer, logos and three of its rail logos from `home-src.html`, so a change there reaches both pages. `schools.html` is a full document of its own; only `index.html` needs the viewer's wrapper.
 
 The page is written for claude.ai's artifact viewer, which adds the `<!doctype html>`, `<head>` and `<body>` around it, so it has none of its own. `preview.mjs` adds that wrapper; do the same before serving it from an ordinary web host. It loads Plus Jakarta Sans and JetBrains Mono from Google Fonts; the main site self-hosts them.
 
