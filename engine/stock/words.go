@@ -73,8 +73,7 @@ var convert = map[string]struct {
 	kind string
 	size int64
 }{
-	"mg": {"mass", 1}, "g": {"mass", 1000}, "gram": {"mass", 1000}, "kg": {"mass", 1_000_000}, "kilo": {"mass", 1_000_000},
-	"kilogram": {"mass", 1_000_000},
+	"mg": {"mass", 1}, "g": {"mass", 1000}, "gram": {"mass", 1000}, "kg": {"mass", 1_000_000}, "kilo": {"mass", 1_000_000}, "kilogram": {"mass", 1_000_000},
 	"ml": {"volume", 1}, "cl": {"volume", 10}, "l": {"volume", 1000}, "litre": {"volume", 1000},
 	"mm": {"length", 1}, "cm": {"length", 10}, "m": {"length", 1000}, "metre": {"length", 1000}, "meter": {"length", 1000},
 }
