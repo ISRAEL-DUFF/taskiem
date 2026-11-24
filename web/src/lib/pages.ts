@@ -431,7 +431,7 @@ const isDate = (c: Column) => c.type === "date" || c.type === "datetime";
 /** The columns a part may group by, order by, add up or compare by. A
  * personal column is never added up, compared by, grouped by or chosen
  * by (sum and date leave it out): the server refuses it (pages §18). */
-export function columnsFor(t: Table | undefined, what: "any" | "pick" | "number" | "sum" | "date" | "group" | "text" | "email"): { name: string; words: string }[] {
+export function columnsFor(t: Table | undefined, what: "any" | "pick" | "number" | "sum" | "date" | "group" | "text" | "mine"): { name: string; words: string }[] {
   const cols = t?.columns ?? [];
   // pick: what rows may be narrowed or ordered by; a personal column of
   // Taskiem's records is masked for everyone, and never one of them.
@@ -448,8 +448,8 @@ export function columnsFor(t: Table | undefined, what: "any" | "pick" | "number"
         return c.type === "text" && !c.personal;
       case "text":
         return c.type === "text";
-      case "email":
-        return c.type === "email";
+      case "mine":
+        return c.type === "email" || c.type === "phone";
     }
     return c.type !== "json";
   });
@@ -576,7 +576,7 @@ export function filterFits(f: PageFilterDef, t: Table | undefined): boolean {
     case "dates":
       return f.column === "created_at" || (!!col && isDate(col) && !col.personal);
     case "mine":
-      return col?.type === "email" && !isRecords(t.name);
+      return (col?.type === "email" || col?.type === "phone") && !isRecords(t.name);
   }
   return false;
 }

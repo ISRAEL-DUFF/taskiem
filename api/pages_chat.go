@@ -105,6 +105,7 @@ func (s *Server) pageShortForm(ctx context.Context, name string, t func(id strin
 	if err != nil || !found {
 		return "", false, err
 	}
+	viewer.Phone = s.viewerPhone(ctx, p)
 	viewer.Personal = p.Can(PermTableRead)
 	pc.values, _ = pc.page.FilterValues(nil, viewer, time.Now())
 

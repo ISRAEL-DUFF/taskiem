@@ -269,8 +269,8 @@ func (f Filter) fits(t datatables.Table) string {
 		if !ok {
 			return fmt.Sprintf("the table %s has no column %s", tableTitle(t), f.Column)
 		}
-		if col.Type != "email" {
-			return fmt.Sprintf("Mine reads a column of email addresses, and %s is not one", columnTitle(col))
+		if col.Type != "email" && col.Type != "phone" {
+			return fmt.Sprintf("Mine reads a column of email addresses or phone numbers, and %s is neither", columnTitle(col))
 		}
 		if IsRecords(t.Name) {
 			return fmt.Sprintf("%s is the customer's, and hidden on the page", columnTitle(col))

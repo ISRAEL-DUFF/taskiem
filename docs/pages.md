@@ -17,7 +17,7 @@ On a table's page, **Show as a page** makes a page from it in one tap: a figure 
 | **Buttons** | Up to three buttons for the whole page (**New ticket**) |
 | **Status** | Where a run of one of your workflows is, in plain words: queued, working, waiting for whom, done, failed. The run the page's address names (`?run=`), else the latest. The run itself, its times and who it waits for show to those who may read runs |
 
-Each figure, list and table reads one table (or your orders or invoices, below), with conditions every row it shows meets ("status is open") and an order. At the top of a page up to four **filters** narrow the parts that use them: a **search**, a **choice** from values you list, **dates** (today, this week, this month, or two days) and **Mine** (rows whose email column is the person's own). A list or table shows 25 rows, then **More**. A page has at most 12 parts.
+Each figure, list and table reads one table (or your orders or invoices, below), with conditions every row it shows meets ("status is open") and an order. At the top of a page up to four **filters** narrow the parts that use them: a **search**, a **choice** from values you list, **dates** (today, this week, this month, or two days) and **Mine** (rows whose email or phone number column is the person's own: their phone is the number they sign in by). A list or table shows 25 rows, then **More**. A page has at most 12 parts.
 
 ## Your orders, invoices, deliveries, customers and staff
 

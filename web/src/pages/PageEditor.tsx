@@ -705,7 +705,7 @@ function Conditions({ part, table, onChange }: { part: Part; table: Table | unde
 function FiltersForm({ doc, tables, onChange }: { doc: PageDoc; tables: Table[]; onChange: (d: PageDoc) => void }) {
   const filters = doc.filters ?? [];
   const used = tables.filter((t) => doc.blocks.some((b) => b.source?.table === t.name));
-  const cols = (what: "group" | "date" | "email") => {
+  const cols = (what: "group" | "date" | "mine") => {
     const seen = new Map<string, string>();
     for (const t of used) for (const c of columnsFor(t, what)) if (!seen.has(c.name)) seen.set(c.name, c.words);
     return [...seen].map(([name, words]) => ({ name, words }));
@@ -716,7 +716,7 @@ function FiltersForm({ doc, tables, onChange }: { doc: PageDoc; tables: Table[];
     const f: PageFilterDef = { id, type };
     if (type === "choice") Object.assign(f, { column: cols("group")[0]?.name ?? "", options: [] as { value: string }[], label: "Show" });
     if (type === "dates") Object.assign(f, { column: cols("date")[0]?.name ?? "created_at", label: "When" });
-    if (type === "mine") Object.assign(f, { column: cols("email")[0]?.name ?? "", label: "Mine" });
+    if (type === "mine") Object.assign(f, { column: cols("mine")[0]?.name ?? "", label: "Mine" });
     if (type === "search") f.label = "Search";
     setList([...filters, f]);
   };
@@ -725,7 +725,7 @@ function FiltersForm({ doc, tables, onChange }: { doc: PageDoc; tables: Table[];
     { type: "search", words: "A search", ok: !filters.some((f) => f.type === "search") },
     { type: "choice", words: "A choice", ok: cols("group").length > 0 },
     { type: "dates", words: "Dates", ok: !filters.some((f) => f.type === "dates") },
-    { type: "mine", words: "Mine", ok: cols("email").length > 0 && !filters.some((f) => f.type === "mine") },
+    { type: "mine", words: "Mine", ok: cols("mine").length > 0 && !filters.some((f) => f.type === "mine") },
   ];
   return (
     <section className="card">
@@ -756,7 +756,7 @@ function FiltersForm({ doc, tables, onChange }: { doc: PageDoc; tables: Table[];
             </>
           )}
           {f.type === "dates" && <ColumnPick label="By" value={f.column ?? ""} cols={cols("date").length ? cols("date") : [{ name: "created_at", words: "When added" }]} onChange={(c) => setOne(i, { ...f, column: c })} />}
-          {f.type === "mine" && <ColumnPick label="Rows whose email is the person's own, in" value={f.column ?? ""} cols={cols("email")} onChange={(c) => setOne(i, { ...f, column: c })} />}
+          {f.type === "mine" && <ColumnPick label="Rows whose email or phone number is the person's own, in" value={f.column ?? ""} cols={cols("mine")} onChange={(c) => setOne(i, { ...f, column: c })} />}
           <button type="button" className="small danger" onClick={() => setList(filters.filter((_, j) => j !== i))}>
             Remove<span className="sr-only"> {f.label || f.type}</span>
           </button>

@@ -33,6 +33,23 @@ type Viewer struct {
 	Edit bool
 }
 
+// PhoneForms are the ways a phone column may hold the viewer's number
+// (Mine on a phone column, pages §6): as the account keeps it
+// (+2348012345678), without its plus (a table's phone may be written
+// either way), and, for a Nigerian number, as it is written at home
+// (08012345678).
+func PhoneForms(number string) []string {
+	n := strings.TrimPrefix(strings.TrimSpace(number), "+")
+	if n == "" {
+		return nil
+	}
+	out := []string{"+" + n, n}
+	if rest, ok := strings.CutPrefix(n, "234"); ok && len(rest) == 10 {
+		out = append(out, "0"+rest)
+	}
+	return out
+}
+
 // ticks are a table row's yes/no cells that can be changed here.
 func ticks(b Block, t datatables.Table, raw map[string]any) []*bool {
 	var out []*bool
@@ -262,7 +279,11 @@ func (p *Page) ReadFor(b Block, t datatables.Table, v Values, order *Order) (Rea
 			case col.Type == "email" && v.Viewer.Email != "":
 				r.Filters = append(r.Filters, map[string]any{"column": col.Name, "op": "ilike", "value": likeEscape.Replace(v.Viewer.Email)})
 			case col.Type == "phone" && v.Viewer.Phone != "":
-				r.Filters = append(r.Filters, map[string]any{"column": col.Name, "op": "eq", "value": v.Viewer.Phone})
+				var anyOf []any
+				for _, n := range PhoneForms(v.Viewer.Phone) {
+					anyOf = append(anyOf, map[string]any{"column": col.Name, "op": "eq", "value": n})
+				}
+				r.Filters = append(r.Filters, map[string]any{"any": anyOf})
 			default:
 				r.None = true
 			}

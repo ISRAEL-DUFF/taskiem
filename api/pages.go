@@ -109,6 +109,17 @@ func mayOpenPage(p *Principal, pg pageRow) bool {
 	return pg.Version != nil && mayStart(p, pg.Roles)
 }
 
+// viewerPhone is the person's own phone number (their account's, as they
+// sign in by it), for Mine on a phone column; "" for an API key or a
+// person with none (pages §6).
+func (s *Server) viewerPhone(ctx context.Context, p *Principal) string {
+	if p.UserID == uuid.Nil {
+		return ""
+	}
+	n, _ := s.phoneOf(ctx, p.UserID).(string)
+	return n
+}
+
 // lockPageNames holds the business's page names and count for the rest of
 // the transaction: two pages made at once (a file read twice, Show as a
 // page pressed twice) cannot take the same free name, nor both pass
@@ -778,6 +789,7 @@ func (s *Server) openPage(w http.ResponseWriter, r *http.Request) (*pageCtx, boo
 		s.fail(w, r, err)
 		return nil, false
 	}
+	viewer.Phone = s.viewerPhone(r.Context(), p)
 	viewer.Personal = p.Can(PermTableRead)
 	viewer.Edit = p.Can(PermTableEdit)
 	if run := r.URL.Query().Get("run"); run != "" {

@@ -137,7 +137,7 @@ func TestRefusals(t *testing.T) {
 		{"table shows a missing column", "/blocks/5/columns/0/column", "shows the column colour", func(m map[string]any) {
 			block(m, 5)["columns"].([]any)[0].(map[string]any)["column"] = "colour"
 		}, true},
-		{"mine on words", "/blocks/4/source/uses/3", "Mine reads a column of email addresses, and Customer", func(m map[string]any) {
+		{"mine on words", "/blocks/4/source/uses/3", "Mine reads a column of email addresses or phone numbers, and Customer", func(m map[string]any) {
 			m["filters"].([]any)[3].(map[string]any)["column"] = "customer"
 		}, true},
 		{"dates on words", "/blocks/4/source/uses/2", "does not hold dates", func(m map[string]any) {
@@ -229,6 +229,40 @@ func TestFilterValuesAndReads(t *testing.T) {
 	}
 	if _, err := p.ReadFor(p.Blocks[5], tickets, v, &Order{Column: "colour"}); err == nil {
 		t.Errorf("ordered by a missing column")
+	}
+}
+
+// Mine on a phone column (g-pages-mine): Check takes it, and a viewer's
+// own number is matched as a table may hold it.
+func TestMineOnPhone(t *testing.T) {
+	doc := strings.Replace(good, `"column": "email", "label": "Mine"`, `"column": "phone", "label": "Mine"`, 1)
+	p := parseOK(t, doc)
+	if ps := Check(p, Env{Tables: []datatables.Table{tickets}}); len(ps) > 0 {
+		t.Fatalf("check: %v", ps)
+	}
+	v, ps := p.FilterValues(map[string]string{"mine": "on"}, Viewer{Phone: "+2348012345678", Email: "ada@x.test"}, time.Now())
+	if len(ps) > 0 {
+		t.Fatal(ps)
+	}
+	r, err := p.ReadFor(p.Blocks[4], tickets, v, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := mustJSON(r.Filters)
+	for _, want := range []string{`"value":"+2348012345678"`, `"value":"2348012345678"`, `"value":"08012345678"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("reads %s, want %s", got, want)
+		}
+	}
+	if strings.Contains(got, "ada@x.test") {
+		t.Errorf("Mine on a phone column matched the email: %s", got)
+	}
+	v.Viewer.Phone = ""
+	if r, _ := p.ReadFor(p.Blocks[4], tickets, v, nil); !r.None {
+		t.Errorf("Mine without a phone should match nothing")
+	}
+	if got := PhoneForms("+447700900123"); len(got) != 2 {
+		t.Errorf("a number from elsewhere has no home form: %v", got)
 	}
 }
 
