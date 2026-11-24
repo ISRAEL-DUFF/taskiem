@@ -1,37 +1,22 @@
-// PROTOTYPE: a video of the app's own screen, drawn frame by frame by the test
-// runner (video/replan.md, "recordings from the real app"). Skipped unless
-// VIDEO_DIR is set:
+// A film of the Today tab (video/recording-app.md): it opens, the day's
+// figure counts up, a finger taps Sales, then a row. Set-up copied from
+// today_tab_test.dart (the Today tab on recorded answers); the filming is
+// film.dart's. Skipped unless VIDEO_DIR is set:
 //
-//   VIDEO_DIR=/tmp/frames flutter test test/video_proof_test.dart
-//   ffmpeg -framerate 30 -i /tmp/frames/f%04d.png -pix_fmt yuv420p out.mp4
-//
-// It copies today_tab_test.dart's set-up (the Today tab on recorded answers),
-// then scripts a short sequence and writes a picture every 33 ms of the
-// app's own clock, so every animation is as the app draws it.
-// The home's Today tab (web Home.tsx, lib/home.ts): the day's money and
-// orders, what needs the person (an approval approved here), the latest
-// runs, the set-up left, the workflows running; each leading to its screen,
-// the web's in the browser.
+//   VIDEO_DIR=/tmp/films flutter test test/film_today_test.dart
+//   python3 video/phone/compose.py --frames /tmp/films/today --out today.mp4 --captions
 
 import 'dart:convert';
-import 'dart:io';
-import 'dart:ui' as ui;
 
-import 'package:flutter/rendering.dart' show OffsetLayer;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:taskiem/app/links.dart';
-import 'package:taskiem/chat/approve.dart' show ApproveSheet;
 import 'package:taskiem/chat/chats.dart';
-import 'package:taskiem/chat/invoice_match.dart' show InvoiceMatchPage;
 import 'package:taskiem/chat/today_tab.dart';
-import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
-import 'looks.dart';
-import 'guidelines.dart';
+import 'film.dart';
 import 'support.dart';
 
 // Thursday 12 November 2026, 13:00 in Lagos.
@@ -186,47 +171,27 @@ void main() {
     return asked;
   }
 
-  /// One frame of the app's screen (a phone, 390 x 844 points, at 3 pixels to a point).
-  Future<void> frame(WidgetTester t, String dir, int n) async {
-    await t.runAsync(() async {
-      final view = t.binding.renderViews.first;
-      // ignore: invalid_use_of_protected_member
-      final layer = view.debugLayer! as OffsetLayer;
-      final image = await layer.toImage(const Rect.fromLTWH(0, 0, 390, 844), pixelRatio: 3);
-      final png = await image.toByteData(format: ui.ImageByteFormat.png);
-      File('$dir/f${n.toString().padLeft(4, '0')}.png').writeAsBytesSync(png!.buffer.asUint8List());
-    });
-  }
-
-  testWidgets('prototype: open Today, tap Sales, tap a row', (t) async {
-    final dir = Platform.environment['VIDEO_DIR']!;
-    Directory(dir).createSync(recursive: true);
-    final saved = debugDisableShadows;
-    debugDisableShadows = false;
-    var n = 0;
-    Future<void> film(int frames) async {
-      for (var i = 0; i < frames; i++) {
-        await t.pump(const Duration(milliseconds: 33));
-        await frame(t, dir, n++);
-      }
-    }
-
+  testWidgets('film: Today', (t) async {
     await open(t, settled: false);
-    t.view.physicalSize = const Size(390, 844);
-    await film(60); // the screen rises in; the figure counts up (2 s)
-    await settle(t);
-    await film(20); // a held beat
+    final f = Film.start(t, 'today');
+    f.say('Every morning, Ada opens Taskiem on Today.', who: 'Ada · Ada\'s Kitchen');
+    await f.play(2.0); // the screen rises in; the figure counts up
+    await f.settle();
+    await f.hold(0.8);
+    f.say('Her business, at a glance: money in, orders and what needs her.');
+    await f.hold(1.6);
     final menu = find.byKey(const ValueKey('today-menu'));
-    await t.tap(find.descendant(of: menu, matching: find.text('Sales')));
-    await film(45); // the sheet rises
-    await settle(t);
-    await film(25);
-    await t.tap(find.bySemanticsLabel(RegExp(r"^Today's sales\. ")));
-    await film(60); // the answer
-    await settle(t);
-    await film(30);
-    debugDisableShadows = saved;
-  }, skip: Platform.environment['VIDEO_DIR'] == null);
+    f.say('What would she like to do? Tap Sales.');
+    await f.tap(find.descendant(of: menu, matching: find.text('Sales')), then: 1.6);
+    await f.settle();
+    f.say("Tap Today's sales.");
+    await f.hold(0.8);
+    await f.tap(find.bySemanticsLabel(RegExp(r"^Today's sales\. ")), then: 2.0);
+    await f.settle();
+    f.say('Sales today: ₦45,000 from 3 sales.');
+    await f.hold(2.2);
+    await f.finish();
+  }, skip: !filming);
 }
 
 Future<void> settle(WidgetTester t) async {
