@@ -195,14 +195,14 @@ void main() {
     await looks(t, 'pages');
   });
 
-  testWidgets('Pages: none yet says where they are made', (t) async {
+  testWidgets('Pages: none yet says where they are made: a starter here, or the web', (t) async {
     phone(t, 600);
     final api = _Api();
     api.routes['GET /v1/pages'] = (_) => {'pages': <Object>[], 'can_edit': true, 'can_publish': true, 'max_pinned': 5, 'max_pages': 10};
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PagesPage(auth: api.auth())));
     await settle(t);
     expect(find.text('No pages yet'), findsOneWidget);
-    expect(find.textContaining('Show as a page'), findsOneWidget);
+    expect(find.textContaining('from a starter'), findsOneWidget);
   });
 
   testWidgets('A page: its figures, a list in groups, a table as rows, a row’s card, filters sent', (t) async {

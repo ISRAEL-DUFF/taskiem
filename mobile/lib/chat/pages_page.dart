@@ -42,6 +42,7 @@ import 'groups.dart' show askSure, pickAction, pickOneOf;
 import 'invoices_page.dart' show openInvoice;
 import 'made_tools.dart' show showMadeToolSheet;
 import 'page_chart.dart' show PageChart;
+import 'page_starters.dart' show openPageStarters;
 import 'live.dart' show SseEvent, readSse;
 import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'words.dart' show CardTone, whenWords;
@@ -199,7 +200,7 @@ class _PagesPageState extends State<PagesPage> {
       title: 'Pages',
       titleSize: 30,
       backLabel: widget.backLabel,
-      description: 'Screens your business makes for itself from its tables. Pages are made and changed on the web.',
+      description: 'Screens your business makes for itself from its tables. Add one from a starter here; pages are changed on the web.',
       onRefresh: _load,
       children: [
         if (_error != null)
@@ -209,10 +210,28 @@ class _PagesPageState extends State<PagesPage> {
           TkEmpty(
             icon: 'b-table',
             title: 'No pages yet',
-            line: editor ? 'Make one on the web: Show as a page on a table makes one in a tap.' : 'Pages your business shares with you show here.',
+            line: editor ? 'Add one from a starter below, or make one on the web from a table.' : 'Pages your business shares with you show here.',
           ),
         if (pinned.isNotEmpty) TkSection(title: 'Pinned', inset: 56, children: [for (final p in pinned) _row(p, editor)]),
         if (rest.isNotEmpty) TkSection(title: pinned.isEmpty ? null : 'All pages', inset: 56, children: [for (final p in rest) _row(p, editor)]),
+        if (editor && widget.auth.can('table.edit') && widget.auth.can('workflow.edit'))
+          TkSection(
+            title: 'Add a page',
+            inset: 56,
+            children: [
+              TkListRow(
+                title: 'From a starter',
+                sub: 'Tickets desk, Expenses this month, Leave and more, each with its table and tools',
+                subLines: 2,
+                icon: 'b-plus',
+                square: look.lime,
+                onTap: () async {
+                  await openPageStarters(context, widget.auth, backLabel: 'Back to Pages');
+                  if (mounted) unawaited(_load());
+                },
+              ),
+            ],
+          ),
       ],
     );
   }
