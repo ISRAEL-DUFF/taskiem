@@ -64,6 +64,7 @@ import { Templates } from "./pages/Templates";
 import { Billing, BillingBanner } from "./pages/Billing";
 import { ConnectDone, ConnectPage, SlackAdded } from "./pages/Connect";
 import { ConfirmEmail, LinkChat } from "./pages/ChatDoors";
+import { SignInWayStep } from "./pages/SignInWay";
 import { Signup, TermsBanner, VerifyEmail } from "./pages/Signup";
 import { Guide, Start } from "./pages/Start";
 import { OnboardingProvider, useOnboarding } from "./onboarding";
@@ -358,6 +359,9 @@ function Shell() {
     );
   // The gate role: one screen, whatever the address; the server refuses every other route.
   if (me.gate_only) return <GateHome />;
+  // New to the apps with no way to prove a new phone is theirs: one first,
+  // before the business opens (taskiem-for-everyone §5.4).
+  if (me.user?.sign_in_way_step) return alone(<SignInWayStep />);
   // Where this business or workspace starts (taskiem-for-everyone §18.2).
   const opens = me.tenant_kind === "workflows" ? "/workflows" : "/home";
   if (loc.pathname === "/login")

@@ -11,7 +11,7 @@ import { ErrorBox, Field, Modal, PasswordInput, useAction } from "../ui";
 // of the person's businesses. Switching moves this session; a business may
 // first ask for its single sign-on, a passkey, or (a new device signed in
 // by a phone code) a second proof: a passkey, a link to the email, or the
-// chat PIN.
+// password. Never the PIN: it pays and approves only.
 
 /** Where a switch lands: You, the workflows of a workspace, else Home. */
 export function landing(to: Business | "you"): string {
@@ -52,7 +52,7 @@ export function useSwitch(dest?: string) {
         const lock = e instanceof ApiError ? switchStep(e.body) : null;
         if (to !== "you" && lock) {
           const ways = (e as ApiError).body.ways as ProofWays | undefined;
-          setAsked({ business: to, lock, ways: ways ?? me?.second_proof?.ways ?? { passkey: false, email: false, pin: false } });
+          setAsked({ business: to, lock, ways: ways ?? me?.second_proof?.ways ?? { passkey: false, email: false, password: false } });
           return;
         }
         throw e;
@@ -255,7 +255,6 @@ export function ProofStep({
   dest?: string;
 }) {
   const [sentTo, setSentTo] = useState<string | null>(null);
-  const [pin, setPin] = useState("");
   const [password, setPassword] = useState("");
   const act = useAction();
   const done = useRef(false);
@@ -292,7 +291,9 @@ export function ProofStep({
     };
   }, [sentTo]);
   const what = business ? `Before ${business.name} opens` : "First";
-  const none = !ways.passkey && !ways.email && !ways.pin && !ways.password;
+  // A passkey this browser cannot use is no way here.
+  const passkey = ways.passkey && passkeysSupported();
+  const none = !passkey && !ways.email && !ways.password;
   return (
     <Modal title="Prove it's you" onClose={onClose}>
       <div data-testid="second-proof">
@@ -300,8 +301,14 @@ export function ProofStep({
           This is a new device for your account. {what}, prove it's you another way. This keeps your businesses safe if your number ever
           goes to someone else.
         </p>
-        {none && <p>Your account has no other way to prove it's you yet. Add an email or a passkey from a device you have used before.</p>}
-        {ways.passkey && passkeysSupported() && (
+        {none && (
+          <p data-testid="no-way-here">
+            {ways.passkey
+              ? "Your passkey can't be used in this browser. Sign in on your old phone, or on a device with your passkey, and add an email or a password there."
+              : "You have no other way to prove it's you on this device. Sign in on your old phone and add a way there: an email, a password or a passkey."}
+          </p>
+        )}
+        {passkey && (
           <p>
             <button
               type="button"
@@ -366,24 +373,6 @@ export function ProofStep({
             </Field>
             <button type="submit" disabled={act.busy || !password}>
               Confirm with my password
-            </button>
-          </form>
-        )}
-        {ways.pin && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void act.run(async () => {
-                await plainly(() => post("/v1/auth/second-proof/pin", { pin }));
-                await proved();
-              }, false);
-            }}
-          >
-            <Field label="Your chat PIN" hint="The PIN you set for approving on WhatsApp.">
-              <PasswordInput inputMode="numeric" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))} required />
-            </Field>
-            <button type="submit" disabled={act.busy || pin.length < 4}>
-              Confirm with my PIN
             </button>
           </form>
         )}

@@ -57,6 +57,8 @@ const OWNER_FILES = [
   "lib/saved.ts",
   "pages/Payments.tsx",
   "pages/PaySheet.tsx",
+  // Adding a way to sign in on a new phone (taskiem-for-everyone §5.4).
+  "pages/SignInWay.tsx",
   "pages/PhotoRead.tsx",
   "lib/photoAI.ts",
   "pages/AIPhotoReading.tsx",

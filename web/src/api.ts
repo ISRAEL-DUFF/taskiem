@@ -317,11 +317,11 @@ export interface TermsAsked {
 /** What a business asks of this session before it opens (§5.4). */
 export type Lock = "sso_required" | "passkey_required" | "second_proof_required";
 
-/** The ways this person can prove a new device is theirs. */
+/** The ways this person can prove a new device is theirs (never the PIN,
+ * which pays and approves only). */
 export interface ProofWays {
   passkey: boolean;
   email: boolean;
-  pin: boolean;
   /** The account's password (POST /v1/auth/second-proof/password). */
   password?: boolean;
 }
@@ -367,6 +367,12 @@ export interface Me {
     phone?: string | null;
     /** The person's own photo (GET /v1/me/photo), shown on their own side only. */
     photo?: { url: string; updated_at: string } | null;
+    /** In a business with no way to prove a new phone is theirs (a passkey,
+     * an email or a password): asked to add one (SignInWay.tsx). */
+    needs_sign_in_way?: boolean;
+    /** No such way, on an account new to the apps: adding one is a step
+     * before a business opens, not a reminder. */
+    sign_in_way_step?: boolean;
   };
   /** Whether the member has an authenticator app enrolled for step-up. */
   totp?: boolean;

@@ -28,7 +28,6 @@ phoneVerify
 phoneCreate
 secondProofEmailStart
 secondProofEmailVerify
-secondProofPin
 secondProofPassword
 secondProofPasskeyOptions
 secondProofPasskey

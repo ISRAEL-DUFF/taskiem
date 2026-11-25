@@ -699,6 +699,8 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 			}
 			out["user"].(map[string]any)["phone"] = s.phoneOf(r.Context(), p.UserID)
 			out["user"].(map[string]any)["photo"] = photoOut(s.photoOf(r.Context(), p.UserID))["photo"]
+			// Whether the person has a way to prove a new device (§5.4).
+			signInWayOut(out["user"].(map[string]any), proof.ways, true)
 		}
 	}
 	// A field agent signed in as themselves lands on the agent app (N6).

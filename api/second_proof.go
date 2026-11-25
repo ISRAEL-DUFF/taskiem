@@ -5,11 +5,13 @@ package api
 // to new people. So an account in a business that signed in by phone code
 // on a new device proves itself another way before entering a business:
 // a passkey (signing in with one, passkeys.go, or an assertion here), a
-// one-time link to the account's real email, the chat PIN, or the
-// person's password. The proof is the device's,
-// kept in user_devices, and forgotten after 90 days unused.
+// one-time link to the account's real email, or the person's password.
+// The PIN is for paying and approving only, never a second proof. The
+// proof is the device's, kept in user_devices, and forgotten after 90 days
+// unused.
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -132,55 +134,6 @@ func (s *Server) secondProofEmailVerify(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"device_proved": true})
 }
 
-// secondProofPin is POST /v1/auth/second-proof/pin ({pin}): the chat PIN,
-// checked and counted as on WhatsApp (whatsapp_flows.go), proves this
-// device. The check and its count are one: the PIN's row is locked
-// (taskiem_wa_pin_lock) while the hash is compared, so guesses sent side
-// by side wait for each other and cannot pass the lock; a right PIN while
-// locked is refused. Limited per person and per address too.
-func (s *Server) secondProofPin(w http.ResponseWriter, r *http.Request) {
-	p, key, ok := s.proofDevice(w, r)
-	if !ok {
-		return
-	}
-	if !s.loginLimiter("second-proof-pin:"+p.UserID.String()).Allow() || !s.loginLimiter("second-proof-pin-ip:"+limitIP(r)).Allow() {
-		writeErr(w, http.StatusTooManyRequests, "too many tries; wait a little")
-		return
-	}
-	ctx := r.Context()
-	var req struct {
-		Pin string `json:"pin"`
-	}
-	if err := decodeBody(r, &req); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	t, err := s.tryPin(ctx, p.UserID, req.Pin)
-	none, right, nowLocked, lockedUntil, failures := t.None, t.Right, t.NowLocked, t.LockedUntil, t.Failures
-	switch {
-	case err != nil:
-		s.fail(w, r, err)
-		return
-	case none:
-		s.fail(w, r, fmt.Errorf("%w: you have no chat PIN", errConflict))
-		return
-	case lockedUntil != nil:
-		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "Your PIN is locked after too many wrong tries, until " + lockedUntil.UTC().Format("15:04") + " UTC.",
-			"locked": true})
-		return
-	}
-	if !right {
-		_ = s.auditEverywhere(ctx, p.UserID, "whatsapp.pin.fail", map[string]any{"failures": failures, "via": "second_proof"})
-		if nowLocked {
-			writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "Too many wrong PINs: your PIN is locked for 15 minutes.", "locked": true})
-			return
-		}
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "That PIN is not right.", "tries_left": waPinMaxFailures - failures})
-		return
-	}
-	s.deviceProved(w, r, p.UserID, key, "pin")
-}
-
 // deviceProved records a second proof for the device and answers 200
 // {device_proved: true}.
 func (s *Server) deviceProved(w http.ResponseWriter, r *http.Request, user uuid.UUID, key []byte, how string) {
@@ -232,7 +185,7 @@ func (s *Server) secondProofPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if hash == nil || req.Password == "" || !checkPassword(*hash, req.Password) {
 		_ = s.auditEverywhere(ctx, p.UserID, "auth.second_proof_fail", map[string]any{"how": "password", "ip": clientIP(r)})
-		writeErr(w, http.StatusUnauthorized, "That password is not right.")
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "That password is not right.", "password_wrong": true})
 		return
 	}
 	s.deviceProved(w, r, p.UserID, key, "password")
@@ -306,4 +259,35 @@ func (s *Server) secondProofPasskey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.deviceProved(w, r, p.UserID, key, "passkey")
+}
+
+// firstWayDevice is the device of this session when it was let in without
+// a second proof because the person had no way to give one (a session made
+// by a code, proofState.unprovable); nil otherwise. Adding their first way
+// (an email, a password, a passkey) proves that device too
+// (proveFirstWay): it was in already, and the new way would otherwise shut
+// it out of the person's other businesses and settings until proved.
+func (s *Server) firstWayDevice(r *http.Request) []byte {
+	p := principalFrom(r.Context())
+	if p == nil || !codeSession(p) {
+		return nil
+	}
+	st, err := s.proofStateOf(r, p)
+	if err != nil || !st.unprovable {
+		return nil
+	}
+	return s.sessionDeviceKey(r, p)
+}
+
+// proveFirstWay records the proof of firstWayDevice's device once the way
+// is added; nothing for a nil device. Audited as a second proof.
+func (s *Server) proveFirstWay(ctx context.Context, r *http.Request, user uuid.UUID, key []byte, how string) {
+	if key == nil {
+		return
+	}
+	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_auth_device_prove($1, $2, $3)`, user, key, how); err != nil {
+		s.Logger.Warn("first way: the device not proved", "err", err)
+		return
+	}
+	_ = s.auditEverywhere(ctx, user, "auth.second_proof", map[string]any{"how": how, "first_way": true, "ip": clientIP(r)})
 }

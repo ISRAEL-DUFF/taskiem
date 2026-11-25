@@ -117,7 +117,10 @@ export function ChangePassword() {
   const [done, setDone] = useState(false);
   const act = useAction();
   const f = me?.factors;
-  if (!me?.user || !f || (!f.password && !f.passkey && !f.totp)) return null;
+  // Signed in by a code to their phone or chat with no factor yet: their
+  // first password is a way to prove a new phone (taskiem-for-everyone §5.4).
+  const first = !!f && !f.password && !f.passkey && !f.totp && (me?.auth_method === "phone" || me?.auth_method === "chat");
+  if (!me?.user || !f || (!f.password && !f.passkey && !f.totp && !first)) return null;
   const problem = mismatch(password, again);
   const submit = async () => {
     const body: Record<string, unknown> = { new_password: password };
@@ -137,7 +140,9 @@ export function ChangePassword() {
       <p className="hint">
         {f.password
           ? "Changing your password signs out your other sessions."
-          : "You sign in without a password. You can set one, confirming with your passkey or authenticator code."}
+          : first
+            ? "Set a password to prove it's you when you sign in on a new phone."
+            : "You sign in without a password. You can set one, confirming with your passkey or authenticator code."}
       </p>
       {done && <p role="status">Password saved. Your other sessions are signed out.</p>}
       <ErrorBox error={act.error} />

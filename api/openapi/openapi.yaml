@@ -25586,40 +25586,6 @@ paths:
                 $ref: '#/components/schemas/DeviceProved'
         default:
           $ref: '#/components/responses/Error'
-  /v1/auth/second-proof/pin:
-    post:
-      operationId: secondProofPin
-      tags:
-      - Authentication
-      summary: Prove it is you with your chat PIN
-      description: 'The chat PIN (set on WhatsApp) proves the device this session is on. Wrong PINs are counted as on
-        WhatsApp: five in 15 minutes lock it (429 `locked`); a wrong one answers 401 with `tries_left`. The check and its
-        count are one, so guesses sent side by side cannot pass the lock, and a right PIN while locked is refused. Limited
-        per person and per address. 409 with no PIN set.'
-      security:
-      - sessionCookie: []
-        csrfHeader: []
-      - sessionToken: []
-      - apiKey: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [pin]
-              properties:
-                pin:
-                  type: string
-      responses:
-        '200':
-          description: Proved
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeviceProved'
-        default:
-          $ref: '#/components/responses/Error'
   /v1/auth/second-proof/password:
     post:
       operationId: secondProofPassword
@@ -25627,8 +25593,9 @@ paths:
       - Authentication
       summary: Prove it is you with your password
       description: 'The person''s password proves the device this session is on, where it is one of their `ways`
-        (`password`: set, usable in a business of theirs, on a confirmed email where this server sends email; 409
-        otherwise). Limited as signing in is; 401 for a wrong password.'
+        (`password`: set, usable in a business of theirs, and chosen by the person or on a confirmed email where this
+        server sends email; 409 otherwise). Limited as signing in is; 401 `password_wrong` for a wrong password (the
+        session goes on).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -33282,7 +33249,11 @@ paths:
       tags:
       - Account
       summary: Change or set the password
-      description: Ends the person's other sessions.
+      description: 'Ends the person''s other sessions. With a password, `current_password`; without one, a passkey or
+        authenticator code. Someone with no factor at all, signed in by a code to their phone or chat within the last
+        minutes, sets their first password with nothing more: it is then a way to prove a new device
+        (docs/spec/taskiem-for-everyone.md §5.4), and the device it was set on, let in without one, counts as proved.
+        A single sign-on account gets none (403).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -46416,7 +46387,7 @@ components:
           $ref: '#/components/schemas/SecondProofWays'
         tries_left:
           type: integer
-          description: A wrong chat PIN (POST /v1/auth/second-proof/pin, 401) leaves this many tries before the lock.
+          description: A wrong PIN (401, paying or approving) leaves this many tries before the lock.
         locked:
           type: boolean
       additionalProperties: true
@@ -47698,16 +47669,14 @@ components:
     SecondProofWays:
       type: object
       description: 'The second proofs a person could give (docs/spec/taskiem-for-everyone.md §5.4): `passkey` (POST
-        /v1/auth/second-proof/passkey), `email` (a link to their real email, confirmed or not), `pin` (the chat PIN), and
-        `password` (POST /v1/auth/second-proof/password: set, usable in a business of theirs, on a confirmed email where
-        this server sends email).'
-      required: [passkey, email, pin, password]
+        /v1/auth/second-proof/passkey), `email` (a link to their real email, confirmed or not), and `password` (POST
+        /v1/auth/second-proof/password: set, usable in a business of theirs, and chosen by the person or on a confirmed
+        email where this server sends email). The PIN is for paying and approving only, never a second proof.'
+      required: [passkey, email, password]
       properties:
         passkey:
           type: boolean
         email:
-          type: boolean
-        pin:
           type: boolean
         password:
           type: boolean
@@ -47768,8 +47737,6 @@ components:
                   type: boolean
                 email:
                   type: boolean
-                pin:
-                  type: boolean
                 password:
                   type: boolean
         user:
@@ -47795,6 +47762,16 @@ components:
             email_placeholder:
               type: boolean
               description: The sign-in name receives no mail (an account made in chat); the web app offers Add your email.
+            needs_sign_in_way:
+              type: boolean
+              description: 'The person is in a business and has no way to prove a new device is theirs (no passkey, email
+                or password; the PIN is not one, docs/spec/taskiem-for-everyone.md §5.4): a sign-in by a code to their
+                phone or chat lets them in from any device, so the apps ask them to add one (on Today and Account).'
+            sign_in_way_step:
+              type: boolean
+              description: 'The person has no such way and their account is new to the apps (made since 25 November 2026,
+                or never opened on a phone or browser before): the apps ask for one as a step, which cannot be skipped
+                before a business is entered or started. Others are reminded instead.'
         totp:
           type: boolean
           description: Whether an authenticator is enrolled.

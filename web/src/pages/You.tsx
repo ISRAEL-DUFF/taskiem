@@ -24,6 +24,7 @@ import { StandingNotice, YouStandingPage } from "./YouStanding";
 import { DeleteAccountPage, YouNotificationsCard, YouPhoto, YouPrivacyLinks, YouPrivacyPage } from "./YouAccount";
 import { SavedAddresses, YouOrder, YouOrders } from "./YouOrders";
 import { SavedCard } from "./Saved";
+import { SignInWayCallout } from "./SignInWay";
 
 // You (docs/spec/taskiem-for-everyone.md §7): a person's own side, where a
 // session with no business lands. Its tabs: Chats (chats with businesses,
@@ -197,14 +198,40 @@ function YouHome() {
           asked={{
             business: joining.business,
             lock: joining.lock,
-            ways: joining.accepted.ways ?? me?.second_proof?.ways ?? { passkey: false, email: false, pin: false },
+            ways: joining.accepted.ways ?? me?.second_proof?.ways ?? { passkey: false, email: false, password: false },
           }}
           dest="/"
           onClose={() => setJoining(null)}
         />
       )}
+      <YouSignInWay />
       <PersonChatList />
       <YourBusinesses />
+    </>
+  );
+}
+
+/** The reminder to add a way to sign in on a new phone (SignInWay.tsx):
+ * on You nothing can be added, so its button opens the person's business
+ * at Account, where they add it. */
+function YouSignInWay() {
+  const { me } = useAuth();
+  const sw = useSwitch("/account#sign-in-way");
+  const open = me?.businesses?.find((b) => !b.locked);
+  if (!me?.user?.needs_sign_in_way) return null;
+  return (
+    <>
+      <SignInWayCallout
+        action={
+          open && (
+            <button type="button" className="small primary" disabled={sw.busy} onClick={() => sw.go(open)}>
+              Add a way
+            </button>
+          )
+        }
+      />
+      <ErrorBox error={sw.error} />
+      {sw.asked && <SwitchStepHere asked={sw.asked} onClose={sw.close} />}
     </>
   );
 }

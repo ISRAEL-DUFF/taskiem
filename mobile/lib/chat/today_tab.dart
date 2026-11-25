@@ -6,6 +6,7 @@
 // the set-up still to finish; the workflows running for them. Workflows,
 // runs and forms are the web's pages: they open in the browser (§3.5).
 
+import '../screens/sign_in_way.dart' show SignInWayCallout, needsSignInWay;
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -656,6 +657,8 @@ class _TodayTabState extends State<TodayTab> with Polling {
         ],
       ),
       children: [
+        // No way to sign in on a new phone yet (sign_in_way.dart): until one is added.
+        if (needsSignInWay(_auth)) SignInWayCallout(auth: _auth, backLabel: 'Back to Today'),
         ?top,
         if (tiles.isNotEmpty) TkHighlights(tiles: tiles),
         // What would you like to do? (menus-everywhere.md §5): the topics

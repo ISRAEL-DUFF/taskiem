@@ -8,6 +8,7 @@ import { ChangePassword } from "./Password";
 import { FingerprintPhones } from "./PayFingerprint";
 import { savedTheme, setTheme, type Theme } from "../theme";
 import { pinProblem } from "../lib/pin";
+import { SignInWayCallout } from "./SignInWay";
 
 interface Passkey {
   id: string;
@@ -804,7 +805,7 @@ function Dormant({ what }: { what: string }) {
 /** Add your email (docs/spec/chat-way-in.md 10.4): for an account made in
  * chat, whose sign-in name receives no mail. Its link, once opened,
  * makes the email the account's. */
-function AddEmail() {
+export function AddEmail() {
   const { me } = useAuth();
   const [email, setEmail] = useState("");
   const act = useAction();
@@ -941,6 +942,7 @@ export function Account() {
         title="Account"
         description="Your sign-in methods, invitations, and linked WhatsApp number, Telegram account and Slack."
       />
+      <SignInWayCallout />
       <Appearance />
       {me?.user && (
         <section className="card">
@@ -949,8 +951,10 @@ export function Account() {
         </section>
       )}
       <Invitations />
-      <AddEmail />
-      <ChangePassword />
+      <div id="sign-in-way">
+        <AddEmail />
+        <ChangePassword />
+      </div>
       <ChatSignIn />
       <Passkeys />
       <PasskeyOnly />

@@ -306,10 +306,11 @@ var proofLinkRe = regexp.MustCompile(`/second-proof#token=([A-Za-z0-9_-]+)`)
 
 // An owner who signed up on WhatsApp signs in by phone (§5.3): their bound
 // number finds them, and becomes their phone. With no second proof to give
-// they still enter their business, and it is recorded. Once they have one
-// (a confirmed email, a chat PIN), a new device needs it first: the email
-// link proves the device that asked and no other; the PIN proves another;
-// 90 days unused, a device is new again. Then their phone changes (§5.5).
+// they still enter their business, and it is recorded, and /v1/me says
+// they need a way: their chat PIN is not one (it pays and approves only).
+// Once they have one (a confirmed email), a new device needs it first: the
+// email link proves the device that asked and no other; 90 days unused, a
+// device is new again. Then their phone changes (§5.5).
 func TestSecondProofs(t *testing.T) {
 	ctx := context.Background()
 	w := newWAWorld(t)
@@ -341,12 +342,25 @@ func TestSecondProofs(t *testing.T) {
 	}
 	const d1, d2, d3 = "0192f000-0000-7000-8000-00000000d001", "0192f000-0000-7000-8000-00000000d002", "0192f000-0000-7000-8000-00000000d003"
 
-	// Nothing to prove with: let in, and recorded.
+	// Nothing to prove with (a chat PIN is no way): let in, and recorded;
+	// asked to add a way, as a step (the account is new to the apps).
+	if _, err := w.env.DB.Admin.Exec(ctx, `SELECT taskiem_wa_pin_set($1, $2)`, adaID, pinHash("4829")); err != nil {
+		t.Fatal(err)
+	}
 	one, _ := signIn(d1)
 	me := one.must(200, "GET", "/v1/me", nil)
 	if me["user"].(map[string]any)["phone"] != ada || me["second_proof"].(map[string]any)["required"] != false ||
 		me["businesses"].([]any)[0].(map[string]any)["lock"] != nil {
 		t.Fatalf("me: %v", me)
+	}
+	if u := me["user"].(map[string]any); u["needs_sign_in_way"] != true || u["sign_in_way_step"] != true {
+		t.Fatalf("no way to prove a new device: %v", u)
+	}
+	if _, ok := me["second_proof"].(map[string]any)["ways"].(map[string]any)["pin"]; ok {
+		t.Fatalf("the PIN is no second proof: %v", me["second_proof"])
+	}
+	if st, _ := one.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "4829"}); st == 200 {
+		t.Fatal("the PIN proved a device")
 	}
 	sw := one.must(200, "POST", "/v1/me/switch", map[string]any{"tenant_id": foods})
 	(&client{t: t, base: w.base, token: sw["token"].(string)}).must(200, "GET", "/v1/workflows", nil)
@@ -403,17 +417,22 @@ func TestSecondProofs(t *testing.T) {
 	inFoods := &client{t: t, base: w.base, token: sw["token"].(string)}
 	inFoods.must(200, "GET", "/v1/workflows", nil)
 
-	// The chat PIN proves the third device.
-	if st, _ := three.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "4829"}); st != 409 {
-		t.Fatalf("no PIN set: %d", st)
+	// The PIN does not prove the third device; a link of its own does.
+	if st, _ := three.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "4829"}); st == 200 {
+		t.Fatal("the PIN proved a device")
 	}
-	if _, err := w.env.DB.Admin.Exec(ctx, `SELECT taskiem_wa_pin_set($1, $2)`, adaID, pinHash("4829")); err != nil {
-		t.Fatal(err)
+	if u := three.must(200, "GET", "/v1/me", nil)["user"].(map[string]any); u["needs_sign_in_way"] != false || u["sign_in_way_step"] != false {
+		t.Fatalf("an email is a way: %v", u)
 	}
-	if st, out := three.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "1111"}); st != 401 || out["tries_left"] != float64(4) {
-		t.Fatalf("a wrong PIN: %d %v", st, out)
+	before := len(mail.all())
+	three.must(202, "POST", "/v1/auth/second-proof/email/start", nil)
+	token = ""
+	for _, m := range mail.all()[before:] {
+		if g := proofLinkRe.FindStringSubmatch(strings.ReplaceAll(m, "=\r\n", "")); g != nil {
+			token = g[1]
+		}
 	}
-	three.must(200, "POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "4829"})
+	three.must(200, "POST", "/v1/auth/second-proof/email/verify", map[string]any{"token": token})
 	sw = three.must(200, "POST", "/v1/me/switch", map[string]any{"tenant_id": foods})
 	inFoods = &client{t: t, base: w.base, token: sw["token"].(string)}
 

@@ -1388,6 +1388,11 @@ th { background: var(--panel-2); }
 .template-card .tool-chip { align-self: flex-start; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
 .recipe-tool ul { margin: 6px 0 0; padding-left: 18px; }
 .notice.ok { background: color-mix(in srgb, var(--ok) 8%, var(--panel)); border-color: color-mix(in srgb, var(--ok) 28%, transparent); }
+/* Add a way to sign in on a new phone (SignInWay.tsx): the reason beside its button. */
+.notice.sign-in-way { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.notice.sign-in-way > svg { flex: none; width: 20px; height: 20px; color: var(--warn); }
+.notice.sign-in-way .grow { flex: 1 1 200px; min-width: 0; }
+.notice.sign-in-way .sub { color: var(--muted); font-size: 0.92em; }
 /* Empty states: the icon larger, on the brand's tint. */
 .empty-icon { width: 56px; height: 56px; border-radius: 16px; background: var(--tint); color: var(--tint-text); }
 .empty-icon svg { width: 26px; height: 26px; }

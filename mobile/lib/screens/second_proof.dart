@@ -1,6 +1,7 @@
 // A second proof for a new phone (docs/spec/taskiem-for-everyone.md §5.4):
 // whichever ways the account has (a passkey, a link to its email, its
-// password, the chat PIN). Each proves this phone and leaves the session
+// password; never the PIN, which pays and approves only). Each proves this
+// phone and leaves the session
 // where it is (POST /v1/auth/second-proof/*); then [SecondProof.onProved]
 // says what next: a business opens, an invitation's business, or Change
 // number goes on. The web's ProofStep (web/src/pages/Switch.tsx).
@@ -20,24 +21,29 @@ import '../kit/sheet.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
 
-/// The ways this person can prove a new phone is theirs.
+/// The ways this person can prove a new phone is theirs: never the PIN,
+/// which pays and approves only (founder, 25 November 2026).
 class ProofWays {
-  const ProofWays({this.passkey = false, this.email = false, this.pin = false, this.password = false});
+  const ProofWays({this.passkey = false, this.email = false, this.password = false});
 
   /// From a 401's `ways`, or /v1/me's `second_proof.ways`.
   factory ProofWays.of(Object? j) {
     final m = j is Map ? j : const {};
     bool on(String k) => m[k] == true;
-    return ProofWays(passkey: on('passkey'), email: on('email'), pin: on('pin'), password: on('password'));
+    return ProofWays(passkey: on('passkey'), email: on('email'), password: on('password'));
   }
 
   /// What /v1/me says, as kept.
   factory ProofWays.ofMe(Me? me) => ProofWays.of(me?.secondProof?.ways?.toJson());
 
-  final bool passkey, email, pin, password;
+  final bool passkey, email, password;
 
-  bool get none => !passkey && !email && !pin && !password;
+  bool get none => !passkey && !email && !password;
 }
+
+/// What to do with no way left to prove a new phone: an owner cannot add
+/// one for someone, so the old phone, where they are signed in, is where.
+const noWayHere = 'Sign in on your old phone and add a way there: an email, a password or a passkey.';
 
 /// Proves this phone with its passkey: the session stays as it is (C2).
 Future<void> passkeyProof(Auth auth) async {
@@ -63,7 +69,6 @@ class SecondProof extends StatefulWidget {
 }
 
 class _SecondProofState extends State<SecondProof> with WidgetsBindingObserver {
-  final _pin = TextEditingController();
   final _password = TextEditingController();
   String? _sentTo;
   String? _error;
@@ -79,7 +84,6 @@ class _SecondProofState extends State<SecondProof> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _pin.dispose();
     _password.dispose();
     super.dispose();
   }
@@ -100,8 +104,7 @@ class _SecondProofState extends State<SecondProof> with WidgetsBindingObserver {
     } on PasskeyCancelled {
       // Closed the phone's passkey sheet.
     } on ApiError catch (e) {
-      // A wrong PIN and too many tries in the web's words; else the
-      // server's own sentence.
+      // Too many tries in the web's words; else the server's own sentence.
       if (!quiet) _error = e.body['tries_left'] is num || e.status == 429 ? codeProblem(e) : sentence(e.message);
     } on Offline {
       if (!quiet) _error = 'You’re offline. Try again when you’re back online.';
@@ -142,15 +145,6 @@ class _SecondProofState extends State<SecondProof> with WidgetsBindingObserver {
         await _proved();
       }, quiet: quiet);
 
-  void _usePin() {
-    final pin = _pin.text.trim();
-    if (pin.length < 4) return;
-    _run(() async {
-      await widget.auth.api.secondProofPin(body: SecondProofPinRequest(pin: pin));
-      await _proved();
-    });
-  }
-
   void _usePassword() {
     final password = _password.text;
     if (password.isEmpty) return;
@@ -173,7 +167,7 @@ class _SecondProofState extends State<SecondProof> with WidgetsBindingObserver {
     final what = widget.business == null ? 'First' : 'Before ${widget.business} opens';
     final look = TkLook.of(context);
     // The app's own look: what to do as a callout, the ways in as rows of
-    // a section, a password or PIN in a form group with its button.
+    // a section, a password in a form group with its button.
     final List<Widget> body = sent != null
         ? [
             Semantics(
@@ -208,15 +202,11 @@ class _SecondProofState extends State<SecondProof> with WidgetsBindingObserver {
               TkFormGroup(children: [TkKitField(label: 'Your password', child: TkTextBox(key: const ValueKey('proof-password'), controller: _password, secret: true))]),
               TkCta(label: _busy ? 'Checking…' : 'Confirm with my password', onTap: _busy ? null : _usePassword),
             ],
-            if (ways.pin) ...[
-              TkFormGroup(children: [TkKitField(label: 'Your chat PIN', hint: 'The PIN you set for approving on WhatsApp.', child: TkTextBox(controller: _pin, digits: 8, secret: true))]),
-              TkCta(label: _busy ? 'Checking…' : 'Confirm with my PIN', onTap: _busy ? null : _usePin),
-            ],
             if (ways.none)
               TkCallout(
                 leading: TkSquare('b-alert', color: look.orange),
-                title: 'No other way yet',
-                sub: 'Your account has no other way to prove it\'s you yet. Add an email or a passkey from a device you have used before.',
+                title: 'No other way on this phone',
+                sub: noWayHere,
                 subLines: 4,
                 color: look.orange,
               ),

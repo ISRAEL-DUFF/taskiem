@@ -131,12 +131,6 @@ class TaskiemApi {
     return DeviceProved.fromJson(j as Map<String, dynamic>);
   }
 
-  /// Prove it is you with your chat PIN (`POST /v1/auth/second-proof/pin`)
-  Future<DeviceProved> secondProofPin({required SecondProofPinRequest body}) async {
-    final j = await _t.send('POST', '/v1/auth/second-proof/pin', body: body.toJson());
-    return DeviceProved.fromJson(j as Map<String, dynamic>);
-  }
-
   /// Prove it is you with your password (`POST /v1/auth/second-proof/password`)
   Future<DeviceProved> secondProofPassword({required SecondProofPasswordRequest body}) async {
     final j = await _t.send('POST', '/v1/auth/second-proof/password', body: body.toJson());
@@ -3103,30 +3097,27 @@ class MeSecondProof {
 
 /// As SecondProofWays.
 class MeSecondProofWays {
-  const MeSecondProofWays({this.email, this.passkey, this.password, this.pin});
+  const MeSecondProofWays({this.email, this.passkey, this.password});
 
   final bool? email;
   final bool? passkey;
   final bool? password;
-  final bool? pin;
 
   factory MeSecondProofWays.fromJson(Map<String, dynamic> j) => MeSecondProofWays(
         email: j['email'] == null ? null : j['email'] as bool,
         passkey: j['passkey'] == null ? null : j['passkey'] as bool,
         password: j['password'] == null ? null : j['password'] as bool,
-        pin: j['pin'] == null ? null : j['pin'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
         'email': ?email,
         'passkey': ?passkey,
         'password': ?password,
-        'pin': ?pin,
       };
 }
 
 class MeUser {
-  const MeUser({this.email, this.emailPlaceholder, this.emailVerified, this.id, this.name, this.phone, this.photo});
+  const MeUser({this.email, this.emailPlaceholder, this.emailVerified, this.id, this.name, this.needsSignInWay, this.phone, this.photo, this.signInWayStep});
 
   final String? email;
   /// The sign-in name receives no mail (an account made in chat); the web app
@@ -3135,11 +3126,22 @@ class MeUser {
   final bool? emailVerified;
   final String? id;
   final String? name;
+  /// The person is in a business and has no way to prove a new device is theirs
+  /// (no passkey, email or password; the PIN is not one,
+  /// docs/spec/taskiem-for-everyone.md §5.4): a sign-in by a code to their
+  /// phone or chat lets them in from any device, so the apps ask them to add
+  /// one (on Today and Account).
+  final bool? needsSignInWay;
   /// The person's own phone number (E.164), or null.
   final Object? phone;
   /// The person's own photo (GET /v1/me/photo), or null. Shown on their own
   /// side only; businesses are not shown it.
   final Object? photo;
+  /// The person has no such way and their account is new to the apps (made
+  /// since 25 November 2026, or never opened on a phone or browser before): the
+  /// apps ask for one as a step, which cannot be skipped before a business is
+  /// entered or started. Others are reminded instead.
+  final bool? signInWayStep;
 
   factory MeUser.fromJson(Map<String, dynamic> j) => MeUser(
         email: j['email'] == null ? null : j['email'] as String,
@@ -3147,8 +3149,10 @@ class MeUser {
         emailVerified: j['email_verified'] == null ? null : j['email_verified'] as bool,
         id: j['id'] == null ? null : j['id'] as String,
         name: j['name'] == null ? null : j['name'] as String,
+        needsSignInWay: j['needs_sign_in_way'] == null ? null : j['needs_sign_in_way'] as bool,
         phone: j['phone'],
         photo: j['photo'],
+        signInWayStep: j['sign_in_way_step'] == null ? null : j['sign_in_way_step'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
@@ -3157,8 +3161,10 @@ class MeUser {
         'email_verified': ?emailVerified,
         'id': ?id,
         'name': ?name,
+        'needs_sign_in_way': ?needsSignInWay,
         'phone': ?phone,
         'photo': ?photo,
+        'sign_in_way_step': ?signInWayStep,
       };
 }
 
@@ -3479,20 +3485,6 @@ class DeviceProved {
       };
 }
 
-class SecondProofPinRequest {
-  const SecondProofPinRequest({required this.pin});
-
-  final String pin;
-
-  factory SecondProofPinRequest.fromJson(Map<String, dynamic> j) => SecondProofPinRequest(
-        pin: j['pin'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'pin': pin,
-      };
-}
-
 class SecondProofPasswordRequest {
   const SecondProofPasswordRequest({required this.password});
 
@@ -3695,29 +3687,27 @@ class InvitationAccepted {
 
 /// The second proofs a person could give (docs/spec/taskiem-for-everyone.md
 /// §5.4): `passkey` (POST /v1/auth/second-proof/passkey), `email` (a link to
-/// their real email, confirmed or not), `pin` (the chat PIN), and `password`
-/// (POST /v1/auth/second-proof/password: set, usable in a business of theirs,
-/// on a confirmed email where this server sends email).
+/// their real email, confirmed or not), and `password` (POST
+/// /v1/auth/second-proof/password: set, usable in a business of theirs, and
+/// chosen by the person or on a confirmed email where this server sends email).
+/// The PIN is for paying and approving only, never a second proof.
 class SecondProofWays {
-  const SecondProofWays({required this.email, required this.passkey, required this.password, required this.pin});
+  const SecondProofWays({required this.email, required this.passkey, required this.password});
 
   final bool email;
   final bool passkey;
   final bool password;
-  final bool pin;
 
   factory SecondProofWays.fromJson(Map<String, dynamic> j) => SecondProofWays(
         email: j['email'] as bool,
         passkey: j['passkey'] as bool,
         password: j['password'] as bool,
-        pin: j['pin'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
         'email': email,
         'passkey': passkey,
         'password': password,
-        'pin': pin,
       };
 }
 

@@ -726,7 +726,7 @@ test("Discover with stand-ins: Near me sends the place in the body only, more re
 for (const width of [390, 360])
   test(`Deleting an account with stand-ins at ${width} px: a business in the way, a wrong password, a new device proving itself first`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
-    const me = { ...PERSON, factors: { passkey: false, totp: false, password: true }, second_proof: { required: false, device_proved: false, ways: { passkey: false, email: false, pin: false, password: true } } };
+    const me = { ...PERSON, factors: { passkey: false, totp: false, password: true }, second_proof: { required: false, device_proved: false, ways: { passkey: false, email: false, password: true } } };
     await page.route("**/v1/me", (r) => r.fulfill(json(me)));
     let step = 0;
     const bodies: unknown[] = [];
@@ -745,7 +745,7 @@ for (const width of [390, 360])
           ),
         );
       if (step === 2) return r.fulfill(json({ error: "That password is not right.", password_wrong: true }, 401));
-      if (step === 3) return r.fulfill(json({ error: "this is a new device", second_proof_required: true, ways: { passkey: false, email: false, pin: false, password: true } }, 401));
+      if (step === 3) return r.fulfill(json({ error: "this is a new device", second_proof_required: true, ways: { passkey: false, email: false, password: true } }, 401));
       return r.fulfill(json({ deleted: true, businesses_told: 2 }));
     });
     await page.route("**/v1/auth/second-proof/password", (r) => r.fulfill(json({ proved: true })));

@@ -401,7 +401,7 @@ export function DeleteAccountPage() {
       } catch (e) {
         // A new device first proves itself another way (§5.4), then deletes.
         if (e instanceof ApiError && e.body.second_proof_required) {
-          setProving((e.body.ways as ProofWays | undefined) ?? me?.second_proof?.ways ?? { passkey: false, email: false, pin: false });
+          setProving((e.body.ways as ProofWays | undefined) ?? me?.second_proof?.ways ?? { passkey: false, email: false, password: false });
           return;
         }
         throw e;

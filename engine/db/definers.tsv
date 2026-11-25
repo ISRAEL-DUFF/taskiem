@@ -390,7 +390,7 @@ taskiem_auth_device_proved(uuid,bytea)	@ISRAEL-DUFF (identity)	Whether a person'
 taskiem_auth_device_prove(uuid,bytea,text)	@ISRAEL-DUFF (identity)	Records a second proof (passkey, email link, chat PIN) for a person's device (00448)
 taskiem_auth_proof_link_issue(uuid,bytea,bytea,interval,integer)	@ISRAEL-DUFF (identity)	Issues a second-proof email link for a device, kept as a hash; hourly cap (00448)
 taskiem_auth_proof_link_use(bytea,uuid,bytea)	@ISRAEL-DUFF (identity)	Uses a second-proof link once, for its person and device, and proves the device (00448)
-taskiem_auth_second_proofs(uuid)	@ISRAEL-DUFF (identity)	Which second proofs a person could give: passkey, real email, chat PIN, password, and whether the email is confirmed; booleans only (00448, 00450)
+taskiem_auth_second_proofs(uuid)	@ISRAEL-DUFF (identity)	Which second proofs a person could give: passkey, real email, password, whether the email is confirmed and the password chosen by them, and whether the app asks for a way as a step; booleans only (00448, 00450, 00760)
 taskiem_auth_phone_change_pending(uuid)	@ISRAEL-DUFF (identity)	The new number a person asked a change code for, while pending (00448)
 taskiem_auth_chat_number_current(uuid,text)	@ISRAEL-DUFF (identity)	Whether a person's WhatsApp binding is still their phone's number, for chat sign-in; a boolean (00450)
 taskiem_wa_pin_lock(uuid)	@ISRAEL-DUFF (identity)	A person's PIN hash and lock, its row locked for the caller's transaction so a check and its count are one (00450)
