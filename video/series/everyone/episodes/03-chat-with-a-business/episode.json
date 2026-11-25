@@ -1,0 +1,68 @@
+{
+  "number": 3,
+  "slug": "chat-with-a-business",
+  "title": "Chat with a business",
+  "headline": "Chat with *a business*",
+  "sub": "One chat with the business, in the app: ask, and it answers.",
+  "mood": "sparse",
+  "films": [
+    "you-chat-business"
+  ],
+  "recap": {
+    "en": "You found Ada's Kitchen.",
+    "pcm": "You don find Ada's Kitchen."
+  },
+  "bridge": {
+    "en": "You asked. Now order.",
+    "pcm": "You don ask. Now order."
+  },
+  "next": {
+    "number": 4,
+    "title": "Order and pay",
+    "headline": "Order *and pay*"
+  },
+  "flow": [
+    {
+      "id": "E3-C1",
+      "who": "Chioma Nnadi",
+      "purpose": "a customer who already uses it",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "At her office desk, glances at her phone, laughs and types a short reply with one hand while holding a lunch bag",
+      "setting": "Tobi's desk at a logistics office in Yaba, Lagos: a laptop, a paper cup of zobo, a window on the street",
+      "camera": "medium shot, eye-level"
+    },
+    {
+      "id": "E3-C2",
+      "who": "Ada Obi",
+      "purpose": "she answers a customer",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Wipes her hands on her apron, reads her phone and types a reply with a quick smile",
+      "setting": "Ada's Kitchen in Yaba, Lagos: white tiles, steel counters, big steaming pots, a bright window on a yellow-painted wall",
+      "camera": "medium close-up, handheld"
+    }
+  ],
+  "narration": {
+    "you-chat-business": {
+      "en": [
+        "Open Ada's Kitchen's chat link. It shows her card.",
+        "Tap Chat. The chat opens, with a note on what Ada sees.",
+        "Tap OK.",
+        "She asks about offers. Tap Not now.",
+        "Tap the box and type your question.",
+        "Tap Send.",
+        "Ada replies in the same chat, with her prices."
+      ],
+      "pcm": [
+        "Open Ada's Kitchen chat link. E show her card.",
+        "Tap Chat. The chat open, with note on wetin Ada fit see.",
+        "Tap OK.",
+        "She ask about offers. Tap Not now.",
+        "Tap the box and type your question.",
+        "Tap Send.",
+        "Ada reply for the same chat, with her prices."
+      ]
+    }
+  }
+}

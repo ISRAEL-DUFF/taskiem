@@ -1,0 +1,72 @@
+{
+  "number": 6,
+  "slug": "book-a-service",
+  "title": "Book a service",
+  "headline": "Book *a service*",
+  "sub": "Pick a service and a free time; the booking is a row in Orders.",
+  "mood": "sparse",
+  "films": [
+    "you-book"
+  ],
+  "recap": {
+    "en": "Orders and bookings are in one place.",
+    "pcm": "Orders and bookings dey one place."
+  },
+  "bridge": {
+    "en": "Found something good? Show someone.",
+    "pcm": "You find better thing? Show person."
+  },
+  "next": {
+    "number": 7,
+    "title": "Share with someone",
+    "headline": "Share *with someone*"
+  },
+  "flow": [
+    {
+      "id": "E6-C1",
+      "who": "Tobi Adewale",
+      "purpose": "he needs a haircut",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Runs a hand over his hair, looks at his reflection in a dark window and nods to himself",
+      "setting": "Tobi's living room in a Lagos flat: a sofa, a small table, a window on the street, soft evening light",
+      "camera": "medium close-up, eye-level"
+    },
+    {
+      "id": "E6-C2",
+      "who": "Tobi Adewale",
+      "purpose": "the haircut",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Sits in a barber's chair under a plain black cape, eyes closed, relaxed, a barber's hands trimming at the side (barber out of focus, only hands visible)",
+      "setting": "Tobi's living room in a Lagos flat: a sofa, a small table, a window on the street, soft evening light",
+      "camera": "medium shot, shallow focus"
+    }
+  ],
+  "narration": {
+    "you-book": {
+      "en": [
+        "Open your chat with Kola.",
+        "Tap the tools button.",
+        "Tap Book to see services.",
+        "Pick Haircut.",
+        "Pick Thursday, then a free time.",
+        "Check the day and time.",
+        "Tap Book. The booking is made.",
+        "A booking appears in Orders, like an order.",
+        "Tap Kola to see the day and time."
+      ],
+      "pcm": [
+        "Open your chat with Kola.",
+        "Tap the tools button.",
+        "Tap Book to see services.",
+        "Pick Haircut.",
+        "Pick Thursday, then free time.",
+        "Check the day and time.",
+        "Tap Book. The booking don set.",
+        "Booking go show for Orders, like order.",
+        "Tap Kola to see the day and time."
+      ]
+    }
+  }
+}

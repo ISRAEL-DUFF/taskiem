@@ -1,0 +1,76 @@
+{
+  "number": 8,
+  "slug": "groups-for-a-purpose",
+  "title": "Groups for a purpose",
+  "headline": "Groups *for a purpose*",
+  "sub": "A family group with a name and a reason, made in a few taps.",
+  "mood": "sparse",
+  "films": [
+    "you-groups"
+  ],
+  "recap": {
+    "en": "You shared with Mama Tobi.",
+    "pcm": "You don share with Mama Tobi."
+  },
+  "bridge": {
+    "en": "A group is ready. Now order together.",
+    "pcm": "The group don ready. Now order together."
+  },
+  "next": {
+    "number": 9,
+    "title": "Order together",
+    "headline": "Order *together*"
+  },
+  "flow": [
+    {
+      "id": "E8-C1",
+      "who": "Tobi Adewale",
+      "purpose": "planning Sunday lunch",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Leans on the sofa arm talking to someone off-screen while counting on his fingers, phone in the other hand",
+      "setting": "Tobi's living room in a Lagos flat: a sofa, a small table, a window on the street, soft evening light",
+      "camera": "medium shot, eye-level"
+    },
+    {
+      "id": "E8-C2",
+      "who": "Mama Tobi",
+      "purpose": "her family group",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Stands at her kitchen counter, reads her phone at arm's length, nods and starts wrapping a stack of plates",
+      "setting": "Mama Tobi's front room in Surulere, Lagos: a floral sofa, a framed family photo, a ceiling fan, warm afternoon light",
+      "camera": "medium shot, warm light"
+    }
+  ],
+  "narration": {
+    "you-groups": {
+      "en": [
+        "A group for Sunday lunch with the family.",
+        "Tap plus, then New chat.",
+        "Tap New group.",
+        "Name it Family lunch.",
+        "In Description, say what the group is for.",
+        "Add people: tick Mama Tobi and Bisi.",
+        "Tap Choose, then Make the group.",
+        "Each add is reported: one added, one invited.",
+        "Tap Done. The group opens.",
+        "Tap the group picture. Its info shows the name and purpose.",
+        "In the group, the tools button offers Order together."
+      ],
+      "pcm": [
+        "Group for Sunday lunch with the family.",
+        "Tap plus, then New chat.",
+        "Tap New group.",
+        "Name am Family lunch.",
+        "For Description, talk wetin the group dey for.",
+        "Add people: tick Mama Tobi and Bisi.",
+        "Tap Choose, then Make the group.",
+        "Each add show: one added, one invited.",
+        "Tap Done. The group open.",
+        "Tap the group picture. Im info show the name and purpose.",
+        "For the group, tools button get Order together."
+      ]
+    }
+  }
+}

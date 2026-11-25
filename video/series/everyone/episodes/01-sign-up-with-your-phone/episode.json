@@ -1,0 +1,72 @@
+{
+  "number": 1,
+  "slug": "sign-up-with-your-phone",
+  "title": "Sign up with your phone",
+  "headline": "Sign up with *your phone*",
+  "sub": "A phone number, a code, and your account is ready.",
+  "mood": "sparse",
+  "films": [
+    "you-sign-up"
+  ],
+  "recap": {
+    "en": "Taskiem in a day. Now, one step at a time.",
+    "pcm": "Taskiem in a day. Now, one step at a time."
+  },
+  "bridge": {
+    "en": "You have an account. Now find a business.",
+    "pcm": "You don get account. Now find business."
+  },
+  "next": {
+    "number": 2,
+    "title": "Find a business",
+    "headline": "Find a *business*"
+  },
+  "flow": [
+    {
+      "id": "E1-C1",
+      "who": "Tobi Adewale",
+      "purpose": "he opens a new app",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Sits on the sofa, thumb hovering over his phone, then taps once and nods",
+      "setting": "Tobi's living room in a Lagos flat: a sofa, a small table, a window on the street, soft evening light",
+      "camera": "medium close-up, eye-level"
+    },
+    {
+      "id": "E1-C2",
+      "who": "Tobi Adewale",
+      "purpose": "account made",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Stands up from the sofa, stretches, glances at his phone and smiles, ready to go out",
+      "setting": "Tobi's living room in a Lagos flat: a sofa, a small table, a window on the street, soft evening light",
+      "camera": "medium shot, slight tracking"
+    }
+  ],
+  "narration": {
+    "you-sign-up": {
+      "en": [
+        "Open Taskiem. First, your phone number.",
+        "Tap the box and type it.",
+        "Tap Continue. A code is sent.",
+        "Type the six digits.",
+        "Tap Continue.",
+        "Make your account. Type your name.",
+        "Tick 18 or over, and agree.",
+        "Tap Create.",
+        "Your account is ready, with Chats, Orders and Discover."
+      ],
+      "pcm": [
+        "Open Taskiem. First, your phone number.",
+        "Tap the box and type am.",
+        "Tap Continue. Dem go send code.",
+        "Type the six digits.",
+        "Tap Continue.",
+        "New number: make your account. Type your name.",
+        "Tick 18 or over, and agree.",
+        "Tap Create.",
+        "Your account don ready, with Chats, Orders and Discover."
+      ]
+    }
+  }
+}

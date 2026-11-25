@@ -76,3 +76,23 @@ Fashola, Chukwudi Ibe, Audu, Danjuma and Ikorodu are in the table above.
 | Mallam | MAH-lam | A title of respect (Hausa) |
 | Dayo | DAH-yoh | Mr Danjuma's son |
 | JSS | "J S S" (letters) | Junior secondary school: say "J S S one A" |
+
+## "Taskiem for you" series: more names (to confirm with a native speaker)
+
+Ada, Bayo, Kola, Kemi, Chioma, Yaba and Tobi (TOH-bee, above) are already listed.
+
+| Name | Say it | Notes |
+| --- | --- | --- |
+| Tobi Adewale | TOH-bee ah-deh-WAH-leh | The customer (Yoruba); stress on the third syllable of Adewale |
+| Mama Tobi | MAH-mah TOH-bee | "Mama" as a title: Tobi's mother |
+| Nnadi | n-NAH-dee | Chioma Nnadi (Igbo); a held first "n" |
+| Obi | OH-bee | Ada Obi (Igbo) |
+| Adeyemi | ah-DEH-yeh-mee | Bayo Adeyemi (Yoruba) |
+| Adebayo | ah-deh-BAH-yoh | Kola Adebayo (Yoruba) |
+| Bola | BOH-lah | Bola Ige, a colleague |
+| Ige | EE-geh | Bola Ige; Dapo Ige (a stranger who messages Tobi) |
+| Dapo | DAH-poh | Dapo Ige |
+| Bisi | BEE-see | Added to the family group |
+| Surulere | soo-roo-LEH-reh | Mama Tobi's area (also in the Fashion table) |
+| jollof | JOH-lof | The rice dish |
+| zobo | ZOH-boh | The hibiscus drink |

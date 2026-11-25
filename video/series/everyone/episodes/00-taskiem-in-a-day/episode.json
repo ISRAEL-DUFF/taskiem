@@ -1,0 +1,152 @@
+{
+  "number": 0,
+  "slug": "taskiem-in-a-day",
+  "title": "Taskiem in a day",
+  "headline": "Taskiem *in a day*",
+  "sub": "Sign up, find a business, order, book, share and plan lunch, beside the chats you already have.",
+  "mood": "build",
+  "reel": [
+    {
+      "film": "you-sign-up",
+      "from": 9.8,
+      "to": 22.8,
+      "tag": "Episode 1 · Sign up with your phone",
+      "caption": "Sign up with a phone number and a code.",
+      "narration": {
+        "en": "Sign up with your phone number and a code, then add your name.",
+        "pcm": "Sign up with your phone number and one code, then add your name."
+      }
+    },
+    {
+      "film": "you-find",
+      "from": 9.1,
+      "to": 22.1,
+      "tag": "Episode 2 · Find a business",
+      "caption": "Find a business by category and area.",
+      "narration": {
+        "en": "Find a business by its category and your area.",
+        "pcm": "Find business by category and your area."
+      }
+    },
+    {
+      "film": "you-chat-business",
+      "from": 15.0,
+      "to": 28.0,
+      "tag": "Episode 3 · Chat with a business",
+      "caption": "Ask a business a question in its chat.",
+      "narration": {
+        "en": "Ask a business a question, and it answers in the same chat.",
+        "pcm": "Ask business question, and e go answer for the same chat."
+      }
+    },
+    {
+      "film": "you-order-pay",
+      "from": 32.2,
+      "to": 44.9,
+      "tag": "Episode 4 · Order and pay",
+      "caption": "Place the order. Ada accepts, and a pay card arrives.",
+      "narration": {
+        "en": "Place the order. When Ada accepts, a pay card arrives.",
+        "pcm": "Place the order. When Ada accept am, pay card go come."
+      }
+    },
+    {
+      "film": "you-follow-orders",
+      "from": 9.0,
+      "to": 21.0,
+      "tag": "Episode 5 · Follow your orders",
+      "caption": "Follow the order. Pull down to refresh it.",
+      "narration": {
+        "en": "Follow the order, and pull down to see the latest step.",
+        "pcm": "Follow the order, and pull down to see the latest step."
+      }
+    },
+    {
+      "film": "you-book",
+      "from": 9.2,
+      "to": 21.0,
+      "tag": "Episode 6 · Book a service",
+      "caption": "Book a service: pick a free time, tap Book.",
+      "narration": {
+        "en": "Book a service: pick a free time, then tap Book.",
+        "pcm": "Book a service: pick free time, then tap Book."
+      }
+    },
+    {
+      "film": "you-share",
+      "from": 6.4,
+      "to": 18.4,
+      "tag": "Episode 7 · Share with someone",
+      "caption": "Share a business with someone.",
+      "narration": {
+        "en": "Share a business with someone, and they get a card.",
+        "pcm": "Share a business with person, and dem go get card."
+      }
+    },
+    {
+      "film": "you-groups",
+      "from": 5.6,
+      "to": 18.0,
+      "tag": "Episode 8 · Groups for a purpose",
+      "caption": "Start a group with a purpose.",
+      "narration": {
+        "en": "Start a group with a purpose, and add the people.",
+        "pcm": "Start a group with purpose, and add the people."
+      }
+    },
+    {
+      "film": "you-order-together",
+      "from": 25.4,
+      "to": 36.8,
+      "tag": "Episode 9 · Order together",
+      "caption": "Order together: everyone adds to one basket.",
+      "narration": {
+        "en": "Order together: everyone adds items to one basket.",
+        "pcm": "Order together: everybody add items to one basket."
+      }
+    },
+    {
+      "film": "you-keep-safe",
+      "from": 13.0,
+      "to": 25.0,
+      "tag": "Episode 10 · Keep it safe",
+      "caption": "Chats are not end-to-end encrypted. Taskiem says so.",
+      "narration": {
+        "en": "Chats are not end-to-end encrypted, and the app says so.",
+        "pcm": "Chats no be end-to-end encrypted, and the app talk am."
+      }
+    }
+  ],
+  "bridge": {
+    "en": "It starts with a phone number.",
+    "pcm": "E start with phone number."
+  },
+  "next": {
+    "number": 1,
+    "title": "Sign up with your phone",
+    "headline": "Sign up with *your phone*"
+  },
+  "flow": [
+    {
+      "id": "E0-C1",
+      "who": "Tobi Adewale",
+      "purpose": "cold open: lunchtime and a hungry young man",
+      "seconds": 4,
+      "goes": "before the title card",
+      "action": "Looks up from his laptop at the clock, grins, picks up his phone and turns it towards the camera without showing the screen",
+      "setting": "Tobi's desk at a logistics office in Yaba, Lagos: a laptop, a paper cup of zobo, a window on the street",
+      "camera": "slow push-in, medium shot, warm midday light"
+    },
+    {
+      "id": "E0-C2",
+      "who": "Mama Tobi",
+      "purpose": "closing: the family at Sunday lunch",
+      "seconds": 5,
+      "goes": "closing, after the footage",
+      "action": "Sits on the sofa with her glasses on, holds her phone at arm's length, taps once, then looks up with a delighted smile, a hand on her chest",
+      "setting": "Mama Tobi's front room in Surulere, Lagos: a floral sofa, a framed family photo, a ceiling fan, warm afternoon light",
+      "camera": "slow pull-back, medium shot"
+    }
+  ],
+  "narration": {}
+}

@@ -1,0 +1,31 @@
+[
+ {
+  "t": 0.0,
+  "text": "Tobi opens Ada’s Kitchen’s chat link. It shows her card.",
+  "who": "Tobi · Ada’s Kitchen"
+ },
+ {
+  "t": 4.0,
+  "text": "He taps Chat with Ada’s Kitchen. The chat opens, with a note on what Ada will see."
+ },
+ {
+  "t": 10.3,
+  "text": "He taps OK to close the note."
+ },
+ {
+  "t": 12.3,
+  "text": "Ada asks about offers. He taps Not now."
+ },
+ {
+  "t": 16.3,
+  "text": "He taps the message box and types a question."
+ },
+ {
+  "t": 21.8,
+  "text": "He taps Send."
+ },
+ {
+  "t": 25.9,
+  "text": "Ada’s reply arrives in the same chat, with her prices."
+ }
+]

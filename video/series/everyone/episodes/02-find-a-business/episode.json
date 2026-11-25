@@ -1,0 +1,70 @@
+{
+  "number": 2,
+  "slug": "find-a-business",
+  "title": "Find a business",
+  "headline": "Find a *business*",
+  "sub": "Discover lists businesses that chose to be found.",
+  "mood": "sparse",
+  "films": [
+    "you-find"
+  ],
+  "recap": {
+    "en": "You have an account.",
+    "pcm": "You don get account."
+  },
+  "bridge": {
+    "en": "You found Ada's Kitchen. Now say hello.",
+    "pcm": "You don find Ada's Kitchen. Now go talk to am."
+  },
+  "next": {
+    "number": 3,
+    "title": "Chat with a business",
+    "headline": "Chat with *a business*"
+  },
+  "flow": [
+    {
+      "id": "E2-C1",
+      "who": "Tobi Adewale",
+      "purpose": "lunch break, looking for somewhere to eat",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Sits on a bench in the shade with his phone, scrolls with one thumb, then looks up at the street thoughtfully",
+      "setting": "a busy Yaba street in Lagos: yellow danfo buses, okada bikes, painted walls",
+      "camera": "medium shot, eye-level, shallow focus"
+    },
+    {
+      "id": "E2-C2",
+      "who": "Ada Obi",
+      "purpose": "a business that chose to be found",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Stirs a big pot, glances at the phone propped on the counter and smiles",
+      "setting": "Ada's Kitchen in Yaba, Lagos: white tiles, steel counters, big steaming pots, a bright window on a yellow-painted wall",
+      "camera": "medium close-up, warm light"
+    }
+  ],
+  "narration": {
+    "you-find": {
+      "en": [
+        "Tap Discover. These businesses chose to be found.",
+        "Each shows when it is open.",
+        "Tap a category: Food and drinks.",
+        "Only food is left. Type Yaba in the Area box.",
+        "Tap Ada's Kitchen.",
+        "Its profile shows what it sells.",
+        "Chat, or open Their shop.",
+        "Below: opening hours, the address and a map link."
+      ],
+      "pcm": [
+        "Tap Discover. These businesses wan make people find dem.",
+        "Each one show when e open.",
+        "Tap category: Food and drinks.",
+        "Only food remain. Type Yaba for the Area box.",
+        "Tap Ada's Kitchen.",
+        "Im profile show wetin e dey sell.",
+        "Chat, or open Their shop.",
+        "Below: opening hours, address and map link."
+      ]
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "number": 9,
+  "slug": "order-together",
+  "title": "Order together",
+  "headline": "Order *together*",
+  "sub": "One basket from one business: everyone adds, one person places it.",
+  "mood": "build",
+  "films": [
+    "you-order-together"
+  ],
+  "recap": {
+    "en": "The group is ready.",
+    "pcm": "The group don ready."
+  },
+  "bridge": {
+    "en": "Lunch is placed. One thing left: keeping it safe.",
+    "pcm": "The lunch don go. One thing remain: keep am safe."
+  },
+  "next": {
+    "number": 10,
+    "title": "Keep it safe",
+    "headline": "Keep it *safe*"
+  },
+  "flow": [
+    {
+      "id": "E9-C1",
+      "who": "Tobi Adewale",
+      "purpose": "the office lunch plan",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Turns in his chair to two colleagues out of shot (only their hands and elbows visible), laughing, phone raised",
+      "setting": "Tobi's desk at a logistics office in Yaba, Lagos: a laptop, a paper cup of zobo, a window on the street",
+      "camera": "medium shot, eye-level"
+    },
+    {
+      "id": "E9-C2",
+      "who": "Tobi Adewale",
+      "purpose": "lunch arrives",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Sets three paper lunch bags on the desk with a pleased nod",
+      "setting": "Tobi's desk at a logistics office in Yaba, Lagos: a laptop, a paper cup of zobo, a window on the street",
+      "camera": "medium close-up, slight push-in"
+    }
+  ],
+  "narration": {
+    "you-order-together": {
+      "en": [
+        "Lunch at the office? Open the Office lunch group.",
+        "Tap the tools button.",
+        "Tap Order together.",
+        "Pick one business: Ada's Kitchen.",
+        "A basket card appears. Tap Open basket.",
+        "It is empty. Tap Add my items.",
+        "Add one jollof rice and one zobo.",
+        "Tap Put my two in the basket.",
+        "Bola and Kemi add theirs on their phones.",
+        "You hold the basket. Choose Pick-up.",
+        "When all have added, tap Close the basket.",
+        "Then tap Place the order.",
+        "If the business takes payment here, choose who pays.",
+        "Or choose I'll pay all. Here, each pays their own.",
+        "The order is placed. Each sees their own share."
+      ],
+      "pcm": [
+        "Lunch for office? Open the Office lunch group.",
+        "Tap the tools button.",
+        "Tap Order together.",
+        "Pick one business: Ada's Kitchen.",
+        "Basket card show. Tap Open basket.",
+        "E empty. Tap Add my items.",
+        "Add one jollof rice and one zobo.",
+        "Tap Put my two in the basket.",
+        "Bola and Kemi add theirs for their phones.",
+        "You hold the basket. Choose Pick-up.",
+        "When all don add, tap Close the basket.",
+        "Then tap Place the order.",
+        "If business dey take payment here, choose who pay.",
+        "Or choose I'll pay all. Here, each pay im own.",
+        "The order don go. Each person see im own share."
+      ]
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "number": 10,
+  "slug": "keep-it-safe",
+  "title": "Keep it safe",
+  "headline": "Keep it *safe*",
+  "sub": "Mute, About, block, who sees your name, and your account.",
+  "mood": "sparse",
+  "films": [
+    "you-keep-safe"
+  ],
+  "recap": {
+    "en": "Messages, orders, groups. How do you keep it safe?",
+    "pcm": "Messages, orders, groups. How you go keep am safe?"
+  },
+  "closing": {
+    "en": "That is Taskiem for you, beside the chats you already have. Talk to a business on Taskiem.",
+    "pcm": "Na so Taskiem for you be, beside the chats wey you don get. Talk to a business on Taskiem."
+  },
+  "flow": [
+    {
+      "id": "E10-C1",
+      "who": "Tobi Adewale",
+      "purpose": "he guards his chats",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Frowns at his phone, sets it face-down on the arm of the sofa, then takes a breath and relaxes",
+      "setting": "Tobi's living room in a Lagos flat: a sofa, a small table, a window on the street, soft evening light",
+      "camera": "medium close-up, locked-off"
+    },
+    {
+      "id": "E10-C2",
+      "who": "Mama Tobi",
+      "purpose": "she feels safe to try",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Looks up from her phone to Tobi, nods once with a satisfied smile and taps her phone screen with one finger",
+      "setting": "Mama Tobi's front room in Surulere, Lagos: a floral sofa, a framed family photo, a ceiling fan, warm afternoon light",
+      "camera": "medium two-shot, warm light"
+    }
+  ],
+  "narration": {
+    "you-keep-safe": {
+      "en": [
+        "A message you do not like? Open the chat.",
+        "Tap More, then Mute notifications.",
+        "The chat is muted.",
+        "Tap More again, then About.",
+        "Taskiem keeps chats on its servers. They are not end-to-end encrypted.",
+        "To stop them writing, tap Block.",
+        "They are not told. You can unblock later.",
+        "Back on Chats, tap More, then Settings.",
+        "Blocked people lists who you blocked.",
+        "Privacy shows what a business sees: your name and number.",
+        "Delete your account is at the bottom of Settings.",
+        "It says what goes and what businesses keep."
+      ],
+      "pcm": [
+        "Message wey you no like? Open the chat.",
+        "Tap More, then Mute notifications.",
+        "The chat don mute.",
+        "Tap More again, then About.",
+        "Taskiem dey keep chats for im servers. Dem no be end-to-end encrypted.",
+        "To stop dem from writing, tap Block.",
+        "Dem no go know. You fit unblock later.",
+        "Back for Chats, tap More, then Settings.",
+        "Blocked people list who you block.",
+        "Privacy show wetin business see: your name and number.",
+        "Delete your account dey for the bottom of Settings.",
+        "E talk wetin go, and wetin business keep."
+      ]
+    }
+  }
+}

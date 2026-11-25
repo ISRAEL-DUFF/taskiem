@@ -1,0 +1,31 @@
+[
+ {
+  "t": 0.0,
+  "text": "Tobi ordered lunch from Ada’s Kitchen. He taps Orders on You.",
+  "who": "Tobi · customer of Ada’s Kitchen"
+ },
+ {
+  "t": 3.8,
+  "text": "Every order and booking with any business is here, newest first."
+ },
+ {
+  "t": 7.0,
+  "text": "He taps Ada’s Kitchen to open his order."
+ },
+ {
+  "t": 9.0,
+  "text": "The order shows what he got, the total and who has it."
+ },
+ {
+  "t": 12.2,
+  "text": "Under Delivery, the steps show the rider has picked it up."
+ },
+ {
+  "t": 15.8,
+  "text": "Minutes later, he pulls down to refresh. The steps now show the rider at his door."
+ },
+ {
+  "t": 20.9,
+  "text": "He goes back. In Orders, the row says At the door too."
+ }
+]

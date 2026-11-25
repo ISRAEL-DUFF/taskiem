@@ -1,0 +1,37 @@
+{
+ "_note": "Phone clock for each film when composing (default 13:00, light); end trims a film (seconds).",
+ "you-sign-up": {
+  "time": "13:00"
+ },
+ "you-find": {
+  "time": "13:00"
+ },
+ "you-chat-business": {
+  "time": "13:00"
+ },
+ "you-order-pay": {
+  "time": "13:02"
+ },
+ "you-follow-orders": {
+  "time": "13:00"
+ },
+ "you-book": {
+  "time": "13:00",
+  "end": 32.8
+ },
+ "you-share": {
+  "time": "13:00"
+ },
+ "you-groups": {
+  "time": "13:00",
+  "end": 43.4
+ },
+ "you-order-together": {
+  "time": "13:00",
+  "end": 62.6
+ },
+ "you-keep-safe": {
+  "time": "13:00",
+  "end": 63.0
+ }
+}

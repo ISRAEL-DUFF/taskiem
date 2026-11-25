@@ -414,9 +414,9 @@ def write_readme(out, series, built):
           "- The narrator's voice: record or generate it from the narration files (English; Pidgin after review).",
           "- Your own cuts, transitions and final mix.", "",
           "## Things to know", "",
-          "- The footage is the real app's own screens, drawn by its test runner with the story's data (Zuri Atelier). No real money moves and no real customer data is shown.",
+          "- The footage is the real app's own screens, drawn by its test runner with the story's data (" + series.get("title", "the series") + "). No real money moves and no real customer data is shown.",
           "- Taskiem works alongside WhatsApp and Telegram; it does not replace them. Say it that way.",
-          f"- Call to action: **{series['cta']}**. Confirm the trial length before publishing; the app's own sign-up says 14 days today.",
+          f"- Call to action: **{series['cta']}**." + (" Confirm the trial length before publishing; the app's own sign-up says 14 days today." if "trial" in series["cta"].lower() else " Confirm this wording before publishing."),
           "- Phone-only parts (the real fingerprint dialog, push notifications) are drawn in the footage; film them on a device if you want the real thing."]
     (out / "README.md").write_text("\n".join(L) + "\n")
 

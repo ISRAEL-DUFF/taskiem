@@ -1,0 +1,78 @@
+{
+  "number": 4,
+  "slug": "order-and-pay",
+  "title": "Order and pay",
+  "headline": "Order *and pay*",
+  "sub": "Build the order in Their shop, then pay on Ada's card.",
+  "mood": "build",
+  "films": [
+    "you-order-pay"
+  ],
+  "recap": {
+    "en": "You asked Ada a question.",
+    "pcm": "You don ask Ada question."
+  },
+  "bridge": {
+    "en": "The order is placed. Where is it now?",
+    "pcm": "The order don go. Where e dey now?"
+  },
+  "next": {
+    "number": 5,
+    "title": "Follow your orders",
+    "headline": "Follow *your orders*"
+  },
+  "flow": [
+    {
+      "id": "E4-C1",
+      "who": "Chioma Nnadi",
+      "purpose": "a regular customer shows how",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Shows a colleague her phone across the desk, points with one finger, both smile",
+      "setting": "Tobi's desk at a logistics office in Yaba, Lagos: a laptop, a paper cup of zobo, a window on the street",
+      "camera": "medium two-shot, eye-level"
+    },
+    {
+      "id": "E4-C2",
+      "who": "Ada Obi",
+      "purpose": "she packs the order",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Packs foil boxes of jollof rice into a delivery bag and zips it shut",
+      "setting": "Ada's Kitchen in Yaba, Lagos: white tiles, steel counters, big steaming pots, a bright window on a yellow-painted wall",
+      "camera": "medium close-up, warm light"
+    }
+  ],
+  "narration": {
+    "you-order-pay": {
+      "en": [
+        "Open your chat with Ada's Kitchen.",
+        "Tap the button by the box for chat tools.",
+        "Tap Their shop.",
+        "Tap plus twice on jollof, once on zobo.",
+        "Three items, eight thousand five hundred naira. Review order.",
+        "Choose Deliver it to me.",
+        "Pick your area, Yaba.",
+        "Type your address.",
+        "Total ten thousand naira. Place order.",
+        "The order goes to Ada's Kitchen.",
+        "Ada accepts. Her order and pay cards arrive.",
+        "Tap Pay to open the pay page."
+      ],
+      "pcm": [
+        "Open your chat with Ada's Kitchen.",
+        "Tap the button by the box for chat tools.",
+        "Tap Their shop.",
+        "Tap plus twice for jollof, once for zobo.",
+        "Three items, eight thousand five hundred naira. Review order.",
+        "Choose Deliver it to me.",
+        "Pick your area, Yaba.",
+        "Type your address.",
+        "Total na ten thousand naira. Place order.",
+        "The order go to Ada's Kitchen.",
+        "Ada accept. Her order card and pay card come.",
+        "Tap Pay to open the pay page."
+      ]
+    }
+  }
+}

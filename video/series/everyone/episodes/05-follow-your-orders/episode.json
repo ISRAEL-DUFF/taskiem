@@ -1,0 +1,68 @@
+{
+  "number": 5,
+  "slug": "follow-your-orders",
+  "title": "Follow your orders",
+  "headline": "Follow *your orders*",
+  "sub": "Orders in one place, and a delivery you can refresh.",
+  "mood": "sparse",
+  "films": [
+    "you-follow-orders"
+  ],
+  "recap": {
+    "en": "Your order is placed.",
+    "pcm": "Your order don go."
+  },
+  "bridge": {
+    "en": "Orders are one thing. Some businesses take bookings.",
+    "pcm": "Orders na one thing. Some business dey take bookings."
+  },
+  "next": {
+    "number": 6,
+    "title": "Book a service",
+    "headline": "Book *a service*"
+  },
+  "flow": [
+    {
+      "id": "E5-C1",
+      "who": "Emeka Nwosu",
+      "purpose": "the rider on the way",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Rides through Yaba traffic with an insulated cool box strapped behind him and checks his phone at a junction",
+      "setting": "a busy Yaba street in Lagos: yellow danfo buses, okada bikes, painted walls",
+      "camera": "tracking shot, medium, eye-level"
+    },
+    {
+      "id": "E5-C2",
+      "who": "Tobi Adewale",
+      "purpose": "lunch at the door",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Opens his front door, takes a paper delivery bag with a smile and nods thanks",
+      "setting": "Tobi's living room in a Lagos flat: a sofa, a small table, a window on the street, soft evening light",
+      "camera": "medium shot from inside the door"
+    }
+  ],
+  "narration": {
+    "you-follow-orders": {
+      "en": [
+        "Tap Orders, on the You tab.",
+        "Orders and bookings, newest first.",
+        "Tap Ada's Kitchen.",
+        "Items, total, and who has it.",
+        "Delivery steps: the rider has picked it up.",
+        "Pull down to refresh. Now the rider is at the door.",
+        "Back in Orders, the row says At the door."
+      ],
+      "pcm": [
+        "Tap Orders, for the You tab.",
+        "Orders and bookings, newest first.",
+        "Tap Ada's Kitchen.",
+        "Items, total, and who get am.",
+        "Delivery steps: the rider don pick am.",
+        "Pull down to refresh. Now the rider don reach the door.",
+        "Back for Orders, the row talk say At the door."
+      ]
+    }
+  }
+}

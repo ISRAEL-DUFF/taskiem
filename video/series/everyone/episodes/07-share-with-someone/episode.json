@@ -1,0 +1,82 @@
+{
+  "number": 7,
+  "slug": "share-with-someone",
+  "title": "Share with someone",
+  "headline": "Share *with someone*",
+  "sub": "Send a business or an order to a person; a stranger's message waits as a request.",
+  "mood": "sparse",
+  "films": [
+    "you-share"
+  ],
+  "recap": {
+    "en": "You booked Kola.",
+    "pcm": "You don book Kola."
+  },
+  "bridge": {
+    "en": "Sharing is one person at a time. Next, a group.",
+    "pcm": "Sharing na one person at a time. Next, group."
+  },
+  "next": {
+    "number": 8,
+    "title": "Groups for a purpose",
+    "headline": "Groups *for a purpose*"
+  },
+  "flow": [
+    {
+      "id": "E7-C1",
+      "who": "Tobi Adewale",
+      "purpose": "he shows his mother",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Sits beside his mother on her sofa, turns his phone gently towards her and points at the screen with a smile",
+      "setting": "Mama Tobi's front room in Surulere, Lagos: a floral sofa, a framed family photo, a ceiling fan, warm afternoon light",
+      "camera": "medium two-shot, over the shoulder (screen not readable)"
+    },
+    {
+      "id": "E7-C2",
+      "who": "Mama Tobi",
+      "purpose": "her phone buzzes",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Reads her phone with her glasses on, lips moving, then looks up and says something delighted to Tobi",
+      "setting": "Mama Tobi's front room in Surulere, Lagos: a floral sofa, a framed family photo, a ceiling fan, warm afternoon light",
+      "camera": "medium close-up, eye-level"
+    }
+  ],
+  "narration": {
+    "you-share": {
+      "en": [
+        "Found a business you like? Share it.",
+        "Open Discover, then the business.",
+        "Tap Share with someone.",
+        "Tick Mama Tobi, tap Send.",
+        "It says Shared. She gets a card.",
+        "An order shares the same way. Open Orders.",
+        "Open the order, tap Share with someone.",
+        "Pick Mama Tobi again and tap Send.",
+        "You are new to her, so it waits.",
+        "She taps Message requests, then your message.",
+        "Both cards show. Tobi is not told she read.",
+        "She accepts. Now he sees when she reads.",
+        "She taps See the business.",
+        "Chat with them starts her own chat."
+      ],
+      "pcm": [
+        "You like one business? Share am.",
+        "Open Discover, then the business.",
+        "Tap Share with someone.",
+        "Tick Mama Tobi, tap Send.",
+        "E say Shared. She get card.",
+        "Order share the same way. Open Orders.",
+        "Open the order, tap Share with someone.",
+        "Pick Mama Tobi again and tap Send.",
+        "You be new to her, so e dey wait.",
+        "She tap Message requests, then your message.",
+        "Two cards show. Tobi no know say she read.",
+        "She accept. Now he go see her read.",
+        "She tap See the business.",
+        "Chat with them go start her own chat."
+      ]
+    }
+  }
+}
