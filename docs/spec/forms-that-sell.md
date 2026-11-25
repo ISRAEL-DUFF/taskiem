@@ -336,6 +336,7 @@ Built 25 November 2026 on the decisions of §12.
 - Selling is refused while the workflow has a version newer than the live form's (`newer_version`), and the web sheet says to publish it first (`TestSellRefusesOverANewerVersion`, `sell.test.ts`).
 - **Secure checkout** shows only where the order form is paid through the payment page on a connected Paystack account (`TestSecureCheckoutOnlyWhenConnected`).
 - `taskiem_form_left_put` keeps a front only as its action's own (migration 00860), reading the action's business through its storefront: it read columns its owner may not, so a keep for an action was refused (`TestFormLeftFrontIsTheActions`).
+- The *prices have changed* message names at most three gone lines and counts the rest, and its SMS is written in plain letters (the naira as N) when a naira sign or a dash in a name would take it over three parts, so the buyer is always told (`TestPriceChangedSMSFits`).
 
 ## 17. As built (L2)
 

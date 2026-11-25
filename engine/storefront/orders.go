@@ -553,10 +553,46 @@ func priceChangedText(ord Order) string {
 	}
 	t := "Prices have changed since you sent " + ord.Reference + "."
 	if len(pc.Gone) > 0 {
-		t += " No longer available: " + strings.Join(pc.Gone, ", ") + "."
+		t += " No longer available: " + goneList(pc.Gone) + "."
 	}
 	t += " The total is now " + FormatNaira(pc.TotalKobo) + ". Confirm or cancel within a day: {link}"
 	return t
+}
+
+// goneList names at most three gone lines, each clipped, and counts the
+// rest, so the message still fits an SMS however many are gone.
+func goneList(gone []string) string {
+	const most, longest = 3, 32
+	names := make([]string, 0, most)
+	for _, g := range gone[:min(len(gone), most)] {
+		if r := []rune(g); len(r) > longest {
+			g = string(r[:longest-1]) + "…"
+		}
+		names = append(names, g)
+	}
+	t := strings.Join(names, ", ")
+	if n := len(gone) - most; n > 0 {
+		t += fmt.Sprintf(" and %d more", n)
+	}
+	return t
+}
+
+// smsText keeps a customer's SMS within the parts the sender allows. One
+// character outside GSM-7 (a naira sign, a dash in a product's name) makes
+// the whole message UCS-2, 67 characters a part; when it would not fit,
+// the naira is written N, typographic marks their plain forms, and any
+// other such character dropped, which keeps it GSM-7, 153 a part.
+func smsText(senderName, text string) string {
+	if sender.Segments(senderName+": "+text) <= sender.MaxSegments {
+		return text
+	}
+	text = strings.NewReplacer("₦", "N", "…", "...", "–", "-", "—", "-", "‘", "'", "’", "'", "“", "\"", "”", "\"").Replace(text)
+	return strings.Map(func(r rune) rune {
+		if sender.GSM7(r) {
+			return r
+		}
+		return -1
+	}, text)
 }
 
 // record seals the customer and writes the order, at the table's prices
@@ -1567,7 +1603,7 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 		}
 		if ord.Customer.Phone != "" {
 			queued, err := o.Messages.Enqueue(ctx, tx, sender.Message{Tenant: tenant, Channel: sender.SMS, Purpose: sender.PurposeConfirmation,
-				To: ord.Customer.Phone, SenderName: c.Name, Text: text, Key: key + ":sms"})
+				To: ord.Customer.Phone, SenderName: c.Name, Text: smsText(c.Name, text), Key: key + ":sms"})
 			switch {
 			case errors.Is(err, sender.ErrAllowance):
 				overAllowance = true // the email, if any, still goes

@@ -3,6 +3,8 @@ package storefront
 import (
 	"strings"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/sender"
 )
 
 // The price check on a package (forms-that-sell §5.2): its lines are
@@ -63,5 +65,23 @@ func TestRepricePackages(t *testing.T) {
 	pc, _ = reprice(withTea, map[string]Item{"7l": l, "9": {ID: "9", Name: "Tea", PriceKobo: &price, Available: true}}, ActionOptions{}, three)
 	if len(pc.Basket) != 1 || pc.Basket[0].ID != "9" || len(pc.Gone) != 2 {
 		t.Fatalf("a line beside a package gone: %+v", pc)
+	}
+}
+
+func TestPriceChangedSMSFits(t *testing.T) {
+	gone := []string{"Smart Ear Cleaner – Medium, Black with the long cable", "Smart Ear Cleaner – Large", "Smart Ear Cleaner – Small", "Ear tips (pack of 20)", "Charging cradle"}
+	ord := Order{Reference: "ORD-7Q2K9X", PriceChange: &PriceChange{TotalKobo: 123456700, Gone: gone}}
+	text := priceChangedText(ord)
+	if !strings.Contains(text, "and 2 more") || strings.Contains(text, "Charging cradle") {
+		t.Fatalf("gone not capped: %q", text)
+	}
+	link := "https://shop.taskiem.com/o/ORD-7Q2K9X?k=abcdefghijklmnopqrstuv"
+	name := "Adaeze's Gadgets and Home Essentials"
+	sms := smsText(name, strings.ReplaceAll(text, "{link}", link))
+	if n := sender.Segments(name + ": " + sms); n > sender.MaxSegments {
+		t.Fatalf("SMS is %d parts: %q", n, sms)
+	}
+	if short := smsText("Ada", "Total ₦5,000"); short != "Total ₦5,000" {
+		t.Fatalf("a short SMS keeps its naira sign: %q", short)
 	}
 }
