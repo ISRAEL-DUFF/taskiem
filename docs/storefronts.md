@@ -308,7 +308,21 @@ An order form can sell **one product in packages** at prices of their own, "1 fo
 - **A basket of some items**: an order form's basket may show only the rows its `items` name; a basket of one row sells that one product, drawn at the top.
 - **One form on a website.** An order form's card, and **On your website** under Page, give the code for that one form ([embed sites](embed-sites.md#one-order-form)).
 
-The **One product** kind of front (the whole landing page made from one catalogue row: a promise line, photos, up to six feature chips from a fixed set of icons, a stock line) is checked with the other kinds and not offered until its page is drawn (forms that sell L2).
+### One product
+
+A **One product** front is one product on a page of its own, the landing page a pay-on-delivery seller runs ([forms that sell](spec/forms-that-sell.md#17-as-built-l2)), made from a product of the catalogue: **Add a front** > One product (the product, and its packages) in the web app, or `sell Ear cleaner on a page 1 for 25000, 2 for 45000` in chat. Its list is the catalogue's own table, so the product is not copied; its order form sells the product in its packages, delivered and paid at the door, with the home order form's delivery areas and payments; its workflow is `storefront-one-product` (the riders' `dispatch-orders` when the business's orders go to them).
+
+The page, at `/<its address>`, in the page's look:
+
+- **The promise line** at the top in the page's colour ("Pay on delivery nationwide", the owner's words, or none), and a **Pay on delivery** mark when the form takes payment at the door.
+- **The stock line**, "Only 14 left", from the product's stock where it is kept, only when the owner turns it on; never a made-up number.
+- **The headline and the reason to buy**: the front's name and line (the product's name and words to start with).
+- **The photos**: the product's photo and the rest of its photos, to swipe.
+- **Feature chips**: up to six short lines, each with an icon from a fixed set of twelve (truck, cash, shield, star, clock, tick, gift, leaf, phone, sparkle, heart, returns), so nothing uploaded can pass as a badge.
+- **The form**: the order form itself, under the page, with its packages, the buyer's details, the delivery area and its fee, the line above the button, posting to the form's own address; then **Order via WhatsApp** to the business's WhatsApp with the product named in the first message, or, without one, its chat link.
+- **The price bar**, fixed to the bottom on a phone: the cheapest package ("From ₦25,000"), and **Order now**, which goes to the form.
+
+Closed, paused, or the product sold out, the page says so in place of the form. The front's own screen (Storefront > Fronts) sets the promise line, the chips and the stock line under **The page**; its packages are its order form's. A One product front whose form sells nothing is drawn as any front is.
 
 ## Your own domain
 
@@ -405,8 +419,9 @@ The owner runs the storefront from WhatsApp or Telegram (spec [5.1](spec/storefr
 | `tickets left`, `places left` | Each event's tickets left and checked in, or each class's places left |
 | `turn on deliveries for Snacks` | The front's order form's workflow made from `dispatch-orders` in place of its plain one ([dispatch](dispatch.md#in-chat)); the home page's order form keeps its own |
 | `orders Snacks` | That front's open orders; `orders` names each order's front when there is more than one |
+| `sell Ear cleaner on a page`, `add a page for Ear cleaner`, with packages after it: `… 1 for 25000, 2 for 45k, 3 for 65k` | A [One product](#one-product) page for a product of the catalogue (one package of one at its price when none are typed): shown with its packages and address, then on **yes** the front and its order form are made, its workflow published from `storefront-one-product` with the Forms page's checks (or asked for under the approval rule, when the page stays off until it is published), the form and the front turned on and the page published again. Needs `workflow.edit` and `workflow.publish`, and the Orders area on. A product with a page already says where it is |
 
-`fronts`, `add front`, switching a front on or off and `orders <front>` have words in every language that is on (`make new front Snacks`, `orders for Snacks` in Pidgin; `fi front kún` and `tan front` in Yoruba; `ƙara front` and `kunna front` in Hausa; `tinye front` and `gbanyụọ front` in Igbo; drafts until reviewed). `add dish`, `sold out` and `turn on … for` are typed in English in every language, as `add product` is.
+`fronts`, `add front`, switching a front on or off, `orders <front>` and `add a page for <product>` (`make page for` in Pidgin, `yi shafi don` in Hausa, `ṣe ojú-ìwé fún` in Yoruba, `mee peeji maka` in Igbo) have words in every language that is on (`make new front Snacks`, `orders for Snacks` in Pidgin; `fi front kún` and `tan front` in Yoruba; `ƙara front` and `kunna front` in Hausa; `tinye front` and `gbanyụọ front` in Igbo; drafts until reviewed). `add dish`, `sold out` and `turn on … for` are typed in English in every language, as `add product` is.
 
 Photos are fetched from the chat (WhatsApp's media API, Telegram's `getFile`), at most 10 MB, held in memory only. A photo sent while something else is being answered is refused.
 
@@ -429,6 +444,7 @@ Customers' texts are in the business's language (its default chat language, Sett
 | `GET /v1/storefront/domains`, `POST /v1/storefront/domains` | The business's [own domains](#your-own-domain), and adding one |
 | `POST /v1/storefront/domains/{id}/verify`, `/primary`, `DELETE /v1/storefront/domains/{id}` | Checking a domain's TXT record, making it the primary, removing it |
 | `GET /v1/storefront/actions`, `PUT /v1/storefront/actions/{kind}` | The forms and their settings (an order form's `notice`, the line above its button) |
+| `POST /v1/storefront/fronts` with `kind: one-product`, `item` and `packages`; `PATCH /v1/storefront/fronts/{id}` with `settings` | A [One product](#one-product) front from a product of the catalogue (refused, naming the area, while Storefront or Orders is off), and its promise line, chips and stock line; a front's `settings` and `sells` say them back |
 | `POST /v1/storefront/fronts/{id}/actions` with `kind: order` and `sells`, `PUT /v1/storefront/actions/{id}/sells`, `GET /v1/storefront/fronts/{id}/sellable` | An order form selling a product in packages (or a basket of some items): adding one, changing what it sells (answering `warnings`), the products it can sell |
 | `GET /v1/storefront/embed?action=<id>` | One order form's code for a website: `frame` with `script`, or `plain` |
 | `GET /v1/storefront/orders`, `GET /v1/storefront/orders/{reference}` | Orders, questions, call-backs and bookings; `?reveal=true` with `pii.reveal`. One order comes with the money matched to it (`payments`; undone with `POST /v1/money/order-payments/{id}/undo`, [matching](matching.md)) |
