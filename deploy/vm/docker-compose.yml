@@ -50,7 +50,7 @@ services:
   # the Compose network.
   openbao:
     <<: *hardening
-    image: ${OPENBAO_IMAGE:-openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf}
+    image: ${OPENBAO_IMAGE:-openbao/openbao:2.7.3@sha256:ba4b133eb9586630024e71a617e66f37f29cc3534cdd46a6233e098ceded8dc9}
     command: ["server"]
     mem_limit: 512m
     pids_limit: 256
@@ -73,7 +73,7 @@ services:
   # not renew it, and an expired token makes every secret unreadable.
   openbao-renew:
     <<: *hardening
-    image: ${OPENBAO_IMAGE:-openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf}
+    image: ${OPENBAO_IMAGE:-openbao/openbao:2.7.3@sha256:ba4b133eb9586630024e71a617e66f37f29cc3534cdd46a6233e098ceded8dc9}
     entrypoint: ["sh", "-c"]
     mem_limit: 64m
     pids_limit: 32
