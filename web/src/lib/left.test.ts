@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WAITS, MIN_WAIT, MAX_WAIT, choiceWords, contactWords, rowStatus, waitWords, weekLine, type LeftRow } from "./left";
+import { WAITS, MIN_WAIT, MAX_WAIT, CONSENT_LINE, CONSENT_LINE_WHATSAPP, choiceWords, consentWords, contactWords, followupWords, rowStatus, waitWords, weekLine, type LeftRow } from "./left";
 
 const row = (over: Partial<LeftRow> = {}): LeftRow => ({
   id: "r1",
@@ -30,7 +30,9 @@ describe("forms left half-filled", () => {
     expect(contactWords(row({ contact_kind: "email", contact: "…@example.com" }))).toBe("Email …@example.com");
   });
   it("says where each row is", () => {
-    expect(rowStatus(row({ followed_up_at: "x", came_back_at: "y", channel: "sms" }), false)).toEqual({ words: "Came back and ordered", tone: "ok" });
+    expect(rowStatus(row({ followed_up_at: "x", came_back_at: "y", channel: "sms" }), false)).toEqual({ words: "Came back and ordered, followed up by text", tone: "ok" });
+    expect(rowStatus(row({ followed_up_at: "x", came_back_at: "y", channel: "whatsapp" }), false).words).toBe("Came back and ordered, followed up on WhatsApp");
+    expect(rowStatus(row({ followed_up_at: "x", channel: "whatsapp" }), false).words).toBe("Followed up on WhatsApp");
     expect(rowStatus(row({ followed_up_at: "x", channel: "email" }), false).words).toBe("Followed up by email");
     expect(rowStatus(row({ outcome: "stopped" }), false).words).toBe("Not followed up: they stopped your messages");
     expect(rowStatus(row(), true)).toEqual({ words: "Waiting: follow-ups are held", tone: "warn" });
@@ -38,5 +40,23 @@ describe("forms left half-filled", () => {
   });
   it("puts the week in one line", () => {
     expect(weekLine({ left: 3, followed: 2, came_back: 1 })).toBe("3 left · 2 followed up · 1 came back");
+  });
+});
+
+describe("follow-ups on WhatsApp (L4)", () => {
+  const base = { on: true, wait_minutes: 30 };
+  it("says how the follow-up goes and what the form says", () => {
+    expect(followupWords(base)).toContain("one text");
+    expect(followupWords({ ...base, whatsapp: true })).toContain("one WhatsApp message from your number 30 minutes after");
+    expect(followupWords({ ...base, whatsapp: true, whatsapp_opt_in: true })).toContain("when they tick the box");
+    expect(consentWords(base)).toBe(`“${CONSENT_LINE}”`);
+    expect(consentWords({ ...base, whatsapp: true })).toBe(`“${CONSENT_LINE_WHATSAPP}”`);
+    expect(consentWords({ ...base, whatsapp: true, whatsapp_opt_in: true })).toContain("Send that message on WhatsApp instead");
+  });
+  it("keeps the words the server draws", async () => {
+    const en = (await import("../../../engine/lang/messages/en.json")).default as { messages?: Record<string, { text: string }> } & Record<string, unknown>;
+    const msgs = (en.messages ?? en) as Record<string, { text: string }>;
+    expect(msgs["form.followup.consent"]?.text).toBe(CONSENT_LINE);
+    expect(msgs["form.followup.consent_whatsapp"]?.text).toBe(CONSENT_LINE_WHATSAPP);
   });
 });

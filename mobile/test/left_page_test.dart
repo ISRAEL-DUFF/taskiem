@@ -18,10 +18,10 @@ import 'guidelines.dart';
 import 'looks.dart';
 import 'support.dart';
 
-Map<String, dynamic> _left({bool on = true, bool held = false}) => {
+Map<String, dynamic> _left({bool on = true, bool held = false, bool whatsapp = false}) => {
   'action_id': 'A1',
   'label': 'Order the ear cleaner',
-  'followups': {'on': on, 'wait_minutes': 30, if (held) 'held_at': '2026-11-25T09:00:00Z'},
+  'followups': {'on': on, 'wait_minutes': 30, if (held) 'held_at': '2026-11-25T09:00:00Z', if (whatsapp) 'whatsapp': true},
   'week': {'left': 3, 'followed': 2, 'came_back': 1},
   'left': [
     {
@@ -46,6 +46,17 @@ Map<String, dynamic> _left({bool on = true, bool held = false}) => {
       'followed_up_at': '2026-11-25T07:31:00Z',
       'channel': 'email',
     },
+    {
+      'id': 'L4',
+      'contact_kind': 'phone',
+      'contact': '… 5550',
+      'product': 'Smart Ear Cleaner',
+      'package': 1,
+      'zone': 'Yaba',
+      'at': '2026-11-25T06:00:00Z',
+      'followed_up_at': '2026-11-25T06:31:00Z',
+      'channel': 'whatsapp',
+    },
     {'id': 'L3', 'contact_kind': 'phone', 'contact': '… 9876', 'product': 'Smart Ear Cleaner', 'package': 3, 'at': '2026-11-24T07:00:00Z', 'outcome': 'stopped'},
   ],
 };
@@ -61,7 +72,7 @@ void main() {
     await t.pumpAndSettle();
   }
 
-  Future<List<String>> open(WidgetTester t, {TkMode mode = TkMode.light, bool held = false}) async {
+  Future<List<String>> open(WidgetTester t, {TkMode mode = TkMode.light, bool held = false, bool whatsapp = false}) async {
     t.view.physicalSize = const Size(390, 1400);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
@@ -71,7 +82,7 @@ void main() {
     http.Response ok(Object b) => http.Response(jsonEncode(b), 200, headers: {'content-type': 'application/json'});
     final auth = f.auth(
       also: (req) async {
-        if (req.url.path == '/v1/storefront/actions/A1/left') return ok(_left(on: on, held: held));
+        if (req.url.path == '/v1/storefront/actions/A1/left') return ok(_left(on: on, held: held, whatsapp: whatsapp));
         if (req.url.path == '/v1/storefront/actions/A1' && req.method == 'PATCH') {
           sent.add('PATCH ${req.body}');
           final b = jsonDecode(req.body) as Map<String, dynamic>;
@@ -97,6 +108,23 @@ void main() {
     expect(leftStatus(r, false), ('Came back', CardTone.lime));
     final stopped = FormLeftLeftItem.fromJson((_left()['left'] as List).last as Map<String, dynamic>);
     expect(leftStatus(stopped, false).$1, 'Stopped');
+    // L4: the channel each follow-up used.
+    final wa = FormLeftLeftItem.fromJson((_left()['left'] as List)[2] as Map<String, dynamic>);
+    expect(leftStatus(wa, false), ('On WhatsApp', CardTone.plain));
+    expect(channelWords('whatsapp'), 'on WhatsApp');
+    expect(channelWords('sms'), 'by text');
+    expect(channelWords('email'), 'by email');
+  });
+
+  testWidgets('follow-ups on WhatsApp: each row says how it was followed up (L4)', (t) async {
+    await open(t, whatsapp: true);
+    expect(find.text('One WhatsApp message from your number, else a text or email'), findsOneWidget);
+    expect(find.text('On WhatsApp'), findsOneWidget);
+    expect(find.textContaining('Followed up on WhatsApp'), findsOneWidget);
+    expect(find.textContaining('Followed up by text'), findsOneWidget);
+    expect(find.textContaining('Followed up by email'), findsOneWidget);
+    await looks(t, 'left-without-ordering-whatsapp');
+    await t.pump(const Duration(seconds: 5));
   });
 
   testWidgets('the week and who left, masked; follow-ups turned off', (t) async {

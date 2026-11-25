@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { get, patch } from "../api";
 import { ErrorBox, Field, Items, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
-import { CONSENT_LINE, WAITS, choiceWords, contactWords, rowStatus, waitWords, type FormLeft, type FollowupSettings } from "../lib/left";
+import { WAITS, choiceWords, consentWords, contactWords, followupWords, rowStatus, waitWords, type FormLeft, type FollowupSettings } from "../lib/left";
 import { StorefrontTabs } from "./Storefront";
 
 /** Left without ordering (forms that sell §6.6): an order form's
@@ -47,7 +47,7 @@ export function StorefrontLeft() {
             </label>
             <p className="hint">
               {d.followups.on
-                ? `They get one text (or an email, when they gave only that) ${waitWords(d.followups.wait_minutes)} after they leave. The texts count in your plan's texts.`
+                ? followupWords(d.followups)
                 : "Off: your form keeps nothing of people who leave."}
             </p>
             {d.followups.on && (
@@ -61,7 +61,7 @@ export function StorefrontLeft() {
                     ))}
                   </select>
                 </Field>
-                <p className="hint">Your form says, under their phone and email: “{CONSENT_LINE}”</p>
+                <p className="hint">Your form says, under their phone and email: {consentWords(d.followups)}</p>
               </>
             )}
             <ErrorBox error={act.error} />

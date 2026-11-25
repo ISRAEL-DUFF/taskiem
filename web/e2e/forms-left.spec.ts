@@ -179,3 +179,43 @@ test("a buyer who left is followed up, and the owner sees it masked", async ({ p
   await expect(page.getByText(/no more messages like this from Ear Shop/)).toBeVisible();
   await check(page, "messages stopped");
 });
+
+// Forms that sell L4 (§6.4): a business with its own WhatsApp number, on a
+// deployment that names the follow-up's template: the owner is told a
+// follow-up goes there, the buyer's form says WhatsApp and STOP, and each
+// row says which channel its follow-up used.
+test("follow-ups on WhatsApp from the business's own number", async ({ page }) => {
+  test.setTimeout(120_000);
+  const { slug, tenant, action, ref } = await seller(page);
+  const pn = `${Date.now()}`.slice(-12);
+  sql(`INSERT INTO whatsapp_numbers (phone_number_id, tenant_id, waba_id, display_number, own_app, created_by) VALUES ('9${pn}', '${tenant}', '3${pn}', '+2348000000001', false, 'e2e')`);
+  await ok(page.request.patch(`/v1/storefront/actions/${action}`, { headers: H, data: { followup_on: true } }));
+
+  await page.goto(`/storefront/left/${action}`);
+  await expect(page.getByText(/They get one WhatsApp message from your number 30 minutes after they leave/)).toBeVisible();
+  await expect(page.getByText(/On WhatsApp, reply STOP to stop these messages/)).toBeVisible();
+  await check(page, "Left without ordering, on WhatsApp");
+
+  // The buyer's form says WhatsApp and STOP.
+  const form = `http://${slug}.e2e.test:${PUBLIC_PORT}/a/${ref}`;
+  await expect
+    .poll(async () => {
+      await page.goto(form);
+      return page.getByText(/on WhatsApp or by text or email, with a link to finish it\. On WhatsApp, reply STOP/).count();
+    }, { timeout: 90_000, intervals: [3000] })
+    .toBe(1);
+  await check(page, "an order form that follows up on WhatsApp");
+
+  // The owner's rows: one followed up on WhatsApp, one by text.
+  sql(
+    `INSERT INTO form_left (id, tenant_id, action_id, contact, contact_hash, contact_kind, choice, last_keep_at, expires_at, contact_mask, left_at, followed_up_at, came_back_at, outcome, channel) VALUES ` +
+      `(gen_random_uuid(), '${tenant}', '${action}', '{}', '\\x${"a".repeat(64)}', 'phone', '{"package": 2, "zone": "Lekki"}', now() - interval '2 hours', now() + interval '7 days', '… 1234', now() - interval '90 minutes', now() - interval '90 minutes', now() - interval '1 hour', 'followed', 'whatsapp'), ` +
+      `(gen_random_uuid(), '${tenant}', '${action}', '{}', '\\x${"b".repeat(64)}', 'phone', '{"package": 1}', now() - interval '3 hours', now() + interval '7 days', '… 5678', now() - interval '150 minutes', now() - interval '150 minutes', NULL, 'followed', 'sms')`,
+  );
+  await page.goto(`/storefront/left/${action}`);
+  const rows = page.getByTestId("left-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.filter({ hasText: "… 1234" })).toContainText("Came back and ordered, followed up on WhatsApp");
+  await expect(rows.filter({ hasText: "… 5678" })).toContainText("Followed up by text");
+  await check(page, "Left without ordering, by channel");
+});

@@ -22723,24 +22723,35 @@ class FormLeft {
 }
 
 class FollowupSettings {
-  const FollowupSettings({this.heldAt, required this.on, required this.waitMinutes});
+  const FollowupSettings({this.heldAt, required this.on, required this.waitMinutes, this.whatsapp, this.whatsappOptIn});
 
   /// Set while the form's follow-ups are held after a run of keeps;
   /// release_hold sends them
   final DateTime? heldAt;
   final bool on;
   final int waitMinutes;
+  /// A follow-up may go on WhatsApp, by the deployment's approved template from
+  /// the business's own number (forms that sell L4); absent when it goes by
+  /// text or email only
+  final bool? whatsapp;
+  /// The WhatsApp template is a marketing one, so only a buyer who ticks the
+  /// box on the form is followed up on WhatsApp
+  final bool? whatsappOptIn;
 
   factory FollowupSettings.fromJson(Map<String, dynamic> j) => FollowupSettings(
         heldAt: j['held_at'] == null ? null : DateTime.parse(j['held_at'] as String),
         on: j['on'] as bool,
         waitMinutes: (j['wait_minutes'] as num).toInt(),
+        whatsapp: j['whatsapp'] == null ? null : j['whatsapp'] as bool,
+        whatsappOptIn: j['whatsapp_opt_in'] == null ? null : j['whatsapp_opt_in'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
         'held_at': ?heldAt?.toUtc().toIso8601String(),
         'on': on,
         'wait_minutes': waitMinutes,
+        'whatsapp': ?whatsapp,
+        'whatsapp_opt_in': ?whatsappOptIn,
       };
 }
 

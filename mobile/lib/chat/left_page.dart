@@ -50,10 +50,19 @@ String rowTitle(FormLeftLeftItem r) {
   return t.isEmpty ? (r.product.isEmpty ? 'Your order form' : r.product) : t;
 }
 
+/// left.ts channelWords: how a row was followed up (L4 adds WhatsApp).
+String channelWords(String? channel) => switch (channel) {
+  'whatsapp' => 'on WhatsApp',
+  'email' => 'by email',
+  _ => 'by text',
+};
+
 /// left.ts rowStatus: where a row is, in a pill.
 (String, CardTone) leftStatus(FormLeftLeftItem r, bool held) {
   if (r.cameBackAt != null) return ('Came back', CardTone.lime);
-  if (r.followedUpAt != null) return (r.channel == 'email' ? 'Emailed' : 'Texted', CardTone.plain);
+  if (r.followedUpAt != null) {
+    return (switch (r.channel) { 'whatsapp' => 'On WhatsApp', 'email' => 'Emailed', _ => 'Texted' }, CardTone.plain);
+  }
   if (r.outcome != null) return (r.outcome == 'stopped' ? 'Stopped' : 'Not sent', CardTone.plain);
   return (held ? 'Held' : 'Waiting', held ? CardTone.warn : CardTone.plain);
 }
@@ -154,7 +163,13 @@ class _LeftPageState extends State<LeftPage> {
             children: [
               TkListRow(
                 title: 'Follow up people who leave',
-                sub: d.followups.on ? 'One text, or an email when they gave only that' : 'Off: your form keeps nothing of them',
+                sub: !d.followups.on
+                    ? 'Off: your form keeps nothing of them'
+                    : d.followups.whatsappOptIn == true
+                    ? 'On WhatsApp if they ask on the form, else one text or email'
+                    : d.followups.whatsapp == true
+                    ? 'One WhatsApp message from your number, else a text or email'
+                    : 'One text, or an email when they gave only that',
                 icon: 'b-send',
                 square: look.teal,
                 chevron: false,
@@ -200,6 +215,7 @@ class _LeftPageState extends State<LeftPage> {
                   sub: [
                     r.contact,
                     whenWords(r.at.toLocal(), now),
+                    if (r.followedUpAt != null) 'Followed up ${channelWords(r.channel)}',
                     if (r.outcome != null && r.followedUpAt == null) _outcomeWords[r.outcome] ?? '',
                   ].join(' · '),
                   icon: r.contactKind == 'email' ? 'b-mail' : 'b-phone',
