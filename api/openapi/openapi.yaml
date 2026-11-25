@@ -8176,6 +8176,109 @@ paths:
                     $ref: '#/components/schemas/Payment'
         default:
           $ref: '#/components/responses/Error'
+  /v1/payments/{id}/fingerprint:
+    post:
+      operationId: fingerprintPayChallenge
+      tags:
+      - Payments
+      summary: The words for this phone's fingerprint key to sign, to send a payment
+      description: 'Paying with the fingerprint (docs/spec/fingerprint-key.md): when the fingerprint may confirm this payment, a challenge bound to it and to `key_id` (one of the person''s keys, GET /v1/me/fingerprint), good once for two minutes, with `limit_kobo` (what the fingerprint may still pay in one payment now). The fingerprint pays at most ₦500,000 a payment and ₦1,000,000 a day across the person''s fingerprint-confirmed payments in every business (Lagos''s day), the role''s own limits too; never a payment to a changed account, one that would wait for the owner''s OK, or a batch. Refusals (403, with `code`): `fingerprint_limit`, `fingerprint_passkey_only`, `no_fingerprint` (the key is not the person''s: removed, or replaced); otherwise as POST /v1/payments/{id}/confirm refuses it (409 `pay_again` without `again`, `not_prepared`).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key_id]
+              properties:
+                key_id: {type: string, format: uuid}
+                again: {type: boolean}
+      responses:
+        '200':
+          description: The words to sign
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challenge, expires_in, limit_kobo]
+                properties:
+                  challenge:
+                    type: string
+                    description: The words the phone signs, as they are (the payment, its amount and a one-use nonce)
+                  expires_in: {type: integer}
+                  limit_kobo: {type: integer, format: int64}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/fingerprint/confirm:
+    post:
+      operationId: fingerprintPayConfirm
+      tags:
+      - Payments
+      summary: Send a prepared payment with the phone's fingerprint
+      description: 'The challenge from POST /v1/payments/{id}/fingerprint, signed by the key on the phone after its fingerprint or face check (ECDSA P-256 over SHA-256, DER, base64). It sends the payment as POST /v1/payments/{id}/confirm does, the payer''s own OK with step-up `fingerprint`. Refusals (403, with `code`): `fingerprint_limit` and `fingerprint_passkey_only` (checked again), `fingerprint_expired` (the challenge is not this payment''s and this key''s, was used, or is old), `fingerprint_wrong` (the signature does not check; audited); otherwise as POST /v1/payments/{id}/confirm refuses it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key_id, challenge, signature]
+              properties:
+                key_id: {type: string, format: uuid}
+                challenge: {type: string}
+                signature:
+                  type: string
+                  description: Base64 DER ECDSA signature of the challenge
+                again: {type: boolean}
+                tell_payee:
+                  type: boolean
+                  description: The sheet's Tell them in the chat, as it is confirmed
+                send_receipt:
+                  type: boolean
+                  description: The sheet's Send them a receipt, as it is confirmed
+      responses:
+        '202':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payment]
+                properties:
+                  payment:
+                    $ref: '#/components/schemas/Payment'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/payments/balance:
     get:
       operationId: getPayBalance
@@ -32718,6 +32821,129 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/fingerprint:
+    get:
+      operationId: getMeFingerprint
+      tags:
+      - Account
+      summary: Your phones that pay by fingerprint
+      description: 'The person''s phones with a fingerprint key (docs/spec/fingerprint-key.md), never the keys; the fingerprint''s limits and what it may still pay today; and `proofs`, the ways they can prove turning it on (`passkey`, `totp`, `pin`, `code` to their phone).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeFingerprint'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addMeFingerprint
+      tags:
+      - Account
+      summary: Pay by fingerprint on this phone
+      description: 'Keeps this phone''s public key (an ECDSA P-256 key made in its secure hardware, usable only after its fingerprint or face check; DER SubjectPublicKeyInfo, base64) for the person and this phone (`device.id`, the app''s install), replacing its earlier one. Proved as setting the PIN is: a passkey (asked for `account.reauth` / `fingerprint.add`), an authenticator code, the PIN (wrong tries counted with every use of it) or the code from POST /v1/me/fingerprint/code. Otherwise 403 `proof_needed` with `reauth` (the ways to prove); 401 `code_wrong` for a wrong code. A session made by a code on a new device of someone with a passkey proves itself first (401 second_proof_required). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [public_key, device]
+              properties:
+                public_key: {type: string}
+                device:
+                  type: object
+                  additionalProperties: false
+                  required: [id, name, platform]
+                  properties:
+                    id: {type: string, format: uuid}
+                    name: {type: string}
+                    platform: {type: string, enum: [android, ios]}
+                passkey: {type: object}
+                totp: {type: string}
+                pin: {type: string}
+                code: {type: string}
+      responses:
+        '201':
+          description: On for this phone
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device]
+                properties:
+                  device:
+                    $ref: '#/components/schemas/FingerprintDevice'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/fingerprint/code:
+    post:
+      operationId: fingerprintCode
+      tags:
+      - Account
+      summary: A code to your phone, to turn on paying by fingerprint
+      description: 'A one-time code to the person''s verified phone number (its own purpose), by WhatsApp or SMS. 409 when they have no phone number; 429 for too many codes.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                via: {type: string, enum: [whatsapp, sms]}
+      responses:
+        '202':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sent_via, expires_in]
+                properties:
+                  sent_via: {type: string}
+                  expires_in: {type: integer}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/fingerprint/{id}:
+    delete:
+      operationId: removeMeFingerprint
+      tags:
+      - Account
+      summary: Stop paying by fingerprint on a phone
+      description: No proof needed (it only takes a way to pay away). 404 when it is not one of the person's. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/terms:
     post:
       operationId: answerTerms
@@ -52342,6 +52568,33 @@ components:
         linked_by: {type: string}
         linked_by_name: {type: string}
         linked_at: {type: string, format: date-time}
+    FingerprintDevice:
+      type: object
+      additionalProperties: false
+      description: A phone that pays by fingerprint
+      required: [id, device_id, name, platform, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        device_id: {type: string, format: uuid}
+        name: {type: string}
+        platform: {type: string, enum: [android, ios]}
+        created_at: {type: string, format: date-time}
+        last_used_at: {type: string, format: date-time}
+    MeFingerprint:
+      type: object
+      additionalProperties: false
+      required: [devices, one_kobo, day_kobo, left_today_kobo, proofs]
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/FingerprintDevice'
+        one_kobo: {type: integer, format: int64}
+        day_kobo: {type: integer, format: int64}
+        left_today_kobo: {type: integer, format: int64}
+        proofs:
+          type: array
+          items: {type: string, enum: [passkey, totp, pin, code]}
     PayLimit:
       type: object
       additionalProperties: false
