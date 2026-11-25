@@ -144,6 +144,19 @@ export function areaOffOf(e: unknown): string {
   return "";
 }
 
+/** The newer version a refusal to sell names (the workflow has one newer
+ * than the live form's, to publish first), else 0. */
+export function newerVersionOf(e: unknown): number {
+  if (
+    e instanceof ApiError &&
+    e.status === 409 &&
+    e.body.code === "newer_version" &&
+    typeof e.body.newer_version === "number"
+  )
+    return e.body.newer_version;
+  return 0;
+}
+
 /** The area's name as Settings has it. */
 export function areaName(area: string): string {
   return area === "orders"

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -73,6 +74,13 @@ func newSellWorld(t *testing.T) *sellWorld {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	w.newHost(t)
+	return w
+}
+
+// newHost starts the public host afresh, nothing of it cached.
+func (w *sellWorld) newHost(t *testing.T) {
+	t.Helper()
 	pp := w.env.DB.PublicPool(t, 2)
 	formKey, _ := storefront.FormKey(bytes.Repeat([]byte{4}, 32))
 	keys := w.forms.Keys
@@ -82,7 +90,6 @@ func newSellWorld(t *testing.T) *sellWorld {
 		Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour), Submissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
 		FormSubmissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}
 	w.host = host.Handler()
-	return w
 }
 
 // at asks the public host for path on host (a GET, or a POST of v).
@@ -385,7 +392,7 @@ func TestSellSomethingWithThisForm(t *testing.T) {
 	}
 	// The Forms page shows it sells.
 	for _, f := range ada.must(200, "GET", "/v1/forms", nil)["forms"].([]any) {
-		if m := f.(map[string]any); m["id"] == id && (m["sells_as"] != act["id"] || m["status"] != "live") {
+		if m := f.(map[string]any); m["id"] == id && (m["sells_as"] != act["id"] || m["status"] != "closed") {
 			t.Fatalf("listed: %v", m)
 		}
 	}
@@ -400,5 +407,71 @@ func TestSellSomethingWithThisForm(t *testing.T) {
 	page := w.at(t, sellStoreAt, "/a/"+slug, nil).Body.String()
 	if !strings.Contains(page, "Best day to deliver") || !strings.Contains(page, `name="pkg"`) || strings.Contains(page, "full_name") {
 		t.Fatalf("the action's page: %s", page)
+	}
+	// The form's own version deployed again: the form is back, open.
+	v := ada.must(201, "POST", "/v1/workflows/"+wfID+"/versions", map[string]any{"definition": json.RawMessage(sellHostedForm)})["version"]
+	ada.must(200, "POST", fmt.Sprintf("/v1/workflows/%s/versions/%v/publish", wfID, v), nil)
+	for _, f := range ada.must(200, "GET", "/v1/forms", nil)["forms"].([]any) {
+		if m := f.(map[string]any); m["id"] == id && (m["sells_as"] != nil || m["status"] != "live") {
+			t.Fatalf("deployed again: %v", m)
+		}
+	}
+}
+
+// A form that sells is closed as a form (review of L1): its address leads
+// to the action while the action is there, it cannot be reopened as the
+// old form, and once the action is deleted it says it is closed, never
+// serving or running the superseded version.
+func TestSoldFormClosedWhenItsActionGoes(t *testing.T) {
+	w := newSellWorld(t)
+	ada := w.ada
+	ctx := context.Background()
+	wfID := publishFlow(t, ada, sellHostedForm)
+	ada.must(200, "POST", "/v1/workflows/"+wfID+"/versions/1/publish", nil)
+	var id, public string
+	for _, f := range ada.must(200, "GET", "/v1/forms", nil)["forms"].([]any) {
+		if m := f.(map[string]any); m["workflow_id"] == wfID && m["environment"] == "prod" {
+			id, public = m["id"].(string), m["public_id"].(string)
+		}
+	}
+	act := ada.must(201, "POST", "/v1/forms/"+id+"/sell", map[string]any{"sells": map[string]any{"item": "ear", "packages": threePacks}})["action"].(map[string]any)
+	if r := w.at(t, reachFormHost, "/f/"+public, nil); r.Code != http.StatusSeeOther {
+		t.Fatalf("while the action is there: %d", r.Code)
+	}
+	if e := ada.must(409, "PATCH", "/v1/forms/"+id, map[string]any{"status": "live"}); !strings.Contains(e["error"].(string), "sells on your page") {
+		t.Fatalf("reopened: %v", e)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `DELETE FROM storefront_actions WHERE id = $1`, act["id"]); err != nil {
+		t.Fatal(err)
+	}
+	w.newHost(t)
+	for _, path := range []string{"/f/" + public, "/embed/f/" + public} {
+		r := w.at(t, reachFormHost, path, nil)
+		if body := r.Body.String(); r.Code == http.StatusSeeOther || strings.Contains(body, "Best day to deliver") || !strings.Contains(body, "not taking answers") {
+			t.Fatalf("%s after the action went: %d %s", path, r.Code, body)
+		}
+	}
+}
+
+// Selling builds the order form's version from the live one: a newer
+// version not yet published is refused, never set aside (review of L1).
+func TestSellRefusesOverANewerVersion(t *testing.T) {
+	w := newSellWorld(t)
+	ada := w.ada
+	wfID := publishFlow(t, ada, sellHostedForm)
+	ada.must(201, "POST", "/v1/workflows/"+wfID+"/versions", map[string]any{"definition": json.RawMessage(sellHostedForm)})
+	var id string
+	for _, f := range ada.must(200, "GET", "/v1/forms", nil)["forms"].([]any) {
+		if m := f.(map[string]any); m["workflow_id"] == wfID && m["environment"] == "prod" {
+			id = m["id"].(string)
+		}
+	}
+	e := ada.must(409, "POST", "/v1/forms/"+id+"/sell", map[string]any{"sells": map[string]any{"item": "ear", "packages": threePacks}})
+	if e["code"] != "newer_version" || e["newer_version"] != float64(2) || !strings.Contains(e["error"].(string), "publish it first") {
+		t.Fatalf("a newer version: %v", e)
+	}
+	ada.must(200, "POST", "/v1/workflows/"+wfID+"/versions/2/publish", nil)
+	if out := ada.must(201, "POST", "/v1/forms/"+id+"/sell", map[string]any{"sells": map[string]any{"item": "ear", "packages": threePacks}}); out["version"] != float64(3) {
+		t.Fatalf("sold after publishing: %v", out)
 	}
 }

@@ -18237,7 +18237,7 @@ paths:
       tags:
       - Forms
       summary: Pause, reopen or close a form, or set when it is open
-      description: A suspended form cannot be changed here. clear names the settings to unset.
+      description: 'A suspended form cannot be changed here, and a form that sells (sells_as) cannot be paused, reopened or closed (409): it is closed as a form, its address leading to its order form, which is turned on or off under Fronts. clear names the settings to unset.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -18295,7 +18295,7 @@ paths:
       tags:
       - Forms
       summary: Sell something with this form
-      description: 'Turns a live hosted form into an order form of the storefront (forms-that-sell §5.1): an action of the home page, or the front named, selling one product in packages or a basket of some items, with the form''s own questions (its name, phone, email and address are asked by the order form itself); the workflow becomes the action''s, its storefront trigger naming the action and its reads of the answers moved to trigger.body.customer and trigger.answers, published, and the page published again. The form keeps its address, which now leads to the action''s. Refused (409, code area_off and the area) while the Storefront or Orders area is off, so the owner can be offered to turn it on; refused before the page is published, under four-eyes publishing, for a form that asks for a file or reads trigger.form, and for one that sells already.'
+      description: 'Turns a live hosted form into an order form of the storefront (forms-that-sell §5.1): an action of the home page, or the front named, selling one product in packages or a basket of some items, with the form''s own questions (its name, phone, email and address are asked by the order form itself); the workflow becomes the action''s, its storefront trigger naming the action and its reads of the answers moved to trigger.body.customer and trigger.answers, published, and the page published again. The form keeps its address, which now leads to the action''s. Refused (409, code area_off and the area) while the Storefront or Orders area is off, so the owner can be offered to turn it on; refused before the page is published, under four-eyes publishing, for a form that asks for a file or reads trigger.form, for one that sells already, and while the workflow has a version newer than the live form''s (409, code newer_version: published first, never set aside). Only one field is taken for each of the buyer''s name, phone, email and address (one marked as it, else named it, else of its format), the address only where the order form delivers; any other field stays the order form''s own question. Once it sells the form is closed as a form: its address leads to the action while the action is there and says it is closed after.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -18366,7 +18366,7 @@ paths:
                     items:
                       type: string
         '409':
-          description: Refused, with the area that is off (area_off) when that is why
+          description: Refused, with the area that is off (code area_off, area_off) when that is why, or the workflow's version newer than the live form's (code newer_version, newer_version), which is published first
           content:
             application/json:
               schema:
@@ -18379,6 +18379,8 @@ paths:
                     type: string
                   area_off:
                     type: string
+                  newer_version:
+                    type: integer
         default:
           $ref: '#/components/responses/Error'
   /v1/forms/{id}/links:
