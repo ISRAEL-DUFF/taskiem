@@ -9,24 +9,27 @@ import (
 
 // WhatsApp follow-ups on the public host (docs/spec/forms-that-sell.md
 // §6.2, §6.4, L4). The consent line names WhatsApp only where a follow-up
-// may go there: the deployment names the template and the business has
-// its own number. A marketing template reaches only a buyer who ticks the
+// may go there: the deployment runs WhatsApp and names the template, and
+// the business's own number's account holds it approved, in the category
+// the deployment names, with our words (DBStorefronts). A marketing template reaches only a buyer who ticks the
 // box offered under the line, and the keep says so. The template's
 // Finish my order button opens <form host>/back/<token>, a fixed address
 // Meta approves, which leads to the link on the storefront's own
 // address: drawn there, it uses nothing up (GET claims nothing).
 
 // followupWords are an order form's consent line and, for a marketing
-// template, the box that asks for WhatsApp.
-func (s *Server) followupWords(p StorefrontPage, l string) (consent, optIn string) {
+// template, the box that asks for WhatsApp; named says the form names
+// WhatsApp (either), which the page's keeps then say (keep.js), so a
+// follow-up goes there only on a promise the form made.
+func (s *Server) followupWords(p StorefrontPage, l string) (consent, optIn string, named bool) {
 	c, tag := lang.Default(), lang.Tag(l)
 	switch {
 	case s.WAFollowups == "" || !p.FollowupWhatsApp:
-		return c.Text(tag, "form.followup.consent"), ""
+		return c.Text(tag, "form.followup.consent"), "", false
 	case s.WAFollowups == "marketing":
-		return c.Text(tag, "form.followup.consent"), c.Text(tag, "form.followup.whatsapp_optin")
+		return c.Text(tag, "form.followup.consent"), c.Text(tag, "form.followup.whatsapp_optin"), true
 	}
-	return c.Text(tag, "form.followup.consent_whatsapp"), ""
+	return c.Text(tag, "form.followup.consent_whatsapp"), "", true
 }
 
 // serveBackOnFormHost leads a follow-up's link opened on the form host

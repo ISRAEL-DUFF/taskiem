@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Forms left half-filled, the owner's side (docs/spec/forms-that-sell.md
@@ -40,13 +41,18 @@ type followupSettings struct {
 }
 
 // followupChannels says whether the business's follow-ups may go on
-// WhatsApp: the deployment names the template and the business has its
-// own number.
+// WhatsApp: the deployment runs WhatsApp and names the template, and the
+// business's own number's account holds it approved, in the category the
+// deployment names, with our words (as the public host's form says, and
+// as WAFollowups sends).
 func (s *Server) followupChannels(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st *followupSettings) error {
-	if s.FollowupTemplate == nil || s.Forms == nil {
+	if s.FollowupTemplate == nil || s.Forms == nil || s.WhatsApp == nil {
 		return nil
 	}
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM whatsapp_numbers WHERE tenant_id = $1 AND status = 'active')`, tenant).Scan(&st.WhatsApp); err != nil {
+	t := *s.FollowupTemplate
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM whatsapp_numbers n JOIN whatsapp_templates w ON w.waba_id = n.waba_id AND w.tenant_id = n.tenant_id
+		WHERE n.tenant_id = $1 AND n.status = 'active' AND w.name = $2 AND w.language = $3 AND w.status = 'approved' AND lower(w.meta_category) = $4 AND w.meta_matches)`,
+		tenant, t.Name, t.LanguageOr(s.WhatsApp.Config.Language), whatsapp.Category(t)).Scan(&st.WhatsApp); err != nil {
 		return err
 	}
 	st.WhatsAppOptIn = st.WhatsApp && s.FollowupTemplate.OptIn()

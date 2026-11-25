@@ -206,8 +206,9 @@ func (s *Server) serveOneProduct(w http.ResponseWriter, r *http.Request, site Si
 	if act.ID != nil && p.Followups[*act.ID] && s.FormKeys != nil && s.Keeps != nil {
 		// A form that follows up a buyer who leaves (forms that sell §6):
 		// the consent line, and the keep token, the submit token's twin.
-		d.Consent, d.WAOptIn = s.followupWords(p, d.Lang)
-		s.keepFor(&d.formData)
+		var named bool
+		d.Consent, d.WAOptIn, named = s.followupWords(p, d.Lang)
+		s.keepFor(&d.formData, named)
 		if k, err := s.guard.Twin(t, d.form+keepSuffix); err == nil {
 			d.Keep.Token = string(k)
 		} else {

@@ -171,3 +171,52 @@ func TestPublicReadinessPingsTheDatabase(t *testing.T) {
 	proxy.SetDown(false)
 	waitFor(http.StatusOK)
 }
+
+// Forms that sell L4's review (finding 4): the public host names WhatsApp
+// in an order form's consent line only where the deployment runs
+// WhatsApp and names the follow-up's template; the template alone, its
+// platform settings unset, promises nothing. The public role reads the
+// template and the platform's number, never its secrets.
+func TestPublicWAFollowup(t *testing.T) {
+	t.Setenv("TASKIEM_DATABASE_URL", "")
+	t.Setenv("TASKIEM_PUBLIC_DATABASE_URL", "postgres://pub@db/taskiem")
+	t.Setenv("TASKIEM_WHATSAPP_PHONE_NUMBER_ID", "")
+	t.Setenv("TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE", "")
+	t.Setenv("TASKIEM_WA_FOLLOWUP_TEMPLATE", "")
+	t.Setenv("TASKIEM_WA_FOLLOWUP_TEMPLATE_LANGUAGE", "")
+	c, err := loadPublicConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := publicWAFollowup(c); ok {
+		t.Fatal("named with nothing set")
+	}
+	t.Setenv("TASKIEM_WA_FOLLOWUP_TEMPLATE", "taskiem_finish_order")
+	t.Setenv("TASKIEM_WA_FOLLOWUP_TEMPLATE_CATEGORY", "utility")
+	if c, err = loadPublicConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := publicWAFollowup(c); ok {
+		t.Fatal("named without the platform's WhatsApp")
+	}
+	t.Setenv("TASKIEM_WHATSAPP_PHONE_NUMBER_ID", "106540352242922")
+	if c, err = loadPublicConfig(); err != nil {
+		t.Fatal(err)
+	}
+	fu, ok := publicWAFollowup(c)
+	if !ok || fu.Name != "taskiem_finish_order" || fu.Category != "utility" || fu.Language != "en" {
+		t.Fatalf("named: %+v %v", fu, ok)
+	}
+	t.Setenv("TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE", "en_US")
+	t.Setenv("TASKIEM_WA_FOLLOWUP_TEMPLATE_CATEGORY", "marketing")
+	if c, err = loadPublicConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if fu, ok = publicWAFollowup(c); !ok || fu.Language != "en_US" || fu.Category != "marketing" {
+		t.Fatalf("its language and category: %+v", fu)
+	}
+	t.Setenv("TASKIEM_WA_FOLLOWUP_TEMPLATE_CATEGORY", "")
+	if _, err := loadPublicConfig(); err == nil {
+		t.Fatal("a template with no category accepted")
+	}
+}

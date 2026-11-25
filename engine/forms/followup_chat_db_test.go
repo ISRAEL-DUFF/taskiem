@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/forms"
@@ -19,12 +20,14 @@ type fakeChat struct {
 
 func (f *fakeChat) OptIn() bool { return f.optIn }
 
-func (f *fakeChat) FollowUp(_ context.Context, _ pgx.Tx, m forms.FollowupMessage) (string, bool, error) {
+func (f *fakeChat) Ready(context.Context, uuid.UUID) (bool, error) { return f.can, nil }
+
+func (f *fakeChat) Send(_ context.Context, m forms.FollowupMessage) (string, error) {
 	if !f.can {
-		return "", false, nil
+		return "", forms.ErrChatNotSent
 	}
 	f.sent = append(f.sent, m)
-	return "wamid." + m.Token[:8], true, nil
+	return "wamid." + m.Token[:8], nil
 }
 
 // Forms that sell L4 (docs/spec/forms-that-sell.md §6.4, §6.5): a typed
@@ -43,6 +46,7 @@ func TestFormLeftFollowedUpOnWhatsApp(t *testing.T) {
 	leave := func(contact string, c forms.Choice) {
 		t.Helper()
 		p++
+		c.WhatsAppNamed = true // the form named WhatsApp
 		if !w.keep(forms.Keep{Contact: contact, Choice: c}, page(p)) {
 			t.Fatal("keep refused")
 		}
@@ -89,7 +93,7 @@ func TestFormLeftFollowedUpOnWhatsApp(t *testing.T) {
 	}
 
 	// WhatsApp says it failed (not on WhatsApp): one text, its own link.
-	if err := w.svc.FollowupFailed(ctx, w.env.Tenant, *wa); err != nil {
+	if err := w.svc.FollowupFailed(ctx, w.env.Tenant, *wa, 131026); err != nil {
 		t.Fatal(err)
 	}
 	sms, n := w.sent("sms")
@@ -105,10 +109,10 @@ func TestFormLeftFollowedUpOnWhatsApp(t *testing.T) {
 		t.Fatalf("the text's link: %v %v", ok, err)
 	}
 	// Once: the same failure again, or an unknown message, texts nothing.
-	if err := w.svc.FollowupFailed(ctx, w.env.Tenant, "wamid."+m.Token[:8]); err != nil {
+	if err := w.svc.FollowupFailed(ctx, w.env.Tenant, "wamid."+m.Token[:8], 131026); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.svc.FollowupFailed(ctx, w.env.Tenant, "wamid.other"); err != nil {
+	if err := w.svc.FollowupFailed(ctx, w.env.Tenant, "wamid.other", 131026); err != nil {
 		t.Fatal(err)
 	}
 	if _, n := w.sent("sms"); n != 1 {

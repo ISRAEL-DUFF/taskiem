@@ -152,6 +152,15 @@ func loadPublicConfig() (config, error) {
 	if c.Shutdown, err = shutdownConfig(); err != nil {
 		return c, err
 	}
+	// The follow-up's template (forms-that-sell L4), for the consent line:
+	// named only where the platform's WhatsApp is set too (its number;
+	// none of its secrets, which this role never holds).
+	if c.WAFollowup, err = whatsapp.FollowupTemplateFromEnv(os.LookupEnv); err != nil {
+		return c, err
+	}
+	if pn := strings.TrimSpace(os.Getenv("TASKIEM_WHATSAPP_PHONE_NUMBER_ID")); pn != "" {
+		c.WhatsApp = &whatsapp.Config{PhoneNumberID: pn, Language: strings.TrimSpace(os.Getenv("TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE"))}
+	}
 	return c, nil
 }
 
@@ -182,6 +191,22 @@ func publicPool(ctx context.Context, cfg config, log *slog.Logger) (*pgxpool.Poo
 
 // publicTask opens the public host's own pool and returns its server, the
 // task that serves it, and the pool, which the caller closes.
+// publicWAFollowup is the follow-up's template as the public host asks
+// after it in each business's account: only where the deployment runs
+// WhatsApp (its platform settings) and names the template, so a form
+// never promises WhatsApp the api cannot send (forms-that-sell L4).
+func publicWAFollowup(cfg config) (publicweb.WAFollowup, bool) {
+	if cfg.WAFollowup == nil || cfg.WhatsApp == nil {
+		return publicweb.WAFollowup{}, false
+	}
+	t := *cfg.WAFollowup
+	def := cfg.WhatsApp.Language
+	if def == "" {
+		def = "en" // as whatsapp.New
+	}
+	return publicweb.WAFollowup{Name: t.Name, Language: t.LanguageOr(def), Category: whatsapp.Category(t)}, true
+}
+
 func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.Server, func(context.Context) error, *pgxpool.Pool, error) {
 	pool, err := publicPool(ctx, cfg, log)
 	if err != nil {
@@ -196,10 +221,10 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 	if len(cfg.Public.Domains) > 0 {
 		srv.PreviewDomain = cfg.Public.Domains[0]
 	}
-	if cfg.WAFollowup != nil {
+	if fu, ok := publicWAFollowup(cfg); ok {
 		// The consent line names WhatsApp where a follow-up may go there,
 		// and a marketing template asks for it (forms-that-sell L4).
-		srv.WAFollowups = whatsapp.Category(*cfg.WAFollowup)
+		srv.WAFollowups, srv.Storefronts = fu.Category, publicweb.DBStorefronts(pool, fu)
 	}
 	if k := cfg.Public.Key; k != nil {
 		if srv.FormKey, err = storefront.FormKey(k); err != nil {

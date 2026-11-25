@@ -527,7 +527,7 @@ func TestFormLeftReviewOnWhatsApp(t *testing.T) {
 	w.admin(`UPDATE storefront_actions SET followup_on = true WHERE id = $1`, w.action)
 	chat := &fakeChat{can: true}
 	w.svc.FollowupChat = chat
-	if !w.keep(forms.Keep{Contact: "08031111111"}, page(1)) || !w.keep(forms.Keep{Contact: "08031112222"}, page(1)) {
+	if !w.keep(waNamed("08031111111"), page(1)) || !w.keep(waNamed("08031112222"), page(1)) {
 		t.Fatal("keeps")
 	}
 	w.drain()
@@ -544,7 +544,7 @@ func TestFormLeftReviewOnWhatsApp(t *testing.T) {
 	}
 	// WhatsApp cannot: the text in the same pass, one take.
 	chat.can = false
-	if !w.keep(forms.Keep{Contact: "08035550002"}, page(2)) {
+	if !w.keep(waNamed("08035550002"), page(2)) {
 		t.Fatal("keep")
 	}
 	w.drain()
@@ -555,7 +555,7 @@ func TestFormLeftReviewOnWhatsApp(t *testing.T) {
 	}
 	// Two replicas at once, WhatsApp carrying both: one past the 100.
 	chat.can = true
-	if !w.keep(forms.Keep{Contact: "08035550003"}, page(3)) || !w.keep(forms.Keep{Contact: "08035550004"}, page(4)) {
+	if !w.keep(waNamed("08035550003"), page(3)) || !w.keep(waNamed("08035550004"), page(4)) {
 		t.Fatal("keeps")
 	}
 	w.drain()
@@ -579,7 +579,7 @@ func TestFormLeftReviewOnWhatsApp(t *testing.T) {
 	// Stale (the form gone from the page): no WhatsApp, no take.
 	before := takes()
 	w.admin(`DELETE FROM form_left WHERE contact = '{}'`)
-	if !w.keep(forms.Keep{Contact: "08035550005"}, page(5)) {
+	if !w.keep(waNamed("08035550005"), page(5)) {
 		t.Fatal("keep")
 	}
 	w.drain()

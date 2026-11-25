@@ -60,16 +60,29 @@ type FollowupMessage struct {
 
 // FollowupChat reaches a typed phone in a chat app: on WhatsApp, by an
 // approved template on the business's own number (L4, followup_chat.go).
-// It answers sent false when it cannot (no own number, the template not
-// approved there, held back past the business's allowance, refused by
-// WhatsApp), and the phone gets a text; ref is the message's id, so a
-// failure WhatsApp reports later sends the text then (FollowupFailed).
+// A follow-up goes in two steps: Ready, under the record's transaction,
+// says whether the chat may carry it at all; the record is then claimed
+// as sending and committed, and Send, outside any transaction, sends it
+// once. The phone gets a text when Ready says no, or when Send clearly
+// did not send (an error wrapping ErrChatNotSent); any other error from
+// Send is an unclear outcome, taken as sent and never sent again. A
+// failure WhatsApp reports later, by the message's id (ref), sends the
+// text then (FollowupFailed).
 type FollowupChat interface {
 	// OptIn: the template is a marketing one, so it reaches only a buyer
 	// who asked for WhatsApp on the form (Choice.WhatsApp).
 	OptIn() bool
-	FollowUp(ctx context.Context, tx pgx.Tx, m FollowupMessage) (ref string, sent bool, err error)
+	// Ready: the business has an own number whose account holds the
+	// template approved, in the category the deployment names, with our
+	// words.
+	Ready(ctx context.Context, tenant uuid.UUID) (bool, error)
+	// Send sends the template; ref is the message's id.
+	Send(ctx context.Context, m FollowupMessage) (ref string, err error)
 }
+
+// ErrChatNotSent is a FollowupChat's word that a message clearly did not
+// go (refused before it left, or by WhatsApp): the text goes instead.
+var ErrChatNotSent = errors.New("forms: the chat did not send the follow-up")
 
 type dueRow struct {
 	id, tenant, action uuid.UUID
@@ -119,9 +132,12 @@ func (s *Service) followUps(ctx context.Context, n int) error {
 }
 
 func (s *Service) followUp(ctx context.Context, x dueRow) error {
+	var chat *FollowupMessage
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
-		outcome, err := s.followUpTx(ctx, tx, x)
+		chat = nil
+		outcome, m, err := s.followUpTx(ctx, tx, x)
 		if err != nil || outcome == "followed" || outcome == "gone" {
+			chat = m
 			return err
 		}
 		return s.mark(ctx, tx, x, outcome)
@@ -130,7 +146,24 @@ func (s *Service) followUp(ctx context.Context, x dueRow) error {
 	if errors.As(err, &ns) {
 		return db.InTenantTx(ctx, s.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error { return s.mark(ctx, tx, x, ns.outcome) })
 	}
-	return err
+	if err != nil || chat == nil {
+		return err
+	}
+	// Claimed and committed, the business's lock let go: now WhatsApp.
+	return s.sendChat(ctx, x, *chat)
+}
+
+// notSent maps the outbox's refusals to the record's outcome.
+func notSent(err error) (string, bool) {
+	switch {
+	case errors.Is(err, sender.ErrRecipientLimit):
+		return "capped", true
+	case errors.Is(err, sender.ErrAllowance):
+		return "limit", true
+	case errors.Is(err, sender.ErrInvalid):
+		return "failed", true
+	}
+	return "", false
 }
 
 // mark records what became of a record past its wait; "" is held.
@@ -145,117 +178,128 @@ func (s *Service) mark(ctx context.Context, tx pgx.Tx, x dueRow, outcome string)
 
 // followUpTx decides and, when it may, sends: "followed", an outcome why
 // not, "gone" when the record's page has its order (the record is
-// forgotten), or "" when the form's follow-ups are held.
-func (s *Service) followUpTx(ctx context.Context, tx pgx.Tx, x dueRow) (string, error) {
+// forgotten), or "" when the form's follow-ups are held. A follow-up
+// claimed for WhatsApp comes back with its message, sent once the
+// transaction is committed and the business's lock let go (sendChat).
+func (s *Service) followUpTx(ctx context.Context, tx pgx.Tx, x dueRow) (string, *FollowupMessage, error) {
 	if !x.on {
-		return "off", nil
+		return "off", nil, nil
 	}
 	// The page's order was sent since (with another contact, a typo
 	// corrected): the page is done, and its record forgotten.
 	var done bool
 	if err := tx.QueryRow(ctx, `SELECT taskiem_form_left_done($1, $2)`, x.tenant, x.id).Scan(&done); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if done {
-		return "gone", nil
+		return "gone", nil, nil
 	}
 	var wait int
 	var released *time.Time
 	if err := tx.QueryRow(ctx, `SELECT followup_wait, followup_released_at FROM storefront_actions WHERE id = $1`, x.action).Scan(&wait, &released); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	now := s.now()
 	if now.Sub(x.lastKeep) > time.Duration(wait)*time.Minute+StaleAfter {
-		return "stale", nil
+		return "stale", nil, nil
 	}
+	// Whether WhatsApp may carry it, asked before the business's lock:
+	// it reads the business's own number and its template.
+	chat := x.kind == "phone" && s.chatReady(ctx, x)
 	// One follow-up of a business at a time, across the api's replicas:
 	// the day's and the month's caps are read and spent under this lock,
-	// held until the follow-up is recorded.
+	// held until the follow-up is recorded (or, on WhatsApp, claimed),
+	// never across a call to WhatsApp.
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 901))`, x.tenant.String()); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var formDay, bizDay, bizMonth, keptToday int
 	var ordersDaily float64
 	var stopped bool
 	if err := tx.QueryRow(ctx, `SELECT form_day, business_day, business_month, kept_today, orders_daily::float8, stopped FROM taskiem_form_left_caps($1, $2, $3)`,
 		x.tenant, x.action, x.hash).Scan(&formDay, &bizDay, &bizMonth, &keptToday, &ordersDaily, &stopped); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if s.afterCaps != nil {
 		s.afterCaps()
 	}
 	if stopped {
-		return "stopped", nil
+		return "stopped", nil, nil
 	}
 	if x.held {
-		return "", nil
+		return "", nil, nil
 	}
 	// A sudden run of keeps holds the form's follow-ups, unless the owner
 	// released them today.
 	today := now.UTC().Truncate(24 * time.Hour)
 	if float64(keptToday) > HoldFactor*max(ordersDaily, HoldFloor) && (released == nil || released.Before(today)) {
 		if _, err := tx.Exec(ctx, `UPDATE storefront_actions SET followup_held_at = now() WHERE id = $1 AND followup_held_at IS NULL`, x.action); err != nil {
-			return "", err
+			return "", nil, err
 		}
 		s.log().Warn("forms: follow-ups held: a run of keeps on one form", "tenant", x.tenant, "action", x.action, "kept_today", keptToday)
-		return "", nil
+		return "", nil, nil
 	}
 	if formDay >= FollowupsPerFormDay || bizDay >= FollowupsPerBusinessDay {
-		return "capped", nil
+		return "capped", nil, nil
 	}
 	if s.FollowupLimit != nil {
 		limit, err := s.FollowupLimit(ctx, x.tenant)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 		if limit > 0 && int64(bizMonth) >= limit {
-			return "limit", nil
+			return "limit", nil, nil
 		}
 	}
 	m, ok, err := s.followupMessage(ctx, tx, x)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if !ok {
-		return "stale", nil // the form or its product is no longer on the page
+		return "stale", nil, nil // the form or its product is no longer on the page
 	}
 	// The person's allowance across businesses, taken only for a message
 	// that is sent: a message the outbox then refuses rolls it back.
 	var took bool
 	if err := tx.QueryRow(ctx, `SELECT taskiem_form_followup_take($1)`, x.hash).Scan(&took); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if !took {
-		return "capped", nil
+		return "capped", nil, nil
 	}
 	channel := sender.SMS
 	if x.kind == "email" {
 		channel = sender.Email
 	}
-	if channel == sender.SMS && s.FollowupChat != nil {
-		// L4: WhatsApp by an approved template, where there is one; else
-		// the text below (followup_chat.go).
-		if sent, err := s.followUpChat(ctx, tx, x, m); err != nil || sent {
-			return "followed", err
+	if chat {
+		// L4: WhatsApp by an approved template (followup_chat.go), under
+		// the outbox's limits per person as a text is (§6.5): claimed as
+		// sending here, sent once this commits.
+		ok, err := s.Messages.TakeRecipient(ctx, tx, "chat", m.To)
+		if err != nil {
+			return "", nil, err
 		}
+		if !ok {
+			return "", nil, errNotSent{"capped"}
+		}
+		claimed, err := s.claimChat(ctx, tx, x, &m)
+		if err != nil || !claimed {
+			return "", nil, err
+		}
+		return "followed", &m, nil
 	}
 	token, ok, err := s.FollowedUp(ctx, tx, x.tenant, x.id, channel)
 	if err != nil || !ok {
-		return "", err
+		return "", nil, err
 	}
 	m.Link = s.backLink(ctx, tx, x.tenant, token)
 	if err := s.sendFollowup(ctx, tx, channel, m); err != nil {
-		switch {
-		case errors.Is(err, sender.ErrRecipientLimit):
-			return "", errNotSent{"capped"}
-		case errors.Is(err, sender.ErrAllowance):
-			return "", errNotSent{"limit"}
-		case errors.Is(err, sender.ErrInvalid):
-			return "", errNotSent{"failed"}
+		if outcome, ok := notSent(err); ok {
+			return "", nil, errNotSent{outcome}
 		}
-		return "", err
+		return "", nil, err
 	}
-	return "followed", nil
+	return "followed", nil, nil
 }
 
 // followupMessage is the message for a record: the business, the product

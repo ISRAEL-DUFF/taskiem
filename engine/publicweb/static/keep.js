@@ -54,6 +54,9 @@
     for (var i = 0; i < qty.length; i++) {
       if (parseInt(qty[i].value, 10) > 0) body.set(qty[i].name, qty[i].value);
     }
+    // The form named WhatsApp (its line, or the box): said, so the
+    // follow-up goes there only on that promise.
+    if (el.hasAttribute("data-keep-wa")) body.set("named", "wa");
     var wa = form.querySelector("input[name=wa]");
     if (wa && wa.checked) body.set("wa", "1");
     var s = site();

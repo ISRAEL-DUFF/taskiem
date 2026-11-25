@@ -77,6 +77,9 @@ type Graph struct {
 	// (whatsapp.Config.Templates), which the fake holds as it holds the
 	// library's.
 	Extra []whatsapp.Template
+	// Hosts are the deployment's addresses, for the url buttons of the
+	// templates the fake lists as Meta holds them (their components).
+	Hosts whatsapp.Hosts
 }
 
 // named finds a template in the library or Extra.
@@ -93,6 +96,61 @@ func (g *Graph) named(name string) (whatsapp.Template, bool) {
 type fakeTemplate struct {
 	ID, Language, Status, Category, Reason string
 	Def                                    map[string]any // the submission, when submitted through the fake
+	// Components, when set, are the body and buttons Meta holds in place
+	// of the submission's or the library's (SetTemplateMeta).
+	Components []whatsapp.MetaComponent
+}
+
+// SetTemplateMeta makes an account hold a template under another
+// category than the library's, or other words ("" and nil keep each; an
+// empty, non-nil comps gives back the library's words): Meta may approve
+// a template in a category of its choosing.
+func (g *Graph) SetTemplateMeta(waba, name, category string, comps []whatsapp.MetaComponent) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	acct := g.account(waba)
+	t, ok := acct[name]
+	if !ok {
+		g.tplSeq++
+		t = fakeTemplate{ID: fmt.Sprintf("%d", 900000000000000+g.tplSeq), Language: "en", Status: "APPROVED"}
+		if tpl, found := g.named(name); found {
+			t.Category = tpl.Category
+		}
+	}
+	if category != "" {
+		t.Category = category
+	}
+	switch {
+	case comps != nil && len(comps) == 0:
+		t.Components = nil
+	case comps != nil:
+		t.Components = comps
+	}
+	acct[name] = t
+}
+
+// components are a template's body and buttons as the fake lists them:
+// set by SetTemplateMeta, else as submitted, else the library's (nil
+// when its url buttons have no address here).
+func (g *Graph) components(name string, t fakeTemplate) []whatsapp.MetaComponent {
+	if t.Components != nil {
+		return t.Components
+	}
+	def := t.Def
+	if def == nil {
+		tpl, ok := g.named(name)
+		if !ok {
+			return nil
+		}
+		var err error
+		if def, err = tpl.Submission(t.Language, g.Hosts); err != nil {
+			return nil
+		}
+	}
+	raw, _ := json.Marshal(def["components"])
+	var out []whatsapp.MetaComponent
+	_ = json.Unmarshal(raw, &out)
+	return out
 }
 
 type fakeMedia struct {
@@ -252,6 +310,9 @@ func (g *Graph) serveTemplates(w http.ResponseWriter, r *http.Request, waba stri
 		var data []map[string]any
 		for name, t := range acct {
 			row := map[string]any{"id": t.ID, "name": name, "language": t.Language, "status": t.Status, "category": t.Category}
+			if c := g.components(name, t); c != nil {
+				row["components"] = c
+			}
 			if t.Reason != "" {
 				row["rejected_reason"] = t.Reason
 			}

@@ -170,6 +170,8 @@ type formData struct {
 
 type keepView struct {
 	URL, Token string
+	// WhatsApp: the form names WhatsApp, and its keeps say so.
+	WhatsApp bool
 }
 
 type zoneItem struct {
@@ -379,8 +381,9 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 	}
 	follows := act.ID != nil && p.Followups[*act.ID] && act.Kind == "order" && s.FormKeys != nil && s.Keeps != nil
 	if follows {
-		f.Consent, f.WAOptIn = s.followupWords(p, f.Lang)
-		s.keepFor(&f)
+		var named bool
+		f.Consent, f.WAOptIn, named = s.followupWords(p, f.Lang)
+		s.keepFor(&f, named)
 	}
 	if r.Method != http.MethodPost {
 		f.stepFor(r.URL.Query())

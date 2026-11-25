@@ -59,10 +59,11 @@ var FormKeepHoldPerIP = formguard.Bucket{Rate: rate.Every(time.Hour / 5), Burst:
 // backPath is a follow-up's link: /back/<token>, and its Stop.
 var backPath = regexp.MustCompile(`^/back/([A-Za-z0-9_-]{32})(?:/(stop))?$`)
 
-// keepFor gives an order form that follows up its keep's address; its
-// token is drawn with the submit token (showForm).
-func (s *Server) keepFor(f *formData) {
-	f.Keep = &keepView{URL: f.Action + keepPath}
+// keepFor gives an order form that follows up its keep's address, and
+// whether the form names WhatsApp; its token is drawn with the submit
+// token (showForm).
+func (s *Server) keepFor(f *formData, whatsApp bool) {
+	f.Keep = &keepView{URL: f.Action + keepPath, WhatsApp: whatsApp}
 }
 
 // serveKeep takes a keep: always 204 unless limited, so a script learns
@@ -165,8 +166,14 @@ func (s *Server) serveKeep(w http.ResponseWriter, r *http.Request, site Site, fo
 			k.Site = o
 		}
 	}
-	if s.WAFollowups == "marketing" && v.Get("wa") == "1" {
-		k.Choice.WhatsApp = true // the buyer asked for WhatsApp (L4)
+	// WhatsApp only where the form the buyer saw named it, and names it
+	// still (L4's review): the page says it drew the WhatsApp words, and
+	// this host would draw them now.
+	if _, _, named := s.followupWords(p, p.Model.Card.Language); named && v.Get("named") == "wa" {
+		k.Choice.WhatsAppNamed = true
+		if s.WAFollowups == "marketing" && v.Get("wa") == "1" {
+			k.Choice.WhatsApp = true // the buyer asked for WhatsApp (L4)
+		}
 	}
 	payload, err := SealKeep(s.FormKeys, *act.ID, k)
 	if err != nil {

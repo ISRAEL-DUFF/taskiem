@@ -307,6 +307,10 @@ type StatusUpdate struct {
 	ID            string // the wamid of the message sent
 	Status        string
 	Failure       string
+	// Code is WhatsApp's error code for a failure (131050: the person
+	// stopped marketing messages from the business; 131049: Meta's limit
+	// of marketing messages a person gets); 0 when none.
+	Code int
 }
 
 // ParseStatuses reads the statuses of messages a number sent, from a
@@ -350,7 +354,7 @@ func ParseStatuses(body []byte) ([]StatusUpdate, error) {
 				}
 				u := StatusUpdate{PhoneNumberID: c.Value.Metadata.PhoneNumberID, ID: st.ID, Status: st.Status}
 				if len(st.Errors) > 0 {
-					u.Failure = st.Errors[0].Title
+					u.Failure, u.Code = st.Errors[0].Title, st.Errors[0].Code
 					if st.Errors[0].Message != "" {
 						u.Failure = st.Errors[0].Message
 					}

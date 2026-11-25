@@ -47,6 +47,7 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	tpl := whatsapp.FollowupTemplate(followName, "", "utility")
 	w.graph.Extra = []whatsapp.Template{tpl}
+	w.graph.Hosts = w.srv.WhatsApp.Client.Hosts
 	w.srv.WhatsApp.Config.Templates = []whatsapp.Template{tpl}
 	w.srv.WhatsApp.Forget()
 	w.srv.FollowupTemplate = &tpl
@@ -72,6 +73,9 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 		}
 		v.Set("keep", km[2])
 		v.Set("website", "")
+		if strings.Contains(page, "data-keep-wa") {
+			v.Set("named", "wa") // keep.js: the form named WhatsApp
+		}
 		time.Sleep(formguard.DefaultMinFill + 100*time.Millisecond)
 		if c := w.at(t, sellStoreAt, km[1], v).Code; c != http.StatusNoContent {
 			t.Fatalf("keep: %d", c)
@@ -106,7 +110,7 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 	listed := false
 	for _, x := range ada.must(200, "GET", "/v1/whatsapp/number/templates", nil)["templates"].([]any) {
 		tm := x.(map[string]any)
-		listed = listed || (tm["name"] == followName && tm["status"] == "approved" && tm["category"] == "utility")
+		listed = listed || (tm["name"] == followName && tm["status"] == "approved" && tm["category"] == "utility" && tm["meta_category"] == "utility" && tm["matches"] == true)
 	}
 	if !listed {
 		t.Fatal("the follow-up's template is not in the number's registry")
@@ -216,11 +220,22 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 	}
 
 	// A marketing template: the form asks, and only a buyer who ticks the
-	// box is followed up on WhatsApp.
+	// box is followed up on WhatsApp. (The deployment says marketing once
+	// Meta files it so: the account still holds it as utility, so first
+	// nothing promises WhatsApp, L4's review.)
 	mkt := whatsapp.FollowupTemplate(followName, "", "marketing")
 	w.forms.FollowupChat = api.WAFollowups(w.srv.WhatsApp, mkt)
 	w.srv.FollowupTemplate = &mkt
 	w.waFollowups = "marketing"
+	if f := ada.must(200, "GET", "/v1/storefront/actions/"+id+"/left", nil)["followups"].(map[string]any); f["whatsapp"] != nil {
+		t.Fatalf("WhatsApp in another category than Meta's: %v", f)
+	}
+	w.newHost(t)
+	if page := w.at(t, sellStoreAt, "/a/"+slug, nil).Body.String(); strings.Contains(page, optInWA) || strings.Contains(page, "data-keep-wa") {
+		t.Fatal("the form offers WhatsApp in another category than Meta's")
+	}
+	w.graph.SetTemplateMeta("300000000000001", followName, "MARKETING", nil)
+	ada.must(200, "POST", "/v1/whatsapp/number/templates/check", nil)
 	if f := ada.must(200, "GET", "/v1/storefront/actions/"+id+"/left", nil)["followups"].(map[string]any); f["whatsapp_opt_in"] != true {
 		t.Fatalf("opt-in: %v", f)
 	}

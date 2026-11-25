@@ -64917,6 +64917,12 @@ components:
         meta_id:
           type: string
           description: The template's id in Meta's account once submitted.
+        meta_category:
+          type: string
+          description: The category Meta gave the template in this account (utility, marketing or authentication), which may differ from the one it was submitted in; absent until Meta lists it. A template whose category decides who may get it (the follow-up of a form left half-filled) is sent only when Meta's category is the one the deployment names.
+        matches:
+          type: boolean
+          description: Whether the body and buttons Meta holds are the library's; absent until Meta lists them. A follow-up template whose words are not ours is never sent.
         submitted_at:
           $ref: '#/components/schemas/Timestamp'
         checked_at:

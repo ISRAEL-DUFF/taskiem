@@ -88,7 +88,11 @@ func (w *sellWorld) newHost(t *testing.T) {
 	pp := w.env.DB.PublicPool(t, 2)
 	formKey, _ := storefront.FormKey(bytes.Repeat([]byte{4}, 32))
 	keys := w.forms.Keys
-	host := &publicweb.Server{Lookup: publicweb.DBLookup(pp), Origins: publicweb.DBOrigins(pp), Storefronts: publicweb.DBStorefronts(pp),
+	stores := publicweb.DBStorefronts(pp)
+	if w.waFollowups != "" {
+		stores = publicweb.DBStorefronts(pp, publicweb.WAFollowup{Name: followName, Language: "en", Category: w.waFollowups})
+	}
+	host := &publicweb.Server{Lookup: publicweb.DBLookup(pp), Origins: publicweb.DBOrigins(pp), Storefronts: stores,
 		Submit: publicweb.DBSubmit(pp), OrderStatus: publicweb.DBOrderStatus(pp), Forms: publicweb.DBForms(pp), Reach: publicweb.DBReach(pp),
 		FormHost: reachFormHost, FormKeys: &keys, FormKey: formKey, InboxKey: w.key, PreviewDomain: "shops.test", Logger: slog.New(slog.DiscardHandler),
 		Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour), Submissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),

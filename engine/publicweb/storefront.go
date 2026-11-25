@@ -37,8 +37,9 @@ type StorefrontPage struct {
 	// Followups are the order forms that follow up a form left
 	// half-filled, by action id (forms-that-sell §6).
 	Followups map[uuid.UUID]bool
-	// FollowupWhatsApp: the business has its own WhatsApp number, so a
-	// follow-up may go there when the deployment names its template (L4).
+	// FollowupWhatsApp: the business's own WhatsApp number's account
+	// holds the deployment's follow-up template approved, in its category,
+	// with our words, so a follow-up may go there (L4).
 	FollowupWhatsApp bool
 }
 
@@ -46,10 +47,18 @@ type StorefrontPage struct {
 // is not served (a draft, an inactive tenant).
 type Storefronts func(ctx context.Context, tenant, id uuid.UUID) (page StorefrontPage, ok bool, err error)
 
+// WAFollowup is the deployment's follow-up template as the public host
+// asks after it in a business's account (forms-that-sell L4): its name,
+// language and category.
+type WAFollowup struct {
+	Name, Language, Category string
+}
+
 // DBStorefronts reads pages with taskiem_public_storefront and
 // taskiem_public_storefront_catalogue, and how many are left with
-// taskiem_product_left: the copy holds no count.
-func DBStorefronts(pool *pgxpool.Pool) Storefronts {
+// taskiem_product_left: the copy holds no count. With the follow-up's
+// template (wa), whether a follow-up may go on WhatsApp; without, never.
+func DBStorefronts(pool *pgxpool.Pool, wa ...WAFollowup) Storefronts {
 	return func(ctx context.Context, tenant, id uuid.UUID) (StorefrontPage, bool, error) {
 		var p StorefrontPage
 		var version int
@@ -95,8 +104,9 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 			}
 			p.Followups[a] = true
 		}
-		if len(follow) > 0 {
-			if err := pool.QueryRow(ctx, `SELECT taskiem_public_form_followup_whatsapp($1)`, id).Scan(&p.FollowupWhatsApp); err != nil {
+		if len(follow) > 0 && len(wa) > 0 {
+			if err := pool.QueryRow(ctx, `SELECT taskiem_public_form_followup_whatsapp($1, $2, $3, $4)`, id, wa[0].Name, wa[0].Language, wa[0].Category).
+				Scan(&p.FollowupWhatsApp); err != nil {
 				return StorefrontPage{}, false, err
 			}
 		}

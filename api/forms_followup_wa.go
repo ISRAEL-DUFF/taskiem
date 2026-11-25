@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -32,42 +33,89 @@ type waFollowups struct {
 
 func (f waFollowups) OptIn() bool { return f.tpl.OptIn() }
 
-// FollowUp sends the template; sent false when the business has no own
-// number, the template is not approved in its account or is held back
-// past its allowance, or WhatsApp refuses it: the text goes instead.
-func (f waFollowups) FollowUp(ctx context.Context, _ pgx.Tx, m forms.FollowupMessage) (string, bool, error) {
-	wa, err := f.wa.ForTenant(ctx, m.Tenant)
+// own is the business's own number, or nil when it has none or its
+// credentials do not read (the text goes, rather than the follow-up
+// waiting on a number that cannot send).
+func (f waFollowups) own(ctx context.Context, tenant uuid.UUID) *whatsapp.Platform {
+	wa, err := f.wa.ForTenant(ctx, tenant)
 	if err != nil {
-		// The own number's credentials do not read: the text goes, rather
-		// than the follow-up waiting on a number that cannot send.
 		if f.wa.Logger != nil {
-			f.wa.Logger.Warn("forms: a follow-up's own WhatsApp number", "tenant", m.Tenant, "err", err)
+			f.wa.Logger.Warn("forms: a follow-up's own WhatsApp number", "tenant", tenant, "err", err)
 		}
-		return "", false, nil
+		return nil
 	}
-	if !wa.Own() || m.Token == "" {
-		return "", false, nil
+	if !wa.Own() {
+		return nil
+	}
+	return wa
+}
+
+// Ready: the business has an own number whose account holds the template
+// approved, in the category the deployment names, with our body and
+// buttons (whatsapp.Platform.TemplateReady).
+func (f waFollowups) Ready(ctx context.Context, tenant uuid.UUID) (bool, error) {
+	wa := f.own(ctx, tenant)
+	if wa == nil {
+		return false, nil
+	}
+	return wa.TemplateReady(ctx, f.tpl)
+}
+
+// Send sends the template once. Whatever stops it before it leaves (no
+// own number, the template no longer ready, held back past the
+// business's allowance, a link its button cannot open) and WhatsApp's
+// refusal are forms.ErrChatNotSent: the text goes instead. Anything else
+// (a timeout, a server error) leaves it unclear whether WhatsApp took it.
+func (f waFollowups) Send(ctx context.Context, m forms.FollowupMessage) (string, error) {
+	wa := f.own(ctx, m.Tenant)
+	if wa == nil || m.Token == "" {
+		return "", forms.ErrChatNotSent
+	}
+	switch ok, err := wa.TemplateReady(ctx, f.tpl); {
+	case err != nil:
+		return "", fmt.Errorf("%w: %w", forms.ErrChatNotSent, err)
+	case !ok:
+		return "", fmt.Errorf("%w: the template is not ready in the account", forms.ErrChatNotSent)
 	}
 	what := m.Product
 	if m.Detail != "" {
 		what += " (" + m.Detail + ")"
 	}
-	link := wa.Client.Hosts.Of(whatsapp.HostForms) + whatsapp.FollowupLinkPath + m.Token
-	id, err := wa.SendTemplate(ctx, m.Tenant, m.To, f.tpl, map[string]string{"business": m.Business, "what": what, "link": link},
-		[]string{whatsapp.FollowupStopPayload})
+	vars := map[string]string{"business": m.Business, "what": what, "link": wa.Client.Hosts.Of(whatsapp.HostForms) + whatsapp.FollowupLinkPath + m.Token}
+	payloads := []string{whatsapp.FollowupStopPayload}
+	lang := f.tpl.LanguageOr(wa.Config.Language)
+	if _, err := f.tpl.Payload(lang, vars, payloads, wa.Client.Hosts); err != nil {
+		return "", fmt.Errorf("%w: %w", forms.ErrChatNotSent, err)
+	}
+	if wa.Meter != nil {
+		switch ok, err := wa.Meter.Allow(ctx, m.Tenant, f.tpl); {
+		case err != nil:
+			return "", fmt.Errorf("%w: %w", forms.ErrChatNotSent, err)
+		case !ok:
+			return "", fmt.Errorf("%w: %w", forms.ErrChatNotSent, whatsapp.ErrTemplateBlocked)
+		}
+	}
+	id, err := wa.Client.SendTemplate(ctx, m.To, f.tpl, lang, vars, payloads)
 	var ge *whatsapp.GraphError
 	switch {
 	case err == nil:
-		return id, true, nil
-	case whatsapp.TemplateUnusable(err), errors.Is(err, whatsapp.ErrTemplateBlocked), errors.As(err, &ge):
-		return "", false, nil
+		if wa.Meter != nil {
+			if merr := wa.Meter.Record(ctx, m.Tenant, f.tpl); merr != nil && f.wa.Logger != nil {
+				f.wa.Logger.Error("whatsapp: counting a template", "template", f.tpl.Name, "err", merr)
+			}
+		}
+		return id, nil
+	case errors.As(err, &ge) && ge.Status < 500:
+		// WhatsApp answered no (the template paused or not approved, the
+		// number refused): nothing went.
+		return "", fmt.Errorf("%w: %w", forms.ErrChatNotSent, err)
 	}
-	return "", false, err
+	return "", err
 }
 
 // followupStatuses passes WhatsApp's word that a message from an own
 // number failed to the follow-ups, which text the buyer instead when it
-// was one.
+// was one (or record a stop, for 131050).
 func (s *Server) followupStatuses(ctx context.Context, hook *whatsapp.Platform, sts []whatsapp.StatusUpdate) {
 	if s.Forms == nil || s.FollowupTemplate == nil {
 		return
@@ -89,7 +137,7 @@ func (s *Server) followupStatuses(ctx context.Context, hook *whatsapp.Platform, 
 		if !wa.Own() {
 			continue
 		}
-		if err := s.Forms.FollowupFailed(ctx, wa.Tenant, u.ID); err != nil {
+		if err := s.Forms.FollowupFailed(ctx, wa.Tenant, u.ID, u.Code); err != nil {
 			s.Logger.Warn("forms: a WhatsApp follow-up that failed, not texted", "err", err)
 		}
 	}

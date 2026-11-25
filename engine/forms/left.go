@@ -64,6 +64,11 @@ type Choice struct {
 	// WhatsApp: the buyer asked on the form for the follow-up on WhatsApp,
 	// where the follow-up's template is a marketing one (L4).
 	WhatsApp bool `json:"whatsapp,omitempty"`
+	// WhatsAppNamed: the form the buyer saw named WhatsApp (its consent
+	// line, or the box asking for it), as the public host drew it. A
+	// follow-up goes on WhatsApp only then, so a buyer is never reached
+	// there on a promise the form did not make (L4's review).
+	WhatsAppNamed bool `json:"wa_named,omitempty"`
 }
 
 // ChoiceLine is one basket line chosen: the row and how many.
