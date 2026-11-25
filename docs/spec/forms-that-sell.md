@@ -112,7 +112,7 @@ A kind, as the others are, so the whole page in the video is made from a catalog
 | The form | The action's form with the packages field, contact details, the delivery area, the notice, the button | The action |
 | **Order via WhatsApp** | Under the button: a link that opens WhatsApp to the business's own number, or the shared number with the business's code, with the product named in the first message; the conversation then takes the order as the customer door does ([Taskiem for everyone](taskiem-for-everyone.md)) | The business's number, as the storefront's **Chat with us** is |
 
-The kind's table is `products` (shared with Shop), so a seller with a shop adds a One product front for a hero item without copying it. Its workflow template is `storefront-order` with pay at the door, and its chat words are `sell <product> on a page` and `add a page for <product>`.
+The kind's table is `products` (shared with Shop), so a seller with a shop adds a One product front for a hero item without copying it. Its workflow template is `storefront-order` with pay at the door, and its chat words are in §7.
 
 The page is drawn by the storefront's renderer in the storefront's look, so there is no new page builder, and it embeds as any front does: the page, the form alone, or a button.
 
@@ -143,9 +143,9 @@ A buyer who has typed a **contact** (a phone or an email in a field the form mar
 
 How the public host knows:
 
-- The page sends a small **keep** request (a beacon) when the contact field loses focus with a valid value, and again when the page is hidden or left, carrying only the contact, the product choice and the form's signed state token. It is sent only after the contact is valid (a Nigerian phone, or an email) and only when the form has not been sent.
-- The record is written through the inbox, as submissions are, and the `api` role takes it: one row per form and contact, replaced by a later keep, deleted by a submission from the same contact on the same form.
-- A form sent within the wait deletes its record before any follow-up. A form sent after the follow-up closes the record as **came back**.
+- The page sends a small **keep** request (a beacon) when the contact field loses focus with a valid value, and again when the page is hidden or left, carrying only the contact, the product choice and a **keep token** of its own. The keep token is minted when the page is drawn and signed by the public host as the form's one-time submit token is: the form, the time it was drawn and a nonce, and nothing typed. It is never the page's state token, which carries every answer typed so far, files included (`hstate`), so nothing from an earlier page leaves the page in a keep. It is sent only after the contact is valid (a Nigerian phone, or an email) and only when the form has not been sent.
+- The record is written through the inbox, as submissions are, and the `api` role takes it: one row per form and contact, replaced by a later keep.
+- A submission from the same contact on the same form **within the wait** deletes the record, before any follow-up. One **after the follow-up** does not delete it: it sets `came_back_at`, and the record stays until it is purged (§6.7).
 - No JavaScript, no keep: a form filled in without scripts has no abandonment, and loses nothing else.
 
 ### 6.2 Consent and the words on the form
@@ -160,11 +160,11 @@ The follow-up is about **the order the buyer started**, not an offer: it names t
 | --- | --- | --- |
 | The wait after the last keep | 30 minutes | 10 minutes to 24 hours |
 | Messages | One | One. A second nudge is a decision for later (§12, 5) |
-| The link's life | 7 days | Fixed |
+| The link's life | 7 days from the message | Fixed; the record lasts as long (§6.7) |
 
 The message, in the storefront's language, from the business's name: *"[Ada's Kitchen] You started an order for the Smart Visual Ear Cleaner Kit (2 items, ₦45,000) and did not finish. Finish it here: <link>. Reply STOP to stop."* On WhatsApp with a button **Finish my order** where the template allows.
 
-The link opens the form again with the package and the area chosen and the contact filled in, in the same frame if the buyer came from the seller's site (the link goes to the seller's page with the form, where the storefront knows it, else to the storefront's own address). It is one-time for the restore and seven days long; after that the form opens plain.
+The link opens the form again with the package and the area chosen (the contact is not put in the link, and the buyer types it again), in the same frame if the buyer came from the seller's site (the link goes to the seller's page with the form, where the storefront knows it, else to the storefront's own address). It is one-time for the restore and seven days long; after that the form opens plain.
 
 ### 6.4 By which channel
 
@@ -172,16 +172,18 @@ The follow-up is the `notify@1` `message` step, so it reaches the person as [upd
 
 | The contact | Reached by |
 | --- | --- |
-| A phone that has linked an app with this business, or wrote to its own number within 24 hours | WhatsApp or Telegram, as today |
-| A phone the buyer typed, with nothing linked | **SMS**, counted in the plan's texts. WhatsApp only where the business has its own number and Meta has approved a template for this message (§12, 3); until then SMS |
+| A phone the form **verified** with a code (`verify`), which is proven, and which has linked an app with this business or wrote to its own number within 24 hours | WhatsApp or Telegram, as today |
+| A phone the buyer typed and the form did not verify, whatever it matches | **SMS**, counted in the plan's texts. WhatsApp only where the business has its own number and Meta has approved a template for this message (§12, 3); until then SMS |
 | An email, and no phone | Email |
 | Both | The phone's channel, with the email left out, so one message is sent |
 
-A phone the buyer typed is **unproven** (0039 point 3): the message reaches it about this one form and nothing else, and the link in it opens this one form. It never binds the number to a contact of the business, and a reply to it, on WhatsApp or by SMS, does not open the business's customer conversation unless the person's own reply does.
+A phone the buyer typed is **unproven** (0039 point 3): the message reaches it about this one form and nothing else, and the link in it opens this one form. A typed phone is never matched to a contact's linked chat, even when the digits are the same: that is the binding 0039 point 3 forbids, and it would let anyone send a business's customer a message in their own chat by typing their number. It never binds the number to a contact of the business, and a reply to it, on WhatsApp or by SMS, does not open the business's customer conversation unless the person's own reply does.
 
 ### 6.5 Limits and stopping
 
 - One follow-up per contact per form in seven days; one left-half-filled record per contact per form at a time.
+- **Across forms:** at most one follow-up per contact in 24 hours and three in seven days, across every form and every business, keyed by the contact's keyed hash, as `message`'s cross-tenant per-person limits are. A number typed into fifty forms gets one text that day.
+- **Per form and per business:** at most 50 follow-ups a day per form and 100 a day per business (starting figures), besides the month's `form_followups`. A sudden run of keeps on one form (more than ten times its daily average of submissions) holds its follow-ups for the owner to release, with a chat alert, so keeps from many addresses with made-up numbers cannot spend the business's texts.
 - Keeps are guarded as submissions are: the signed token, the honeypot, the per-address and per-form buckets, and a bucket of their own (`FormKeepsPerIP`), so a script cannot fill a business's inbox or spend its texts.
 - Follow-ups count against the plan's monthly texts (SMS) or the WhatsApp template count, as the step's messages do, and a plan limit `form_followups` caps them a month (200 on the lowest plan is a starting figure).
 - **STOP** by SMS or WhatsApp, or the email's unsubscribe link, stops every follow-up to that contact from that business, and is honoured by `message` as the existing stop is.
@@ -191,26 +193,28 @@ A phone the buyer typed is **unproven** (0039 point 3): the message reaches it a
 
 - On the form's and the action's page: **Left without ordering** this week (a count), **Followed up** (how many), **Came back** (how many ordered after the message), and the list, each row the product, the package, when, the channel, and the contact masked (the last four digits, the email's domain). Opening a row shows nothing more.
 - In the chat: an alert when people leave a form today ("3 people left your order form today; 2 were followed up"), with the form's page behind it, as other alerts open their pages.
-- Nothing of a left-half-filled record reaches the AI builder or a page's or tool's reads: it is not a table, and `taskiem_public` and the `api` role read it through narrow functions only.
+- Nothing of a left-half-filled record reaches the AI builder or a page's or tool's reads: it is not a table, and only the `api` role reads it, through narrow functions. The public host reads nothing of it (§10).
 
 ### 6.7 Retention and erasure
 
-A left-half-filled record is kept for 7 days after its last keep, then deleted, whether or not it was followed up. The count of **Came back** is kept as a number on the form, not as the record. Erasing a person erases their records as it erases their submissions. The records are not exported with the storefront's orders.
+A left-half-filled record is kept for 7 days after its last keep, or, once followed up, for 7 days after the follow-up, so it lasts as long as the restore link and a buyer who comes back on the link's last day is still counted; then it is deleted. The count of **Came back** is kept as a number on the form, not as the record. Erasing a person erases their records as it erases their submissions. The records are not exported with the storefront's orders.
 
 ## 7. What the AI builder and the templates learn
 
 - **Templates:** `storefront-order` gains the follow-up as a setting of the action (off by default for actions that exist, on for a One product front); a template `storefront-one-product` makes the front, its action and its workflow from one catalogue row.
 - **The builder:** "sell my ear cleaner on a page, pay on delivery, 1 for 25k, 2 for 45k, 3 for 65k, and follow up anyone who leaves" drafts the One product front, its packages and the follow-up setting, read back in plain words. The builder is given product names and prices, never a buyer's contact.
-- **Chat:** `sell <product> on a page` makes the front from chat with the one-person approval rule, as `turn on orders` does; `page <product> on`, `follow-ups on` and `follow-ups off` for the action.
+- **Chat** (the only list of these words): `sell <product> on a page`, or `add a page for <product>`, makes the front from chat with the one-person approval rule, as `turn on orders` does; `follow-ups on` and `follow-ups off` for the action.
 
 ## 8. Security and abuse
 
 | Concern | Control |
 | --- | --- |
 | A form that fakes a price or a total | Prices are the packages published with the storefront and the catalogue copy; the server prices every submission; the form's numbers are never read (0059 point 2, as today) |
-| A keep used to harvest or spam | A keep carries a contact and a product choice only, is guarded like a submission, is one per contact per form, and leads to one message in seven days about that one form |
+| A keep used to harvest or spam | A keep carries a contact, a product choice and its own keep token, never the page's answers; it is guarded like a submission and is one per contact per form |
+| One person's number typed into many forms | One follow-up per contact a day and three a week across every form and business (§6.5) |
+| Made-up numbers sent from many addresses to spend a business's texts | Daily caps per form and per business, and a hold on a form whose keeps jump, released by the owner (§6.5) |
 | A follow-up as unsolicited marketing | The words are Taskiem's and name the order the person started; the consent line is on the form; STOP is honoured across the business; nothing is sent to a list |
-| A typed number that is someone else's | The message reaches the number about this one form, with a link that restores a product choice and nothing personal; it binds nothing and opens no conversation (0039 point 3) |
+| A typed number that is someone else's | The message goes by SMS about this one form, with a link that restores a product choice and nothing personal; a typed number is never matched to a linked chat; it binds nothing and opens no conversation (0039 point 3) |
 | Personal data kept without purpose | Only the contact and the product choice are kept, sealed for the `api` role, for 7 days; names, addresses and answers are never kept before a form is sent |
 | The host site reading the form | A frame, as today: the host site's scripts cannot read it, and `postMessage` carries no answers |
 | A phishing page in the form's look | The same checks as every public form and storefront: a verified email, reserved and look-alike names, the Report link, operator suspension |
@@ -225,7 +229,7 @@ A left-half-filled record is kept for 7 days after its last keep, then deleted, 
 | A hosted form that sells | **Sell something with this form** makes an action of the front, keeps the form's address, draws it under the storefront's look; its workflow runs on the storefront trigger; the Storefront area off refuses it with the offer to turn it on |
 | One product | The kind's front from a catalogue row: every part of §5.4 drawn on the web and in the app's parity test, in the three themes, at 360 and 390 px with axe; **Order via WhatsApp** opens the right number with the product named |
 | Embedding | The action's form framed on a verified site, the snippet from Settings; the height event follows the packages field; the submitted event carries the action and reference and nothing else; an unverified site refused |
-| Left half-filled | A keep after a valid contact only; a keep refused without the token, past the buckets, or after the form was sent; one record per contact and form; a submission deletes the record; the wait, then one message, by the right channel for each row of §6.4; the restore link opens the form with the choice kept, once, within 7 days; STOP stops; the record purged at 7 days; erasure |
+| Left half-filled | A keep after a valid contact only; a keep refused without the token, past the buckets, or after the form was sent; one record per contact and form; a keep carries no answer from an earlier page; a submission within the wait deletes the record and one after the follow-up sets `came_back_at`; the wait, then one message, by the right channel for each row of §6.4, and a typed phone that matches a linked contact goes by SMS; the caps across forms, per form and per business, and the hold; the restore link opens the form with the choice kept, once, within 7 days of the message, and is still counted as came back on its last day; STOP stops; the record purged when its link has expired; erasure |
 | The owner's view | The counts and the masked list; the chat alert; nothing in the AI builder's inputs or a page's reads (isolation test, as data tables have) |
 | Plain words | The form's consent line and the follow-up's words in the five languages, against the plain-words list |
 | Migrations | Down and up for the new tables |
@@ -233,8 +237,9 @@ A left-half-filled record is kept for 7 days after its last keep, then deleted, 
 ## 10. Storage and API
 
 - **`storefront_actions`** gains `packages` (in the form's schema, so nothing new) and the follow-up settings: `followup_on`, `followup_wait`. **`storefront_fronts`** gains the One product kind's settings (the promise line, the chips) as the kind's options do.
-- **`form_left`** (new): tenant, form or action, front, embed site, the contact sealed for the `api` role, a keyed hash of the contact for the one-per-contact rule (as reach contacts are keyed), the product choice, `last_keep_at`, `followed_up_at`, `came_back_at`, `expires_at`. Under forced row-level security; the public host writes through the inbox and reads nothing; the `api` role reads through narrow functions.
-- **The public host:** `POST /a/<action>/keep` and `/f/<id>/keep` (a beacon), `GET /r/<restore token>` (the form restored).
+- **`form_left`** (new): tenant, form or action, front, embed site, the contact sealed for the `api` role, a keyed hash of the contact for the one-per-contact rule (as reach contacts are keyed), the product choice, `last_keep_at`, `followed_up_at`, `came_back_at`, `expires_at` (7 days after the last keep, moved to 7 days after the follow-up when one is sent). Under forced row-level security; the public host writes through the inbox and reads nothing of it; the `api` role reads through narrow functions.
+- **`form_restores`** (new): one row per follow-up, written by the `api` role: a hash of the restore token, the form, the product choice and area, `expires_at`, `used_at`. Never the contact. The public host claims a row through one definer, by the token's hash, getting back only the product choice and area and marking it used, as one-time links are claimed today.
+- **The public host:** `POST /a/<action>/keep` and `/f/<id>/keep` (a beacon), `GET /back/<restore token>` (the form restored; not under `/r/`, which link forms and receipts already share).
 - **API:** `GET /v1/storefront/actions/{id}/left` (the counts and the masked list), `PATCH /v1/storefront/actions/{id}` (the follow-up settings, the packages through the form), `GET /v1/forms/{id}/left` the same for a hosted form that sells; the embed snippet for one action in `GET /v1/storefront/embed`. OpenAPI and the app's client as always.
 - **The follow-up** is a run of a managed workflow (`storefront-followup`, the server's, not the owner's to edit) started by the `api` role when the wait passes, with `notify@1` `message` and the restore link; its run is the audit of what was sent, where and whether it came back.
 
@@ -295,3 +300,9 @@ The plan was read against the code on the day it was written. What that found:
 | Everything typed kept, to restore the form whole | The contact and the product choice only; the restore fills those and the buyer types the rest again (§6.1, §12, 7) |
 | "Free delivery" as a package property | The storefront's delivery areas and fees are what is charged; the label is the owner's words, and the editor offers to set the fees to nothing (§5.2) |
 | The embed as new work | The storefront embeds one action's form on a verified site already; what is new is the snippet per action and the packages field's height (§5.5) |
+| A keep carried the form's signed state token | That token holds every answer typed so far, files included; a keep carries a token of its own with nothing typed in it (§6.1) |
+| A typed phone that matched a linked contact went to their chat | A typed phone goes by SMS whatever it matches; a linked chat only for a phone the form verified (§6.4, 0039 point 3) |
+| Follow-ups capped per contact per form only | Also per contact across every form and business, per form and per business a day, and a hold when a form's keeps jump (§6.5, §8) |
+| The record purged 7 days after the last keep, before its link expired | The record lasts as long as the link; the restore goes through `form_restores`, which the public host claims by one definer and which holds no contact; the public host reads nothing of `form_left` (§6.7, §10) |
+| A submission both deleted the record and closed it as came back | Within the wait it deletes it; after the follow-up it sets `came_back_at` (§6.1) |
+| The restore link at `/r/` | At `/back/`: `/r/` serves link forms and receipts already (§10) |
