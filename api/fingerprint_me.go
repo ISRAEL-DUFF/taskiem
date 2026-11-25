@@ -277,7 +277,7 @@ func (s *Server) putMeFingerprint(w http.ResponseWriter, r *http.Request) {
 	}
 	der, _, err := parsePayKey(req.PublicKey)
 	if err != nil {
-		s.fail(w, r, fmt.Errorf("%w: %v", errBadRequest, err))
+		s.fail(w, r, fmt.Errorf("%w: %w", errBadRequest, err))
 		return
 	}
 	d := req.Device
