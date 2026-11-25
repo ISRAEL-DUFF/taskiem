@@ -277,7 +277,10 @@ The questions as they stood:
   from …", a photo is one node with its words, the chats' search is named
   with what is typed in it. The test skips what a scrolling list has cut
   off at its edge (Flutter's own check means to, but compares in
-  different coordinates).
+  different coordinates). A held bubble's node is at least 48 px to a
+  screen reader (`BubbleHold`, as `TapArea` gives a button), drawn as the
+  web's one-line bubble is; found by the first parity screen with a
+  one-line message in mid-screen (`chat-taskiem-page`, 25 November 2026).
 
 | # | What | Work |
 | --- | --- | --- |

@@ -9,7 +9,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart' show TapGestureRecognizer;
-import 'package:flutter/rendering.dart' show RenderDecoratedBox;
+import 'package:flutter/rendering.dart' show RenderDecoratedBox, RenderProxyBox, SemanticsConfiguration, SemanticsHintOverrides;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -1234,14 +1234,82 @@ class _BubbleHoldState extends State<BubbleHold> with SingleTickerProviderStateM
       ),
     );
     if (widget.onHold == null) return gestures;
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
+    return _HoldRoom(
       label: widget.label,
-      onLongPressHint: 'Options',
+      textDirection: Directionality.maybeOf(context),
       onLongPress: () => widget.onHold!(_rect()),
       child: gestures,
     );
+  }
+}
+
+/// The bubble's own node to a screen reader ("Your message", held for
+/// Options), with its ticks and a star kept apart as their own nodes, and
+/// at least [tapMin] each way (docs/spec/mobile-app.md §8), as [TapArea]
+/// gives a button: a one-line bubble is drawn 34 px high, as the web's is,
+/// and the room is the screen reader's, not a finger's. Bubbles sit a few
+/// pixels apart, so a hit-test room would take a press on a bubble's edge
+/// for its neighbour; to a finger the bubble is its drawn words, the
+/// screen's width, as it is on the web.
+class _HoldRoom extends SingleChildRenderObjectWidget {
+  const _HoldRoom({required this.label, required this.textDirection, required this.onLongPress, required super.child});
+  final String label;
+  final TextDirection? textDirection;
+  final VoidCallback onLongPress;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderHoldRoom(label, textDirection, onLongPress);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderHoldRoom renderObject) {
+    renderObject
+      ..label = label
+      ..textDirection = textDirection
+      ..onLongPress = onLongPress;
+  }
+}
+
+class _RenderHoldRoom extends RenderProxyBox {
+  _RenderHoldRoom(this._label, this._textDirection, this._onLongPress);
+
+  String _label;
+  set label(String v) {
+    if (v == _label) return;
+    _label = v;
+    markNeedsSemanticsUpdate();
+  }
+
+  TextDirection? _textDirection;
+  set textDirection(TextDirection? v) {
+    if (v == _textDirection) return;
+    _textDirection = v;
+    markNeedsSemanticsUpdate();
+  }
+
+  VoidCallback _onLongPress;
+  set onLongPress(VoidCallback v) {
+    if (v == _onLongPress) return;
+    _onLongPress = v;
+    markNeedsSemanticsUpdate();
+  }
+
+  @override
+  Rect get semanticBounds {
+    final w = size.width < tapMin ? (tapMin - size.width) / 2 : 0.0;
+    final h = size.height < tapMin ? (tapMin - size.height) / 2 : 0.0;
+    return Rect.fromLTRB(-w, -h, size.width + w, size.height + h);
+  }
+
+  @override
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
+    config
+      ..isSemanticBoundary = true
+      ..explicitChildNodes = true
+      ..label = _label
+      ..textDirection = _textDirection
+      ..hintOverrides = const SemanticsHintOverrides(onLongPressHint: 'Options')
+      ..onLongPress = _onLongPress;
   }
 }
 
