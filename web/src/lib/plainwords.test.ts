@@ -73,6 +73,11 @@ const OWNER_FILES = [
   "lib/savedSources.ts",
   "pages/Storefront.tsx",
   "pages/StorefrontForms.tsx",
+  "pages/SellForm.tsx",
+  "pages/OneProductFront.tsx",
+  // Forms left half-filled (forms that sell L3): who left, and the follow-ups.
+  "pages/StorefrontLeft.tsx",
+  "lib/left.ts",
   "pages/StorefrontFronts.tsx",
   "pages/FrontItems.tsx",
   "pages/StorefrontBookings.tsx",

@@ -105,18 +105,21 @@ type formOut struct {
 	ClosedMessage  *string    `json:"closed_message"`
 	URL            string     `json:"url"`
 	EmbedURL       string     `json:"embed_url"`
+	// SellsAs is the storefront's order form this form became (Sell
+	// something with this form): its address leads there.
+	SellsAs *uuid.UUID `json:"sells_as"`
 }
 
 const formCols = `e.id, e.public_id, e.workflow_id, w.name, e.environment, e.version, COALESCE(v.definition->'trigger'->'config'->>'title', ''),
 	COALESCE(v.definition->'trigger'->'config'->>'access', 'public'), e.status, e.opens_at, e.closes_at, e.max_submissions, e.submissions,
-	(SELECT count(*) FROM form_submissions s WHERE s.endpoint_id = e.id AND s.created_at > now() - interval '7 days')::int, e.closed_message`
+	(SELECT count(*) FROM form_submissions s WHERE s.endpoint_id = e.id AND s.created_at > now() - interval '7 days')::int, e.closed_message, e.action_id`
 
 const formFrom = ` FROM form_endpoints e JOIN workflows w ON w.id = e.workflow_id JOIN workflow_versions v ON v.workflow_id = e.workflow_id AND v.version = e.version`
 
 func (s *Server) scanForm(r pgx.Row) (formOut, error) {
 	var f formOut
 	err := r.Scan(&f.ID, &f.PublicID, &f.WorkflowID, &f.Workflow, &f.Environment, &f.Version, &f.Title, &f.Access, &f.Status, &f.OpensAt, &f.ClosesAt,
-		&f.MaxSubmissions, &f.Submissions, &f.Week, &f.ClosedMessage)
+		&f.MaxSubmissions, &f.Submissions, &f.Week, &f.ClosedMessage, &f.SellsAs)
 	switch {
 	case err != nil || s.Forms == nil:
 	case f.Access == "members":
@@ -198,6 +201,11 @@ func (s *Server) patchForm(w http.ResponseWriter, r *http.Request) {
 		}
 		if cur.Status == "suspended" {
 			return fmt.Errorf("%w: this form was suspended by Taskiem's operators", errConflict)
+		}
+		// A form that sells is the storefront's order form now: its
+		// address leads there, and it is opened and closed there.
+		if cur.SellsAs != nil && req.Status != nil && *req.Status != cur.Status {
+			return fmt.Errorf("%w: this form sells on your page now: turn its order form on or off under Fronts", errConflict)
 		}
 		clear := func(c string) bool { return slices.Contains(req.Clear, c) }
 		if _, err := tx.Exec(r.Context(), `UPDATE form_endpoints SET status = COALESCE($2, status),
@@ -1006,12 +1014,21 @@ func (s *Server) RunForms(ctx context.Context) error {
 			if err := s.Forms.Drain(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("forms: inbox", "err", err)
 			}
+			if err := s.Forms.DrainKeeps(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("forms: forms left half-filled", "err", err)
+			}
 		case <-tick.C:
+			if err := s.Forms.FollowUps(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("forms: following up forms left half-filled", "err", err)
+			}
 			if err := s.Forms.Tick(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("forms: links and codes", "err", err)
 			}
 			if err := s.Forms.DrainDeletions(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("forms: deleting stored files", "err", err)
+			}
+			if _, err := s.Forms.PurgeLeft(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("forms: purging forms left half-filled", "err", err)
 			}
 		}
 	}

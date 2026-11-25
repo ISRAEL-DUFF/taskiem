@@ -144,3 +144,45 @@ notices before it. A look's stylesheet draws them. */}}
 {{if or .Delivery .Pickup}}<details><summary>Delivery</summary><p>{{if .Delivery}}{{.Business}} delivers{{with .DeliveryNote}}: {{.}}{{end}}.{{end}}{{if .Pickup}} You can also pick it up.{{end}}</p></details>{{end}}
 {{if or .Whats .Phone}}<details><summary>Questions and changes</summary><p>{{with .Whats}}<a href="{{.}}" rel="noopener">Message {{$.Business}} on WhatsApp</a>{{else}}Call <a href="tel:{{.Phone}}">{{.Phone}}</a>{{end}} to ask about this item or to change an order.</p></details>{{end}}
 </div>{{end}}
+
+{{/* A form that sells (forms-that-sell §5): the one product at the top,
+its packages, the warning line, and a frame's messages to its website. */}}
+{{define "sfone"}}{{with .One}}<section class="sell-one" aria-labelledby="sell-one-h">{{with .Small}}<img src="{{.}}" alt="" width="84" height="84" decoding="async">{{end}}<div>
+<h2 id="sell-one-h">{{.Name}}</h2>{{with .Line}}<p class="hint">{{.}}</p>{{end}}{{if .SoldOut}}<p class="hint">Sold out right now.</p>{{end}}
+{{if .Secure}}<p class="sell-secure">{{template "i-lock"}} Secure checkout</p>{{end}}</div></section>{{end}}{{end}}
+
+{{define "sfpackages"}}{{with .Packages}}<fieldset class="packages" data-packages>
+<legend>{{.Title}}</legend>
+{{if .SoldOut}}<p class="hint">{{with .Item}}{{.}}{{else}}This product{{end}} is not available right now.</p>{{end}}
+{{range .Packages}}<div class="pkg{{if .Short}} is-short{{end}}"><input id="pkg-{{.Qty}}" type="radio" name="pkg" value="{{.Qty}}" data-price="{{.PriceKobo}}" data-qty="{{.Qty}}"{{if .Chosen}} checked{{end}}{{if .Short}} disabled{{end}} required><label for="pkg-{{.Qty}}"><strong>{{.Label}}</strong> <span>{{if .Short}}<span class="pkg-short">Not enough in stock</span>{{else}}{{.Price}}{{with .Each}} · {{.}}{{end}}{{end}}</span></label></div>
+{{end}}{{if .Sizes}}{{if .Each}}{{range .Units}}<div class="field" data-unit="{{.N}}"{{if .Hidden}} hidden{{end}}><label for="pz-{{.N}}">{{$.Packages.SizeWord}} for item {{.N}}</label>
+<select id="pz-{{.N}}" name="pz.{{.N}}"><option value="">Choose</option>{{range .Sizes}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
+{{end}}{{else}}<div class="field"><label for="pz">{{.SizeWord}}</label>
+<select id="pz" name="pz" required><option value="">Choose</option>{{range .Sizes}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
+{{end}}{{end}}<p class="total" data-total aria-live="polite"></p>
+</fieldset>{{end}}{{end}}
+
+{{define "sfnotice"}}{{with .Notice}}<p class="sell-notice" role="note">{{.}}</p>{{end}}{{end}}
+
+{{define "sfembed"}}{{if .Embed}}<script src="{{asset "form-embed.js"}}" defer></script>
+<div hidden data-embed data-kind="storefront" data-origins="{{.Origins}}"></div>{{end}}{{end}}
+
+{{define "sfembeddone"}}{{if .Embed}}<script src="{{asset "form-embed.js"}}" defer></script>
+<div hidden data-embed data-kind="storefront" data-origins="{{.Origins}}"{{with .Sent}} data-submitted="{{$.Reference}}" data-action="{{.}}"{{end}}></div>{{end}}{{end}}
+
+{{/* Forms left half-filled (forms-that-sell §6.2): the consent line under
+the contact, in the form's language, on an order form that follows up;
+and the keep, sent by a script once a contact is typed. */}}
+{{define "sfconsent"}}{{with .Consent}}<p class="hint sell-consent" id="f-consent">{{.}}</p>
+{{end}}{{with .WAOptIn}}<label class="check sell-consent" for="f-wa"><input id="f-wa" type="checkbox" name="wa" value="1"> {{.}}</label>
+{{end}}{{end}}
+
+{{define "sfkeep"}}{{with .Keep}}<script src="{{asset "keep.js"}}" defer></script>
+<div hidden data-keep="{{.URL}}" data-keep-token="{{.Token}}"{{if .WhatsApp}} data-keep-wa{{end}}></div>{{end}}{{end}}
+
+{{/* A follow-up's link (§6.3): nothing is used up by opening it; Finish
+my order restores the choice once, Stop these messages stops them. */}}
+{{define "sfback"}}<p class="notice" role="status">{{.Message}}</p>
+{{if .Restore}}<form method="post" action="{{.Post}}" class="form back-form"><button class="btn btn-primary btn-block" type="submit">Finish my order</button></form>
+{{end}}{{if .CanStop}}<form method="post" action="{{.Stop}}" class="form back-form"><button class="btn btn-block" type="submit">Stop these messages</button></form>
+{{end}}{{with .Home}}<p><a class="btn btn-block" href="{{.}}">Go to {{$.Business}}</a></p>{{end}}{{end}}

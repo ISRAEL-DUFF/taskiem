@@ -21,6 +21,10 @@ like a masthead. */}}
 
 {{define "kicker"}}<p class="kicker">{{.}}</p>{{end}}
 
+{{/* Where Bold closes its coloured header and opens the page: nothing
+here, so a page shared by every look (oneproduct.html) can call it. */}}
+{{define "fmain"}}{{end}}
+
 {{define "ffoot"}}</main>
 <footer class="foot">
 <p class="safety">{{template "safety"}}</p>

@@ -1,0 +1,25 @@
+
+/* A form that sells (forms-that-sell §5): the product at the top, its
+   packages as choices with the chosen one marked, a package the stock
+   cannot fill greyed, and the warning line above the button. */
+.sell-one { display: flex; gap: .875rem; align-items: center; margin: 0 0 1rem; padding: .75rem; border: 1px solid var(--ln); border-radius: var(--r, 12px); background: var(--card, var(--soft, #fff)); }
+.sell-one img { width: 84px; height: 84px; object-fit: cover; border-radius: calc(var(--r, 12px) - 4px); flex: none; }
+.sell-one h2 { margin: 0; font-size: 1.125rem; overflow-wrap: anywhere; }
+.sell-one p { margin: .25rem 0 0; }
+.sell-secure { display: inline-flex; align-items: center; gap: .25rem; font-size: .85rem; font-weight: 700; }
+.sell-secure svg { width: 1em; height: 1em; }
+.packages { border: 0; margin: 0 0 1rem; padding: 0; display: grid; gap: .5rem; min-width: 0; }
+.packages legend { font-size: 1.125rem; font-weight: 700; margin-bottom: .625rem; padding: 0; }
+.pkg { position: relative; }
+.pkg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.pkg label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem .75rem; padding: .875rem 1rem; border: 2px solid var(--ln); border-radius: var(--r, 12px); background: var(--card, var(--bg, #fff)); color: inherit; cursor: pointer; }
+.pkg label strong { overflow-wrap: anywhere; }
+.pkg label > span { font-variant-numeric: tabular-nums; }
+.pkg input:checked + label { border-color: var(--brand, #1d1b18); box-shadow: inset 0 0 0 1px var(--brand, #1d1b18); }
+.pkg input:focus-visible + label { outline: 3px solid var(--brand-soft, #8ab); outline-offset: 2px; }
+.pkg.is-short label { cursor: not-allowed; border-style: dashed; }
+.pkg.is-short label strong { text-decoration: line-through; }
+.pkg-short { font-weight: 700; }
+.packages .field select { width: 100%; }
+.sell-notice { margin: 1rem 0; padding: .75rem 1rem; border-radius: var(--r, 12px); border: 1px solid #b45309; background: #fff7ed; color: #7c2d12; font-weight: 600; }
+@media (prefers-color-scheme: dark) { .sell-notice { background: #431407; color: #fed7aa; border-color: #fb923c; } }

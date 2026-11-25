@@ -47,6 +47,11 @@ func TestFormsValidate(t *testing.T) {
 		{`"pin":`, `"pin":`, ""},
 		{`"bank":{"type":"string","title":"=not an expression"}`, `"pin":{"type":"string"}`, "never asks for passwords"},
 		{`"max_mb":5`, `"max_mb":50`, "at most 25 MB"},
+		// A form that sells is an action of the storefront (forms that
+		// sell §5.1): a hosted form takes no packages or basket.
+		{`"employer":{"type":"string"}`, `"employer":{"type":"object","x-form":{"widget":"packages","list":"catalogue","item":"r","packages":[{"qty":1,"price_kobo":100}]}}`,
+			"Sell something with this form"},
+		{`"employer":{"type":"string"}`, `"employer":{"type":"array","x-form":{"widget":"basket","list":"catalogue"}}`, "an order form of your storefront"},
 	} {
 		if c.want == "" {
 			continue

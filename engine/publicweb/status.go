@@ -43,6 +43,12 @@ type statusData struct {
 	Links    []statusLinkView
 	Token    string
 	Honeypot string
+	// Embed, Origins and Sent: a frame tells its verified website the
+	// action and the reference once, when it is sent (Sent, the action's
+	// address), and nothing of the customer (forms-that-sell §5.5).
+	Embed   bool
+	Origins string
+	Sent    string
 }
 
 type changeButton struct {
@@ -72,6 +78,14 @@ func (s *Server) serveStatus(w http.ResponseWriter, r *http.Request, site Site, 
 		}
 		s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
 		return
+	}
+	if embed {
+		if origins, err := s.embedOrigins(r.Context(), site.Tenant); err == nil {
+			d.Embed, d.Origins = true, strings.Join(origins, " ")
+		}
+		if sent := r.URL.Query().Get("sent"); actionRef.MatchString(sent) {
+			d.Sent = sent
+		}
 	}
 	s.renderPrivate(w, r, http.StatusOK, "status.html", d)
 }

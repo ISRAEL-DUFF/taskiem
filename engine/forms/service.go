@@ -62,9 +62,19 @@ type Service struct {
 	AppURL   string
 	// Ask puts a form step to people in their chat apps once its request
 	// is recorded as sent (device fields §2); nil asks in the app alone.
-	Ask    func(ctx context.Context, a ChatAsk)
-	Logger *slog.Logger
-	Now    func() time.Time
+	Ask func(ctx context.Context, a ChatAsk)
+	// Forms left half-filled (forms-that-sell §6): ShopDomain is where
+	// storefronts are served (<slug>.<domain>), for the restore link;
+	// FollowupLimit the plan's form_followups a month (0: none; nil:
+	// none); FollowupChat reaches a typed phone on WhatsApp by template
+	// (L4; nil: a text).
+	ShopDomain    string
+	FollowupLimit func(ctx context.Context, tenant uuid.UUID) (int64, error)
+	FollowupChat  FollowupChat
+	// afterCaps, in tests, runs once a follow-up's caps are read.
+	afterCaps func()
+	Logger    *slog.Logger
+	Now       func() time.Time
 }
 
 // Errors a submission is refused with; the respondent was told before it

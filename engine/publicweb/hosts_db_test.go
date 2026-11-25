@@ -196,7 +196,17 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		"taskiem_public_link_code(uuid)": true,
 		// A customer's page (decision 0060, R5): their open lines with nothing personal, and paying towards the total.
 		"taskiem_public_customer_link(bytea)": true, "taskiem_public_customer_link_request(bytea,text,bigint)": true,
-		"taskiem_public_customer_link_payment(bytea)": true, "taskiem_public_customer_link_own_account(bytea)": true}
+		"taskiem_public_customer_link_payment(bytea)": true, "taskiem_public_customer_link_own_account(bytea)": true,
+		// Forms that sell (L0, L3 and its review): a keep only for an order form that follows up and was not sent, which of a
+		// published storefront's forms follow up, and a restore link of the site's business: claimed once by its hash (the
+		// choice only), its page before it is used (the form it restores), and its Stop (nothing read back).
+		"taskiem_public_form_keep(uuid,bytea,bytea)": true, "taskiem_public_form_followups(uuid)": true,
+		"taskiem_public_form_restore(bytea,uuid)": true, "taskiem_public_form_restore_ok(bytea,uuid)": true, "taskiem_public_form_stop(bytea,uuid)": true,
+		// Forms that sell (L4): the category Meta gave the built-in follow-up template in a storefront's business's
+		// own WhatsApp number's account, where it is approved with our words and the owner lets follow-ups go there
+		// (one word or none; the founder's direction of 25 November 2026), and the storefront's address of a
+		// follow-up's link not past its time, for the template's button on the form host.
+		"taskiem_public_form_followup_whatsapp(uuid,text)": true, "taskiem_public_form_back_where(bytea)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)

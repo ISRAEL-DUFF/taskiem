@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { approvedCount, canSubmit, statusWords, summaryLine, type TemplateView } from "./whatsappTemplates";
+import { approvedCount, canSubmit, metaLine, statusWords, summaryLine, type TemplateView } from "./whatsappTemplates";
 
 const tpl = (name: string, status: TemplateView["status"]): TemplateView => ({ name, category: "utility", language: "en", status, purpose: "" });
 
@@ -11,6 +11,16 @@ describe("whatsapp templates", () => {
     expect(statusWords("rejected")).toBe("Rejected");
     expect(statusWords("paused")).toBe("Paused by Meta");
     expect(statusWords("disabled")).toBe("Disabled by Meta");
+  });
+
+  it("says Meta's category, and warns when it is not ours", () => {
+    expect(metaLine(tpl("a", "pending"))).toBeNull();
+    expect(metaLine({ ...tpl("a", "approved"), meta_category: "utility", matches: true })).toEqual({ text: "Meta: utility", warn: false });
+    expect(metaLine({ ...tpl("a", "approved"), meta_category: "marketing", matches: true })).toEqual({ text: "Meta filed it as marketing, not utility", warn: true });
+    expect(metaLine({ ...tpl("a", "approved"), meta_category: "utility", matches: false })).toEqual({ text: "Meta: utility, with other words than ours", warn: true });
+    // The follow-up's category decides who gets it: marketing is no warning.
+    expect(metaLine({ ...tpl("taskiem_finish_order", "approved"), meta_category: "marketing", matches: true })?.warn).toBe(false);
+    expect(metaLine({ ...tpl("taskiem_finish_order", "approved"), meta_category: "authentication", matches: true })?.warn).toBe(true);
   });
 
   it("offers Submit only for templates Meta does not hold", () => {

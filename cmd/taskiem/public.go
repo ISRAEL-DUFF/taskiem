@@ -64,6 +64,13 @@ type publicConfig struct {
 	// registrable domains, which cannot be a CNAME. Unset, owners are told
 	// to use their DNS provider's ALIAS or CNAME flattening.
 	Addresses []string
+	// WALanguage is the language WhatsApp templates are in
+	// (TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE, "en"): an order form names
+	// WhatsApp where the business's own number's account holds the
+	// follow-up's template approved in it (forms-that-sell L4). The public
+	// host reads nothing else of WhatsApp: none of the platform number's
+	// settings or secrets.
+	WALanguage string
 }
 
 func publicConfigFromEnv() (publicConfig, error) {
@@ -77,6 +84,9 @@ func publicConfigFromEnv() (publicConfig, error) {
 		DSN:      os.Getenv("TASKIEM_PUBLIC_DATABASE_URL"),
 		Role:     env("TASKIEM_PUBLIC_DATABASE_ROLE", "taskiem_public"),
 		PoolSize: 5,
+	}
+	if c.WALanguage = strings.TrimSpace(os.Getenv("TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE")); c.WALanguage == "" {
+		c.WALanguage = "en" // as whatsapp.New
 	}
 	for _, d := range strings.Split(os.Getenv("TASKIEM_PUBLIC_DOMAINS"), ",") {
 		if d = strings.ToLower(strings.TrimSpace(d)); d != "" {
@@ -186,11 +196,11 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	srv := &publicweb.Server{Lookup: publicweb.DBLookup(pool), Origins: publicweb.DBOrigins(pool), Storefronts: publicweb.DBStorefronts(pool), Reports: publicweb.DBReports(pool), Brands: publicweb.DBBrands(pool),
+	srv := &publicweb.Server{Lookup: publicweb.DBLookup(pool), Origins: publicweb.DBOrigins(pool), Storefronts: publicweb.DBStorefronts(pool, cfg.Public.WALanguage), Reports: publicweb.DBReports(pool), Brands: publicweb.DBBrands(pool),
 		Submit: publicweb.DBSubmit(pool), OrderStatus: publicweb.DBOrderStatus(pool),
 		Services: publicweb.DBServices(pool), Busy: publicweb.DBBusy(pool), Book: publicweb.DBBook(pool), Claim: publicweb.DBClaim(pool), Booking: publicweb.DBBookingStatus(pool),
 		Change: publicweb.DBChange(pool), PriceChange: publicweb.DBPriceChange(pool),
-		Forms: publicweb.DBForms(pool), Invoices: publicweb.DBInvoices(pool), InvoicePay: publicweb.DBInvoicePay{Pool: pool}, Customers: publicweb.DBCustomers(pool), CustomerPay: publicweb.DBCustomerPay{Pool: pool}, OrderPay: publicweb.DBOrderPay{Pool: pool}, OrderRate: publicweb.DBOrderRate{Pool: pool}, Receipts: publicweb.DBReceipts(pool), Families: publicweb.DBFamilies{Pool: pool}, Reach: publicweb.DBReach(pool), FormHost: cfg.Public.FormHost, AppURL: cfg.Public.AppURL,
+		Forms: publicweb.DBForms(pool), Invoices: publicweb.DBInvoices(pool), InvoicePay: publicweb.DBInvoicePay{Pool: pool}, Customers: publicweb.DBCustomers(pool), CustomerPay: publicweb.DBCustomerPay{Pool: pool}, OrderPay: publicweb.DBOrderPay{Pool: pool}, OrderRate: publicweb.DBOrderRate{Pool: pool}, Receipts: publicweb.DBReceipts(pool), Families: publicweb.DBFamilies{Pool: pool}, Reach: publicweb.DBReach(pool), Keeps: publicweb.DBKeeps(pool), FormHost: cfg.Public.FormHost, AppURL: cfg.Public.AppURL,
 		Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
 	if len(cfg.Public.Domains) > 0 {
 		srv.PreviewDomain = cfg.Public.Domains[0]

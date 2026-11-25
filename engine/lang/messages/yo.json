@@ -9450,6 +9450,146 @@
       "text": "Èwo: {names}? Tún sọ ọ́ pẹ̀lú orúkọ rẹ̀ ní kíkún.",
       "reviewed": false,
       "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): a name that matches more than one person"
+    },
+    "wa.page.how": {
+      "text": "Kọ ọ́ báyìí: *sell Ear cleaner on a page*, pẹ̀lú àwọn àpò tí o bá fẹ́: *sell Ear cleaner on a page 1 for 25000, 2 for 45000*. Ọjà náà gbọ́dọ̀ wà nínú àkójọ rẹ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page without a product, or with packages that could not be read"
+    },
+    "wa.page.not_understood": {
+      "text": "Kò yé mi *{bit}*. Kọ àwọn àpò lẹ́yìn orúkọ ọjà náà, ọ̀kọ̀ọ̀kan bí iye mélòó fún iye owó wo: *sell Ear cleaner on a page 1 for 25000, 2 for 45000*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: words after the product's name that are not packages; {bit} is the words not understood, as typed"
+    },
+    "wa.page.orders_off": {
+      "text": "Ojú-ìwé tó ń tà ń gba àṣẹ: tan Orders nínú Settings ná, kí o tún gbìyànjú.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page while the Orders part is off"
+    },
+    "wa.page.no_item": {
+      "text": "Kò sí ọjà tí orúkọ rẹ̀ ń jẹ́ *{name}* nínú àkójọ rẹ. Fi kún un ná: *add product {name} 25000*",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: no product of that name"
+    },
+    "wa.page.which": {
+      "text": "Ọjà ju ẹyọ kan lọ ló ní orúkọ yẹn: {items}. Kọ orúkọ rẹ̀ ní kíkún.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: the name matched several products"
+    },
+    "wa.page.no_price": {
+      "text": "*{name}* kò ní iye nínú àkójọ rẹ. Fún un ní iye ná: *price {name} 25000*",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: the product has no price"
+    },
+    "wa.page.exists": {
+      "text": "*{name}* ti ní ojú-ìwé tirẹ̀ tẹ́lẹ̀: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: a One product page sells it already"
+    },
+    "wa.page.bad_packages": {
+      "text": "A kò lè lo àwọn àpò yẹn: {reason} Kọ ọ̀kọ̀ọ̀kan bí iye mélòó fún iye owó wo, bíi *1 for 25000, 2 for 45000*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: the packages typed were refused (more than six, a number twice, a price too small)"
+    },
+    "wa.page.confirm": {
+      "text": "Ṣé kí n ṣe ojú-ìwé fún *{name}*?\nYóò fi àwọn fọ́tò àti ọ̀rọ̀ rẹ̀ hàn, ìlérí rẹ, àti *Order now* pẹ̀lú {packages}, a ó gbé e dé, a ó sì sanwó ní ẹnu ọ̀nà.\nÀdírẹ́sì rẹ̀: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: confirming; packages are like \"1 item · ₦25,000; 2 items · ₦45,000\""
+    },
+    "wa.page.warning": {
+      "text": "Àkíyèsí: {warning}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: a package dearer per item than the product's own price, or under a quarter of it (a warning, not a refusal)"
+    },
+    "wa.page.not_made": {
+      "text": "A kò ṣe ojú-ìwé náà: {reason}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page refused after yes"
+    },
+    "wa.page.made_off": {
+      "text": "Mo ti ṣe ojú-ìwé fún *{name}*. Yóò wà ní pípa títí a ó fi ṣètò àwọn àṣẹ rẹ̀:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: made, but the order workflow waits for an approval; the approval's words follow"
+    },
+    "wa.page.made_unpublished": {
+      "text": "Mo ti ṣe ojú-ìwé fún *{name}*, mo sì ti tàn án.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: made, but the storefront itself is not published yet; how to publish follows"
+    },
+    "wa.page.made": {
+      "text": "Ojú-ìwé rẹ fún *{name}* ti tàn: {link}\nYí ìlérí rẹ̀, àwọn àmì rẹ̀ àti àwọn àpò rẹ̀ padà ní Fronts nínú web app.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: made and live"
+    },
+    "wa.page.pay_at_door": {
+      "text": "Àwọn olùrà ń sanwó ní ẹnu ọ̀nà, ní owó ọwọ́ tàbí nípa fífi ránṣẹ́. Láti gba owó lórí ayélujára pẹ̀lú, so Paystack pọ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: made, with no online payments connected"
+    },
+    "form.followup.consent": {
+      "text": "Tí o bá kúrò kí o tó fi èyí ránṣẹ́, a lè fi ìfiránṣẹ́ kan ránṣẹ́ sí ọ nípa ọjà yìí, nípasẹ̀ àtẹ̀jíṣẹ́ tàbí ímeèlì, pẹ̀lú ìjápọ̀ láti parí rẹ̀. O lè dá àwọn ìfiránṣẹ́ wọ̀nyí dúró láti ìjápọ̀ náà.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Public host, under the phone and email of an order form that follows up a form left half-filled (forms-that-sell §6.2); Taskiem's words, the owner cannot change them"
+    },
+    "form.followup.sms": {
+      "text": "O bẹ̀rẹ̀ ọjà {what} ṣùgbọ́n o kò parí rẹ̀. Parí rẹ̀ níbí: {link} (o lè dá àwọn ìfiránṣẹ́ dúró níbẹ̀)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: SMS to a buyer who typed their phone into an order form and left (forms-that-sell §6.3); starts with the business's name; {what} is the product and package, {link} the restore link; at most three SMS parts"
+    },
+    "form.followup.email_subject": {
+      "text": "Ọjà rẹ pẹ̀lú {business}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Subject of the email to a buyer who typed their email into an order form and left (forms-that-sell §6.3)"
+    },
+    "form.followup.email": {
+      "text": "O bẹ̀rẹ̀ ọjà {what} pẹ̀lú {business} ṣùgbọ́n o kò parí rẹ̀.\n\nParí rẹ̀ níbí: {link}\n\nOhun tí o yàn ṣì wà; ìwọ yóò tún kọ àwọn àlàyé rẹ. Kí o má baà gba irú ìfiránṣẹ́ yìí mọ́, ṣí ìjápọ̀ náà kí o yan Stop these messages.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Email to a buyer who typed their email into an order form and left (forms-that-sell §6.3); {what} is the product and package, {link} the restore link"
+    },
+    "form.followup.consent_whatsapp": {
+      "text": "Tí o bá kúrò kí o tó fi èyí ránṣẹ́, a lè fi ìfiránṣẹ́ kan ránṣẹ́ sí ọ nípa ọjà tí o fẹ́ rà yìí, lórí WhatsApp tàbí nípa àtẹ̀jíṣẹ́ tàbí ímeèlì, pẹ̀lú ìjápọ̀ láti parí rẹ̀. Lórí WhatsApp, fèsì STOP láti dá àwọn ìfiránṣẹ́ wọ̀nyí dúró; bí bẹ́ẹ̀ kọ́, dá wọn dúró láti ìjápọ̀ yẹn.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Public host, under the phone and email of an order form that follows up a form left half-filled, where the follow-up may go on WhatsApp from the business's own number (forms-that-sell §6.2, L4); Taskiem's words, the owner cannot change them; STOP stays in English"
+    },
+    "form.followup.whatsapp_optin": {
+      "text": "Fi ìfiránṣẹ́ yẹn ránṣẹ́ lórí WhatsApp dípò (fèsì STOP níbẹ̀ láti dá a dúró)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Public host, a tick box under the consent line of an order form whose WhatsApp follow-up is a marketing template: only a buyer who ticks it is followed up on WhatsApp (forms-that-sell L4); STOP stays in English"
+    },
+    "form.followup.stopped": {
+      "text": "O kò ní rí irú ìfiránṣẹ́ yìí gbà láti ọ̀dọ̀ {business} mọ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: WhatsApp, from the business's own number: answer to STOP, or the Stop button, from someone the business followed up after they left an order form (forms-that-sell §6.5, L4)"
+    },
+    "wa.followups.on": {
+      "text": "A ti tan ìtẹ̀lé fún *{form}*. Ẹni tí ó bá kọ fóònù tàbí ímeèlì rẹ̀ tí ó sì kúrò láì ra yóò gba ìfiránṣẹ́ kan lẹ́yìn ìṣẹ́jú {wait}, nípa àtẹ̀jíṣẹ́, ímeèlì tàbí WhatsApp, pẹ̀lú ìjápọ̀ láti parí ọjà náà. Fọ́ọ̀mù náà ti sọ bẹ́ẹ̀ lábẹ́ àlàyé wọn báyìí. Sọ *follow-ups off* láti dá a dúró.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups on, done"
+    },
+    "wa.followups.off": {
+      "text": "A ti pa ìtẹ̀lé fún *{form}*. Kò tún pa ohunkóhun mọ́ nípa ẹni tí ó kúrò láì ra mọ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups off, done"
+    },
+    "wa.followups.already_on": {
+      "text": "Ìtẹ̀lé ti wà ní títàn tẹ́lẹ̀ fún *{form}*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups on, on already"
+    },
+    "wa.followups.already_off": {
+      "text": "Ìtẹ̀lé ti wà ní pípa tẹ́lẹ̀ fún *{form}*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups off, off already"
+    },
+    "wa.followups.which": {
+      "text": "Fọ́ọ̀mù ọjà wo: {names}? Sọ *follow-ups {how} for* àti orúkọ rẹ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): more than one order form, which one"
+    },
+    "wa.followups.none": {
+      "text": "Ojú-ìwé rẹ kò tíì ní fọ́ọ̀mù ọjà. Sọ *turn on orders* ná.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): no order form to follow up"
     }
   }
 }

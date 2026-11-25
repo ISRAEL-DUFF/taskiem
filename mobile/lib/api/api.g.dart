@@ -2407,6 +2407,18 @@ class TaskiemApi {
     return GetMyPayslipResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Who left an order form without ordering (`GET /v1/storefront/actions/{id}/left`)
+  Future<FormLeft> getStorefrontActionLeft({required String id}) async {
+    final j = await _t.send('GET', '/v1/storefront/actions/${Uri.encodeComponent(id)}/left');
+    return FormLeft.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// An order form's follow-ups (`PATCH /v1/storefront/actions/{id}`)
+  Future<PatchStorefrontActionResponse> patchStorefrontAction({required PatchStorefrontActionRequest body, required String id}) async {
+    final j = await _t.send('PATCH', '/v1/storefront/actions/${Uri.encodeComponent(id)}', body: body.toJson());
+    return PatchStorefrontActionResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Your phones that pay by fingerprint (`GET /v1/me/fingerprint`)
   Future<MeFingerprint> getMeFingerprint() async {
     final j = await _t.send('GET', '/v1/me/fingerprint');
@@ -23084,6 +23096,185 @@ class GetMyPayslipResponse {
 
   Map<String, dynamic> toJson() => {
         'payslip': payslip.toJson(),
+      };
+}
+
+class FormLeft {
+  const FormLeft({required this.actionId, required this.followups, required this.label, required this.left, required this.week});
+
+  final String actionId;
+  final FollowupSettings followups;
+  final String label;
+  final List<FormLeftLeftItem> left;
+  final FormLeftWeek week;
+
+  factory FormLeft.fromJson(Map<String, dynamic> j) => FormLeft(
+        actionId: j['action_id'] as String,
+        followups: FollowupSettings.fromJson(j['followups'] as Map<String, dynamic>),
+        label: j['label'] as String,
+        left: (j['left'] as List).map((e) => FormLeftLeftItem.fromJson(e as Map<String, dynamic>)).toList(),
+        week: FormLeftWeek.fromJson(j['week'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'action_id': actionId,
+        'followups': followups.toJson(),
+        'label': label,
+        'left': left.map((e) => e.toJson()).toList(),
+        'week': week.toJson(),
+      };
+}
+
+class FollowupSettings {
+  const FollowupSettings({this.heldAt, required this.on, required this.waitMinutes, this.whatsapp, required this.whatsappOn, this.whatsappOptIn, this.whatsappReady});
+
+  /// Set while the form's follow-ups are held after a run of keeps;
+  /// release_hold sends them
+  final DateTime? heldAt;
+  final bool on;
+  final int waitMinutes;
+  /// A follow-up may go on WhatsApp, by the approved template from the
+  /// business's own number (whatsapp_ready and whatsapp_on); absent when it
+  /// goes by text or email only
+  final bool? whatsapp;
+  /// The owner's choice for the whole business, "Also follow up on WhatsApp
+  /// from my number" (on unless turned off; followup_whatsapp in the PATCH)
+  final bool whatsappOn;
+  /// Meta filed the template as marketing in the business's account, so only a
+  /// buyer who ticks the box on the form is followed up on WhatsApp
+  final bool? whatsappOptIn;
+  /// The business's own WhatsApp number's account holds the built-in follow-up
+  /// template (taskiem_finish_order) approved by Meta with our words, as
+  /// utility or marketing, so follow-ups may go on WhatsApp (forms that sell
+  /// L4); absent otherwise
+  final bool? whatsappReady;
+
+  factory FollowupSettings.fromJson(Map<String, dynamic> j) => FollowupSettings(
+        heldAt: j['held_at'] == null ? null : DateTime.parse(j['held_at'] as String),
+        on: j['on'] as bool,
+        waitMinutes: (j['wait_minutes'] as num).toInt(),
+        whatsapp: j['whatsapp'] == null ? null : j['whatsapp'] as bool,
+        whatsappOn: j['whatsapp_on'] as bool,
+        whatsappOptIn: j['whatsapp_opt_in'] == null ? null : j['whatsapp_opt_in'] as bool,
+        whatsappReady: j['whatsapp_ready'] == null ? null : j['whatsapp_ready'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'held_at': ?heldAt?.toUtc().toIso8601String(),
+        'on': on,
+        'wait_minutes': waitMinutes,
+        'whatsapp': ?whatsapp,
+        'whatsapp_on': whatsappOn,
+        'whatsapp_opt_in': ?whatsappOptIn,
+        'whatsapp_ready': ?whatsappReady,
+      };
+}
+
+class FormLeftLeftItem {
+  const FormLeftLeftItem({required this.at, this.cameBackAt, this.channel, required this.contact, required this.contactKind, this.followedUpAt, required this.id, this.outcome, this.package, required this.product, this.zone});
+
+  final DateTime at;
+  final DateTime? cameBackAt;
+  final String? channel;
+  /// Masked, "… 4567" or "…@example.com"
+  final String contact;
+  final String contactKind;
+  final DateTime? followedUpAt;
+  final String id;
+  /// Why it was not followed up; absent while waiting or held, and once
+  /// followed up
+  final String? outcome;
+  final int? package;
+  final String product;
+  final String? zone;
+
+  factory FormLeftLeftItem.fromJson(Map<String, dynamic> j) => FormLeftLeftItem(
+        at: DateTime.parse(j['at'] as String),
+        cameBackAt: j['came_back_at'] == null ? null : DateTime.parse(j['came_back_at'] as String),
+        channel: j['channel'] == null ? null : j['channel'] as String,
+        contact: j['contact'] as String,
+        contactKind: j['contact_kind'] as String,
+        followedUpAt: j['followed_up_at'] == null ? null : DateTime.parse(j['followed_up_at'] as String),
+        id: j['id'] as String,
+        outcome: j['outcome'] == null ? null : j['outcome'] as String,
+        package: j['package'] == null ? null : (j['package'] as num).toInt(),
+        product: j['product'] as String,
+        zone: j['zone'] == null ? null : j['zone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'came_back_at': ?cameBackAt?.toUtc().toIso8601String(),
+        'channel': ?channel,
+        'contact': contact,
+        'contact_kind': contactKind,
+        'followed_up_at': ?followedUpAt?.toUtc().toIso8601String(),
+        'id': id,
+        'outcome': ?outcome,
+        'package': ?package,
+        'product': product,
+        'zone': ?zone,
+      };
+}
+
+class FormLeftWeek {
+  const FormLeftWeek({required this.cameBack, required this.followed, required this.left});
+
+  final int cameBack;
+  final int followed;
+  final int left;
+
+  factory FormLeftWeek.fromJson(Map<String, dynamic> j) => FormLeftWeek(
+        cameBack: (j['came_back'] as num).toInt(),
+        followed: (j['followed'] as num).toInt(),
+        left: (j['left'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'came_back': cameBack,
+        'followed': followed,
+        'left': left,
+      };
+}
+
+class PatchStorefrontActionRequest {
+  const PatchStorefrontActionRequest({this.followupOn, this.followupWait, this.followupWhatsapp, this.releaseHold});
+
+  final bool? followupOn;
+  /// Minutes after the buyer's last keep
+  final int? followupWait;
+  /// For every order form of the business, follow-ups may also go on WhatsApp
+  /// from its own number once the template is approved there (on unless turned
+  /// off); off, they go by text or email only
+  final bool? followupWhatsapp;
+  final bool? releaseHold;
+
+  factory PatchStorefrontActionRequest.fromJson(Map<String, dynamic> j) => PatchStorefrontActionRequest(
+        followupOn: j['followup_on'] == null ? null : j['followup_on'] as bool,
+        followupWait: j['followup_wait'] == null ? null : (j['followup_wait'] as num).toInt(),
+        followupWhatsapp: j['followup_whatsapp'] == null ? null : j['followup_whatsapp'] as bool,
+        releaseHold: j['release_hold'] == null ? null : j['release_hold'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'followup_on': ?followupOn,
+        'followup_wait': ?followupWait,
+        'followup_whatsapp': ?followupWhatsapp,
+        'release_hold': ?releaseHold,
+      };
+}
+
+class PatchStorefrontActionResponse {
+  const PatchStorefrontActionResponse({required this.followups});
+
+  final FollowupSettings followups;
+
+  factory PatchStorefrontActionResponse.fromJson(Map<String, dynamic> j) => PatchStorefrontActionResponse(
+        followups: FollowupSettings.fromJson(j['followups'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'followups': followups.toJson(),
       };
 }
 

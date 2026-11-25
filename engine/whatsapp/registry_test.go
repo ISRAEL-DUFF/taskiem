@@ -71,7 +71,7 @@ func TestBusinessManagementCalls(t *testing.T) {
 	defer srv.Close()
 	c := &Client{BaseURL: srv.URL, PhoneNumberID: "111", Token: "tok", HTTP: srv.Client()}
 	def, _ := TplInvoice.Submission("en", Hosts{Forms: "https://forms.example.com"})
-	id, status, err := c.CreateTemplate(context.Background(), "300000000000001", def)
+	id, status, _, err := c.CreateTemplate(context.Background(), "300000000000001", def)
 	if err != nil || id != "1234567890123456789" || status != "PENDING" || created["name"] != "taskiem_invoice" {
 		t.Fatalf("create: %s %s %v %v", id, status, err, created)
 	}
@@ -79,7 +79,7 @@ func TestBusinessManagementCalls(t *testing.T) {
 	if err != nil || len(listed) != 2 || pages != 2 || listed[0].ID != "1" || listed[0].Status != "APPROVED" || listed[1].Reason() != "INVALID_FORMAT" {
 		t.Fatalf("list: %+v %v (%d pages)", listed, err, pages)
 	}
-	if _, _, err := c.CreateTemplate(context.Background(), "not-an-id", def); err == nil {
+	if _, _, _, err := c.CreateTemplate(context.Background(), "not-an-id", def); err == nil {
 		t.Error("a bad account id")
 	}
 }

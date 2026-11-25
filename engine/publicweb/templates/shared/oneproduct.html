@@ -1,0 +1,33 @@
+{{/* A One product front (forms that sell §5.4): one product on a page of
+its own, drawn in every look by the look's own bar, form and stylesheet,
+with oneproduct.css for its parts. The form is the front's order form,
+posting to its own address. */}}<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}<title>{{.Title}}</title>
+{{with .Description}}<meta name="description" content="{{.}}">
+<meta property="og:description" content="{{.}}">{{end}}
+<meta property="og:type" content="product">
+<meta property="og:title" content="{{.Headline}}">
+{{with .Image}}<meta property="og:image" content="{{.}}">{{end}}
+{{with .URL}}<meta property="og:url" content="{{.}}">
+<link rel="canonical" href="{{.}}">{{end}}
+<link rel="stylesheet" href="{{asset "sell.css"}}">
+<link rel="stylesheet" href="{{asset "oneproduct.css"}}">
+{{if .Packages}}<script src="{{asset "sell.js"}}" defer></script>
+{{end}}{{template "fbody" .}}{{template "fmain" .}}
+<div class="op">
+{{with .Promise}}<p class="op-promise">{{.}}</p>
+{{end}}{{if or .PayAtDoor .Stock}}<p class="op-marks">{{if .PayAtDoor}}<span class="op-mark">{{template "i-check"}}Pay on delivery</span>{{end}}{{with .Stock}}<span class="op-mark op-stock" role="status">{{.}}</span>{{end}}</p>
+{{end}}<h1 class="op-h">{{.Headline}}</h1>
+{{with .Reason}}<p class="op-reason">{{.}}</p>
+{{end}}{{if .Photos}}<div class="op-photos{{if eq (len .Photos) 1}} is-one{{end}}">{{range $i, $p := .Photos}}<img src="{{$p.Large}}"{{with $p.Small}} srcset="{{.}} 320w, {{$p.Large}} 800w" sizes="(min-width: 640px) 36rem, 92vw"{{end}} alt="{{$.Headline}}{{if gt (len $.Photos) 1}}, photo {{add $i 1}} of {{len $.Photos}}{{end}}"{{if $i}} loading="lazy"{{end}} decoding="async">{{end}}</div>
+{{end}}{{if .Chips}}<ul class="op-chips" aria-label="Why buy it">{{range .Chips}}<li>{{.Icon}}<span>{{.Text}}</span></li>{{end}}</ul>
+{{end}}<section id="order" class="op-order" aria-labelledby="op-order-h">
+<h2 id="op-order-h">{{.Label}}</h2>
+{{if .Ordering}}{{template "orderform" .}}{{else}}<p class="notice" role="status">{{.Shut}}</p>
+{{end}}{{if .Ordering}}{{with .Whats}}<p class="op-whats"><a class="btn btn-block" href="{{.}}" rel="noopener">{{template "i-whatsapp"}}{{$.WhatsLabel}}</a><span class="hint">Having trouble with the form? Order in a message instead.</span></p>
+{{end}}{{end}}</section>
+</div>
+{{if and .Ordering .Price}}<div class="op-bar"><p class="op-bar-price"><strong>{{.Price}}</strong>{{with .PriceNote}}<span>{{.}}</span>{{end}}</p><a class="btn btn-primary btn-brand" href="#order">{{.Label}}</a></div>
+{{end}}{{if .Ordering}}{{template "sfkeep" .}}{{end}}{{template "ffoot" .}}

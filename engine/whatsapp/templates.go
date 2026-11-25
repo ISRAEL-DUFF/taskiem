@@ -31,6 +31,10 @@ type Template struct {
 	// one for the business's own people, filled from the step's one-line
 	// variables alone (TellTemplate).
 	Tell bool
+	// OwnOnly marks a template sent only from a business's own number
+	// (the follow-up of a form left half-filled): it is listed, submitted
+	// and tracked in own numbers' accounts, never in the shared number's.
+	OwnOnly bool
 }
 
 // TemplateButton is a button defined on a template: a quick reply (its
@@ -304,7 +308,7 @@ var (
 
 // AllTemplates lists the library, for documentation, submission and tests.
 var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate, TplUpdateChat, TplLinkMessage, TplCustomerReply,
-	TplInvoice, TplBalance, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite, TplStaffTask}
+	TplInvoice, TplBalance, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite, TplStaffTask, TplFinishOrder}
 
 var placeholder = regexp.MustCompile(`\{\{(\d+)\}\}`)
 
@@ -492,6 +496,24 @@ func TellVars(t Template) []string {
 		}
 	}
 	return out
+}
+
+// Library is the templates this number's account holds: the library,
+// but on the shared number those sent only from an own number (OwnOnly).
+func (p *Platform) Library() []Template {
+	if p.Own() {
+		return AllTemplates
+	}
+	return slices.DeleteFunc(slices.Clone(AllTemplates), func(t Template) bool { return t.OwnOnly })
+}
+
+// TemplateNamed finds a template in this number's library.
+func (p *Platform) TemplateNamed(name string) (Template, bool) {
+	t, ok := TemplateNamed(name)
+	if !ok || t.OwnOnly && !p.Own() {
+		return Template{}, false
+	}
+	return t, true
 }
 
 // TemplateNamed finds a template in the library.

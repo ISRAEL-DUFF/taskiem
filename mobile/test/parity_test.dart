@@ -387,6 +387,23 @@ final screens = <String, Screen>{
       await t.pumpAndSettle();
     },
   ),
+  // A One product page made from chat (forms-that-sell L2), the owner's
+  // message at the thread's top, as the web half scrolls it.
+  'chat-taskiem-page': (
+    build: () {
+      final f = Fixture('chat-taskiem-page');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      final thread = t.state<ThreadViewState<TaskiemLine>>(find.byType(ThreadView<TaskiemLine>));
+      final view = t.renderObject<RenderBox>(find.byType(SingleChildScrollView));
+      final said = t.renderObject<RenderBox>(find.textContaining('sell Smart Ear Cleaner on a page', findRichText: true).first);
+      thread.scroll.jumpTo(thread.scroll.offset + said.localToGlobal(Offset.zero, ancestor: view).dy);
+      await t.pumpAndSettle();
+    },
+  ),
   'chat-taskiem-approval': (
     build: () {
       final f = Fixture('chat-taskiem');
@@ -555,7 +572,7 @@ const appsOwnLook = {
   // The chat in the app's own look (docs/spec/mobile-app-look.md, "The chat").
   'chat-attach', 'chat-caption', 'chat-delete', 'chat-files', 'chat-files-end', 'chat-head-menu', 'chat-info-media', 'chat-long',
   'chat-menu', 'chat-order', 'chat-order-review', 'chat-pick', 'chat-product', 'chat-reply', 'chat-sell', 'chat-taskiem',
-  'chat-taskiem-approval', 'chat-taskiem-approve', 'chat-taskiem-cards', 'chat-tool-sheet', 'chat-tools', 'chat-tunde',
+  'chat-taskiem-approval', 'chat-taskiem-approve', 'chat-taskiem-cards', 'chat-taskiem-page', 'chat-tool-sheet', 'chat-tools', 'chat-tunde',
   'chats', 'chats-customers', 'chats-search', 'chats-starred', 'customer-chidi',
   // Signing in, as drawn (docs/spec/mobile-app-look.md, "Signing in").
   'sign-in', 'sign-in-chat', 'sign-in-chat-code', 'sign-in-wrong', 'sign-up',

@@ -254,6 +254,10 @@ func (q *Queue) countries() []string {
 	return q.Countries
 }
 
+// ContactHash is an address keyed as the per-person limits key it: a
+// phone under "sms" (or "whatsapp"), an email under "email".
+func (q *Queue) ContactHash(channel, to string) []byte { return q.hash(channel, to) }
+
 func (q *Queue) hash(channel, to string) []byte {
 	h := hmac.New(sha256.New, q.HashKey)
 	h.Write([]byte(channel + "\x00" + to))

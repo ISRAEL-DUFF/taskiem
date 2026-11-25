@@ -40,30 +40,30 @@ func TestFoodOptions(t *testing.T) {
 	// Large goes up to ₦700 at the table.
 	dearer := rice
 	dearer.Options = ParseOptions(`[{"name": "Size", "choices": ["Regular", {"name": "Large", "price": 700}]}, {"name": "Extra", "choices": ["None", {"name": "Plantain", "price": 300}]}]`)
-	pc, changed := reprice(sub, map[string]Item{"1": dearer}, ActionOptions{})
+	pc, changed := reprice(sub, map[string]Item{"1": dearer}, ActionOptions{}, PackagesField{})
 	if !changed || pc.TotalKobo != 2*(150000+70000+30000) {
 		t.Fatalf("repriced: %+v %v", pc, changed)
 	}
 	// Plantain is off the menu.
 	gone := rice
 	gone.Options = ParseOptions(`[{"name": "Size", "choices": ["Regular", {"name": "Large", "price": 500}]}, {"name": "Extra", "choices": ["None"]}]`)
-	if pc, changed := reprice(sub, map[string]Item{"1": gone}, ActionOptions{}); !changed || len(pc.Gone) != 1 || pc.Gone[0] != "Jollof rice (Large, Plantain)" {
+	if pc, changed := reprice(sub, map[string]Item{"1": gone}, ActionOptions{}, PackagesField{}); !changed || len(pc.Gone) != 1 || pc.Gone[0] != "Jollof rice (Large, Plantain)" {
 		t.Fatalf("a choice gone: %+v", pc)
 	}
-	if _, changed := reprice(sub, map[string]Item{"1": rice}, ActionOptions{}); changed {
+	if _, changed := reprice(sub, map[string]Item{"1": rice}, ActionOptions{}, PackagesField{}); changed {
 		t.Fatal("nothing changed")
 	}
 	// An order with a deposit keeps one at the new prices: the action's
 	// percentage, else the share it had (30% of 460000 is 138000).
 	dep := sub
 	dep.DepositKobo = 138000
-	if pc, _ := reprice(dep, map[string]Item{"1": dearer}, ActionOptions{DepositPercent: 30}); pc.DepositKobo != (500000*30+99)/100 {
+	if pc, _ := reprice(dep, map[string]Item{"1": dearer}, ActionOptions{DepositPercent: 30}, PackagesField{}); pc.DepositKobo != (500000*30+99)/100 {
 		t.Fatalf("deposit at the action's percentage: %+v", pc)
 	}
-	if pc, _ := reprice(dep, map[string]Item{"1": dearer}, ActionOptions{}); pc.DepositKobo != 150000 {
+	if pc, _ := reprice(dep, map[string]Item{"1": dearer}, ActionOptions{}, PackagesField{}); pc.DepositKobo != 150000 {
 		t.Fatalf("deposit at the order's share: %+v", pc)
 	}
-	if pc, _ := reprice(sub, map[string]Item{"1": dearer}, ActionOptions{}); pc.DepositKobo != 0 {
+	if pc, _ := reprice(sub, map[string]Item{"1": dearer}, ActionOptions{}, PackagesField{}); pc.DepositKobo != 0 {
 		t.Fatalf("no deposit stays none: %+v", pc)
 	}
 }

@@ -174,6 +174,12 @@ const (
 	gsm7ext = "^{}\\[~]|€\f"
 )
 
+// GSM7 reports whether r is in the GSM 03.38 alphabet, its extension
+// included, so a message of such runes goes 153 characters a part.
+func GSM7(r rune) bool {
+	return strings.ContainsRune(gsm7, r) || strings.ContainsRune(gsm7ext, r)
+}
+
 // Segments is how many SMS parts text takes: 160 GSM-7 septets in one part
 // or 153 in each of several; 70 UCS-2 characters, or 67 each, once any
 // character is outside GSM-7 (a naira sign, most emoji).

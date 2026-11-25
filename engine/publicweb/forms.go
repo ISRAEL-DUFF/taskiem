@@ -89,6 +89,9 @@ type formData struct {
 	// size sold out, or none of those values): kept so a submission is
 	// refused with it rather than sent without the line.
 	pickError string
+	// basketOnly are the rows the form's basket names (nil: every row):
+	// the only ones a submission may order, whatever the browser posts.
+	basketOnly []string
 	pageData
 	Business string
 	Kind     string
@@ -141,6 +144,34 @@ type formData struct {
 	// step's button says how much); Whats is the business's WhatsApp.
 	PayNow bool
 	Whats  string
+	// Forms that sell (forms-that-sell §5): One is the product a form
+	// sells, drawn at the top; Packages its packages field (pkgField as
+	// published, which prices it); Notice the warning line above the
+	// button.
+	One      *oneView
+	Packages *packagesView
+	pkgField storefront.PackagesField
+	Notice   string
+	// Embed and Origins: a frame on the business's verified websites,
+	// which is told the page's height and, once sent, the action and the
+	// reference (storefront:height, storefront:submitted).
+	Embed   bool
+	Origins string
+	Ref     string
+	// Forms left half-filled (forms-that-sell §6): the consent line under
+	// the contact, and where and with what token the page sends a keep;
+	// both only on an order form that follows up.
+	Consent string
+	Keep    *keepView
+	// WAOptIn is the box a buyer ticks to have the follow-up on WhatsApp,
+	// where its template is a marketing one (L4); "" offers none.
+	WAOptIn string
+}
+
+type keepView struct {
+	URL, Token string
+	// WhatsApp: the form names WhatsApp, and its keeps say so.
+	WhatsApp bool
 }
 
 type zoneItem struct {
@@ -341,9 +372,29 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 		s.serveBooking(w, r, site, p, act, embed)
 		return
 	}
+	if embed {
+		// A frame is told where it may post its height and its reference.
+		origins, err := s.embedOrigins(r.Context(), site.Tenant)
+		if err == nil {
+			f.Embed, f.Origins = true, strings.Join(origins, " ")
+		}
+	}
+	follows := act.ID != nil && p.Followups[*act.ID] && act.Kind == "order" && s.FormKeys != nil && s.Keeps != nil
+	if follows {
+		var named bool
+		f.Consent, f.WAOptIn, named = s.followupWords(p, f.Lang)
+		s.keepFor(&f, named)
+	}
 	if r.Method != http.MethodPost {
 		f.stepFor(r.URL.Query())
-		if item := r.URL.Query().Get("item"); item != "" {
+		f.Packages.choose(r.URL.Query())
+		if z := r.URL.Query().Get("zone"); z != "" {
+			for i := range f.Zones {
+				f.Zones[i].Selected = f.Zones[i].Name == z
+			}
+		}
+
+		if item := r.URL.Query().Get(oneItemQuery); item != "" && f.One == nil {
 			for i := range f.Items {
 				if f.Items[i].ID == item && f.Items[i].Orderable {
 					f.Items[i].Qty = 1
@@ -364,7 +415,7 @@ func (s *Server) formsOpen() bool {
 func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bool, base string) formData {
 	c := p.Model.Card
 	f := formData{pageData: pageData{Title: act.Label, Lang: c.Language}, Business: c.Name, Kind: act.Kind, Label: act.Label,
-		Action: base + "/a/" + act.Ref(), Home: "/", Honeypot: formguard.HoneypotField, Purpose: purposes[act.Kind],
+		Action: base + "/a/" + act.Ref(), Home: "/", Honeypot: formguard.HoneypotField, Purpose: purposes[act.Kind], Ref: act.Ref(),
 		form: formID(site.ID, strings.TrimPrefix(base+"/"+act.Ref(), "/"))}
 	if base != "" {
 		f.Home = base
@@ -404,10 +455,22 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 		case f.Delivery && !f.Pickup:
 			f.Fulfilment = "delivery"
 		}
+		if storefront.HasWidget(form, "packages") {
+			f.Packages, f.pkgField = packagesFieldView(form, storefront.WithSizes(p.Items))
+		}
+		// One product, pre-chosen at the top (§5.3), with Secure checkout
+		// where it is paid through the payment page.
+		if one := storefront.OneItem(form); one != "" {
+			if it, ok := findItem(p.Items, one); ok {
+				f.One = oneItemView(it, act.Checkout)
+			}
+		}
+		f.Notice = storefront.NoticeFor(storefront.ActionOptions{Notice: act.Notice}, f.One != nil)
 		if storefront.HasWidget(form, "basket") {
-			f.Items = basketItems(storefront.WithSizes(p.Items))
+			f.basketOnly = storefront.BasketItems(form)
+			f.Items = onlyItems(basketItems(storefront.WithSizes(p.Items)), f.basketOnly)
 			for _, it := range p.Items {
-				if len(it.Sizes) > 0 {
+				if len(it.Sizes) > 0 && storefront.OnForm(it, f.basketOnly) {
 					f.products = append(f.products, it)
 				}
 			}
@@ -435,6 +498,15 @@ func (s *Server) showForm(w http.ResponseWriter, r *http.Request, status int, f 
 		token = string(t)
 	}
 	f.Token = token
+	if f.Keep != nil {
+		// The page's keep token is its submit token's twin (§6.1).
+		k, err := s.guard.Twin(formguard.Token(token), f.form+keepSuffix)
+		if err != nil {
+			f.Keep = nil
+		} else {
+			f.Keep.Token = string(k)
+		}
+	}
 	if r.Method == http.MethodPost {
 		f.detailsAgain()
 	}
@@ -548,11 +620,13 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 			Message: f.Business + " is not taking this form right now.", Home: f.Home})
 		return
 	}
-	prefix := ""
+	prefix, sent := "", ""
 	if embed {
-		prefix = "/embed"
+		// The frame's status page tells the website once which action
+		// was sent, and the reference.
+		prefix, sent = "/embed", "&sent="+url.QueryEscape(act.Ref())
 	}
-	http.Redirect(w, r, prefix+"/o/"+url.PathEscape(ref)+"?k="+url.QueryEscape(sub.StatusKey), http.StatusSeeOther)
+	http.Redirect(w, r, prefix+"/o/"+url.PathEscape(ref)+"?k="+url.QueryEscape(sub.StatusKey)+sent, http.StatusSeeOther)
 }
 
 // record seals a submission and records it, with a new reference if the
@@ -592,6 +666,7 @@ func (f *formData) keep(v url.Values) {
 	for _, q := range f.Questions {
 		q.show(v)
 	}
+	f.Packages.choose(v)
 	f.keepBasket(v)
 }
 
@@ -706,7 +781,11 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 		if f.pickError != "" {
 			return sub, f.pickError
 		}
-		if msg := f.basket(v, items, &sub); msg != "" {
+		if f.Packages != nil {
+			if msg := f.packageLines(v, items, &sub); msg != "" {
+				return sub, msg
+			}
+		} else if msg := f.basket(v, items, &sub); msg != "" {
 			return sub, msg
 		}
 		switch {
@@ -829,7 +908,7 @@ func readAnswers(qs []*field, v url.Values) (map[string]any, string) {
 func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront.Submission) string {
 	seen := map[string]bool{}
 	for _, it := range items {
-		if seen[it.ID] {
+		if seen[it.ID] || !storefront.OnForm(it, f.basketOnly) {
 			continue
 		}
 		seen[it.ID] = true

@@ -129,6 +129,56 @@ type Claims struct {
 
 	token string // the token verified, binding VerifyPoW to it
 	idem  [32]byte
+	key   []byte // the key that verified it
+}
+
+// IdempotencyKeyFor is the idempotency key a token for form with the
+// same nonce has: a keep token's twin, the submission its page would make
+// (Twin).
+func (c Claims) IdempotencyKeyFor(form string) [32]byte {
+	var out [32]byte
+	if c.key == nil {
+		return out
+	}
+	m := hmac.New(sha256.New, c.key)
+	m.Write([]byte("idem"))
+	m.Write(c.Nonce[:])
+	m.Write([]byte(form))
+	copy(out[:], m.Sum(nil))
+	return out
+}
+
+// Twin signs a token for form with the nonce and the issue time of t, a
+// token this guard signed: a page's keep token beside its submit token
+// (forms-that-sell §6.1). Neither can stand for the other (the form is
+// signed), and the keep can name the submission its page would make
+// (IdempotencyKeyFor) without carrying the submit token.
+func (g *Guard) Twin(t Token, form string) (Token, error) {
+	if form == "" || len(form) > MaxForm {
+		return "", fmt.Errorf("formguard: form id must be 1 to %d bytes", MaxForm)
+	}
+	b, err := base64.RawURLEncoding.DecodeString(string(t))
+	if err != nil || len(b) < headerSize+1+tagSize || b[0] != tokenVersion {
+		return "", ErrInvalid
+	}
+	n := int(b[10+nonceSize])
+	if n == 0 || n > MaxForm || len(b) != headerSize+n+tagSize {
+		return "", ErrInvalid
+	}
+	body, sum := b[:headerSize+n], b[headerSize+n:]
+	signed := false
+	for _, k := range g.keys {
+		signed = signed || hmac.Equal(sum, tag(k, body))
+	}
+	if !signed {
+		return "", ErrInvalid
+	}
+	out := make([]byte, headerSize, headerSize+len(form)+tagSize)
+	copy(out, body[:headerSize])
+	out[10+nonceSize] = byte(len(form)) // #nosec G115 -- at most MaxForm
+	out = append(out, form...)
+	out = append(out, tag(g.keys[0], out)...)
+	return Token(base64.RawURLEncoding.EncodeToString(out)), nil
 }
 
 // IdempotencyKey identifies the submission: HMAC(key, "idem"||nonce||form)
@@ -215,6 +265,7 @@ func (g *Guard) Verify(token, form string, now time.Time) (Claims, error) {
 	m.Write(c.Nonce[:])
 	m.Write([]byte(c.Form))
 	copy(c.idem[:], m.Sum(nil))
+	c.key = key
 	return c, nil
 }
 

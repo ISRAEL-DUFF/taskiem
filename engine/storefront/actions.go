@@ -83,6 +83,40 @@ type ActionOptions struct {
 	// QuoteDays is how long a quote stands for the customer to accept
 	// (fronts F7): 1 to 60, 7 by default.
 	QuoteDays int `json:"quote_days,omitempty"`
+	// Notice is the order form's warning line above its button ("Do not
+	// order if you are not ready to receive it in 2 to 4 days"), drawn in
+	// the storefront's warning tone (forms-that-sell §5.2): unset is
+	// DefaultNotice on a form that sells one product, "-" none.
+	Notice string `json:"notice,omitempty"`
+}
+
+// DefaultNotice is the warning line of an order form that sells one
+// product, until the owner changes or clears it.
+const DefaultNotice = "Please order only when you are ready to receive it."
+
+// MaxNotice is how long a notice may be.
+const MaxNotice = 160
+
+// CheckNotice refuses a notice that is not one line of words.
+func CheckNotice(n string) error {
+	if n != strings.TrimSpace(n) || len([]rune(n)) > MaxNotice || hasLink(n) || strings.ContainsAny(n, "\n\r") {
+		return fmt.Errorf("%w: the notice above the button is up to %d characters on one line, with no links", ErrInvalid, MaxNotice)
+	}
+	return nil
+}
+
+// NoticeFor is the notice an order form shows ("" for none): its own, or
+// the default on a form that sells one product.
+func NoticeFor(o ActionOptions, oneItem bool) string {
+	switch {
+	case o.Notice == "-":
+		return ""
+	case o.Notice != "":
+		return o.Notice
+	case oneItem:
+		return DefaultNotice
+	}
+	return ""
 }
 
 // Zone is an area a business delivers to and what delivery there costs.
@@ -205,6 +239,11 @@ type PublicAction struct {
 	MaxPerOrder int  `json:"max_per_order,omitempty"`
 	Instalments int  `json:"instalments,omitempty"`
 	WaitingList bool `json:"waiting_list,omitempty"`
+	// Notice is an order form's warning line (forms-that-sell §5.2);
+	// Checkout that it is paid through the payment page, which the page
+	// marks Secure checkout.
+	Notice   string `json:"notice,omitempty"`
+	Checkout bool   `json:"checkout,omitempty"`
 }
 
 var defaultLabels = map[string]string{"order": "Order now", "enquiry": "Ask a question", "callback": "Request a call back", "booking": "Book", "hire": "Hire now",
@@ -353,6 +392,9 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		if !a.Options.Delivery || a.Payment == "none" {
 			a.Options.PayOnDelivery = false
 		}
+		if err := CheckNotice(a.Options.Notice); err != nil {
+			return Action{}, err
+		}
 	case "booking":
 		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
 			return Action{}, fmt.Errorf("%w: a deposit is 0 (none) to 100 (the full price) per cent of the price", ErrInvalid)
@@ -493,11 +535,35 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 	return a, nil
 }
 
-// publicAction is an action as a snapshot holds it.
-func publicAction(a Action) PublicAction {
+// publicAction is an action as a snapshot holds it, Secure checkout
+// marked only where an order is paid through the payment page on a
+// payments account that is connected (forms-that-sell §5.3).
+func publicAction(ctx context.Context, tx pgx.Tx, a Action) (PublicAction, error) {
+	checkout, err := paysThroughCheckout(ctx, tx, a)
+	if err != nil {
+		return PublicAction{}, err
+	}
 	return PublicAction{Kind: a.Kind, Label: a.Label, Payment: a.Payment, Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote,
 		Zones: a.Options.Zones, PayOnDelivery: a.Options.PayOnDelivery, DepositPercent: a.Options.DepositPercent,
-		MaxPerOrder: a.Options.MaxPerOrder, Instalments: a.Options.Instalments, WaitingList: a.Options.WaitingList}
+		MaxPerOrder: a.Options.MaxPerOrder, Instalments: a.Options.Instalments, WaitingList: a.Options.WaitingList,
+		Notice: a.Options.Notice, Checkout: checkout}, nil
+}
+
+// paysThroughCheckout reports whether an order form is paid through the
+// payment page: it takes payment, by card on a Paystack connection (not
+// another rail's bank transfer), and that connection is connected in prod.
+func paysThroughCheckout(ctx context.Context, tx pgx.Tx, a Action) (bool, error) {
+	if a.Kind != "order" || a.Payment == "none" {
+		return false, nil
+	}
+	name, card := paystackConnection(a.Options.Connection)
+	if !card {
+		return false, nil
+	}
+	var ok bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM connections WHERE environment = 'prod' AND connector = 'paystack' AND name = $1 AND status = 'active')`,
+		name).Scan(&ok)
+	return ok, err
 }
 
 // Ref is how a page addresses the action, /a/<ref>: its slug, or for one
@@ -573,7 +639,11 @@ func publicActions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]PublicAc
 	var out []PublicAction
 	for _, a := range list {
 		if a.Enabled && a.Builtin {
-			out = append(out, publicAction(a))
+			pa, err := publicAction(ctx, tx, a)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, pa)
 		}
 	}
 	return out, nil

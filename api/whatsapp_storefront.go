@@ -81,6 +81,9 @@ type chatShop struct {
 	Kind      string              `json:"kind,omitempty"`
 	Table     string              `json:"table,omitempty"`
 	Columns   *storefront.Columns `json:"columns,omitempty"`
+	// Packages are a One product page's packages being confirmed
+	// (chat_oneproduct.go).
+	Packages []storefront.Package `json:"packages,omitempty"`
 }
 
 type shopChoice struct {
@@ -184,6 +187,10 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 			return false, nil
 		}
 		return true, s.shopAsk(ctx, c, &chatShop{Action: "orders_on"}, c.t("wa.shop.turn_on_orders"))
+	case followupsCmd.MatchString(text):
+		// An order form's follow-ups (forms-that-sell §7, chat_followups.go).
+		m := followupsCmd.FindStringSubmatch(text)
+		do = func() error { return s.waFollowups(ctx, c, strings.EqualFold(m[1], "on"), m[2]) }
 	case cmd == "open shop" || cmd == "open my shop" || cmd == "reopen shop" || cmd == "reopen":
 		do = func() error { return s.waShopOpen(ctx, c) }
 	case s.Orders != nil && (cmd == "orders" || cmd == "my orders" || cmd == "open orders"):
@@ -1547,6 +1554,8 @@ func (s *Server) waShopApply(ctx context.Context, c *chat) error {
 		return s.shopSwitchFront(ctx, c)
 	case "front_action_on":
 		return s.shopTurnOnFrontAction(ctx, c)
+	case "sell_page":
+		return s.shopSellOnPage(ctx, c)
 	case "front_deliveries_on":
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return err

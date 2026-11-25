@@ -865,6 +865,15 @@ button.small:focus-visible { box-shadow: var(--ring); } /* the ring, which the l
 .form-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 14px; }
 .form-card .kv { margin-bottom: 12px; }
 .embed-code { display: block; word-break: break-all; font-size: 12px; margin: 2px 0 4px; }
+.sell-embed-row { margin: 0 0 16px; }
+/* Forms that sell: a package per row (how many, the price, its words), wrapping on a phone. */
+.sell-packages { border: 0; padding: 0; margin: 12px 0; min-width: 0; }
+.sell-packages legend { font-weight: 700; padding: 0; }
+.sell-row { display: grid; grid-template-columns: minmax(0, 5rem) minmax(0, 8rem) minmax(0, 1fr) auto; gap: 8px; align-items: end; border-top: 1px solid var(--border); padding-top: 8px; margin-bottom: 8px; }
+.sell-row .field { margin: 0; }
+.sell-warn { grid-column: 1 / -1; margin: 0; }
+pre.embed-code { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+@media (max-width: 520px) { .sell-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .sell-row .field:nth-child(3) { grid-column: 1 / -1; } }
 @media (max-width: 1100px) {
   .form-editor { grid-template-columns: 1fr; }
   .form-editor .form-preview { position: static; max-height: none; }

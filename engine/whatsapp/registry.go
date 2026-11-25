@@ -64,6 +64,13 @@ type TemplateStatus struct {
 	SubmittedAt *time.Time `json:"submitted_at,omitempty"`
 	CheckedAt   *time.Time `json:"checked_at,omitempty"`
 	Purpose     string     `json:"purpose"`
+	// MetaCategory is the category Meta gave the template in this
+	// account (utility, marketing, authentication), which may differ
+	// from the one it was submitted in; "" until Meta lists it.
+	MetaCategory string `json:"meta_category,omitempty"`
+	// Matches says whether the body and buttons Meta holds are the
+	// library's; nil until Meta lists them.
+	Matches *bool `json:"matches,omitempty"`
 }
 
 // StatusFromMeta maps a status or webhook event Meta reports to the
@@ -173,28 +180,31 @@ var ErrNoWABA = errors.New("whatsapp: the number's WhatsApp Business Account id 
 // this number's account; every template is not_submitted when nothing is
 // recorded.
 func (p *Platform) TemplateStatuses(ctx context.Context) ([]TemplateStatus, error) {
-	out := make([]TemplateStatus, 0, len(AllTemplates))
-	for _, t := range AllTemplates {
+	lib := p.Library()
+	out := make([]TemplateStatus, 0, len(lib))
+	for _, t := range lib {
 		out = append(out, TemplateStatus{Name: t.Name, Category: Category(t), Language: p.Config.Language, Status: TemplateNotSubmitted, Purpose: t.Purpose})
 	}
 	if p.WABA == "" {
 		return out, nil
 	}
 	err := p.registry(ctx, func(q querier) error {
-		rows, err := q.Query(ctx, `SELECT name, status, reason, COALESCE(meta_id, ''), submitted_at, checked_at FROM whatsapp_templates WHERE waba_id = $1 AND language = $2`, p.WABA, p.Config.Language)
+		rows, err := q.Query(ctx, `SELECT name, language, status, reason, COALESCE(meta_id, ''), submitted_at, checked_at, lower(COALESCE(meta_category, '')), meta_matches
+			FROM whatsapp_templates WHERE waba_id = $1`, p.WABA)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
-			var name string
+			var name, language string
 			var st TemplateStatus
-			if err := rows.Scan(&name, &st.Status, &st.Reason, &st.MetaID, &st.SubmittedAt, &st.CheckedAt); err != nil {
+			if err := rows.Scan(&name, &language, &st.Status, &st.Reason, &st.MetaID, &st.SubmittedAt, &st.CheckedAt, &st.MetaCategory, &st.Matches); err != nil {
 				return err
 			}
 			for i := range out {
-				if out[i].Name == name {
+				if out[i].Name == name && out[i].Language == language {
 					out[i].Status, out[i].Reason, out[i].MetaID, out[i].SubmittedAt, out[i].CheckedAt = st.Status, st.Reason, st.MetaID, st.SubmittedAt, st.CheckedAt
+					out[i].MetaCategory, out[i].Matches = st.MetaCategory, st.Matches
 				}
 			}
 		}
@@ -219,8 +229,17 @@ func NotApprovedNote(statuses []TemplateStatus) string {
 	return "Until these templates are approved, their messages do not go on WhatsApp outside a person's 24-hour window and fall back (SMS, email, the web app): " + strings.Join(names, ", ") + "."
 }
 
+// metaView is what Meta lists of a template beyond its status: its
+// category in the account and whether its body and buttons are ours. A
+// nil one keeps what was recorded (a status webhook carries neither); an
+// empty one forgets it (Meta no longer holds the template).
+type metaView struct {
+	category string
+	matches  bool
+}
+
 // record writes a template's standing as Meta reported it.
-func (p *Platform) record(ctx context.Context, q querier, name, metaID, status, reason string, submitted bool) error {
+func (p *Platform) record(ctx context.Context, q querier, name, language, metaID, status, reason string, submitted bool, meta *metaView) error {
 	var submittedAt *time.Time
 	if submitted {
 		now := p.now()
@@ -235,17 +254,27 @@ func (p *Platform) record(ctx context.Context, q querier, name, metaID, status, 
 		// not write them, so they are written through a definer that works
 		// only outside any tenant scope (migration 00353).
 		_, err := q.Exec(ctx, `SELECT taskiem_wa_platform_template_record($1, $2, $3, $4, $5, $6, $7)`,
-			p.WABA, name, p.Config.Language, mid, status, clip(reason, 1000), submittedAt)
+			p.WABA, name, language, mid, status, clip(reason, 1000), submittedAt)
 		return err
 	}
 	// An own number's row is its tenant's: the upsert never moves a row
 	// between owners (row-level security refuses another owner's row).
-	_, err := q.Exec(ctx, `INSERT INTO whatsapp_templates (waba_id, name, language, tenant_id, meta_id, status, reason, submitted_at, checked_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+	// Meta's category and whether its words are ours are kept as last
+	// listed when this answer does not carry them.
+	var category *string
+	var matches *bool
+	if meta != nil && meta.category != "" {
+		c := clip(strings.ToLower(meta.category), 40)
+		category, matches = &c, &meta.matches
+	}
+	_, err := q.Exec(ctx, `INSERT INTO whatsapp_templates (waba_id, name, language, tenant_id, meta_id, status, reason, submitted_at, checked_at, meta_category, meta_matches)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9, $10)
 		ON CONFLICT (waba_id, name, language) DO UPDATE SET meta_id = COALESCE(EXCLUDED.meta_id, whatsapp_templates.meta_id),
-		  status = EXCLUDED.status, reason = EXCLUDED.reason, submitted_at = COALESCE(EXCLUDED.submitted_at, whatsapp_templates.submitted_at), checked_at = now(), updated_at = now()
+		  status = EXCLUDED.status, reason = EXCLUDED.reason, submitted_at = COALESCE(EXCLUDED.submitted_at, whatsapp_templates.submitted_at), checked_at = now(), updated_at = now(),
+		  meta_category = CASE WHEN $11 THEN EXCLUDED.meta_category ELSE whatsapp_templates.meta_category END,
+		  meta_matches = CASE WHEN $11 THEN EXCLUDED.meta_matches ELSE whatsapp_templates.meta_matches END
 		WHERE whatsapp_templates.tenant_id = EXCLUDED.tenant_id`,
-		p.WABA, name, p.Config.Language, p.tenantRef(), mid, status, clip(reason, 1000), submittedAt)
+		p.WABA, name, language, p.tenantRef(), mid, status, clip(reason, 1000), submittedAt, category, matches, meta != nil)
 	return err
 }
 
@@ -254,7 +283,7 @@ func (p *Platform) record(ctx context.Context, q querier, name, metaID, status, 
 // when it answers a status at once). A template Meta already holds under
 // that name is refused by Meta; CheckTemplates then records its status.
 func (p *Platform) SubmitTemplate(ctx context.Context, name string) (TemplateStatus, error) {
-	t, ok := TemplateNamed(name)
+	t, ok := p.TemplateNamed(name)
 	if !ok {
 		return TemplateStatus{}, fmt.Errorf("whatsapp: no template named %q", name)
 	}
@@ -265,7 +294,7 @@ func (p *Platform) SubmitTemplate(ctx context.Context, name string) (TemplateSta
 	if err != nil {
 		return TemplateStatus{}, err
 	}
-	id, status, err := p.Client.CreateTemplate(ctx, p.WABA, def)
+	id, status, category, err := p.Client.CreateTemplate(ctx, p.WABA, def)
 	if err != nil {
 		return TemplateStatus{}, err
 	}
@@ -273,7 +302,15 @@ func (p *Platform) SubmitTemplate(ctx context.Context, name string) (TemplateSta
 	if !ok {
 		st = TemplatePending
 	}
-	if err := p.registry(ctx, func(q querier) error { return p.record(ctx, q, t.Name, id, st, "", true) }); err != nil {
+	if err := p.registry(ctx, func(q querier) error {
+		// Submitted as the library has it: ours until Meta lists it
+		// otherwise; the category is the one Meta answered, if any.
+		var meta *metaView
+		if category != "" {
+			meta = &metaView{category: category, matches: true}
+		}
+		return p.record(ctx, q, t.Name, p.Config.Language, id, st, "", true, meta)
+	}); err != nil {
 		return TemplateStatus{}, err
 	}
 	return p.templateStatus(ctx, t.Name)
@@ -306,15 +343,14 @@ func (p *Platform) CheckTemplates(ctx context.Context) ([]TemplateStatus, error)
 	}
 	byName := map[string]MetaTemplate{}
 	for _, m := range listed {
-		if m.Language == p.Config.Language {
-			byName[m.Name] = m
-		}
+		byName[m.Name+"\x00"+m.Language] = m
 	}
 	err = p.registry(ctx, func(q querier) error {
-		for _, t := range AllTemplates {
-			m, ok := byName[t.Name]
+		for _, t := range p.Library() {
+			language := p.Config.Language
+			m, ok := byName[t.Name+"\x00"+language]
 			if !ok {
-				if err := p.record(ctx, q, t.Name, "", TemplateNotSubmitted, "", false); err != nil {
+				if err := p.record(ctx, q, t.Name, language, "", TemplateNotSubmitted, "", false, &metaView{}); err != nil {
 					return err
 				}
 				continue
@@ -323,7 +359,8 @@ func (p *Platform) CheckTemplates(ctx context.Context) ([]TemplateStatus, error)
 			if !known {
 				st = TemplatePending
 			}
-			if err := p.record(ctx, q, t.Name, m.ID, st, m.Reason(), false); err != nil {
+			meta := &metaView{category: m.Category, matches: ComponentsMatch(t, language, p.Client.Hosts, m.Components)}
+			if err := p.record(ctx, q, t.Name, language, m.ID, st, m.Reason(), false, meta); err != nil {
 				return err
 			}
 		}
@@ -379,7 +416,12 @@ func (p *Platform) ApplyTemplateStatus(ctx context.Context, u TemplateStatusUpda
 			return nil
 		}
 	}
-	return q.registry(ctx, func(qq querier) error { return q.record(ctx, qq, u.Name, u.MetaID, st, u.Reason, false) })
+	if _, ok := q.TemplateNamed(u.Name); !ok {
+		return nil // an own number's template, on the shared number's account
+	}
+	return q.registry(ctx, func(qq querier) error {
+		return q.record(ctx, qq, u.Name, u.Language, u.MetaID, st, u.Reason, false, nil)
+	})
 }
 
 // PollTemplates checks every tracked account against Meta: the platform
@@ -445,6 +487,23 @@ type MetaTemplate struct {
 	Status         string `json:"status"`
 	Category       string `json:"category"`
 	RejectedReason string `json:"rejected_reason"`
+	// Components are the body and buttons as Meta holds them.
+	Components []MetaComponent `json:"components,omitempty"`
+}
+
+// MetaComponent is one component of a template as Meta lists it: the
+// body's text, or the buttons.
+type MetaComponent struct {
+	Type    string       `json:"type"`
+	Text    string       `json:"text,omitempty"`
+	Buttons []MetaButton `json:"buttons,omitempty"`
+}
+
+// MetaButton is a template's button as Meta lists it.
+type MetaButton struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+	URL  string `json:"url,omitempty"`
 }
 
 // Reason is the rejection reason worth recording ("" for NONE).
@@ -457,27 +516,28 @@ func (m MetaTemplate) Reason() string {
 
 // CreateTemplate submits a template to a WhatsApp Business Account (POST
 // /{waba-id}/message_templates): Meta's id for it and the status it
-// answers (PENDING until reviewed).
-func (c *Client) CreateTemplate(ctx context.Context, waba string, def map[string]any) (id, status string, err error) {
+// answers (PENDING until reviewed), and the category it answers.
+func (c *Client) CreateTemplate(ctx context.Context, waba string, def map[string]any) (id, status, category string, err error) {
 	if !graphIDRe.MatchString(waba) {
-		return "", "", ErrNoWABA
+		return "", "", "", ErrNoWABA
 	}
 	body, err := json.Marshal(def)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	raw, err := c.call(ctx, http.MethodPost, "/"+url.PathEscape(waba)+"/message_templates", "application/json", bytes.NewReader(body))
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	var out struct {
-		ID     json.RawMessage `json:"id"`
-		Status string          `json:"status"`
+		ID       json.RawMessage `json:"id"`
+		Status   string          `json:"status"`
+		Category string          `json:"category"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", "", errors.New("whatsapp: unreadable template submission answer")
+		return "", "", "", errors.New("whatsapp: unreadable template submission answer")
 	}
-	return anyID(out.ID), out.Status, nil
+	return anyID(out.ID), out.Status, out.Category, nil
 }
 
 // ListTemplates lists an account's templates (GET
@@ -489,7 +549,7 @@ func (c *Client) ListTemplates(ctx context.Context, waba string) ([]MetaTemplate
 	var out []MetaTemplate
 	after := ""
 	for range 20 {
-		q := url.Values{"fields": {"id,name,language,status,category,rejected_reason"}, "limit": {"100"}}
+		q := url.Values{"fields": {"id,name,language,status,category,rejected_reason,components"}, "limit": {"100"}}
 		if after != "" {
 			q.Set("after", after)
 		}
@@ -505,6 +565,7 @@ func (c *Client) ListTemplates(ctx context.Context, waba string) ([]MetaTemplate
 				Status         string          `json:"status"`
 				Category       string          `json:"category"`
 				RejectedReason string          `json:"rejected_reason"`
+				Components     []MetaComponent `json:"components"`
 			} `json:"data"`
 			Paging struct {
 				Cursors struct {
@@ -517,7 +578,8 @@ func (c *Client) ListTemplates(ctx context.Context, waba string) ([]MetaTemplate
 			return nil, errors.New("whatsapp: unreadable template list")
 		}
 		for _, d := range page.Data {
-			out = append(out, MetaTemplate{ID: anyID(d.ID), Name: d.Name, Language: d.Language, Status: d.Status, Category: d.Category, RejectedReason: d.RejectedReason})
+			out = append(out, MetaTemplate{ID: anyID(d.ID), Name: d.Name, Language: d.Language, Status: d.Status, Category: d.Category, RejectedReason: d.RejectedReason,
+				Components: d.Components})
 		}
 		if page.Paging.Next == "" || page.Paging.Cursors.After == "" || page.Paging.Cursors.After == after {
 			break
@@ -542,4 +604,77 @@ func anyID(v json.RawMessage) string {
 		return ""
 	}
 	return s
+}
+
+// ComponentsMatch reports whether the body and buttons Meta holds for a
+// template in an account are the library's (as Submission would send
+// them in lang under hosts): the same body text, no header or footer of
+// its own, and the same buttons in order, each of the same type, words
+// and address. An authentication template's words are Meta's own, so
+// any match.
+func ComponentsMatch(t Template, lang string, hosts Hosts, comps []MetaComponent) bool {
+	if t.Category == "AUTHENTICATION" {
+		return true
+	}
+	def, err := t.Submission(lang, hosts)
+	if err != nil || len(comps) == 0 {
+		return false
+	}
+	var want []MetaButton
+	for _, c := range def["components"].([]any) {
+		m := c.(map[string]any)
+		if m["type"] != "BUTTONS" {
+			continue
+		}
+		for _, b := range m["buttons"].([]any) {
+			bm := b.(map[string]any)
+			u, _ := bm["url"].(string)
+			want = append(want, MetaButton{Type: bm["type"].(string), Text: bm["text"].(string), URL: u})
+		}
+	}
+	body, buttons := false, false
+	for _, c := range comps {
+		switch strings.ToUpper(c.Type) {
+		case "BODY":
+			if body || c.Text != t.Body {
+				return false
+			}
+			body = true
+		case "BUTTONS":
+			if buttons || len(c.Buttons) != len(want) {
+				return false
+			}
+			for i, b := range c.Buttons {
+				if !strings.EqualFold(b.Type, want[i].Type) || b.Text != want[i].Text || b.URL != want[i].URL {
+					return false
+				}
+			}
+			buttons = true
+		default:
+			return false
+		}
+	}
+	return body && buttons == (len(want) > 0)
+}
+
+// TemplateCategory is the category Meta gave a template in this own
+// number's account ("utility", "marketing"), where Meta holds it approved
+// with the library's body and buttons (CheckTemplates records both); ""
+// where it does not, or on the shared number. A template whose category
+// decides who may get it (the follow-up of a form left half-filled) is
+// sent, or promised, only on this answer.
+func (p *Platform) TemplateCategory(ctx context.Context, t Template) (string, error) {
+	if !p.Own() || p.WABA == "" {
+		return "", nil
+	}
+	var category string
+	err := p.registry(ctx, func(q querier) error {
+		err := q.QueryRow(ctx, `SELECT lower(meta_category) FROM whatsapp_templates WHERE waba_id = $1 AND name = $2 AND language = $3 AND status = 'approved'
+			AND meta_category IS NOT NULL AND meta_matches`, p.WABA, t.Name, p.Config.Language).Scan(&category)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	})
+	return category, err
 }

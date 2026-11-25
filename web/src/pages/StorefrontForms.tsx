@@ -32,6 +32,7 @@ import {
   paystackLine,
 } from "../lib/orders";
 import type { ConnectorInfo } from "../api";
+import { ActionEmbedCode } from "./SellForm";
 
 /** The storefront's forms (order, question, call-back, booking): each needs
  * a workflow in prod before it can be switched on; a booking also needs the
@@ -215,6 +216,17 @@ export function FormCard({
         <div className="notice" role="status">
           {notice}
         </div>
+      )}
+      {published && saved.enabled && action.id && (
+        <div className="sell-embed-row">
+          <ActionEmbedCode actionId={action.id} label={info.title.toLowerCase()} />
+        </div>
+      )}
+      {kind === "order" && action.id && (
+        // Forms left half-filled (forms that sell §6.6): its follow-ups and who left it.
+        <p className="hint">
+          <Link to={`/storefront/left/${action.id}`}>Left without ordering</Link>: follow up people who type their phone and leave.
+        </p>
       )}
       {showSetup && (
         <div className="sf-setup">
@@ -454,6 +466,12 @@ function OrderOptions({
           number the rider gets for the order, or in cash
         </label>
       )}
+      <Field
+        label="Line above the button"
+        hint={`A warning customers read before they order, such as “Do not order if you are not ready to receive it in 2 to 4 days.” A form selling one product shows “Please order only when you are ready to receive it.” until you write your own; type - for none. ${form.notice.length}/160`}
+      >
+        <input value={form.notice} maxLength={160} onChange={(e) => set({ notice: e.target.value })} />
+      </Field>
     </>
   );
 }

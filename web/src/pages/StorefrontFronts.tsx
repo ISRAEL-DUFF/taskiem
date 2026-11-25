@@ -25,6 +25,13 @@ import { pageURL, type Storefront } from "../lib/storefront";
 import { StorefrontTabs } from "./Storefront";
 import { FormCard } from "./StorefrontForms";
 import { FrontItems, OrdersBanner } from "./FrontItems";
+import { SellSheet } from "./SellForm";
+import {
+  OneProductFields,
+  OneProductSettingsCard,
+  type OneProductPick,
+} from "./OneProductFront";
+import { ONE_PRODUCT } from "../lib/oneproduct";
 
 /** The storefront's fronts (docs/spec/fronts.md F3): the home page and
  * any other pages of things to sell or ask about, each with its own list
@@ -146,9 +153,16 @@ function AddFront({
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState(view.kinds[0]?.name ?? "custom");
+  const [pick, setPick] = useState<OneProductPick | null>(null);
   const act = useAction();
   const navigate = useNavigate();
-  const problem = frontNameProblem(name);
+  const one = kind === ONE_PRODUCT;
+  // A One product page is named for its product unless the owner names it.
+  const shownName = one && !name.trim() ? (pick?.name ?? "") : name;
+  const problem =
+    frontNameProblem(shownName) ||
+    (one ? (pick?.problem ?? "Choose the product the page sells.") : "");
+  const homeId = view.fronts.find((f) => f.slug === "")?.id ?? "";
   return (
     <Modal title="Add a front" onClose={onClose}>
       <form
@@ -156,8 +170,11 @@ function AddFront({
           e.preventDefault();
           void act.run(async () => {
             const f = await post<Front>("/v1/storefront/fronts", {
-              name: name.trim(),
+              name: shownName.trim(),
               kind,
+              ...(one && pick
+                ? { item: pick.item, packages: pick.packages }
+                : {}),
             });
             onAdded(f);
             navigate(`/storefront/fronts/${f.id}`);
@@ -165,7 +182,7 @@ function AddFront({
         }}
       >
         <Field label="Name" hint="As customers see it: Snacks, Small chops, Ask us">
-          <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
+          <input value={shownName} maxLength={80} onChange={(e) => setName(e.target.value)} />
         </Field>
         <fieldset className="choices">
           <legend>What is it for?</legend>
@@ -185,6 +202,7 @@ function AddFront({
             </label>
           ))}
         </fieldset>
+        {one && <OneProductFields homeId={homeId} onChange={setPick} />}
         <ErrorBox error={act.error} />
         <div className="toolbar">
           <button
@@ -213,6 +231,8 @@ export function StorefrontFront() {
   const act = useAction();
   const navigate = useNavigate();
   const [edit, setEdit] = useState<{ name: string; tagline: string; slug: string } | null>(null);
+  const [selling, setSelling] = useState(false);
+  const [sellNote, setSellNote] = useState<string[] | null>(null);
   const published = (sf.data?.published_version ?? 0) > 0;
   const base = sf.data ? pageURL(sf.data) : "";
   const home = f?.slug === "";
@@ -310,7 +330,10 @@ export function StorefrontFront() {
           {!home && toTurnOn && (
             <OrdersBanner front={f} action={toTurnOn} published={published} onDone={view.reload} />
           )}
-          {home ? (
+          {f.kind === ONE_PRODUCT && (
+            <OneProductSettingsCard key={JSON.stringify(f.settings)} front={f} onSaved={view.reload} />
+          )}
+          {f.kind === ONE_PRODUCT ? null : home ? (
             <section className="card" aria-labelledby="front-items">
               <h2 id="front-items" style={{ marginTop: 0 }}>
                 Items
@@ -330,9 +353,39 @@ export function StorefrontFront() {
             </section>
           )}
           <section className="card sf-links" aria-labelledby="front-forms">
-            <h2 id="front-forms" style={{ marginTop: 0 }}>
-              Forms
-            </h2>
+            <div className="toolbar">
+              <h2 id="front-forms" className="grow" style={{ margin: 0 }}>
+                Forms
+              </h2>
+              {(home || f.table_id) && (
+                <button type="button" className="small" onClick={() => setSelling(true)}>
+                  Add an order form
+                </button>
+              )}
+            </div>
+            {sellNote && (
+              <div className="notice" role="status">
+                Added, off: set it up below, then show it on your page.
+                {sellNote.map((w) => (
+                  <p key={w} className="hint">
+                    {w}
+                  </p>
+                ))}
+              </div>
+            )}
+            {selling && (
+              <SellSheet
+                title="Add an order form"
+                frontId={f.id}
+                defaultLabel="Order now"
+                onClose={() => setSelling(false)}
+                onDone={(s) => {
+                  setSelling(false);
+                  setSellNote(s.warnings);
+                  view.reload();
+                }}
+              />
+            )}
             {f.actions.length === 0 ? (
               <EmptyState icon="forms">This front has no forms.</EmptyState>
             ) : (

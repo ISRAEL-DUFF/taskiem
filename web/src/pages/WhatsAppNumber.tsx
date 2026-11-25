@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { del, get, post, put } from "../api";
-import { canSubmit, statusWords, summaryLine, type TemplatesView, type TemplateView } from "../lib/whatsappTemplates";
+import { canSubmit, metaLine, statusWords, summaryLine, type TemplatesView, type TemplateView } from "../lib/whatsappTemplates";
 import { ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
 
 interface NumberView {
@@ -142,6 +142,7 @@ function Templates() {
               <td>
                 <span data-testid="status">{statusWords(t.status)}</span>
                 {t.reason && <div className="hint">{t.reason}</div>}
+                <MetaCategory t={t} />
                 {t.checked_at && <div className="hint">checked {fmtTime(t.checked_at)}</div>}
               </td>
               <td className="hint">{t.purpose}</td>
@@ -156,6 +157,18 @@ function Templates() {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** The category Meta gave a template in the account, and a warning when
+ * it, or its words, are not ours. */
+function MetaCategory({ t }: { t: TemplateView }) {
+  const m = metaLine(t);
+  if (!m) return null;
+  return (
+    <div className={m.warn ? "warn" : "hint"} data-testid="meta-category">
+      {m.text}
     </div>
   );
 }

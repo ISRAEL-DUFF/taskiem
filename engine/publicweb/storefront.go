@@ -34,6 +34,15 @@ type StorefrontPage struct {
 	// Lists are the copies of the other fronts' lists, by table (fronts
 	// F3, §5.2).
 	Lists map[string][]storefront.Item
+	// Followups are the order forms that follow up a form left
+	// half-filled, by action id (forms-that-sell §6).
+	Followups map[uuid.UUID]bool
+	// FollowupWhatsApp is the category Meta gave the follow-up's template
+	// (taskiem_finish_order) in the business's own WhatsApp number's
+	// account, where it is approved with our words and the owner lets
+	// follow-ups go there: "utility" or "marketing"; "" when a follow-up
+	// never goes on WhatsApp (L4).
+	FollowupWhatsApp string
 }
 
 // Storefronts reads a business's storefront's page; ok is false when it
@@ -42,8 +51,15 @@ type Storefronts func(ctx context.Context, tenant, id uuid.UUID) (page Storefron
 
 // DBStorefronts reads pages with taskiem_public_storefront and
 // taskiem_public_storefront_catalogue, and how many are left with
-// taskiem_product_left: the copy holds no count.
-func DBStorefronts(pool *pgxpool.Pool) Storefronts {
+// taskiem_product_left: the copy holds no count. For a page with order
+// forms that follow up, it reads whether and how a follow-up may go on
+// WhatsApp (taskiem_public_form_followup_whatsapp), in waLanguage, the
+// deployment's WhatsApp template language ("en" when not given).
+func DBStorefronts(pool *pgxpool.Pool, waLanguage ...string) Storefronts {
+	language := "en"
+	if len(waLanguage) > 0 && waLanguage[0] != "" {
+		language = waLanguage[0]
+	}
 	return func(ctx context.Context, tenant, id uuid.UUID) (StorefrontPage, bool, error) {
 		var p StorefrontPage
 		var version int
@@ -76,6 +92,27 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 		}
 		if err := productLeft(ctx, pool, tenant, p.Items); err != nil {
 			return StorefrontPage{}, false, err
+		}
+		// The order forms that follow up a form left half-filled (forms
+		// that sell §6.2): their consent line, and their keeps.
+		var follow []uuid.UUID
+		if err := pool.QueryRow(ctx, `SELECT taskiem_public_form_followups($1)`, id).Scan(&follow); err != nil {
+			return StorefrontPage{}, false, err
+		}
+		for _, a := range follow {
+			if p.Followups == nil {
+				p.Followups = map[uuid.UUID]bool{}
+			}
+			p.Followups[a] = true
+		}
+		if len(follow) > 0 {
+			var category *string
+			if err := pool.QueryRow(ctx, `SELECT taskiem_public_form_followup_whatsapp($1, $2)`, id, language).Scan(&category); err != nil {
+				return StorefrontPage{}, false, err
+			}
+			if category != nil {
+				p.FollowupWhatsApp = *category
+			}
 		}
 		// Each other front's list, its table read once.
 		for _, f := range p.Model.Fronts {
@@ -379,6 +416,11 @@ func (s *Server) serveFront(w http.ResponseWriter, r *http.Request, site Site, s
 	f, found := frontOf(p, slug)
 	if !ok || !found || p.Status == "suspended" {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
+		return
+	}
+	// A One product front is the product's own page (forms that sell
+	// §5.4), while its order form sells it.
+	if f.Kind == storefront.OneProduct && s.serveOneProduct(w, r, site, p, f) {
 		return
 	}
 	front := p

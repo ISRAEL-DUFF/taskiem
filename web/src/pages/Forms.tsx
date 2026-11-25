@@ -10,6 +10,8 @@ import { useAuth } from "../auth";
 import { embedSnippet, linksCSV, maskContact, parseRecipients, showAnswer } from "../lib/forms";
 import { saveFile } from "../lib/saveFile";
 import { Badge, EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { toast } from "../toast";
+import { SellSheet } from "./SellForm";
 
 export interface FormInfo {
   id: string;
@@ -29,6 +31,8 @@ export interface FormInfo {
   closed_message: string | null;
   url: string;
   embed_url: string;
+  /** The storefront's order form this form became (Sell something with this form). */
+  sells_as?: string | null;
 }
 
 export interface FormSubmission {
@@ -161,7 +165,12 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
   const act = useAction();
   const [settings, setSettings] = useState(false);
   const [links, setLinks] = useState(false);
+  const [selling, setSelling] = useState(false);
+  const [sold, setSold] = useState<{ url?: string; warnings: string[] } | null>(null);
   const link = formLink(f);
+  // Sell something with this form (forms that sell §5.1): a live public
+  // form becomes the storefront's order form, keeping its address.
+  const canSell = can("workflow.publish") && can("storefront.manage") && f.environment === "prod" && f.status === "live" && f.access === "public" && !f.sells_as;
   const headingId = `form-${f.id}`;
   const setStatus = (status: string) => act.run(async () => (await patch(`/v1/forms/${f.id}`, { status }), onChange()), "Saved");
   const publish = can("workflow.publish") && f.status !== "suspended";
@@ -171,7 +180,7 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
         <h2 id={headingId} className="grow" style={{ margin: 0 }}>
           {f.title || f.workflow}
         </h2>
-        <Badge value={f.status} />
+        <Badge value={f.sells_as ? "selling" : f.status} />
       </div>
       <dl className="kv">
         <dt>Workflow</dt>
@@ -214,25 +223,43 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
           </>
         )}
       </dl>
+      {(f.sells_as || sold) && (
+        <div className="notice" role="status">
+          This form sells on your page now: its link and its code on your website lead to your order form there.{" "}
+          {sold?.url && (
+            <a href={sold.url} target="_blank" rel="noreferrer">
+              Open it
+            </a>
+          )}{" "}
+          <Link to="/storefront/fronts">Change its packages under Fronts</Link>.{" "}
+          {f.sells_as && <Link to={`/storefront/left/${f.sells_as}`}>Left without ordering</Link>}
+          {sold?.warnings.map((w) => (
+            <p key={w} className="hint">
+              {w}
+            </p>
+          ))}
+        </div>
+      )}
       {f.status === "suspended" && <div className="error">Taskiem's operators suspended this form. Contact support to have it looked at.</div>}
       <ErrorBox error={act.error} />
       <div className="toolbar">
-        {publish && f.status !== "live" && (
+        {publish && !f.sells_as && f.status !== "live" && (
           <button disabled={act.busy} onClick={() => void setStatus("live")}>
             {f.status === "closed" ? "Reopen" : "Resume"}
           </button>
         )}
-        {publish && f.status === "live" && (
+        {publish && !f.sells_as && f.status === "live" && (
           <button disabled={act.busy} onClick={() => void setStatus("paused")}>
             Pause
           </button>
         )}
-        {publish && f.status !== "closed" && (
+        {publish && !f.sells_as && f.status !== "closed" && (
           <button disabled={act.busy} onClick={() => confirm(`Close "${f.title}"? People see its closed message until it is reopened.`) && void setStatus("closed")}>
             Close
           </button>
         )}
         {publish && <button onClick={() => setSettings(true)}>Opening times and limit</button>}
+        {canSell && !sold && <button onClick={() => setSelling(true)}>Sell something with this form</button>}
         {can("form.links") && f.access === "link" && f.status !== "suspended" && (
           <button className="primary" onClick={() => setLinks(true)}>
             Make links
@@ -250,6 +277,21 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
         />
       )}
       {links && <MakeLinks form={f} onClose={() => setLinks(false)} />}
+      {selling && (
+        <SellSheet
+          title="Sell something with this form"
+          formId={f.id}
+          workflowId={f.workflow_id}
+          defaultLabel={(f.title || "Order now").slice(0, 40)}
+          onClose={() => setSelling(false)}
+          onDone={(s) => {
+            setSelling(false);
+            setSold(s);
+            toast("This form sells on your page now");
+            onChange();
+          }}
+        />
+      )}
     </article>
   );
 }

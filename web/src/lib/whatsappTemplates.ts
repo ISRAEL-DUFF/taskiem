@@ -15,6 +15,10 @@ export interface TemplateView {
   submitted_at?: string;
   checked_at?: string;
   purpose: string;
+  /** The category Meta gave it in this account, once Meta lists it. */
+  meta_category?: string;
+  /** Whether Meta's body and buttons are ours, once Meta lists them. */
+  matches?: boolean;
 }
 
 export interface TemplatesView {
@@ -39,6 +43,24 @@ export function statusWords(s: TemplateStatus): string {
     case "disabled":
       return "Disabled by Meta";
   }
+}
+
+/** The follow-up of an order form left half-filled: its category in
+ * the account decides who may get it, not a warning (forms that sell §19). */
+export const FINISH_ORDER = "taskiem_finish_order";
+
+/** What Meta holds, when Meta lists it: its category there, and a
+ * warning when that is not the category submitted or its words are not
+ * ours (the follow-up of a form left half-filled is then not sent). The
+ * follow-up filed as marketing still goes, only to buyers who ask on the
+ * form; in any other category it does not. */
+export function metaLine(t: TemplateView): { text: string; warn: boolean } | null {
+  if (!t.meta_category) return null;
+  if (t.matches === false) return { text: `Meta: ${t.meta_category}, with other words than ours`, warn: true };
+  if (t.name === FINISH_ORDER && t.meta_category === "marketing")
+    return { text: "Meta: marketing, so only buyers who tick the box on your order form get it", warn: false };
+  if (t.meta_category !== t.category) return { text: `Meta filed it as ${t.meta_category}, not ${t.category}`, warn: true };
+  return { text: `Meta: ${t.meta_category}`, warn: false };
 }
 
 /** Whether Submit is offered: a template Meta does not hold, or one it

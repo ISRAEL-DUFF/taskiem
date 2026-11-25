@@ -122,6 +122,15 @@ String timeLeft(String iso, DateTime now) {
 
 /// orders.ts itemsSummary and orderWhat: the basket, or a booking's
 /// service and time.
+/// A basket line that is (part of) a package of a form that sells
+/// (docs/spec/forms-that-sell.md §5.2): "Package of 2 for ₦45,000", as the
+/// web's Orders says it; '' for an ordinary line.
+String packageLine(Map<String, dynamic> l) {
+  final qty = _int(l['package_qty']);
+  if (qty <= 0) return '';
+  return 'Package of $qty for ${naira(_int(l['package_kobo']))}';
+}
+
 String orderWhat(Map<String, dynamic> o) {
   if (o['kind'] == 'booking') {
     return [_str(o['service_name']), if (_str(o['starts_at']).isNotEmpty) whenLabel(_str(o['starts_at']))].where((x) => x.isNotEmpty).join(' · ');
@@ -661,7 +670,9 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
                 for (final l in basket)
                   (
                     name: '${_str(l['name'])}${((l['quantity'] as num?)?.toInt() ?? 1) == 1 ? '' : ' × ${(l['quantity'] as num).toInt()}'}',
-                    sub: '',
+                    // A package of a form that sells (forms that sell §5.2):
+                    // its price is the package's, not each one's.
+                    sub: packageLine(l),
                     under: null,
                     amount: l['line_kobo'] != null ? naira(_int(l['line_kobo'])) : '',
                   ),

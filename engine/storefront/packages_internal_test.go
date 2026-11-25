@@ -1,0 +1,87 @@
+package storefront
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/israel-duff/taskiem/engine/sender"
+)
+
+// The price check on a package (forms-that-sell §5.2): its lines are
+// priced as the package from the published form, never per item from the
+// table, so a bundle cheaper than its items stays its price; a package
+// the form no longer offers, or an item gone, is gone; a new package
+// price is a price change, shared over the lines.
+func TestRepricePackages(t *testing.T) {
+	price := int64(2500000)
+	item := Item{ID: "7", Name: "Ear cleaner", PriceKobo: &price, Available: true}
+	live := map[string]Item{"7": item}
+	pf := PackagesField{Item: "7", Packages: []Package{{Qty: 1, PriceKobo: 2500000}, {Qty: 2, PriceKobo: 4500000}}}
+	sub := Submission{Kind: "order", DeliveryKobo: 150000, TotalKobo: 4650000,
+		Basket: []Line{{ID: "7", Name: "Ear cleaner", Quantity: 2, PriceKobo: 2250000, LineKobo: 4500000, PackageQty: 2, PackageKobo: 4500000}}}
+	pc, changed := reprice(sub, live, ActionOptions{}, pf)
+	if changed || pc.TotalKobo != 4650000 || pc.Basket[0].LineKobo != 4500000 {
+		t.Fatalf("as published: %v %+v", changed, pc)
+	}
+	// The table's price per item moved: the package is still its price.
+	dearer := int64(3000000)
+	if _, changed := reprice(sub, map[string]Item{"7": {ID: "7", Name: "Ear cleaner", PriceKobo: &dearer, Available: true}}, ActionOptions{}, pf); changed {
+		t.Fatal("a package repriced from the table")
+	}
+	// The owner published a new price for two.
+	pf2 := PackagesField{Item: "7", Packages: []Package{{Qty: 2, PriceKobo: 4000000}}}
+	if pc, changed := reprice(sub, live, ActionOptions{}, pf2); !changed || pc.TotalKobo != 4150000 || pc.Basket[0].PackageKobo != 4000000 {
+		t.Fatalf("new package price: %v %+v", changed, pc)
+	}
+	// No longer offered, or the item gone: gone.
+	if pc, changed := reprice(sub, live, ActionOptions{}, PackagesField{}); !changed || len(pc.Gone) != 1 || len(pc.Basket) != 0 {
+		t.Fatalf("no such package: %+v", pc)
+	}
+	if pc, changed := reprice(sub, map[string]Item{}, ActionOptions{}, pf); !changed || len(pc.Gone) != 1 {
+		t.Fatalf("item gone: %+v", pc)
+	}
+	// A size for each unit: lines per size, shared, adding up exactly.
+	three := PackagesField{Item: "7", Packages: []Package{{Qty: 3, PriceKobo: 6500000}}}
+	m := Item{ID: "7m", Name: "Shirt – M", PriceKobo: &price, Available: true}
+	l := Item{ID: "7l", Name: "Shirt – L", PriceKobo: &price, Available: true}
+	each := Submission{Kind: "order", TotalKobo: 6500000, Basket: []Line{
+		{ID: "7m", Quantity: 2, LineKobo: 4333333, PackageQty: 3, PackageKobo: 6500000}, {ID: "7l", Quantity: 1, LineKobo: 2166667, PackageQty: 3, PackageKobo: 6500000}}}
+	pc, changed = reprice(each, map[string]Item{"7m": m, "7l": l}, ActionOptions{}, three)
+	if changed || pc.TotalKobo != 6500000 || pc.Basket[0].LineKobo+pc.Basket[1].LineKobo != 6500000 {
+		t.Fatalf("each: %v %+v", changed, pc)
+	}
+	// One size gone: the whole package is gone, never 1 L at the price
+	// of three.
+	each = Submission{Kind: "order", TotalKobo: 6500000, Basket: []Line{
+		{ID: "7m", Name: "Shirt – M", Quantity: 2, LineKobo: 4333333, PackageQty: 3, PackageKobo: 6500000},
+		{ID: "7l", Name: "Shirt – L", Quantity: 1, LineKobo: 2166667, PackageQty: 3, PackageKobo: 6500000}}}
+	pc, changed = reprice(each, map[string]Item{"7l": l}, ActionOptions{}, three)
+	if !changed || len(pc.Basket) != 0 || pc.TotalKobo != 0 || strings.Join(pc.Gone, ", ") != "Shirt – M, Shirt – L" {
+		t.Fatalf("a size gone: %v %+v", changed, pc)
+	}
+	// A line beside the package stays.
+	withTea := each
+	withTea.Basket = append(append([]Line{}, each.Basket...), Line{ID: "9", Name: "Tea", Quantity: 1, PriceKobo: price, LineKobo: price})
+	pc, _ = reprice(withTea, map[string]Item{"7l": l, "9": {ID: "9", Name: "Tea", PriceKobo: &price, Available: true}}, ActionOptions{}, three)
+	if len(pc.Basket) != 1 || pc.Basket[0].ID != "9" || len(pc.Gone) != 2 {
+		t.Fatalf("a line beside a package gone: %+v", pc)
+	}
+}
+
+func TestPriceChangedSMSFits(t *testing.T) {
+	gone := []string{"Smart Ear Cleaner – Medium, Black with the long cable", "Smart Ear Cleaner – Large", "Smart Ear Cleaner – Small", "Ear tips (pack of 20)", "Charging cradle"}
+	ord := Order{Reference: "ORD-7Q2K9X", PriceChange: &PriceChange{TotalKobo: 123456700, Gone: gone}}
+	text := priceChangedText(ord)
+	if !strings.Contains(text, "and 2 more") || strings.Contains(text, "Charging cradle") {
+		t.Fatalf("gone not capped: %q", text)
+	}
+	link := "https://shop.taskiem.com/o/ORD-7Q2K9X?k=abcdefghijklmnopqrstuv"
+	name := "Adaeze's Gadgets and Home Essentials"
+	sms := smsText(name, strings.ReplaceAll(text, "{link}", link))
+	if n := sender.Segments(name + ": " + sms); n > sender.MaxSegments {
+		t.Fatalf("SMS is %d parts: %q", n, sms)
+	}
+	if short := smsText("Ada", "Total ₦5,000"); short != "Total ₦5,000" {
+		t.Fatalf("a short SMS keeps its naira sign: %q", short)
+	}
+}

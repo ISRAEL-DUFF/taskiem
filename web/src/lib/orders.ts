@@ -23,6 +23,8 @@ export interface ActionOptions {
   deposit_percent?: number;
   /** What a customer cancelling a paid booking gets back. */
   cancel_refund?: "full" | "keep_deposit";
+  /** An order form's line above its button (forms that sell §5.2); "-" for none. */
+  notice?: string;
 }
 
 /** An area the business delivers to and what delivery there costs. */
@@ -56,6 +58,9 @@ export interface OrderLine {
   quantity?: number;
   price_kobo?: number;
   line_kobo?: number;
+  /** The package the line is (part of), from a form that sells: how many it is and its price. */
+  package_qty?: number;
+  package_kobo?: number;
 }
 
 export type OrderStatus =
@@ -293,6 +298,8 @@ export interface ActionForm {
   deposit: string;
   /** Whether a customer cancelling a paid booking keeps their deposit back. */
   keepDeposit: boolean;
+  /** An order form's line above its button, as typed ("-" for none). */
+  notice: string;
 }
 
 export function actionForm(a: StorefrontAction): ActionForm {
@@ -311,6 +318,7 @@ export function actionForm(a: StorefrontAction): ActionForm {
     })),
     deposit: a.options.deposit_percent ? String(a.options.deposit_percent) : "",
     keepDeposit: a.options.cancel_refund === "keep_deposit",
+    notice: a.options.notice ?? "",
   };
 }
 
@@ -363,6 +371,7 @@ export function actionRequest(kind: FormKind, f: ActionForm): ActionRequest {
   const zones = zoneList(f.zones);
   if (f.delivery && zones.length > 0) options.zones = zones;
   if (f.delivery && f.payOnDelivery) options.pay_on_delivery = true;
+  if (f.notice.trim()) options.notice = f.notice.trim();
   const deposit = Number(f.deposit.trim());
   if (
     f.payment !== "none" &&

@@ -19,6 +19,7 @@
 /staff | app lib/chat/team_pages.dart
 /tasks | app lib/chat/team_pages.dart
 /storefront/stock | app lib/chat/stock_page.dart
+/storefront/left/ | app lib/chat/left_page.dart
 /storefront/price-lists | app lib/chat/price_lists_page.dart
 /storefront/bookings | app lib/chat/bookings_page.dart
 /storefront/orders/ | app lib/chat/storefront_orders_page.dart

@@ -590,6 +590,26 @@ const SCREENS: {
     },
   },
   {
+    // A One product page made from chat (forms-that-sell L2): "sell …
+    // on a page", the page shown, yes, and its address; the owner's
+    // message at the thread's top.
+    name: "chat-taskiem-page",
+    touch: true,
+    path: "/chat?with=taskiem",
+    fixture: "chat-taskiem-page",
+    ready: async (p) => {
+      await expect(p.getByTestId("taskiem-stream")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p
+        .getByText(/^sell Smart Ear Cleaner on a page/)
+        .evaluate((c) => {
+          const s = c.closest(".chat-stream") as HTMLElement;
+          s.scrollTop += c.getBoundingClientRect().top - s.getBoundingClientRect().top;
+        });
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // The same, the approval at the thread's top: Decline and Approve.
     name: "chat-taskiem-approval",
     touch: true,

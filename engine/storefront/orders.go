@@ -118,8 +118,13 @@ type Orders struct {
 	AfterPaid func(ctx context.Context, tenant uuid.UUID, ord Order) error
 	// PreviewDomain is where storefronts are served (<slug>.<domain>).
 	PreviewDomain string
-	Logger        *slog.Logger
-	Now           func() time.Time
+	// FormSent tells forms left half-filled that a buyer sent an order
+	// form, in the transaction that records the order
+	// (forms.Service.OrderSent), with the page it was sent from (its
+	// status hash, which the page's keeps name); nil tells nothing.
+	FormSent func(ctx context.Context, tx pgx.Tx, tenant, action uuid.UUID, phone, email string, page []byte) error
+	Logger   *slog.Logger
+	Now      func() time.Time
 }
 
 func (o *Orders) now() time.Time {
@@ -489,15 +494,61 @@ func (o *Orders) checkPrices(ctx context.Context, x inboxRow, sub Submission, op
 		}
 	}
 	live, err := o.Live.Items(ctx, x.tenant, from, ids)
+	var pf PackagesField
+	var only []string
+	if err == nil {
+		// The page as published: what a package costs, and the rows a
+		// basket offers. Unread, prices are not checked, as when the table
+		// does not answer: never every package line gone.
+		pf, only, err = o.publishedForm(ctx, x)
+	}
 	if err != nil {
 		if o.now().Sub(sub.Submitted) < PriceCheckGrace {
 			return PriceChange{}, false, "", fmt.Errorf("price check: %w", err)
 		}
-		o.log().Warn("storefront: prices not checked; the table did not answer", "reference", x.reference, "err", err)
+		o.log().Warn("storefront: prices not checked; the table or the published page could not be read", "reference", x.reference, "err", err)
 		return PriceChange{}, false, "Prices were not checked: the table could not be read", nil
 	}
-	pc, changed := reprice(sub, live, opts)
+	// A row the form's basket does not name is gone, as a row the table
+	// lost is: the form never offered it.
+	for id, it := range live {
+		if !OnForm(it, only) {
+			delete(live, id)
+		}
+	}
+	pc, changed := reprice(sub, live, opts, pf)
 	return pc, changed, "", nil
+}
+
+// publishedForm reads the action a submission was sent to as the
+// storefront has it published now: its packages field (what a package
+// costs; none when it sells no packages, whose lines are then gone) and
+// the rows its basket names (nil: every row).
+func (o *Orders) publishedForm(ctx context.Context, x inboxRow) (PackagesField, []string, error) {
+	var pf PackagesField
+	var only []string
+	if x.action == nil {
+		return pf, nil, nil
+	}
+	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
+		m, err := PublishedModel(ctx, tx, x.tenant)
+		if errors.Is(err, ErrNotFound) {
+			return nil // never published: nothing it offers
+		}
+		if err != nil {
+			return err
+		}
+		for _, f := range m.Fronts {
+			for _, a := range f.Actions {
+				if a.ID != nil && *a.ID == *x.action {
+					pf, _ = FormPackages(a.Form)
+					only = BasketItems(a.Form)
+				}
+			}
+		}
+		return nil
+	})
+	return pf, only, err
 }
 
 func priceChangedText(ord Order) string {
@@ -507,10 +558,46 @@ func priceChangedText(ord Order) string {
 	}
 	t := "Prices have changed since you sent " + ord.Reference + "."
 	if len(pc.Gone) > 0 {
-		t += " No longer available: " + strings.Join(pc.Gone, ", ") + "."
+		t += " No longer available: " + goneList(pc.Gone) + "."
 	}
 	t += " The total is now " + FormatNaira(pc.TotalKobo) + ". Confirm or cancel within a day: {link}"
 	return t
+}
+
+// goneList names at most three gone lines, each clipped, and counts the
+// rest, so the message still fits an SMS however many are gone.
+func goneList(gone []string) string {
+	const most, longest = 3, 32
+	names := make([]string, 0, most)
+	for _, g := range gone[:min(len(gone), most)] {
+		if r := []rune(g); len(r) > longest {
+			g = string(r[:longest-1]) + "…"
+		}
+		names = append(names, g)
+	}
+	t := strings.Join(names, ", ")
+	if n := len(gone) - most; n > 0 {
+		t += fmt.Sprintf(" and %d more", n)
+	}
+	return t
+}
+
+// smsText keeps a customer's SMS within the parts the sender allows. One
+// character outside GSM-7 (a naira sign, a dash in a product's name) makes
+// the whole message UCS-2, 67 characters a part; when it would not fit,
+// the naira is written N, typographic marks their plain forms, and any
+// other such character dropped, which keeps it GSM-7, 153 a part.
+func smsText(senderName, text string) string {
+	if sender.Segments(senderName+": "+text) <= sender.MaxSegments {
+		return text
+	}
+	text = strings.NewReplacer("₦", "N", "…", "...", "–", "-", "—", "-", "‘", "'", "’", "'", "“", "\"", "”", "\"").Replace(text)
+	return strings.Map(func(r rune) rune {
+		if sender.GSM7(r) {
+			return r
+		}
+		return -1
+	}, text)
 }
 
 // record seals the customer and writes the order, at the table's prices
@@ -650,6 +737,13 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	}
 	if o.PhoneIndex != nil {
 		if err := o.PhoneIndex.WriteTx(ctx, tx, x.tenant, id, sub.Customer.Phone); err != nil {
+			return Order{}, err
+		}
+	}
+	if o.FormSent != nil && x.action != nil && x.kind == "order" {
+		// A form left half-filled by this buyer: forgotten, or came back
+		// after its follow-up (forms-that-sell §6.1).
+		if err := o.FormSent(ctx, tx, x.tenant, *x.action, sub.Customer.Phone, sub.Customer.Email, x.statusHash); err != nil {
 			return Order{}, err
 		}
 	}
@@ -922,7 +1016,10 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 	if runKind == "app" {
 		runKind = "order"
 	}
-	body := map[string]any{"reference": ord.Reference, "kind": runKind, "customer": ord.Customer, "basket": ord.Basket, "total_kobo": ord.TotalKobo,
+	// lines are the basket again under the record's name, so a package's
+	// line reads the same in trigger.body and trigger.submission
+	// (forms-that-sell §5.6).
+	body := map[string]any{"reference": ord.Reference, "kind": runKind, "customer": ord.Customer, "basket": ord.Basket, "lines": ord.Basket, "total_kobo": ord.TotalKobo,
 		"total": FormatNaira(ord.TotalKobo), "summary": Summary(ord.Basket), "fulfilment": ord.Fulfilment, "payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}}
 	if ord.Zone != "" {
 		// The delivery area and its fee (dispatch D1), in the summary too.
@@ -1518,7 +1615,7 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 		}
 		if ord.Customer.Phone != "" {
 			queued, err := o.Messages.Enqueue(ctx, tx, sender.Message{Tenant: tenant, Channel: sender.SMS, Purpose: sender.PurposeConfirmation,
-				To: ord.Customer.Phone, SenderName: c.Name, Text: text, Key: key + ":sms"})
+				To: ord.Customer.Phone, SenderName: c.Name, Text: smsText(c.Name, text), Key: key + ":sms"})
 			switch {
 			case errors.Is(err, sender.ErrAllowance):
 				overAllowance = true // the email, if any, still goes

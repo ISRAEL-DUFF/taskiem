@@ -77,6 +77,7 @@ import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
 import { RidersPayPage, StorefrontDeliveries } from "./pages/Dispatch";
 import { StorefrontRiders } from "./pages/StorefrontRiders";
 import { StorefrontStock } from "./pages/StorefrontStock";
+import { StorefrontLeft } from "./pages/StorefrontLeft";
 import { StorefrontSuppliers } from "./pages/StorefrontSuppliers";
 import {
   ChatPage,
@@ -920,6 +921,10 @@ function SignedIn() {
                   <Route
                     path="/storefront/deliveries"
                     element={<StorefrontDeliveries />}
+                  />
+                  <Route
+                    path="/storefront/left/:id"
+                    element={<StorefrontLeft />}
                   />
                   <Route
                     path="/storefront/stock"

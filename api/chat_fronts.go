@@ -43,12 +43,22 @@ var (
 var frontKindWords = map[string]string{
 	"shop": "shop", "food": "food", "kitchen": "food", "hire": "hire", "rental": "hire", "spaces": "spaces", "space": "spaces", "hall": "spaces", "halls": "spaces", "venue": "spaces", "tickets": "tickets", "ticket": "tickets", "event": "tickets", "events": "tickets", "classes": "classes", "class": "classes", "course": "classes", "courses": "classes", "quotes": "quotes", "quote": "quotes", "questions": "questions", "question": "questions",
 	"call-backs": "callbacks", "call-back": "callbacks", "callbacks": "callbacks", "callback": "callbacks", "custom": "custom",
+	"one-product": "one-product",
 }
 
 // waFrontCommand acts on a fronts command; false when cmd is not one.
 func (s *Server) waFrontCommand(ctx context.Context, c *chat, text, cmd string) (bool, error) {
 	var do func() error
+	pw, onPage := readPageWords(text)
+	if onPage && pw.make {
+		// "make a page for …" is a One product page only when it names a
+		// product; other words go on as they did before it.
+		onPage = s.pageNamesProduct(ctx, c, pw)
+	}
 	switch {
+	case onPage:
+		// "sell Ear cleaner on a page" (chat_oneproduct.go), before a sale.
+		do = func() error { return s.waSellOnPage(ctx, c, text) }
 	case cmd == "fronts" || cmd == "my fronts":
 		do = func() error { return s.waFronts(ctx, c) }
 	case addFrontCmd.MatchString(text):
@@ -230,16 +240,28 @@ func (s *Server) waAddFront(ctx context.Context, c *chat, name, kind string) err
 // kindChoices are the kinds as a numbered list, each with its line.
 func kindChoices() string {
 	var lines []string
-	for i, k := range storefront.FrontKinds() {
+	for i, k := range chatKinds() {
 		lines = append(lines, strconv.Itoa(i+1)+". *"+k.Title+"*: "+k.Line)
 	}
 	return strings.Join(lines, "\n")
 }
 
+// chatKinds are the kinds "add front" offers by number: every kind but One
+// product, which is made from a product ("sell <product> on a page").
+func chatKinds() []storefront.FrontKind {
+	var out []storefront.FrontKind
+	for _, k := range storefront.FrontKinds() {
+		if k.Name != storefront.OneProduct {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
 // waFrontKindPick takes the kind by its number or its word.
 func (s *Server) waFrontKindPick(ctx context.Context, c *chat, text string) error {
 	sh := c.data.Shop
-	kinds := storefront.FrontKinds()
+	kinds := chatKinds()
 	kind := ""
 	if n, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && n >= 1 && n <= len(kinds) {
 		kind = kinds[n-1].Name
@@ -257,6 +279,12 @@ func (s *Server) frontAskAdd(ctx context.Context, c *chat, name, kind string) er
 	k, ok := storefront.FrontKindOf(kind)
 	if !ok {
 		return c.say(ctx, s, c.t("wa.front.how_add"))
+	}
+	if k.Name == storefront.OneProduct {
+		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+			return err
+		}
+		return c.say(ctx, s, c.t("wa.page.how"))
 	}
 	if k.Table != "" && !c.p.Can(PermTableEdit) {
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {

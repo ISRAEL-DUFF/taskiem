@@ -146,6 +146,7 @@ func (s *Server) waReceive(w http.ResponseWriter, r *http.Request) {
 	// for the numbers this app speaks for (customer_chat.go).
 	if sts, err := whatsapp.ParseStatuses(body); err == nil && len(sts) > 0 {
 		s.customerStatuses(ctx, hook, sts)
+		s.followupStatuses(ctx, hook, sts)
 	}
 	for _, m := range msgs {
 		if m.ID == "" {
@@ -355,6 +356,12 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 	// message its link filled in, with the code.
 	if m := reachCodeRe.FindStringSubmatch(in.Text); m != nil && in.Type == "text" {
 		return s.reachStart(ctx, wa, reach.WhatsApp, number, m[1])
+	}
+	// A follow-up's Stop, on the business's own number (forms that sell
+	// L4, forms_followup_wa.go).
+	if in.Reply == whatsapp.FollowupStopPayload {
+		_, _, err := s.followupStop(ctx, wa, number, in)
+		return err
 	}
 	// An invoice's buttons, which its customer may use (invoice_chat.go).
 	if in.Reply != "" {
@@ -664,10 +671,20 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 			return s.waSay(ctx, wa, number, "", tr(l, "reach.stopped", "business", name))
 		}
 	}
+	// STOP on the business's own number stops its follow-ups of forms
+	// left half-filled (forms that sell L4), whatever else it stops.
+	_, followed, err := s.followupStop(ctx, wa, number, in)
+	if err != nil {
+		return err
+	}
 	// A customer's STOP or START on the business's own number
 	// (customer_chat.go), before the reach book's.
 	if done, err := s.customerStopStart(ctx, wa, number, text); done || err != nil {
 		return err
+	}
+	if followed {
+		// Followed up, and no thread of theirs: told so, never a thread.
+		return s.followupStopped(ctx, wa, number)
 	}
 	if done, err := s.reachStopStart(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
@@ -1466,7 +1483,7 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 		}
 		return true, s.waStartBuild(ctx, c, arg)
 	case lang.IntentMakePage, lang.IntentMyPage, lang.IntentOrders, lang.IntentOpenShop, lang.IntentCloseShop, lang.IntentQR, lang.IntentReady, lang.IntentDelivered,
-		lang.IntentFronts, lang.IntentAddFront, lang.IntentFrontOn, lang.IntentFrontOff:
+		lang.IntentFronts, lang.IntentAddFront, lang.IntentFrontOn, lang.IntentFrontOff, lang.IntentSellOnPage:
 		// The storefront commands in any language: answered as their
 		// English command (N6).
 		if c.state != stateIdle {
@@ -2132,6 +2149,11 @@ func shopCommandOf(i lang.Intent, arg string) string {
 			return ""
 		}
 		return "add front " + strings.TrimSpace(arg)
+	case lang.IntentSellOnPage:
+		if strings.TrimSpace(arg) == "" {
+			return ""
+		}
+		return "add a page for " + strings.TrimSpace(arg)
 	case lang.IntentFrontOn, lang.IntentFrontOff:
 		if strings.TrimSpace(arg) == "" {
 			return ""

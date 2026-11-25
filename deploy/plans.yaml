@@ -65,6 +65,7 @@ plans:
       storefront_orders_monthly: 300
       storefront_bookings_monthly: 300
       sms_monthly: 100
+      form_followups: 200
       link_messages_daily: 200
       max_saved_objects: 2000
       embed_sites: 1
@@ -98,6 +99,7 @@ plans:
       storefront_orders_monthly: 1500
       storefront_bookings_monthly: 1500
       sms_monthly: 500
+      form_followups: 500
       link_messages_daily: 500
       max_saved_objects: 3000
       embed_sites: 3
@@ -128,6 +130,7 @@ plans:
       max_pages: 10
       storefront_items: 2000
       sms_monthly: 1000
+      form_followups: 1000
       link_messages_daily: 1000
       max_saved_objects: 5000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true}
@@ -158,6 +161,7 @@ plans:
       max_pages: 50
       storefront_items: 2000
       sms_monthly: 1000
+      form_followups: 1000
       link_messages_daily: 2000
       max_saved_objects: 10000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true}
@@ -188,6 +192,7 @@ plans:
       max_pages: 0
       storefront_items: 2000
       sms_monthly: 1000
+      form_followups: 0
       link_messages_daily: 5000
       max_saved_objects: 25000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true, sso: true, embedded: true}

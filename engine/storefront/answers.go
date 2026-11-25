@@ -35,8 +35,9 @@ var answerName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 // Widgets are the fields that draw on the front's lists (§5.4): their
 // values are Taskiem's (the basket's lines, the booking's time), part of
 // trigger.submission and trigger.body, never answers. F1 has the basket
-// (today's order form) and time (today's booking form).
-var Widgets = []string{"basket", "time"}
+// (today's order form) and time (today's booking form); forms that sell
+// add packages (docs/spec/forms-that-sell.md §5.2).
+var Widgets = []string{"basket", "time", "packages"}
 
 // BuiltinForm is a built-in action's form when it has none of its own:
 // the order form's basket from the catalogue, the booking form's time from
@@ -150,6 +151,9 @@ func CheckForm(form []byte) error {
 		if n > 1 {
 			return fmt.Errorf("%w: a form has one %s field at most", ErrInvalid, w)
 		}
+	}
+	if err := checkSelling(form); err != nil {
+		return err
 	}
 	for _, k := range FormFields(form) {
 		if props[k].Format == "file" {

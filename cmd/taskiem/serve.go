@@ -812,6 +812,13 @@ type engine struct {
 // have tables. The platform token stays in this process.
 // smsAllowance is a tenant's monthly SMS allowance (the plan's
 // sms_monthly; 0: no limit), for the message queues.
+// formFollowups is the plan's follow-ups of forms left half-filled a
+// month (forms-that-sell §6.5).
+func (e *engine) formFollowups(ctx context.Context, tenant uuid.UUID) (int64, error) {
+	l, err := e.store.LimitsFor(ctx, tenant)
+	return l.FormFollowups, err
+}
+
 func (e *engine) smsAllowance(ctx context.Context, tenant uuid.UUID) (int64, error) {
 	l, err := e.store.LimitsFor(ctx, tenant)
 	return l.SMSMonthly, err
@@ -904,6 +911,11 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	if e.forms != nil {
 		formOps.Set(e.forms)
+		if e.orders != nil {
+			// An order sent forgets, or marks came back, a form its buyer
+			// left half-filled (forms-that-sell §6.1).
+			e.orders.FormSent = e.forms.OrderSent
+		}
 	}
 	if e.email, err = emailService(cfg, e, log); err != nil {
 		pool.Close()
@@ -927,6 +939,13 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 			l, err := e.store.LimitsFor(ctx, t)
 			return l.WhatsAppTemplatesMonthly, err
 		}}
+	}
+	if e.forms != nil && e.wa != nil {
+		// Follow-ups of forms left half-filled go by text, email or
+		// WhatsApp: on WhatsApp by the built-in template from a business's
+		// own number, where its account holds it approved and the owner
+		// lets them (forms-that-sell L4); nothing here switches it.
+		e.forms.FollowupChat = api.WAFollowups(e.wa)
 	}
 	if cfg.Telegram != nil {
 		e.tg = telegram.New(pool, *cfg.Telegram, &egress.Guard{Logger: log}, log)

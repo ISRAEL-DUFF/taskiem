@@ -1,0 +1,33 @@
+/* A One product front (forms-that-sell §5.4): the promise line in the
+   storefront's colour, the marks, the headline and reason, the photos,
+   the feature chips, the order form, Order via WhatsApp, and the price bar
+   fixed to the bottom on a phone. Colours come from the look (--brand,
+   --on-brand, --brand-text, --brand-tint, --card, --line, --muted). */
+.op { min-width: 0; }
+.op-promise { margin: 0 0 1rem; padding: .625rem .875rem; border-radius: var(--r, 12px); background: var(--brand, #1d1b18); color: var(--on-brand, #fff); font-weight: 700; text-align: center; overflow-wrap: anywhere; }
+.op-marks { display: flex; flex-wrap: wrap; gap: .375rem .5rem; margin: 0 0 .75rem; }
+.op-mark { display: inline-flex; align-items: center; gap: .3rem; padding: .25rem .625rem; border-radius: 999px; background: var(--brand-tint, #eef); color: var(--brand-text, inherit); font-size: .8rem; font-weight: 700; }
+.op-stock { background: #fff1f2; color: #9f1239; }
+.op-h { font-size: 1.75rem; line-height: 1.15; margin: 0 0 .5rem; overflow-wrap: anywhere; }
+.op-reason { margin: 0 0 1rem; color: var(--muted, #555); font-size: 1rem; overflow-wrap: anywhere; }
+.op-photos { display: flex; gap: .5rem; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 0 1rem; padding-bottom: .25rem; }
+.op-photos img { flex: 0 0 86%; width: 86%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: var(--r, 12px); scroll-snap-align: start; background: var(--brand-tint, #eee); }
+.op-photos.is-one img { flex-basis: 100%; width: 100%; }
+.op-chips { list-style: none; margin: 0 0 1.25rem; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.op-chips li { display: flex; align-items: center; gap: .5rem; min-width: 0; padding: .625rem .75rem; border: 1px solid var(--line, #ddd); border-radius: var(--r, 12px); background: var(--card, #fff); font-size: .875rem; font-weight: 600; }
+.op-chips li span { min-width: 0; overflow-wrap: anywhere; }
+.op-chips .i { width: 1.25rem; height: 1.25rem; color: var(--brand-text, inherit); }
+.op-order { scroll-margin-top: 1rem; }
+.op-order > h2 { font-size: 1.25rem; margin: 1.5rem 0 .75rem; }
+.op-whats { display: grid; gap: .375rem; margin: .75rem 0 0; text-align: center; }
+.op-whats .btn { margin-top: 0; }
+.op-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .625rem 1rem calc(.625rem + env(safe-area-inset-bottom)); background: var(--card, #fff); border-top: 1px solid var(--line, #ddd); box-shadow: 0 -6px 18px rgba(0,0,0,.08); }
+.op-bar-price { display: grid; margin: 0; min-width: 0; line-height: 1.2; }
+.op-bar-price strong { font-size: 1.125rem; font-variant-numeric: tabular-nums; }
+.op-bar-price span { color: var(--muted, #555); font-size: .8rem; }
+.op-bar .btn { flex: none; min-height: 48px; padding: .5rem 1.25rem; }
+body:has(.op-bar) .foot { padding-bottom: 6rem; }
+@media (min-width: 720px) {
+  .op-bar { left: 50%; right: auto; bottom: 1rem; width: min(38rem, calc(100% - 2rem)); transform: translateX(-50%); border: 1px solid var(--line, #ddd); border-radius: var(--r, 12px); }
+  .op-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

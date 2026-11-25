@@ -313,7 +313,11 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			return err
 		}
 	}
-	// A workflow that no longer has a form trigger closes its form.
+	// A workflow that no longer has a form trigger closes its form, a
+	// form that sells too: its address sends buyers to its action on the
+	// storefront while the action is there (forms-that-sell §5.1), and
+	// says it is closed once the action is gone, never serving the old
+	// version's form again.
 	if def.Trigger.Type != "form" {
 		if _, err := tx.Exec(ctx, `UPDATE form_endpoints SET status = 'closed', updated_at = now()
 			WHERE workflow_id = $1 AND environment = ANY ($2) AND status IN ('live', 'paused')`, wf, envs); err != nil {
@@ -401,13 +405,16 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 				VALUES ($1, $2, $3, $4, $5, 'link', $6)`, id, tenant, wf, version, env, []string{str(c, "event")})
 		case "form":
 			// The form is live at its endpoint's public id, which stays
-			// the same across versions; a paused or closed form stays so.
+			// the same across versions; a paused or closed form stays so,
+			// but for one closed by selling: its form is back, so it opens.
 			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type)
 				VALUES ($1, $2, $3, $4, $5, 'form')`, id, tenant, wf, version, env)
 			if err == nil {
 				_, err = tx.Exec(ctx, `INSERT INTO form_endpoints (id, tenant_id, workflow_id, environment, public_id, version, form)
 					VALUES ($1, $2, $3, $4, $5, $6, $7)
-					ON CONFLICT (workflow_id, environment) DO UPDATE SET version = EXCLUDED.version, form = EXCLUDED.form, updated_at = now()`,
+					ON CONFLICT (workflow_id, environment) DO UPDATE SET version = EXCLUDED.version, form = EXCLUDED.form, action_id = NULL,
+						status = CASE WHEN form_endpoints.action_id IS NOT NULL AND form_endpoints.status = 'closed' THEN 'live' ELSE form_endpoints.status END,
+						updated_at = now()`,
 					uuid.Must(uuid.NewV7()), tenant, wf, env, NewFormID(), version, formCopy(def))
 			}
 		case "email":

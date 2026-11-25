@@ -169,6 +169,20 @@ type Server struct {
 	FormHost string
 	Forms    FormStore
 	FormKeys *forms.Keys
+	// Keeps writes the keeps of order forms left half-filled and claims
+	// their follow-ups' restore links (forms-that-sell §6); nil: no form
+	// follows up. FormKeeps limits keeps per client address; nil uses
+	// FormKeepsPerIP. FormKeepContacts limits the different contacts one
+	// address names in keeps, across forms (nil: FormKeepContactsPerIP),
+	// and FormKeepHold the different contacts it names on one form before
+	// that form's follow-ups are held (nil: FormKeepHoldPerIP).
+	Keeps            Keeps
+	FormKeeps        *formguard.Limiter
+	FormKeepContacts *formguard.Limiter
+	FormKeepHold     *formguard.Limiter
+	// keepSeen remembers the contacts an address named on a form within
+	// the last two hours, so a contact named again is not counted again.
+	keepSeen *lru.Cache[string, bool]
 	// Reach offers updates on WhatsApp and Telegram (N11); nil: none.
 	Reach ReachStore
 	// AppURL is the web app's, where members' forms open.
@@ -264,6 +278,21 @@ func (s *Server) Handler() http.Handler {
 	if s.FormSubmissions == nil {
 		b := FormSubmissionsPerIP
 		s.FormSubmissions = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormKeeps == nil {
+		b := FormKeepsPerIP
+		s.FormKeeps = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormKeepContacts == nil {
+		b := FormKeepContactsPerIP
+		s.FormKeepContacts = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormKeepHold == nil {
+		b := FormKeepHoldPerIP
+		s.FormKeepHold = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.keepSeen == nil {
+		s.keepSeen = lru.New[string, bool](SubmissionLimiterSize, 2*time.Hour)
 	}
 	if s.FormCodes == nil {
 		b := FormCodesPerIP
@@ -416,6 +445,14 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 	switch {
 	case site.Kind == "storefront" && path == "/report" && !embed:
 		s.serveReport(w, r, site)
+	case site.Kind == "storefront" && strings.HasSuffix(path, keepPath) && r.Method == http.MethodPost:
+		// A keep of an order form left half-filled (forms-that-sell §6.1).
+		s.serveKeep(w, r, site, strings.TrimSuffix(path, keepPath))
+	case site.Kind == "storefront" && !embed && backPath.MatchString(path):
+		// A follow-up's link (§6.3): a page that uses nothing up, and its
+		// two buttons.
+		m := backPath.FindStringSubmatch(path)
+		s.serveBack(w, r, site, m[1], m[2])
 	case site.Kind == "storefront" && strings.HasPrefix(path, "/a/") && actionRef.MatchString(path[len("/a/"):]):
 		s.serveForm(w, r, site, path[len("/a/"):], embed)
 	case site.Kind == "storefront" && frontActionPath.MatchString(path):

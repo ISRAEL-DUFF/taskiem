@@ -1304,7 +1304,7 @@ paths:
       tags:
       - Storefront
       summary: Add a front of a kind
-      description: Makes the kind's table for the business (needs table.edit), then the front, off, with a list of the table and the kind's actions, off.
+      description: Makes the kind's table for the business (needs table.edit), then the front, off, with a list of the table and the kind's actions, off. A One product front (kind one-product, forms-that-sell §5.4) is made from a product of the catalogue instead (item, with its packages; one of one at its price when none), on the catalogue's own table, its order form selling the product delivered and paid at the door, off; refused while the Storefront or Orders area is off (409 area_off). Every kind is 409 before the business has a page. Its packages' warnings say one costs more per item than the product, or under a quarter of it.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -1326,6 +1326,22 @@ paths:
                   maxLength: 80
                 kind:
                   type: string
+                item:
+                  type: string
+                  maxLength: 64
+                  description: A One product front's product, a row of the catalogue
+                packages:
+                  type: array
+                  maxItems: 6
+                  items:
+                    $ref: '#/components/schemas/Package'
+                choose:
+                  type: string
+                  enum: [all, each, '']
+                tagline:
+                  type: string
+                  maxLength: 120
+                  description: A One product front's reason to buy; the product's words when empty
       responses:
         '201':
           description: The front
@@ -1341,7 +1357,7 @@ paths:
       tags:
       - Storefront
       summary: Add a form to a front
-      description: A form added to a front, off (fronts F7) - a blank form (form, a question form whose questions you write), a question (enquiry), a call-back (callback) or a quote request (quote). Set it up and turn it on as any form is.
+      description: A form added to a front, off (fronts F7) - a blank form (form, a question form whose questions you write), a question (enquiry), a call-back (callback) or a quote request (quote); or an order form that sells (order, forms-that-sell §5.1) - one product in packages, or a basket of some of the front's items - with the home page's payment, delivery areas and pay at the door, and its notice. Set it up and turn it on as any form is. An order form answers {action, warnings}, the warnings saying a package costs more per item than its product.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -1367,10 +1383,16 @@ paths:
               properties:
                 kind:
                   type: string
-                  enum: [form, enquiry, callback, quote]
+                  enum: [form, enquiry, callback, quote, order]
                 label:
                   type: string
                   maxLength: 40
+                sells:
+                  $ref: '#/components/schemas/SellSpec'
+                notice:
+                  type: string
+                  maxLength: 160
+                  description: An order form's warning line above its button; '-' for none
       responses:
         '201':
           description: The form, off
@@ -1379,6 +1401,217 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/actions/{id}/sells:
+    put:
+      operationId: putStorefrontActionSells
+      tags:
+      - Storefront
+      summary: Set what an order form sells
+      description: An order form's packages (one product, one to six packages each a quantity once and a price, labels drawn from the quantity and price when none) or its basket's items, and its notice (forms-that-sell §5.2), keeping its own questions. The product must be on the front's list. A published page is published again. Warnings say a package costs more per item than its product; they do not refuse.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [sells]
+              properties:
+                sells:
+                  $ref: '#/components/schemas/SellSpec'
+                notice:
+                  type: string
+                  maxLength: 160
+      responses:
+        '200':
+          description: What the packages say against the list's prices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, warnings]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/actions/{id}:
+    patch:
+      operationId: patchStorefrontAction
+      tags:
+      - Storefront
+      summary: An order form's follow-ups
+      description: Whether an order form follows up a buyer who typed a phone or an email and left without ordering, and how long it waits first (10 minutes to 24 hours; forms-that-sell §6.3). With follow-ups on, the form says so under the contact and keeps the contact and the product choice of one who leaves; off, it keeps nothing. release_hold sends the follow-ups held after a run of keeps (§6.5). Follow-ups go by text, email or WhatsApp; followup_whatsapp is the owner's choice for the whole business, "Also follow up on WhatsApp from my number" (§19). Audited as storefront.followups.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                followup_on:
+                  type: boolean
+                followup_wait:
+                  type: integer
+                  minimum: 10
+                  maximum: 1440
+                  description: Minutes after the buyer's last keep
+                release_hold:
+                  type: boolean
+                followup_whatsapp:
+                  type: boolean
+                  description: For every order form of the business, follow-ups may also go on WhatsApp from its own number once the template is approved there (on unless turned off); off, they go by text or email only
+      responses:
+        '200':
+          description: The follow-up settings now
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [followups]
+                properties:
+                  followups:
+                    $ref: '#/components/schemas/FollowupSettings'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/actions/{id}/left:
+    get:
+      operationId: getStorefrontActionLeft
+      tags:
+      - Storefront
+      summary: Who left an order form without ordering
+      description: An order form's follow-up settings, this week's counts (left without ordering, followed up, came back) and the records that left, newest first (forms-that-sell §6.6). Each row is the product, the package, when, the channel and the contact masked (a phone's last four digits, an email's domain); nothing more is kept or shown. Came back is counted after a record is gone.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The form's follow-ups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormLeft'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}/sellable:
+    get:
+      operationId: listSellableItems
+      tags:
+      - Storefront
+      summary: The products a front's order form can sell
+      description: The front's items on sale at a price, as the page has them (its copy), for choosing one to sell in packages (forms-that-sell §5.1); stock is how many are left where it is kept, sizes how many sizes and colours a product has.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The products
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, price_kobo, stock, sizes]
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        price_kobo:
+                          type: [integer, 'null']
+                        photo:
+                          type: string
+                        stock:
+                          type: [integer, 'null']
+                        sizes:
+                          type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/embed:
+    get:
+      operationId: getStorefrontEmbed
+      tags:
+      - Storefront
+      summary: The code for one order form on a website
+      description: 'Where one action''s form is, framed and not, and the code that shows it on the business''s own verified website (forms-that-sell §5.5): a frame with the few lines that size it to the height its form tells it (storefront:height), or a plain frame of a fixed height for a site builder that takes no script. The frame tells the website storefront:submitted with the action and the reference only.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: action
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The form's addresses and code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionEmbed'
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/actions/{id}/form:
@@ -1720,7 +1953,7 @@ paths:
       tags:
       - Storefront
       summary: Change a front
-      description: Its name, line, address, place or switch. On a published page the page is published again with its checks, so a front is turned on only when the page may show it. The home page keeps its address and stays on.
+      description: Its name, line, address, place or switch, and a One product front's settings (its promise line, up to six feature chips each an icon of the fixed set and a few words, and whether the stock line shows). On a published page the page is published again with its checks, so a front is turned on only when the page may show it. The home page keeps its address and stays on.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -1753,6 +1986,8 @@ paths:
                   type: boolean
                 position:
                   type: integer
+                settings:
+                  $ref: '#/components/schemas/OneProductSettings'
       responses:
         '200':
           description: The front
@@ -18412,7 +18647,7 @@ paths:
       tags:
       - Forms
       summary: Pause, reopen or close a form, or set when it is open
-      description: A suspended form cannot be changed here. clear names the settings to unset.
+      description: 'A suspended form cannot be changed here, and a form that sells (sells_as) cannot be paused, reopened or closed (409): it is closed as a form, its address leading to its order form, which is turned on or off under Fronts. clear names the settings to unset.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -18462,6 +18697,128 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Form'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/forms/{id}/left:
+    get:
+      operationId: getFormLeft
+      tags:
+      - Forms
+      summary: Who left a form that sells without ordering
+      description: A hosted form that sells is an order form of the storefront (forms-that-sell §5.1); this is that order form's follow-up settings, this week's counts and its records that left, as GET /v1/storefront/actions/{id}/left. A form that sells nothing answers 409.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The form's follow-ups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormLeft'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/forms/{id}/sell:
+    post:
+      operationId: sellForm
+      tags:
+      - Forms
+      summary: Sell something with this form
+      description: 'Turns a live hosted form into an order form of the storefront (forms-that-sell §5.1): an action of the home page, or the front named, selling one product in packages or a basket of some items, with the form''s own questions (its name, phone, email and address are asked by the order form itself); the workflow becomes the action''s, its storefront trigger naming the action and its reads of the answers moved to trigger.body.customer and trigger.answers, published, and the page published again. The form keeps its address, which now leads to the action''s. Refused (409, code area_off and the area) while the Storefront or Orders area is off, so the owner can be offered to turn it on; refused before the page is published, under four-eyes publishing, for a form that asks for a file or reads trigger.form, for one that sells already, and while the workflow has a version newer than the live form''s (409, code newer_version: published first, never set aside). Only one field is taken for each of the buyer''s name, phone, email and address (one marked as it, else named it, else of its format), the address only where the order form delivers; any other field stays the order form''s own question. Once it sells the form is closed as a form: its address leads to the action while the action is there and says it is closed after.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.publish,storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [sells]
+              properties:
+                front_id:
+                  type: string
+                  format: uuid
+                label:
+                  type: string
+                  maxLength: 40
+                sells:
+                  $ref: '#/components/schemas/SellSpec'
+                notice:
+                  type: string
+                  maxLength: 160
+      responses:
+        '201':
+          description: The order form, live
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [action, front, workflow_id, version, url, form_url, warnings]
+                properties:
+                  action:
+                    $ref: '#/components/schemas/StorefrontAction'
+                  front:
+                    type: object
+                    required: [id, slug, name]
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      slug:
+                        type: string
+                      name:
+                        type: string
+                  workflow_id:
+                    type: string
+                    format: uuid
+                  version:
+                    type: integer
+                  url:
+                    type: string
+                  form_url:
+                    type: string
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+        '409':
+          description: Refused, with the area that is off (code area_off, area_off) when that is why, or the workflow's version newer than the live form's (code newer_version, newer_version), which is published first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                  area_off:
+                    type: string
+                  newer_version:
+                    type: integer
         default:
           $ref: '#/components/responses/Error'
   /v1/forms/{id}/links:
@@ -45808,6 +46165,88 @@ components:
           type: array
           items:
             type: string
+    FollowupSettings:
+      type: object
+      required: ['on', wait_minutes, whatsapp_on]
+      properties:
+        'on':
+          type: boolean
+        wait_minutes:
+          type: integer
+        held_at:
+          type: string
+          format: date-time
+          description: Set while the form's follow-ups are held after a run of keeps; release_hold sends them
+        whatsapp_ready:
+          type: boolean
+          description: The business's own WhatsApp number's account holds the built-in follow-up template (taskiem_finish_order) approved by Meta with our words, as utility or marketing, so follow-ups may go on WhatsApp (forms that sell L4); absent otherwise
+        whatsapp_on:
+          type: boolean
+          description: The owner's choice for the whole business, "Also follow up on WhatsApp from my number" (on unless turned off; followup_whatsapp in the PATCH)
+        whatsapp:
+          type: boolean
+          description: A follow-up may go on WhatsApp, by the approved template from the business's own number (whatsapp_ready and whatsapp_on); absent when it goes by text or email only
+        whatsapp_opt_in:
+          type: boolean
+          description: Meta filed the template as marketing in the business's account, so only a buyer who ticks the box on the form is followed up on WhatsApp
+    FormLeft:
+      type: object
+      required: [action_id, label, followups, week, left]
+      properties:
+        action_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        followups:
+          $ref: '#/components/schemas/FollowupSettings'
+        week:
+          type: object
+          required: [left, followed, came_back]
+          properties:
+            left:
+              type: integer
+            followed:
+              type: integer
+            came_back:
+              type: integer
+        left:
+          type: array
+          items:
+            type: object
+            required: [id, contact_kind, contact, product, at]
+            properties:
+              id:
+                type: string
+                format: uuid
+              contact_kind:
+                type: string
+                enum: [phone, email]
+              contact:
+                type: string
+                description: Masked, "… 4567" or "…@example.com"
+              product:
+                type: string
+              package:
+                type: integer
+              zone:
+                type: string
+              at:
+                type: string
+                format: date-time
+              followed_up_at:
+                type: string
+                format: date-time
+              came_back_at:
+                type: string
+                format: date-time
+              channel:
+                type: string
+                enum: [sms, email, whatsapp]
+              outcome:
+                type: string
+                enum: [capped, stopped, limit, 'off', stale, failed]
+                description: Why it was not followed up; absent while waiting or held, and once followed up
     ChatAlert:
       type: object
       description: An alert as a chat card, with what its next step needs.
@@ -45818,7 +46257,7 @@ components:
           description: The alert's key, for Later (its kind and what it is about)
         kind:
           type: string
-          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, school_approval, deal, order_draft, customer_waiting, page]
+          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, school_approval, deal, order_draft, customer_waiting, page, left]
         at:
           type: string
           format: date-time
@@ -51370,6 +51809,11 @@ components:
         url:
           type: string
           description: 'The page''s public address for links, QR codes and cards: its own primary domain once verified, else preview_url'
+        warnings:
+          type: array
+          items:
+            type: string
+          description: What a publish says without refusing - an order form's package dearer per item than its product, or a product no longer on its list (forms-that-sell §5.2)
         domain:
           type:
           - string
@@ -51668,6 +52112,73 @@ components:
           minimum: 0
           maximum: 60
           description: How long a quote stands for the customer to accept (fronts F7; 7 by default)
+        notice:
+          type: string
+          maxLength: 160
+          description: An order form's warning line above its button (forms-that-sell §5.2); a form selling one product shows a default when unset, '-' shows none
+    SellSpec:
+      type: object
+      additionalProperties: false
+      description: What an order form sells (forms-that-sell §5.2) - one product (item, a row of the front's list) in one to six packages, or a basket of some items (all of the list when none)
+      properties:
+        item:
+          type: string
+          maxLength: 64
+        packages:
+          type: array
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/Package'
+        choose:
+          type: string
+          enum: [all, each, '']
+          description: For a product in sizes and colours, one choice for all its units or one for each
+        items:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+    Package:
+      type: object
+      additionalProperties: false
+      required: [qty, price_kobo]
+      properties:
+        qty:
+          type: integer
+          minimum: 1
+          maximum: 20
+        price_kobo:
+          type: integer
+          minimum: 100
+        label:
+          type: string
+          maxLength: 60
+          description: The owner's words; drawn from the quantity and price when none (2 items · ₦45,000)
+    ActionEmbed:
+      type: object
+      required: [action_id, label, 'on', url, embed_url, frame, script, plain]
+      properties:
+        action_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        'on':
+          type: boolean
+          description: Whether the form is on; an off form shows nothing
+        url:
+          type: string
+        embed_url:
+          type: string
+        frame:
+          type: string
+          description: The frame, to go with script
+        script:
+          type: string
+          description: The lines that give the frame its form's height
+        plain:
+          type: string
+          description: A frame of a fixed height, for a site builder that takes no script
     Delivery:
       type: object
       required: [id, order_id, reference, rider_id, rider, status, offered_at, fee_kobo]
@@ -56969,6 +57480,60 @@ components:
         items:
           type: integer
           description: How many items its list shows
+        settings:
+          description: A One product front's settings; null for another kind
+          oneOf:
+          - $ref: '#/components/schemas/OneProductSettings'
+          - type: 'null'
+        sells:
+          type: object
+          description: What a One product front's order form sells
+          required: [action_id, item, name, packages]
+          properties:
+            action_id:
+              type: string
+              format: uuid
+            item:
+              type: string
+            name:
+              type: string
+            packages:
+              type: array
+              items:
+                $ref: '#/components/schemas/Package'
+            choose:
+              type: string
+        warnings:
+          type: array
+          items:
+            type: string
+          description: A new One product front's packages that cost more per item than the product
+    OneProductSettings:
+      type: object
+      additionalProperties: false
+      description: A One product front's settings (forms-that-sell §5.4)
+      properties:
+        promise:
+          type: string
+          maxLength: 80
+          description: The line at the top, in the page's colour; none when empty
+        chips:
+          type: array
+          maxItems: 6
+          items:
+            type: object
+            additionalProperties: false
+            required: [icon, text]
+            properties:
+              icon:
+                type: string
+                enum: [truck, cash, shield, star, clock, check, gift, leaf, phone, sparkle, heart, return]
+              text:
+                type: string
+                maxLength: 40
+        stock_line:
+          type: boolean
+          description: Shows how many are left, from the product's stock where it is kept
     StorefrontAction:
       type: object
       required: [kind, enabled, label, payment, options, workflow_id]
@@ -58681,6 +59246,12 @@ components:
           description: Where people fill it in (the app, for a members form)
         embed_url:
           type: string
+        sells_as:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The storefront's order form this form became (Sell something with this form); its address leads there
     FormSubmission:
       type: object
       required: [id, reference, answers, respondent, channel, status, created_at]
@@ -59636,6 +60207,9 @@ components:
         max_pages:
           type: integer
           description: Pages a business makes, drafts counted (10 by default; 0 no limit).
+        form_followups:
+          type: integer
+          description: Follow-ups of order forms left half-filled per UTC month (200 on the lowest plan; 0 no limit).
       additionalProperties: false
     Usage:
       type: object
@@ -64888,6 +65462,12 @@ components:
         meta_id:
           type: string
           description: The template's id in Meta's account once submitted.
+        meta_category:
+          type: string
+          description: The category Meta gave the template in this account (utility, marketing or authentication), which may differ from the one it was submitted in; absent until Meta lists it. A template whose category decides who may get it (the follow-up of a form left half-filled, taskiem_finish_order) goes by it, utility to every buyer the form told, marketing only to buyers who ticked the form's box, nothing else at all.
+        matches:
+          type: boolean
+          description: Whether the body and buttons Meta holds are the library's; absent until Meta lists them. A follow-up template whose words are not ours is never sent.
         submitted_at:
           $ref: '#/components/schemas/Timestamp'
         checked_at:

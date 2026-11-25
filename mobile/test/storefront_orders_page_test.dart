@@ -92,6 +92,7 @@ void main() {
     Size size = const Size(390, 2000),
     List<String>? perms,
     Future<http.Response?> Function(http.Request req)? also,
+    TkMode mode = TkMode.light,
   }) async {
     // Each its own screen, not the last one's kept.
     await t.pumpWidget(const SizedBox());
@@ -165,7 +166,7 @@ void main() {
       now: () => f.at,
     );
     if (perms != null) chats.auth.me = Me.fromJson({...f.json('/v1/me'), 'permissions': perms});
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: home(chats)));
+    await t.pumpWidget(TaskiemApp(mode: mode, home: home(chats)));
     await settle(t);
     return (sent: sent, chats: chats);
   }
@@ -218,6 +219,40 @@ void main() {
     await settle(t);
     expect(find.text('Ngozi Eze'), findsOneWidget);
     expect(find.bySemanticsLabel('Call 08031234567'), findsOneWidget);
+  });
+
+  // Forms that sell L1 (docs/spec/forms-that-sell.md §5.6): an order from a
+  // form selling one product in packages, paid at the door: the package
+  // is one line at its own price, said as a package, with the area's fee.
+  testWidgets('an order of a package: one line at the package’s price, said as a package', (t) async {
+    expect(packageLine({'name': 'Ear cleaner', 'quantity': 2, 'line_kobo': 4500000, 'package_qty': 2, 'package_kobo': 4500000}), 'Package of 2 for ₦45,000');
+    expect(packageLine({'name': 'Jollof rice', 'quantity': 2, 'line_kobo': 500000}), '');
+    for (final dark in [false, true]) {
+      await serve(
+        t,
+        (c) => StorefrontOrderPage(auth: c.auth, reference: 'OR-5K2Q', now: () => _now),
+        mode: dark ? TkMode.dark : TkMode.light,
+        order: _order(
+          status: 'received',
+          more: {
+            'basket': [
+              {'name': 'Smart Ear Cleaner', 'quantity': 2, 'price_kobo': 2250000, 'line_kobo': 4500000, 'package_qty': 2, 'package_kobo': 4500000},
+            ],
+            'total_kobo': 4650000,
+            'zone': 'Lekki',
+            'delivery_kobo': 150000,
+            'payment': 'on_delivery',
+            'paid_at': null,
+          },
+        ),
+      );
+      expect(find.text('Smart Ear Cleaner × 2'), findsOneWidget);
+      expect(find.text('Package of 2 for ₦45,000'), findsOneWidget);
+      expect(find.text('₦45,000'), findsOneWidget);
+      expect(find.text('Delivery to Lekki'), findsOneWidget);
+      expect(find.text('₦46,500'), findsWidgets);
+      await snap(t, 'order-package-${dark ? 'dark' : 'light'}');
+    }
   });
 
   testWidgets('a rider on the way: their steps; taken back after yes; a delivered one confirmed', (t) async {
