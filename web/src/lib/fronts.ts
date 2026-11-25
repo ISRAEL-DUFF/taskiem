@@ -22,6 +22,29 @@ export interface Front {
   /** The table its list shows, and how many items. */
   table_id: string | null;
   items: number;
+  /** A One product front's settings (forms that sell §5.4); null else. */
+  settings?: OneProductSettings | null;
+  /** What a One product front's order form sells. */
+  sells?: FrontSells;
+  /** A new One product front's packages dearer per item than the product. */
+  warnings?: string[];
+}
+
+/** A One product front's settings: the promise line, the feature chips
+ * and whether "Only 14 left" shows. */
+export interface OneProductSettings {
+  promise?: string;
+  chips?: { icon: string; text: string }[];
+  stock_line: boolean;
+}
+
+/** The product a One product front's order form sells, in packages. */
+export interface FrontSells {
+  action_id: string;
+  item: string;
+  name: string;
+  packages: { qty: number; price_kobo: number; label?: string }[];
+  choose?: string;
 }
 
 export interface FrontsView {

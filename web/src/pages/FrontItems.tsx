@@ -482,11 +482,20 @@ export function OrdersBanner({
       <h2 id={`orders-off-${front.id}`} style={{ marginTop: 0 }}>
         Customers cannot order from this front yet
       </h2>
-      <p>
-        Its “{action.label}” form is {action.workflow_id ? "off" : "not set up"}
-        , so items on {front.name} have nothing to press. Turn it on and an item
-        opens with <strong>Add to order</strong>.
-      </p>
+      {front.kind === "one-product" ? (
+        <p>
+          Its “{action.label}” form is{" "}
+          {action.workflow_id ? "off" : "not set up"}, so the page shows no
+          form to order with. Turn it on and the page takes orders, paid at
+          the door.
+        </p>
+      ) : (
+        <p>
+          Its “{action.label}” form is {action.workflow_id ? "off" : "not set up"}
+          , so items on {front.name} have nothing to press. Turn it on and an item
+          opens with <strong>Add to order</strong>.
+        </p>
+      )}
       {waiting && (
         <div className="notice" role="status">
           The form's workflow waits for a second person to publish it under
