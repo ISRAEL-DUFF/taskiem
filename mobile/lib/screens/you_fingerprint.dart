@@ -32,7 +32,7 @@ import '../kit/sheet.dart' show TkKitField, TkLines, showTkSheet;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'sign_in.dart' show CodeBoxes;
-import 'you_pin.dart' show pinDigits;
+import 'you_pin.dart' show pinDigits, whatWentWrong;
 
 /// The PIN's length, as the PIN screen's (you_pin.dart).
 const payPinLength = pinDigits;
@@ -47,7 +47,7 @@ String _say(Object e) => switch (e) {
   Offline() => 'You’re offline. Try again when you’re back online.',
   FingerprintUnavailable() => e.message,
   FingerprintGone() => e.message,
-  _ => 'Something went wrong. Try again.',
+  _ => 'Something went wrong (${whatWentWrong(e)}). Try again.',
 };
 
 /// Opens [FingerprintOnSheet]; true once it is on.

@@ -80,11 +80,21 @@ String pinWhen(DateTime d, DateTime now) {
   return '$day at ${clock(d)}';
 }
 
+/// A failure that is not the server's answer, in a few words a person can
+/// pass on: what kind of failure it was and its first words, so "could not
+/// be read" says why (an answer the app could not read, the phone's
+/// fingerprint chip refusing). Never the answer itself.
+String whatWentWrong(Object e) {
+  final words = e.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+  final short = words.length > 120 ? '${words.substring(0, 120)}…' : words;
+  return short.isEmpty ? '${e.runtimeType}' : short;
+}
+
 String _say(Object e) => switch (e) {
   ApiError() when e.has('code_wrong') || e.has('locked') || e.status == 429 => codeProblem(e),
   ApiError() => e.message,
   Offline() => 'You’re offline. Try again when you’re back online.',
-  _ => 'Something went wrong. Try again.',
+  _ => 'Something went wrong (${whatWentWrong(e)}). Try again.',
 };
 
 /// How setting the PIN is confirmed here: the passkey on this phone, a
