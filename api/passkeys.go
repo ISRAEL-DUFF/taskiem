@@ -533,6 +533,7 @@ var stepUpOps = map[string]bool{
 	riderOpBank:  true,
 	"pii.erase":  true,
 	payOpConfirm: true, payOpApprove: true, payOpBatch: true, staffOpAccount: true,
+	payrollOpReveal: true,
 }
 
 // stepUpScope is what a step-up challenge is bound to.

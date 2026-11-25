@@ -612,7 +612,9 @@ export function PersonChatPage() {
       void send(s.text, s.file);
     },
     enabled: !!c && !c.blocked && !c.blocked_you && !erased,
-    closes: [!!tool, reporting, !!sharing],
+    // One of their tools opens as the tools menu closes: one sheet in
+    // place of another, so the focus stays in it, not the box behind.
+    closes: [!!tool || !!their, reporting, !!sharing],
   });
 
   // The offers question is asked once: answered, or shown and passed over

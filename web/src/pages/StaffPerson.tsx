@@ -98,6 +98,13 @@ export function StaffPerson() {
       )}
       {p && <WherePaid user={user} name={name} acct={acct} onChanged={view.reload} />}
       {p && can("payroll.read") && <InPayrollaCard payrolla={p.payrolla} />}
+      {p && !p.payrolla && can("payroll.prepare") && (
+        <p className="toolbar">
+          <Link className="button" to={`/payroll/team?add=${encodeURIComponent(user)}`} data-testid="staff-add-to-payroll">
+            Add to payroll<span className="sr-only"> {name}</span>
+          </Link>
+        </p>
+      )}
       {p && <PersonFigures user={user} name={name} />}
       {paying !== undefined && acct && (
         <PaySheet

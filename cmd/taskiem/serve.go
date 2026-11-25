@@ -520,8 +520,10 @@ func loadConfig() (config, error) {
 			PayrollaURL: os.Getenv("TASKIEM_PAYROLLA_URL"),
 			// The test modes' addresses (connector/v1 rule 17): each
 			// provider's sandbox by default.
-			IswalletTestURL: os.Getenv("TASKIEM_ISWALLET_TEST_URL"),
-			PayrollaTestURL: os.Getenv("TASKIEM_PAYROLLA_TEST_URL"),
+			IswalletTestURL:    os.Getenv("TASKIEM_ISWALLET_TEST_URL"),
+			PayrollaTestURL:    os.Getenv("TASKIEM_PAYROLLA_TEST_URL"),
+			PayrollaAppURL:     os.Getenv("TASKIEM_PAYROLLA_APP_URL"),
+			PayrollaTestAppURL: os.Getenv("TASKIEM_PAYROLLA_TEST_APP_URL"),
 			// QuickBooks' production and sandbox hosts and Intuit's token
 			// endpoint (tests, a proxy).
 			QuickBooksURL:      os.Getenv("TASKIEM_QUICKBOOKS_URL"),
@@ -1072,7 +1074,11 @@ func modeURLs(m *connector.Manifest) []string {
 func (e *engine) hooks() *ingest.Handler {
 	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log, MoneyLog: e.moneyLog(),
 		Egress: &egress.Guard{Logger: e.log}, Apps: platformApps(e.registry),
-		Platform: map[string]ingest.Platform{"iswallet": {WebhookSecrets: e.cfg.ISWallet.WebhookSecrets}}}
+		Platform: map[string]ingest.Platform{"iswallet": {WebhookSecrets: e.cfg.ISWallet.WebhookSecrets}},
+		// company.disconnected ends a Payrolla connection made in one step
+		// (P4b-1); employee events tell the right people (P4b-2).
+		Heard: api.HeardAll(api.PayrollaHeard(e.pool, e.vault, e.log),
+			api.PayrollaTeamHeard(e.pool, e.vault, e.registry, &egress.Guard{Logger: e.log}, e.log).Heard)}
 }
 
 // platformClient is Taskiem's own client at a provider (decision 0052),

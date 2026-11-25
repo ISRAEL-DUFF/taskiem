@@ -81,7 +81,14 @@ func (s *Server) connectorAction(ctx context.Context, p *Principal, conn, title,
 		g = &egress.Guard{Logger: s.Logger}
 	}
 	hc := g.Client(egress.Policy{Tenant: p.TenantID.String(), Hosts: c.Manifest.HostsFor(creds), Purpose: "connector:" + conn}, 20*time.Second)
-	resp, err := c.Actions[action].Execute(ctx, connector.Request{Input: input, Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1})
+	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: purpose, Actor: p.Actor()})
+	tenant := p.TenantID
+	// Tokens a connector refreshes (Payrolla connected in one step) are
+	// stored under the connection's lock.
+	rotate := func(ctx context.Context, fn connector.RotateFunc) (map[string]string, error) {
+		return s.Vault.RotateCredentials(use, tenant, env, conn, name, fn)
+	}
+	resp, err := c.Actions[action].Execute(ctx, connector.Request{Input: input, Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1, Rotate: rotate})
 	if err != nil {
 		return nil, &lookupError{err: err}
 	}

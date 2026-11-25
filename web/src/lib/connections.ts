@@ -85,8 +85,17 @@ export function keyProblem(f: AuthField, value: string, mode = ""): string {
  * field the server makes (generate: webhook_token) is never shown: nobody
  * types it, and the server refuses one that is given. */
 export function splitFields(c: ConnectorInfo | undefined): { main: AuthField[]; more: AuthField[] } {
-  const fields = (c?.auth.fields ?? []).filter((f) => f.generate !== "webhook_token");
-  return { main: fields.filter((f) => f.required !== false), more: fields.filter((f) => f.required === false) };
+  // An optional field that connecting in one step fills (Payrolla's
+  // tokens, Taskiem's app, the company) is nobody's to type.
+  const o = c?.auth.oauth2;
+  const filled = new Set([...Object.keys(o?.fields_from_token ?? {}), ...Object.keys(o?.platform_client_fields ?? {}), ...(o?.linked_fields ?? [])]);
+  const fields = (c?.auth.fields ?? []).filter((f) => f.generate !== "webhook_token" && !(f.required === false && filled.has(f.key)));
+  let main = fields.filter((f) => f.required !== false);
+  let more = fields.filter((f) => f.required === false);
+  // A connector whose key is optional only because it can be connected in
+  // one step instead (Payrolla) still shows the key first.
+  if (main.length === 0 && more.length > 0 && o) [main, more] = [more.slice(0, 1), more.slice(1)];
+  return { main, more };
 }
 
 /** A webhook address carrying the token Taskiem made for a connection just

@@ -394,6 +394,10 @@ func (s *Server) removeStaff(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(r.Context(), `DELETE FROM memberships WHERE tenant_id = $1 AND user_id = $2`, p.TenantID, user); err != nil {
 			return err
 		}
+		// Still in Payrolla: the owners are asked whether to end it (P4b-2).
+		if err := askEndLeaverTx(r.Context(), tx, p.TenantID, user, name); err != nil {
+			return err
+		}
 		if err := dropLeaverLinksTx(r.Context(), tx, p.TenantID, user); err != nil {
 			return err
 		}

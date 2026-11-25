@@ -580,6 +580,7 @@ export interface ConnectorInfo {
       pkce: boolean;
       fields_from_token?: Record<string, string>;
       platform_client_fields?: Record<string, string>;
+      linked_fields?: string[];
     };
   };
   /** For a connector with `auth.oauth2`: whether it can be connected by OAuth on this platform. */

@@ -8542,6 +8542,909 @@
       "text": "Ma'aikata suna biyan asusun da kasuwanci ya adana ne kawai: roƙi mai shi ya adana wannan tukuna.",
       "reviewed": false,
       "context": "Draft, not reviewed: A staff member forwarded account details not saved: staff pay the business's saved accounts only"
+    },
+    "payroll.settings.chat": {
+      "text": "Yadda aka saita albashinka a Payrolla:\n{lines}\n\nCanza kowane a Payrolla. Duba shi a nan: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): the payroll's setup in words ({lines}: one line each) and a link"
+    },
+    "payroll.schedule.card": {
+      "text": "Jadawalin {kind} ɗinka na {period}: {amount} na {people}. {state}\nLayin kowane mutum yana bayan shiga: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a tax or pension schedule's total, never each person's line, and a link behind sign-in ({kind}: PAYE, pension, NHF or NHIS)"
+    },
+    "payroll.schedule.none": {
+      "text": "Babu jadawalin {kind} na {period} tukuna. Jadawali suna shirya da zarar an kulle albashin wannan watan.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): no schedule of that kind for that month"
+    },
+    "payroll.schedule.none_any": {
+      "text": "Babu jadawalin {kind} tukuna. Jadawali suna shirya da zarar an kulle albashi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): no schedule of that kind at all"
+    },
+    "payroll.schedule.to_pay": {
+      "text": "Za a biya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule still to pay"
+    },
+    "payroll.schedule.due": {
+      "text": "A biya kafin {when}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule still to pay, and its due date ({when}: 10 Dec)"
+    },
+    "payroll.schedule.paid": {
+      "text": "An biya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule that is paid"
+    },
+    "payroll.schedule.scope_owner": {
+      "text": "Payrolla ba ta ba Taskiem izinin karanta jadawalin haraji da fansho ɗinka ba. Sake haɗa Payrolla ka ba da izinin Read statutory reports.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): Payrolla's SCOPE_REQUIRED for reports:read, to an owner (Read statutory reports is the scope in Payrolla's own words)"
+    },
+    "payroll.schedule.scope_other": {
+      "text": "Ka ce mai shi ya ba da izinin Read statutory reports a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): Payrolla's SCOPE_REQUIRED for reports:read, to others"
+    },
+    "payroll.people": {
+      "text": "Mutane {n}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): how many people a payroll pays"
+    },
+    "payroll.people_one": {
+      "text": "Mutum 1",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll that pays one person"
+    },
+    "payroll.someone": {
+      "text": "Wani",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a person Payrolla did not name"
+    },
+    "payroll.state.draft": {
+      "text": "ba a lissafa ba tukuna",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence: \"it's now …\""
+    },
+    "payroll.state.computed": {
+      "text": "yana jiran amincewa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.approved": {
+      "text": "an amince",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.locked": {
+      "text": "an kulle",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.disbursing": {
+      "text": "ana biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.completed": {
+      "text": "an biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.partially_completed": {
+      "text": "an biya wani ɓangare",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.cancelled": {
+      "text": "an soke",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.failed": {
+      "text": "ya gaza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.other": {
+      "text": "yana wani wuri a Payrolla",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state Taskiem has no words for"
+    },
+    "payroll.short": {
+      "text": "Walat ɗinka na Payrolla yana da {available}. Wannan albashin yana buƙatar {needed}: ya rage {short}. Saka kuɗi kafin {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): the funding line: the wallet against the payroll's total"
+    },
+    "payroll.pays_on": {
+      "text": "Za a biya a {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a locked payroll's card"
+    },
+    "payroll.locked": {
+      "text": "An kulle. Payrolla za ta biya {people} {amount} a {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Lock and pay with the code"
+    },
+    "payroll.approved": {
+      "text": "An amince. A kulle a biya?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Approve with the code"
+    },
+    "payroll.rejected": {
+      "text": "An mayar da shi. Za a sanar da wanda ya shirya shi, tare da bayaninka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Reject"
+    },
+    "payroll.code.totp": {
+      "text": "Buɗe manhajar authenticator ɗinka don lambar Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla's code is: an authenticator app"
+    },
+    "payroll.code.sms": {
+      "text": "Payrolla ta aika lamba zuwa wayarka mai ƙarewa da {hint}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: a phone"
+    },
+    "payroll.code.sms_any": {
+      "text": "Payrolla ta aika lamba zuwa wayarka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: a phone with no hint"
+    },
+    "payroll.code.email": {
+      "text": "Payrolla ta aika lamba zuwa imel ɗinka {hint}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: an email"
+    },
+    "payroll.code.email_any": {
+      "text": "Payrolla ta aika lamba zuwa imel ɗinka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: an email with no hint"
+    },
+    "payroll.code.any": {
+      "text": "Payrolla ta aiko maka lamba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: unknown"
+    },
+    "payroll.code.type_approve": {
+      "text": "Rubuta ta a nan don amincewa da albashin {period}. Tana aiki sau ɗaya, na minti 5.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): in the chat thread: type the code to approve"
+    },
+    "payroll.code.type_lock": {
+      "text": "Rubuta ta a nan don kulle albashin {period} a biya kowa a {date}. Ba a iya buɗe albashin da aka kulle. Tana aiki sau ɗaya, na minti 5.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): in the chat thread: type the code to lock"
+    },
+    "payroll.code.safer": {
+      "text": "Lamba daga manhajar authenticator ta fi tsaro: saita ɗaya a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): under a code sent by text message"
+    },
+    "payroll.code.stopped": {
+      "text": "An dakata. Ba za a yi amfani da wannan lambar ba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"stop\" while a code waits"
+    },
+    "payroll.code.entered": {
+      "text": "An shigar da lamba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): what the conversation's history keeps instead of the code"
+    },
+    "payroll.code.again": {
+      "text": "Sake rubuta lambar, ko ka ce stop.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after a wrong code in the thread"
+    },
+    "payroll.card.title": {
+      "text": "*Albashin {period}*",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card in the chat: its title"
+    },
+    "payroll.card.line": {
+      "text": "{people} · {amount} · ranar biya {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: people, total and pay day"
+    },
+    "payroll.card.status": {
+      "text": "{status}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: its state, capitalised",
+      "same": true
+    },
+    "payroll.card.new": {
+      "text": "Sababbi a wannan wata: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: who is new since last month"
+    },
+    "payroll.card.left": {
+      "text": "Ba a biya su wannan wata ba: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: who was paid last month and is not now"
+    },
+    "payroll.card.changed": {
+      "text": "Albashi ya canza: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: whose pay changed"
+    },
+    "payroll.card.open": {
+      "text": "Buɗe: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: the link to its page"
+    },
+    "payroll.card.waiting": {
+      "text": "Yana jiran amincewa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.approved": {
+      "text": "An amince: a kulle a biya na gaba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.locked": {
+      "text": "An kulle. Za a biya a {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.draft": {
+      "text": "Ba a lissafa ba tukuna",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.done": {
+      "text": "Yanzu: {state}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: any other state"
+    },
+    "payroll.button.approve": {
+      "text": "Amince",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.reject": {
+      "text": "Ƙi",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.lock": {
+      "text": "Kulle ka biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.new_code": {
+      "text": "Aika sabuwar lamba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button after an expired code (20 characters at most)"
+    },
+    "payroll.reject.how": {
+      "text": "Don mayar da shi, rubuta: reject payroll, tare da dalili. Misali: reject payroll, Musa's bonus is wrong",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): how to reject in the chat"
+    },
+    "payroll.none": {
+      "text": "Babu albashin da ke jiran hakan yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): approve or lock payroll with none at that step"
+    },
+    "payroll.no_run": {
+      "text": "Babu albashi a Payrolla tukuna. Rubuta: prepare {month} payroll",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"payroll\" with no run yet"
+    },
+    "payroll.prepared": {
+      "text": "Albashin {period} ya shirya don dubawa: {people}, {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after preparing a payroll in the chat"
+    },
+    "payroll.prepare.which": {
+      "text": "Faɗi wane wata, misali: prepare december payroll",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"prepare payroll\" with no month"
+    },
+    "payroll.slack": {
+      "text": "Ana amincewa da albashi inda kake rubuta lambar Payrolla, ba a cikin hirar jama'a ba. Buɗe shi: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): approving from Slack: a link to the web"
+    },
+    "payroll.not_allowed": {
+      "text": "Ba za ka iya yin hakan ga albashin a nan ba. Tambayi mai shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a person without the permission"
+    },
+    "payroll.told.rejected": {
+      "text": "{by} ya mayar da albashin {period}: {note}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): told to whoever prepared it"
+    },
+    "payroll.told.approved": {
+      "text": "{by} ya amince da albashin {period} a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.rejected_there": {
+      "text": "{by} ya mayar da albashin {period} a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.locked": {
+      "text": "{by} ya kulle albashin {period} a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.scheduled": {
+      "text": "An kulle albashin {period}. Payrolla za ta biya {people} {amount} a {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's payment scheduled"
+    },
+    "payroll.refused.sod": {
+      "text": "Kai ne ka shirya wannan albashin, don haka dole wani ya amince da shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SOD_VIOLATION"
+    },
+    "payroll.refused.sod_who": {
+      "text": "Tambayi {who}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): who can approve instead"
+    },
+    "payroll.refused.not_linked": {
+      "text": "Haɗa asusunka na Payrolla tukuna. Yana buƙatar lamba ɗaya: Payroll settings, Link my Payrolla account.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's APPROVER_NOT_LINKED"
+    },
+    "payroll.refused.not_an_approver": {
+      "text": "A Payrolla ba za ka iya amincewa da albashi ba. Ka ce mai shi ya maishe ka Approver a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NOT_AN_APPROVER"
+    },
+    "payroll.refused.cannot_pay": {
+      "text": "A Payrolla ba za ka iya aika biya ba. Tambayi mai shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CANNOT_PAY"
+    },
+    "payroll.refused.no_factor": {
+      "text": "Payrolla ba ta da inda za ta aiko maka lamba tukuna. Ka ce mai shi ya saka wayarka a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's PAYMENT_CONFIRMATION_NOT_SET_UP"
+    },
+    "payroll.refused.code_invalid": {
+      "text": "Wannan lambar ba daidai ba ce. Duba ta ka sake rubutawa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_INVALID"
+    },
+    "payroll.refused.code_expired": {
+      "text": "Wannan lambar ta ƙare. Nemi sabuwar lamba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_EXPIRED"
+    },
+    "payroll.refused.code_locked": {
+      "text": "Kuskure ya yi yawa da wannan lambar. Nemi sabuwar lamba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_LOCKED"
+    },
+    "payroll.refused.code_used": {
+      "text": "An riga an yi amfani da wannan lambar. Nemi sabuwar lamba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_USED"
+    },
+    "payroll.refused.too_many_codes": {
+      "text": "Payrolla ta aiko maka lambobi da yawa. Sake gwadawa bayan minti 10.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's TOO_MANY_CODES"
+    },
+    "payroll.refused.invalid_state": {
+      "text": "Wannan albashin ya wuce wannan mataki: yanzu {state}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's INVALID_STATE"
+    },
+    "payroll.refused.invalid_state_unknown": {
+      "text": "Wannan albashin ya wuce wannan mataki. Sake buɗe shi don ganin inda yake.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's INVALID_STATE, the state unknown"
+    },
+    "payroll.refused.no_account": {
+      "text": "Wasu mutane ba su da asusun da za a biya su: {who}. Saka asusunsu, ko ka bar su a wannan wata.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NO_PAYOUT_DESTINATION"
+    },
+    "payroll.refused.no_account_some": {
+      "text": "Wasu mutane ba su da asusun da za a biya su. Saka asusunsu, ko ka bar su a wannan wata.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NO_PAYOUT_DESTINATION, no names"
+    },
+    "payroll.refused.duplicate": {
+      "text": "Akwai albashi na {period} tuni.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's DUPLICATE_RUN"
+    },
+    "payroll.refused.compute_error": {
+      "text": "Payrolla ta kasa lissafa wannan albashin: {reason}. Gyara shi a saitunan Payrolla, sannan ka danna Recalculate.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a run's compute_error"
+    },
+    "payroll.refused.not_worked_out": {
+      "text": "Payrolla ba ta lissafa wannan albashin ba tukuna. Gyara shi a saitunan Payrolla, sannan ka danna Recalculate.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a run still not worked out"
+    },
+    "payroll.refused.scope_owner": {
+      "text": "Payrolla ba ta ba Taskiem izinin yin hakan ba. Sake haɗa Payrolla ka ba da izinin Prepare payroll da Approve and pay.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SCOPE_REQUIRED, to an owner"
+    },
+    "payroll.refused.scope_other": {
+      "text": "Ka ce mai shi ya ba da izinin hakan a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SCOPE_REQUIRED, to others"
+    },
+    "payroll.refused.reason": {
+      "text": "Faɗi dalili.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's REASON_REQUIRED"
+    },
+    "payroll.refused.note": {
+      "text": "Faɗi dalilin da kake mayar da shi, a gajeren rubutu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a rejection with no note"
+    },
+    "payroll.button.open": {
+      "text": "Buɗe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a link button on the payroll's card on Telegram"
+    },
+    "payroll.pay.awaiting": {
+      "text": "Ana jiran kuɗi: ya rage {short}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a locked payroll's payment, waiting for the wallet"
+    },
+    "payroll.pay.awaiting_any": {
+      "text": "Ana jiran kuɗi",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a locked payroll's payment, waiting for the wallet, by how much not known"
+    },
+    "payroll.pay.paying": {
+      "text": "Ana biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll's payment under way"
+    },
+    "payroll.pay.paid": {
+      "text": "An biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll paid to everyone"
+    },
+    "payroll.pay.paid_some": {
+      "text": "An biya, {n} ba a biya ba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll paid to some, with how many were not"
+    },
+    "payroll.pay.failed": {
+      "text": "Ba a biya ba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll's payment that failed"
+    },
+    "payroll.pay.none_now": {
+      "text": "Babu albashin da aka kulle da ke jiran ranar biyansa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"pay payroll now\" with nothing to pay now"
+    },
+    "payroll.paid_now": {
+      "text": "Ana biya yanzu. Payrolla tana biyan {people} {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): after Pay now with the code"
+    },
+    "payroll.retried": {
+      "text": "An sake aikawa. Payrolla za ta biya kowannensu a asusunsa na yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): after Pay the failed ones again with the code"
+    },
+    "payroll.refused.awaiting_funds": {
+      "text": "Walat ɗinka na Payrolla ya rage {short}. Saka kuɗi, Payrolla za ta biya da zarar ya shiga.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's AWAITING_FUNDS"
+    },
+    "payroll.refused.awaiting_funds_some": {
+      "text": "Walat ɗinka na Payrolla bai isa ba. Saka kuɗi, Payrolla za ta biya da zarar ya shiga.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's AWAITING_FUNDS, by how much not known"
+    },
+    "payroll.refused.already_paying": {
+      "text": "Payrolla tana biyan wannan albashin tuni.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's ALREADY_PAYING"
+    },
+    "payroll.refused.nothing_to_retry": {
+      "text": "Babu biyan da ya gaza da za a sake aikawa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's NOTHING_TO_RETRY"
+    },
+    "payroll.refused.payslip_not_final": {
+      "text": "Wannan takardar albashi za ta shirya da zarar an kulle albashin.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's PAYSLIP_NOT_FINAL"
+    },
+    "payroll.refused.payslip_links_off": {
+      "text": "An kashe hanyoyin takardar albashi. Kunna su a Payrolla, Settings, Connected apps.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's PAYSLIP_LINKS_DISABLED"
+    },
+    "payroll.code.type_pay_now": {
+      "text": "Rubuta ta a nan don biyan albashin {period} yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): in the chat thread: type the code to pay now"
+    },
+    "payroll.code.type_retry": {
+      "text": "Rubuta ta a nan don sake aika biyan albashin {period} da suka gaza.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): in the chat thread: type the code to pay the failed ones again"
+    },
+    "payroll.button.retry": {
+      "text": "Sake biyan su",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a button (at most 20 characters): pay the failed ones again"
+    },
+    "payroll.told.short": {
+      "text": "Albashin {period} yana jiran kuɗi: ya rage {short}. Saka kuɗi a walat ɗinka na Payrolla; Payrolla za ta biya da zarar ya shiga.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told on the pay day when the wallet is short"
+    },
+    "payroll.told.warn3": {
+      "text": "Albashin {period} zai biya a {date}, nan da kwana 3. Walat ɗinka na Payrolla yana da {available}; yana buƙatar {needed}: ya rage {short}. Saka kuɗi kafin lokacin.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the morning warning three days before the pay day"
+    },
+    "payroll.told.warn1": {
+      "text": "Albashin {period} zai biya gobe, {date}. Walat ɗinka na Payrolla yana da {available}; yana buƙatar {needed}: ya rage {short}. Saka kuɗi yau.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the morning warning the day before the pay day"
+    },
+    "payroll.told.paid_all": {
+      "text": "An biya albashin {period}: duka {people}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told when everyone was paid"
+    },
+    "payroll.told.paid_some": {
+      "text": "Albashin {period}: an biya {paid} daga cikin mutane {total}. {n} ba a biya ba: {who}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told when some were not paid, with who and why"
+    },
+    "payroll.slip.paid": {
+      "text": "An biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment"
+    },
+    "payroll.slip.sent": {
+      "text": "Yana kan hanya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment sent, not yet arrived"
+    },
+    "payroll.slip.failed": {
+      "text": "Ba a biya ba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment that failed"
+    },
+    "payroll.slip.returned": {
+      "text": "Banki ya mayar",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment the bank returned"
+    },
+    "payroll.slip.waiting": {
+      "text": "Ba a biya ba tukuna",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment not sent yet"
+    },
+    "payroll.payslip.ready": {
+      "text": "Takardar albashinka ta {month} ta shirya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the only words an employee is sent about their payslip"
+    },
+    "payroll.payslip.open": {
+      "text": "Buɗe ta a Taskiem. Za ka shiga da farko.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): under the payslip notice on a chat app, with its link"
+    },
+    "payroll.payslip.not_linked": {
+      "text": "Ba a haɗa ka da albashi a nan ba tukuna. Tambayi mai aikinka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslip\" from someone not linked to a Payrolla employee"
+    },
+    "payroll.payslip.none": {
+      "text": "Ba ka da takardar albashi tukuna. Suna zuwa da zarar an kulle albashi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslip\" with none yet"
+    },
+    "payroll.payslip.links": {
+      "text": "Takardun albashinka suna buɗewa a Taskiem bayan ka shiga:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslips\" on a chat app, before the links"
+    },
+    "payroll.payslip.link_line": {
+      "text": "{period}: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslips\" on a chat app: one payslip's link",
+      "same": true
+    },
+    "payroll.button.approve_who": {
+      "text": "Amince {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): a button under the account changes waiting: approve this person's ({name}: their first name; 20 characters at most with it)"
+    },
+    "payroll.change.approved": {
+      "text": "An amince. Daga yanzu Payrolla za ta biya {name} a sabon asusun.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): after the code typed in the thread"
+    },
+    "payroll.change.approved_own": {
+      "text": "Wanda ya nema ne ya amince. Daga yanzu Payrolla za ta biya {name} a sabon asusun.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the company's only approver approved a change they asked for themselves, with their code"
+    },
+    "payroll.change.asked_employee": {
+      "text": "Ma'aikacin ne ya nema.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: the employee, with their own code"
+    },
+    "payroll.change.asked_payrolla": {
+      "text": "An nema a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Payrolla's own screens"
+    },
+    "payroll.change.asked_taskiem": {
+      "text": "{who} ne ya nema a Taskiem.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Taskiem ({who}: their name)"
+    },
+    "payroll.change.asked_taskiem_someone": {
+      "text": "An nema a Taskiem.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Taskiem whose name isn't known"
+    },
+    "payroll.change.decided": {
+      "text": "An riga an yanke wannan canjin asusun.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): Payrolla's INVALID_STATE: approved or rejected already"
+    },
+    "payroll.change.gone": {
+      "text": "Payrolla ba ta da irin wannan canjin asusun. Wataƙila an riga an yanke shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the change is not in Payrolla any more"
+    },
+    "payroll.change.how": {
+      "text": "Don amincewa da ɗaya, rubuta: approve {name}'s account change.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): under the list, to those who may approve ({name}: a first name, in small letters)"
+    },
+    "payroll.change.line": {
+      "text": "{name}: {account}. {asked}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): one change waiting ({account}: the bank's name for the new account, the bank and its last four digits; {asked}: who asked)",
+      "same": true
+    },
+    "payroll.change.none": {
+      "text": "Babu canjin asusun da ke jira.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): nothing waiting"
+    },
+    "payroll.change.none_for": {
+      "text": "Babu canjin asusun da ke jiran {name}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): none waiting for the person named"
+    },
+    "payroll.change.open": {
+      "text": "Duba su duka: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): a link to Account changes"
+    },
+    "payroll.change.open_page": {
+      "text": "Ka amince da shi inda kake rubuta lambar Payrolla: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): on the web, in the app and on Slack, a link to Account changes, whose sheet takes the code"
+    },
+    "payroll.change.reject_how": {
+      "text": "Don ƙin shi, rubuta: reject {whose} account change, tare da dalili.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): \"reject … account change\" without a note ({whose}: musa's, or the)"
+    },
+    "payroll.change.rejected": {
+      "text": "An ƙi. Har yanzu ana biyan {name} a asusunsa na yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): after rejecting a change with a note"
+    },
+    "payroll.change.same_person": {
+      "text": "Kai ne ka nemi wannan canjin asusun, don haka dole wani ya amince da shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): Payrolla's SAME_PERSON: whoever asked can't approve it, unless they are the only approver"
+    },
+    "payroll.change.title": {
+      "text": "Canje-canjen asusun da ke jira:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the title of the list"
+    },
+    "payroll.change.type": {
+      "text": "Rubuta ta a nan don amincewa da sabon asusun albashin {name}: {account}. Tana aiki sau ɗaya, na minti 5.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): in the WhatsApp or Telegram thread: type the code to approve a change ({account}: the bank's name for it, the bank and its last four digits)"
+    },
+    "payroll.change.which": {
+      "text": "Wanne: {names}? Faɗi da sunansa, misali: approve musa's account change.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): more than one change, and no name or a name of two people"
+    },
+    "payroll.staff.add_form": {
+      "text": "Saka {name} cikin albashi a wannan fom, tare da albashinsa da asusun bankinsa. Sunan asusun daga banki zai bayyana kafin ka ajiye: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add musa to payroll\" for a staff member not yet in Payrolla: the Add someone form, filled in from them"
+    },
+    "payroll.staff.add_new": {
+      "text": "{name} ba ya cikin ma'aikatanka a Taskiem. Saka shi cikin albashi a wannan fom, tare da albashinsa da asusun bankinsa: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add … to payroll\" for someone not on the staff: the empty Add someone form"
+    },
+    "payroll.staff.already": {
+      "text": "{name} yana cikin albashi tuni. Duba shi a Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add … to payroll\" for someone already in Payrolla"
+    },
+    "payroll.staff.ask_end": {
+      "text": "A kawo ƙarshen aikin {name}? Zai fara aiki yau. Payrolla ba za ta iya saita ranar ƙarshe ba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before ending someone's employment"
+    },
+    "payroll.staff.ask_move": {
+      "text": "A mayar da {name} zuwa {department}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's department"
+    },
+    "payroll.staff.ask_pay": {
+      "text": "A canza albashin {name} na wata daga {before} zuwa {amount}, farawa {date}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's pay (amounts before tax)"
+    },
+    "payroll.staff.ask_pay_new": {
+      "text": "A canza albashin {name} na wata zuwa {amount}, farawa {date}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's pay when their pay now isn't known"
+    },
+    "payroll.staff.bank_form": {
+      "text": "Ana rubuta sabon asusun albashi a fom kawai, don banki ya duba shi. Buɗe {name} a Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"change zainab's salary account\": the form, never the chat"
+    },
+    "payroll.staff.done_end": {
+      "text": "Aikin {name} ya ƙare yau.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes"
+    },
+    "payroll.staff.done_move": {
+      "text": "An gama. {name} yana {department} yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes"
+    },
+    "payroll.staff.done_pay": {
+      "text": "An gama. Sabon albashin {name} zai fara {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes ({date}: 1 January 2027)"
+    },
+    "payroll.staff.from_bad": {
+      "text": "Faɗi lokacin da sabon albashin zai fara, misali: from january, ko from 1 january.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a start date that can't be read"
+    },
+    "payroll.staff.left": {
+      "text": "{name} ya riga ya bar aiki.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): someone whose employment ended"
+    },
+    "payroll.staff.my_account": {
+      "text": "Canza asusun albashinka a My pay. A can za ka rubuta lambar da Payrolla ta tura maka: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"change my salary account\" from a linked employee"
+    },
+    "payroll.staff.parts_kept": {
+      "text": "Albashinsa na asali, na gidaje da na sufuri za su tsaya yadda suke.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after the question about a change of pay, when they have those parts"
+    },
+    "payroll.staff.pay_form": {
+      "text": "Albashin asali, na gidaje da na sufuri na {name} sun haura {amount}. Canza albashinsa a fom ɗin da ke Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a lower pay than the parts add up to: the form, not a guess"
+    },
+    "payroll.staff.today": {
+      "text": "yau",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a change of pay starting today, in \"starting {date}\""
+    },
+    "payroll.words.amount": {
+      "text": "Wannan adadin bai yi daidai ba. Faɗi shi kamar haka: 100k, ko ₦100,000.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): an amount that can't be read"
+    },
+    "payroll.words.ask_bonus": {
+      "text": "A ƙara kari na {amount} ga {name} a albashin {period}, saboda {reason}? Ana cire haraji daga kari, don haka albashin da yake karɓa ({net} yanzu) zai ƙaru ƙasa da haka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before adding a bonus ({net}: their take-home pay now, from Payrolla)"
+    },
+    "payroll.words.ask_deduction": {
+      "text": "A cire {amount} daga albashin {name} a albashin {period}, saboda {reason}? Albashin da yake karɓa {net} ne yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before a deduction"
+    },
+    "payroll.words.ask_leave_out": {
+      "text": "A bar {name} daga albashin {period}, saboda {reason}? Ba za a biya shi komai wannan wata ba maimakon {net}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before leaving someone out this month"
+    },
+    "payroll.words.ask_put_back": {
+      "text": "A mayar da {name} cikin albashin {period}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before putting someone left out back"
+    },
+    "payroll.words.done": {
+      "text": "An gama.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after yes, when the person's pay can't be read"
+    },
+    "payroll.words.done_adjust": {
+      "text": "An gama. Yanzu {name} zai karɓi {net} a wannan wata (a da {before} ne).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after a bonus or a deduction, with their take-home pay from Payrolla"
+    },
+    "payroll.words.done_leave_out": {
+      "text": "An gama. An bar {name} daga albashin {period}. Yanzu yana biyan {people} {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after leaving someone out"
+    },
+    "payroll.words.done_put_back": {
+      "text": "An gama. {name} ya dawo cikin albashin {period} kuma zai karɓi {net}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after putting someone back"
+    },
+    "payroll.words.leave_reason": {
+      "text": "Me ya sa aka bar {name} a wannan wata? Faɗi a 'yan kalmomi, misali: hutu ba tare da albashi ba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks the reason for leaving someone out"
+    },
+    "payroll.words.no_open": {
+      "text": "Babu albashin da ke buɗe don canje-canje. Rubuta: prepare {month} payroll.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): no payroll prepared and not yet approved ({month}: this month, in small letters)"
+    },
+    "payroll.words.not_found": {
+      "text": "Babu wanda ake kira {name} a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): a name that matches no one on payroll"
+    },
+    "payroll.words.not_found_run": {
+      "text": "Babu wanda ake kira {name} a albashin {period}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): a name that matches no one in the payroll"
+    },
+    "payroll.words.not_left_out": {
+      "text": "Ba a bar {name} daga albashin {period} ba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): \"put … back\" for someone not left out"
+    },
+    "payroll.words.nothing": {
+      "text": "Babu abin da ya canza.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): no to a change waiting for yes"
+    },
+    "payroll.words.reason": {
+      "text": "Don me ne? Faɗi a 'yan kalmomi, misali: burin Q4.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks the reason for a bonus or a deduction"
+    },
+    "payroll.words.reason_short": {
+      "text": "Faɗi dalili a 'yan kalmomi (haruffa 200 a mafi yawa).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): an empty or too long reason"
+    },
+    "payroll.words.which": {
+      "text": "Wanne: {names}? Sake faɗi da cikakken sunansa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): a name that matches more than one person"
     }
   }
 }

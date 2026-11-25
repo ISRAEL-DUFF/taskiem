@@ -389,6 +389,12 @@ getPayroll
 getPayrollRun
 getPayrollStaff
 putStaffPayrolla
+# Payroll settings: the connection, who can approve, linking (P4b-1)
+getPayrollConnection
+getPayrollApprovers
+startPayrollLink
+confirmPayrollLink
+unlinkPayroll
 
 # Pay several people (P3, docs/spec/chat-pay-people.md)
 listPaymentBatches
@@ -460,3 +466,52 @@ getThing
 addThing
 patchThing
 getMoneySpending
+
+# Staff and pay from Taskiem (P4b-2): Team, adding someone, changing pay and
+# details, ending employment, held account changes, My pay
+listPayrollBanks
+getPayrollTeam
+getPayrollEmployee
+addPayrollEmployee
+changePayrollEmployee
+askPayrollBankChange
+endPayrollEmployee
+payrollNameCheck
+getPayrollBankChanges
+startBankChangeCode
+approveBankChange
+rejectBankChange
+getMyPay
+startMyBankChange
+confirmMyBankChange
+# This month's payroll (P4b-3): prepare it, a bonus or a deduction, leave
+# someone out and put them back, recalculate, cancel; approve, reject and
+# lock and pay with Payrolla's code (docs/spec/chat-pay-people.md)
+preparePayrollRun
+adjustPayrollRun
+unadjustPayrollRun
+excludePayrollRun
+putBackPayrollRun
+computePayrollRun
+cancelPayrollRun
+startPayrollRunCode
+approvePayrollRun
+lockPayrollRun
+rejectPayrollRun
+# Payroll settings and the tax and pension schedules (P4b-5): the setup
+# read-only, each payroll's schedules with a line per person, pension PINs
+# shown with a passkey, a spreadsheet when asked (docs/spec/chat-pay-people.md)
+getPayrollSettings
+listPayrollSchedules
+getPayrollSchedule
+revealPayrollSchedule
+downloadPayrollSchedule
+# After locking (P4b-4): Pay now and Pay the failed ones again with
+# Payrolla's code; payslips as Taskiem's own cards, anyone's for
+# payroll.read and one's own on My pay (docs/spec/chat-pay-people.md)
+payPayrollRunNow
+retryPayrollRunFailed
+getPayrollPayslip
+sendPayrollPayslipLink
+getMyPayslips
+getMyPayslip

@@ -77,6 +77,11 @@ type Options struct {
 	// provider's sandbox by default). IswalletURL and PayrollaURL are the
 	// live modes' (each provider's production by default).
 	IswalletTestURL, PayrollaTestURL string
+	// PayrollaAppURL and PayrollaTestAppURL are Payrolla's sign-in apps,
+	// where an owner allows Taskiem when connecting in one step
+	// (TASKIEM_PAYROLLA_APP_URL, TASKIEM_PAYROLLA_TEST_APP_URL; the
+	// sandbox's by default, production's unset until Payrolla gives it).
+	PayrollaAppURL, PayrollaTestAppURL string
 	// QuickBooksURL and QuickBooksTestURL replace QuickBooks' production
 	// and sandbox hosts, QuickBooksTokenURL Intuit's token endpoint
 	// (TASKIEM_QUICKBOOKS_URL, _TEST_URL, _TOKEN_URL; tests, a proxy).
@@ -167,7 +172,7 @@ func Register(r *connector.Registry, o Options) error {
 		youverify.New(youverify.Options{BaseURL: o.YouverifyURL}),
 		mpesa.New(mpesa.Options{BaseURL: o.MpesaURL}),
 		mtnmomo.New(mtnmomo.Options{BaseURL: o.MTNMoMoURL}),
-		payrolla.New(payrolla.Options{BaseURL: o.PayrollaURL, LiveURL: o.PayrollaURL, TestURL: o.PayrollaTestURL}),
+		payrolla.New(payrolla.Options{BaseURL: o.PayrollaURL, LiveURL: o.PayrollaURL, TestURL: o.PayrollaTestURL, LiveAppURL: o.PayrollaAppURL, TestAppURL: o.PayrollaTestAppURL}),
 		quickbooks.New(quickbooks.Options{LiveURL: o.QuickBooksURL, TestURL: o.QuickBooksTestURL, TokenURL: o.QuickBooksTokenURL}),
 		zohobooks.New(zohobooks.Options{BaseURL: o.ZohoBooksURL, AccountsServer: o.ZohoAccountsURL}),
 		zohomail.New(zohomail.Options{BaseURL: o.ZohoMailURL, AccountsServer: o.ZohoAccountsURL}),

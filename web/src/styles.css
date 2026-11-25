@@ -2705,6 +2705,20 @@ a.treat-went { text-decoration: underline; text-underline-offset: 2px; }
 .spending-profit { margin: 12px 0 0; }
 .spending-profit .hint { display: block; }
 
+/* This month's payroll (P4b-3): a person's breakdown, and the payroll's
+   card in the Taskiem chat. */
+.payroll-breakdown { margin: 6px 0 8px; }
+.payroll-breakdown > summary { min-height: 32px; display: flex; align-items: center; }
+.payroll-breakdown dl { margin: 8px 0 0; display: grid; gap: 4px; }
+.payroll-item { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.payroll-item dt { color: var(--muted); }
+.payroll-item dd { margin: 0; font-variant-numeric: tabular-nums; }
+.payroll-item.total { border-top: 1px solid var(--border); padding-top: 4px; font-weight: 600; }
+.payroll-item.total dt { color: var(--text); }
+.payroll-item.note { color: var(--muted); font-size: 13px; margin-top: 6px; }
+.payroll-card { max-width: 420px; margin: 4px 0; }
+.payroll-card h3 { margin: 0 0 4px; font-size: 15px; }
+.payroll-card-figure { font-size: 22px; font-weight: 700; margin: 0; font-variant-numeric: tabular-nums; }
 /* Saved things and the runs that read them (build plan H6). */
 .run-saved { display: block; }
 .saved-runs { margin: 12px 0; }

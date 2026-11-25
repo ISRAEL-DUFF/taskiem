@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Taskiem for Schools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+<style>
+{{BASECSS}}
+
+/* ================= schools page ================= */
+/* the third phone skin: the gate screen */
+.phone[data-skin="gate"]{--hd:#0d3b2e;--hd-ink:#fff;--hd-sub:rgba(255,255,255,.7);--wall:#0b2a21;--in:#fff;--out:#fff;--out-ink:#13261f;--out-time:#5b6b64;--ink-c:#13261f;--time:#5b6b64;--pay:#0d3b2e;--pay-ink:#c8f169;--rad:22px;--av:#c8f169;--av-ink:#0d3b2e;--bar-ink:#fff}
+.phone[data-skin="gate"] .compose{display:none}
+.phone[data-skin="gate"] .msgs{justify-content:center;padding:16px}
+.m.g{align-self:stretch;max-width:none;border-radius:22px;padding:20px 16px 16px;text-align:center;white-space:normal;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:330px}
+.m.g .scan{font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;color:#5b6b64;margin-bottom:12px}
+.m.g .ph{width:72px;height:72px;border-radius:50%;background:#dcf1e7;color:#0d3b2e;display:grid;place-items:center;font-weight:800;font-size:22px;margin-bottom:8px}
+.m.g b{font-size:19px;color:#13261f}
+.m.g small{font-size:13px;color:#5b6b64}
+.m.g .vd{margin-top:auto;font-size:22px;padding:18px 6px}
+.m.g.pop .vd{animation:verdict .6s var(--spring) .7s both}
+@keyframes verdict{from{transform:rotateX(90deg) scale(.8);opacity:0}}
+.m.g time{display:none}
+.m.note{align-self:center;max-width:90%;background:rgba(13,59,46,.88);color:#fff;font-size:12px;font-weight:700;border-radius:999px;padding:7px 13px;box-shadow:none;text-align:center}
+.m.note time{display:none}
+.m .lnk{display:block;margin-top:4px;color:#027eb5;font-weight:700}
+.m .acct{display:block;margin:6px 0 2px;padding:8px 10px;border-radius:10px;background:#f1f4ef;font-family:var(--f-mono);font-size:12.5px;line-height:1.5}
+.m .acct b{font-size:15px;letter-spacing:.04em}
+.m .card{display:block;margin:2px 0 4px;padding:10px;border-radius:12px;background:#f1f4ef}
+.m .card .k{display:block;font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#a05a00}
+.m .acts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.m .acts span{text-align:center;padding:8px;border-radius:10px;font-weight:800;font-size:13px;background:#fff;border:1px solid #d9e2d9;color:#13261f;transition:background .3s,color .3s,transform .2s}
+.m .acts span.yes{background:#0d3b2e;color:#c8f169;border-color:#0d3b2e}
+.m .acts span.on{transform:scale(.92)}
+
+/* persona icons in the switcher */
+.ch .ico.persona{background:#0d3b2e;box-shadow:inset 0 0 0 2px rgba(200,241,105,.5);display:grid;place-items:center;color:#c8f169}
+.ch .ico.persona svg{width:24px;height:24px}
+
+/* the rails strip under the hero */
+.rails{padding-block:clamp(28px,4vw,44px)}
+.rails .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:16px 26px}
+.rails .label{color:var(--muted)}
+.rails .tiles{display:flex;gap:14px}
+.rails .lg{width:60px;height:60px}
+
+/* section heads */
+.shead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:16px 40px;margin-bottom:clamp(24px,3.5vw,40px)}
+.shead .label{color:var(--acc)}
+.shead .h2{margin-top:10px}
+.shead p{max-width:42ch}
+
+/* every child has their own account number */
+.accts{padding-block:clamp(56px,8vw,110px) clamp(24px,4vw,56px)}
+.match{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:20px;align-items:start}
+.feed,.kids{background:var(--card);border:1px solid var(--line);border-radius:28px;padding:20px}
+.feed .label,.kids .label{color:var(--muted);margin-bottom:12px}
+.feed ul{display:flex;flex-direction:column;gap:10px;min-height:260px}
+.tx{display:grid;grid-template-columns:42px minmax(0,1fr);gap:4px 12px;align-items:center;padding:12px;border-radius:18px;background:var(--ground);border:1px solid var(--line);transition:opacity .35s,transform .5s var(--spring)}
+.tx .ic{grid-row:span 2;width:42px;height:42px;border-radius:13px;background:var(--pine);color:var(--lime);display:grid;place-items:center;font-weight:800}
+.tx b{font-size:17px;color:var(--head);font-variant-numeric:tabular-nums}
+.tx small{font-size:13px;color:var(--body)}
+.tx small code{font-family:var(--f-mono);font-size:12px}
+.tx.unk .ic{background:var(--amber);color:var(--pine)}
+.tx.off{opacity:0;transform:translateX(-30px) scale(.9)}
+.kids .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.kid{position:relative;padding:14px;border-radius:18px;background:var(--ground);border:1.5px solid var(--line);transition:border-color .3s,box-shadow .3s,transform .4s var(--spring)}
+.kid .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.kid b{font-size:15.5px;color:var(--head)}
+.kid small{font-size:12.5px;color:var(--muted)}
+.kid code{display:block;margin-top:4px;font-family:var(--f-mono);font-size:12px;color:var(--body)}
+.kid .kbar{display:block;margin-top:10px;height:8px;border-radius:8px;background:color-mix(in srgb,var(--acc) 15%,transparent);overflow:hidden}
+.kid .kbar i{display:block;height:100%;width:calc(var(--p,1) * 100%);background:var(--acc);border-radius:8px;transition:width .9s cubic-bezier(.3,.8,.2,1)}
+.kid .kst{display:block;margin-top:6px;font-size:12.5px;font-weight:800;color:var(--head)}
+.kid.hit{border-color:var(--acc);box-shadow:0 0 0 5px color-mix(in srgb,var(--acc) 16%,transparent);transform:scale(1.02)}
+.tomatch{margin-top:10px;padding:14px;border-radius:18px;border:1.5px dashed var(--amber);background:color-mix(in srgb,var(--amber) 10%,transparent);transition:transform .4s var(--spring),box-shadow .3s}
+.tomatch .k{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.tomatch b{display:block;margin-top:4px;font-size:15px;color:var(--head)}
+.tomatch small{display:block;font-size:13px;color:var(--body)}
+.tomatch.hit{transform:scale(1.02);box-shadow:0 0 0 5px color-mix(in srgb,var(--amber) 22%,transparent)}
+.tomatch .ok{display:inline-block;margin-top:8px;padding:5px 10px;border-radius:999px;background:var(--pine);color:var(--lime);font-size:12.5px;font-weight:800}
+.tomatch .ok.hide{opacity:0}
+@media (max-width:900px){.match{grid-template-columns:minmax(0,1fr)}.feed ul{min-height:0}}
+@media (max-width:420px){.kids .grid{grid-template-columns:minmax(0,1fr)}}
+
+/* the reminder ladder */
+.ladder{padding-block:clamp(48px,7vw,100px) clamp(24px,4vw,56px)}
+.lad-wrap{background:var(--card);border:1px solid var(--line);border-radius:28px;padding:20px;overflow-x:auto}
+.lad{position:relative;display:grid;grid-template-columns:150px repeat(4,minmax(130px,1fr));gap:8px;min-width:720px}
+.lad .hd{font-family:var(--f-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:4px 8px 8px}
+.lad .fam{display:flex;flex-direction:column;justify-content:center;padding:10px 8px}
+.lad .fam b{font-size:15.5px;color:var(--head)}
+.lad .fam small{font-size:12.5px;color:var(--muted)}
+.c{display:flex;align-items:center;justify-content:center;text-align:center;padding:12px 8px;border-radius:14px;font-size:13.5px;font-weight:800;line-height:1.25;min-height:58px;animation:cell 10s infinite;animation-delay:calc(var(--t) * 2.1s)}
+.c.sent{background:var(--pine);color:var(--lime)}
+.c.firm{background:var(--pine);color:var(--white);box-shadow:inset 0 0 0 2px var(--amber)}
+.c.skip{background:var(--mint-tint);color:var(--head)}
+.c.paid{background:transparent;color:var(--head);box-shadow:inset 0 0 0 2px var(--acc)}
+.c.none{background:transparent;color:var(--muted);font-weight:500;animation:none;opacity:.5}
+@keyframes cell{0%{opacity:.22;transform:scale(.94)}3%,88%{opacity:1;transform:none}96%,100%{opacity:.22;transform:scale(.94)}}
+.sweep{position:absolute;top:0;bottom:0;width:3px;border-radius:3px;background:var(--amber);left:150px;animation:sweep 10s linear infinite;pointer-events:none}
+.sweep::before{content:"today";position:absolute;top:-2px;left:6px;font-family:var(--f-mono);font-size:10.5px;color:var(--amber);font-weight:700}
+@keyframes sweep{0%{left:158px;opacity:1}84%{left:calc(100% - 4px);opacity:1}90%,100%{left:calc(100% - 4px);opacity:0}}
+.lad-key{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:16px;font-size:14px;color:var(--body)}
+.lad-key span{display:inline-flex;align-items:center;gap:8px}
+.lad-key i{width:14px;height:14px;border-radius:4px;display:inline-block}
+
+/* the desk and the gate */
+.desk{padding-block:clamp(24px,4vw,56px)}
+.desk-panel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(28px,4vw,64px);align-items:center;padding:clamp(28px,5vw,72px)}
+.desk-panel .h2{margin-top:12px}
+.desk-cards{display:flex;flex-wrap:wrap;gap:18px;justify-content:center}
+.appr{width:min(300px,100%);background:#ffffff;color:#13261f;border-radius:26px;padding:20px;box-shadow:0 30px 60px -30px rgba(0,0,0,.7)}
+.appr .k{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#a05a00}
+.appr b{display:block;margin-top:6px;font-size:26px;letter-spacing:-.03em;color:#0d3b2e}
+.appr small{display:block;font-size:13.5px;color:#43544c}
+.appr .acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+.appr .acts span{text-align:center;padding:11px 6px;border-radius:12px;font-weight:800;font-size:14px;border:1px solid #d9e2d9}
+.appr .acts .yes{background:#0d3b2e;color:#c8f169;border-color:#0d3b2e;animation:press 6s infinite}
+@keyframes press{0%,40%{transform:none}44%{transform:scale(.9)}48%,100%{transform:none}}
+.appr .done{margin-top:12px;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:#dcf1e7;font-size:13.5px;font-weight:700;color:#0d3b2e;animation:done 6s var(--spring) infinite}
+@keyframes done{0%,46%{opacity:0;transform:translateY(8px)}52%,94%{opacity:1;transform:none}100%{opacity:0}}
+@media (max-width:900px){.desk-panel{grid-template-columns:minmax(0,1fr)}}
+
+/* the proprietor's morning */
+.morning{padding-block:clamp(48px,7vw,100px) clamp(24px,4vw,56px)}
+.ov{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:20px}
+.ov-ring,.ov-tiles{background:var(--card);border:1px solid var(--line);border-radius:28px;padding:24px}
+.ov-ring{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px}
+.ring-box{position:relative;width:min(220px,70vw)}
+.ring-svg{width:100%;height:auto;display:block}
+.ring-svg circle{fill:none;stroke-width:14}
+.ring-svg .t{stroke:color-mix(in srgb,var(--acc) 14%,transparent)}
+.ring-svg .f{stroke:var(--acc);stroke-linecap:round;stroke-dasharray:1 1;stroke-dashoffset:calc(1 - var(--p,.737));transform:rotate(-90deg);transform-origin:50% 50%;transition:stroke-dashoffset 1.6s cubic-bezier(.3,.8,.2,1)}
+.ring-in{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-in b{font-size:40px;letter-spacing:-.04em;color:var(--head)}
+.ring-in small{font-size:13px;color:var(--muted)}
+.ov-ring p{font-size:15px}
+.ov-ring p b{color:var(--head)}
+.ov-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-content:start}
+.tile{padding:16px;border-radius:18px;background:var(--ground);border:1px solid var(--line)}
+.tile .k{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tile b{display:block;margin-top:6px;font-size:26px;letter-spacing:-.03em;color:var(--head);font-variant-numeric:tabular-nums}
+.tile small{font-size:13px;color:var(--body)}
+.tile.warn{border-color:var(--amber)}
+.aging{grid-column:1/-1;padding:16px;border-radius:18px;background:var(--ground);border:1px solid var(--line)}
+.aging .k{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.ag{display:grid;grid-template-columns:110px minmax(0,1fr) 70px;gap:10px;align-items:center;margin-top:10px;font-size:13.5px;color:var(--body)}
+.ag i{display:block;height:12px;border-radius:6px;background:var(--acc);width:calc(var(--w) * 100%);transform-origin:left;transition:transform 1.2s cubic-bezier(.3,.8,.2,1)}
+.ag i.late{background:var(--amber)}
+.ag span:last-child{text-align:right;font-variant-numeric:tabular-nums;color:var(--head);font-weight:700}
+@media (max-width:900px){.ov{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:420px){.ov-tiles{grid-template-columns:minmax(0,1fr)}.ag{grid-template-columns:86px minmax(0,1fr) 60px}}
+.js .wait:not(.go) .ring-svg .f{stroke-dashoffset:1}
+.js .wait:not(.go) .ag i{transform:scaleX(0)}
+.back-link{display:inline-flex;margin-top:18px;font-weight:700;color:var(--acc)}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="bar">
+      <a class="logo" href="index.html" aria-label="Taskiem home">
+        <span class="mk">{{MARK}}</span>
+        <span class="wm wm-std">{{WORD}}</span>
+        <span class="wm wm-rev">{{WORDREV}}</span>
+      </a>
+      <nav class="nav" aria-label="Sections">
+        <a href="index.html">For businesses</a>
+        <a href="#accounts">Account numbers</a>
+        <a href="#build">Billing</a>
+        <a href="#chasing">Chasing</a>
+        <a href="#desk">The gate</a>
+      </nav>
+      <a class="btn btn-main mag" href="#begin">Start free</a>
+      <button class="theme" id="theme" type="button" aria-label="Switch light or dark">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ======== HERO ======== -->
+  <section class="hero">
+    <div class="hero-bleed" id="hero">
+    <div class="wrap">
+      <div class="hero-panel">
+        <div class="hero-copy">
+          <p class="label">Taskiem for schools</p>
+          <h1 style="margin-top:16px" aria-live="polite">
+            <span class="l1">School fees, sorted for</span>
+            <span class="slot" id="slot"><span class="w">parents<span class="dot"></span></span></span>
+          </h1>
+          <p class="lede">Every student gets their own account number. A parent's transfer lands on the right child by itself, the receipt goes out, the proprietor approves cash, and the gate knows who is cleared.</p>
+          <div class="chans" role="tablist" aria-label="Whose phone">
+            <span class="lbl">Watch it for</span>
+            <button class="ch" role="tab" aria-selected="true" aria-label="A parent" data-i="0" type="button">{{RING}}<span class="ico persona"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></span><span class="tip">A parent</span></button>
+            <button class="ch" role="tab" aria-selected="false" aria-label="The proprietor" data-i="1" type="button">{{RING}}<span class="ico persona"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tip">The proprietor</span></button>
+            <button class="ch" role="tab" aria-selected="false" aria-label="The gate" data-i="2" type="button">{{RING}}<span class="ico persona"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V9l8-5 8 5v12"/><path d="M9 21v-7h6v7"/></svg></span><span class="tip">The gate</span></button>
+          </div>
+          <div class="cta-row">
+            <a class="btn btn-lime btn-big mag" href="#begin">Start free <span class="arr">→</span></a>
+            <a class="btn btn-ghost btn-big mag" href="#accounts">See how fees land</a>
+          </div>
+          <p class="fine">Free for 14 days. For nursery, primary and secondary schools.</p>
+        </div>
+
+        <div class="stage" aria-hidden="true">
+          <div class="ring"></div><div class="ring r2"></div>
+          <div class="phone" id="phone" data-skin="wa">
+            <span class="island"></span>
+            <div class="screen">
+              <div class="sbar"><span>9:41</span><i></i></div>
+              <div class="chead" id="chead"><span class="back">‹</span><span class="av">GC</span><div><b>Greenfield College</b><small>business account</small></div><span class="via">WhatsApp</span></div>
+              <div class="msgs" id="msgs"></div>
+              <div class="compose"><span>Message</span><i></i></div>
+            </div>
+          </div>
+          <div class="chips" id="chips"></div>
+        </div>
+      </div>
+    </div>
+    </div>
+  </section>
+
+  <!-- the three phones -->
+  <template id="c0" data-word="parents" data-skin="wa" data-av="GC" data-name="Greenfield College" data-sub="business account" data-via="WhatsApp">
+    <div class="m in" data-chip="0">Good morning Mrs Obi. First term fees for <b>Ada Obi, JSS 2A</b>:<span class="ln"><span>Tuition</span><span>₦150,000</span></span><span class="ln"><span>PTA levy</span><span>₦10,000</span></span><span class="ln"><span>ICT levy</span><span>₦15,000</span></span><span class="ln"><span>Books</span><span>₦10,000</span></span><span class="tot"><span>Total</span><span>₦185,000</span></span><span class="acct">Ada's own account<br><b>9012 345 678</b><br>Moniepoint · Greenfield/Ada Obi</span><time>07:30</time></div>
+    <div class="m note">Mrs Obi pays ₦185,000 from her bank app</div>
+    <div class="m in" data-chip="1 2">Received ₦185,000 for Ada Obi. Thank you! Ada's first term fees are fully paid.<span class="card"><span class="k">Receipt</span>GFC-0142 · ₦185,000<span class="lnk">Check this receipt ›</span></span><time>10:14</time></div>
+    <div class="m in">Your family page shows both children's fees, receipts and account numbers. No password needed.<span class="pay">Open family page</span><time>10:14</time></div>
+    <ul class="cl"><li data-side="L" style="--y:16%;--fx:120px;--fy:100px">Term invoiced · 412 students</li><li data-side="R" style="--y:46%;--fx:-120px;--fy:10px">Landed on Ada's account</li><li data-side="L" style="--y:74%;--fx:120px;--fy:-70px">Ada: cleared</li></ul>
+  </template>
+  <template id="c1" data-word="the proprietor" data-skin="tk" data-av="T" data-name="Taskiem" data-sub="Greenfield College" data-via="App">
+    <div class="m in" data-chip="0"><span class="card"><span class="k">Needs a second person</span><b>Cash ₦50,000</b> from Mr Bello for <b>Tunde Bello, JSS 1B</b>. Recorded by Funmi at the desk; above your ₦20,000 limit.</span><span class="acts"><span>Decline</span><span class="yes" data-pick>Approve</span></span><time>11:02</time></div>
+    <div class="m out" data-picked>Approve<time>11:03</time></div>
+    <div class="m in" data-chip="1">Approved. ₦50,000 counted to Tunde's first term fees. Receipt GFC-0143 sent to the Bellos.<time>11:03</time></div>
+    <div class="m in" data-chip="2"><b>Yesterday's close</b><span class="ln"><span>Money in</span><span>₦2,340,000</span></span><span class="ln"><span>Payments</span><span>61</span></span><span class="ln"><span>Matched by themselves</span><span>58</span></span><span class="ln"><span>To match</span><span>3</span></span><time>07:00</time></div>
+    <ul class="cl"><li data-side="L" style="--y:18%;--fx:120px;--fy:100px">Waiting for a second person</li><li data-side="R" style="--y:48%;--fx:-120px;--fy:10px">Approved · receipt sent</li><li data-side="L" style="--y:76%;--fx:120px;--fy:-70px">Daily close at 7am</li></ul>
+  </template>
+  <template id="c2" data-word="the gate" data-skin="gate" data-av="G" data-name="Main gate" data-sub="Greenfield College" data-via="Gate">
+    <div class="m in g" data-chip="0"><span class="scan">ADMISSION NO. GFC/22/0187</span><span class="ph">AO</span><b>Ada Obi</b><small>JSS 2A</small><span class="vd ok">CLEARED</span></div>
+    <div class="m in g" data-chip="1"><span class="scan">ADMISSION NO. GFC/23/0311</span><span class="ph">TB</span><b>Tunde Bello</b><small>JSS 1B</small><span class="vd no">SEE THE BURSAR</span></div>
+    <div class="m in g" data-chip="2"><span class="scan">ADMISSION NO. GFC/21/0044</span><span class="ph">CO</span><b>Chika Okafor</b><small>SS 1A</small><span class="vd ok">CLEARED</span></div>
+    <ul class="cl"><li data-side="L" style="--y:20%;--fx:120px;--fy:100px">No amounts at the gate</li><li data-side="R" style="--y:50%;--fx:-120px;--fy:10px">Cleared by the school's rule</li><li data-side="L" style="--y:78%;--fx:120px;--fy:-70px">On a payment plan: cleared</li></ul>
+  </template>
+
+  <div class="rails">
+    <div class="wrap">
+      <p class="label">Student account numbers from</p>
+      <div class="tiles">{{RAILS}}</div>
+    </div>
+  </div>
+
+  <!-- ======== ACCOUNT NUMBERS ======== -->
+  <section class="accts" id="accounts">
+    <div class="wrap">
+      <div class="shead">
+        <div><p class="label">Every child, their own account number</p><h2 class="h2">Money finds the right child by itself.</h2></div>
+        <p>Parents pay by transfer, any amount, any time. One transfer can cover brothers and sisters. Money from an account Taskiem doesn't know waits for the bursar, with a suggestion.</p>
+      </div>
+      <div class="match" id="match">
+        <div class="feed">
+          <p class="label">Money in today</p>
+          <ul id="feed">
+            <li class="tx"><span class="ic">₦</span><b>₦185,000</b><small>Mrs Obi · to <code>9012 345 678</code></small></li>
+            <li class="tx"><span class="ic">₦</span><b>₦240,000</b><small>The Okafors · one transfer for two</small></li>
+            <li class="tx unk"><span class="ic">?</span><b>₦30,000</b><small>From <code>0123 *** 789</code> · "school fees"</small></li>
+          </ul>
+        </div>
+        <div class="kids">
+          <p class="label">Students</p>
+          <div class="grid">
+            <div class="kid" data-k="ada" style="--p:1"><div class="top"><b>Ada Obi</b><small>JSS 2A</small></div><code>9012 345 678</code><span class="kbar"><i></i></span><span class="kst">Paid ✓</span></div>
+            <div class="kid" data-k="tunde" style="--p:.55"><div class="top"><b>Tunde Bello</b><small>JSS 1B</small></div><code>9012 777 104</code><span class="kbar"><i></i></span><span class="kst">₦85,000 to go</span></div>
+            <div class="kid" data-k="chika" style="--p:1"><div class="top"><b>Chika Okafor</b><small>SS 1A</small></div><code>9012 410 552</code><span class="kbar"><i></i></span><span class="kst">Paid · shared transfer</span></div>
+            <div class="kid" data-k="emeka" style="--p:1"><div class="top"><b>Emeka Okafor</b><small>JSS 3C</small></div><code>9012 410 553</code><span class="kbar"><i></i></span><span class="kst">Paid · shared transfer</span></div>
+          </div>
+          <div class="tomatch" id="tomatch"><span class="k">To match</span><b>₦30,000 from 0123 *** 789</b><small>Suggested: Tunde Bello. This account paid for Tunde last term.</small><span class="ok" id="tmOk">Matched by Funmi ✓</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== BILL THE TERM ======== -->
+  <section class="build" id="build">
+    <div class="wrap">
+      <div class="shead">
+        <div><p class="label">Billing, by saying it</p><h2 class="h2">Bill the whole term<br>in one message.</h2></div>
+        <p>Taskiem reads your classes and fees, invoices every student once, and sends each family their invoice. Running it again only bills students added since.</p>
+      </div>
+      <div class="wf-say">
+        {{MARK}}
+        <p class="cm out">on the first day of term, bill every student their fees and send each family their invoice and fees page, then tell the bursar what went out</p>
+        <p class="cm in">Here is your workflow: 7 steps, on 7 September. Each student is billed once, even if it runs again.</p>
+      </div>
+      <div class="wf" data-wf>
+        <div class="wf-bar">
+          <span class="wf-back" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></span>
+          <span class="wf-name">Bill the first term</span>
+          <span class="wf-tag">Version 1 · Draft</span>
+          <span class="wf-tabs" aria-hidden="true"><span class="on">Steps</span><span>Runs</span><span>Settings</span></span>
+          <span class="wf-actions" aria-hidden="true"><span class="wf-btn">Save draft</span><span class="wf-btn test">Test workflow</span><span class="wf-btn main">Publish</span></span>
+        </div>
+        <div class="wf-canvas">
+          <div class="wf-stage">
+            <svg class="wf-edges" viewBox="0 0 1160 440" preserveAspectRatio="none"><path class="hot" data-e="1" d="M280 100 H330"/><path class="hot" data-e="2" d="M570 100 H620"/><path class="hot" data-e="3" d="M860 100 H910"/><path class="hot" data-e="4" d="M1030 132 V196 Q1030 208 1018 208 H172 Q160 208 160 220 V284"/><path class="no" d="M1030 132 V284"/><path class="hot" data-e="5" d="M280 316 H330"/><path class="hot" data-e="6" d="M570 316 H620"/><circle class="plus" cx="305" cy="100" r="11"/><circle class="plus" cx="595" cy="100" r="11"/><circle class="plus" cx="885" cy="100" r="11"/><circle class="plus" cx="305" cy="316" r="11"/><circle class="plus" cx="595" cy="316" r="11"/><g class="plus-x"><path d="M301 100h8M305 96v8"/><path d="M591 100h8M595 96v8"/><path d="M881 100h8M885 96v8"/><path d="M301 316h8M305 312v8"/><path d="M591 316h8M595 312v8"/></g><circle class="wf-pulse" r="7" cx="280" cy="100"/></svg>
+            <span class="wf-lab" style="left:948px;top:196px">Yes</span>
+            <span class="wf-lab" style="left:1040px;top:196px">No</span>
+            <div class="wf-card trigger" style="left:40px;top:56px"><span class="wf-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span class="wf-text"><span class="wf-kicker">What starts it</span><span class="wf-title">On 7 September, 7:00</span><span class="wf-line">First day of term</span></span></div><div class="wf-card ran" data-run="1" style="left:330px;top:68px"><span class="wf-ico tone-brand"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg></span><span class="wf-text"><span class="wf-title">Read this term's fees</span><span class="wf-line">Schools · Fees by class</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card ran" data-run="2" style="left:620px;top:68px"><span class="wf-ico tone-info"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span><span class="wf-text"><span class="wf-title">Invoice every student</span><span class="wf-line">Schools · Invoice the term, once</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card ran" data-run="3" style="left:910px;top:68px"><span class="wf-ico tone-warn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.4"/><path d="M12 17h.01"/></svg></span><span class="wf-text"><span class="wf-title">Any new invoices?</span><span class="wf-line">If · one or more</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card ran" data-run="4" style="left:40px;top:284px"><span class="wf-ico tone-ok"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/><path d="M18 15l2 2 3-3"/></svg></span><span class="wf-text"><span class="wf-br">Yes</span><span class="wf-title">Send each family their invoice</span><span class="wf-line">For each · WhatsApp, or SMS</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card ran" data-run="5" style="left:330px;top:284px"><span class="wf-ico tone-brand"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M12 10v10"/></svg></span><span class="wf-text"><span class="wf-title">Record what went out</span><span class="wf-line">Your records · Add rows</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card ran" data-run="6" style="left:620px;top:284px"><span class="wf-ico tone-ok"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></span><span class="wf-text"><span class="wf-title">Tell the bursar</span><span class="wf-line">WhatsApp · 412 invoiced, 268 families</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card dim" style="left:910px;top:284px"><span class="wf-ico tone-muted"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></span><span class="wf-text"><span class="wf-br">No</span><span class="wf-title">Tell the bursar nothing was new</span><span class="wf-line">WhatsApp · Tell</span></span></div>
+          </div>
+          <div class="wf-tools" aria-hidden="true"><span>+</span><span>−</span><span>⤢</span><span class="wide">Tidy up</span></div>
+          <div class="wf-map" aria-hidden="true"><i style="left:4%;top:18%;background:#0d3b2e"></i><i style="left:30%;top:18%"></i><i style="left:56%;top:18%"></i><i style="left:82%;top:18%"></i><i style="left:4%;top:62%"></i><i style="left:30%;top:62%"></i><i style="left:56%;top:62%"></i><i style="left:82%;top:62%;opacity:.4"></i></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== CHASING ======== -->
+  <section class="ladder" id="chasing">
+    <div class="wrap">
+      <div class="shead">
+        <div><p class="label">Chasing that respects families</p><h2 class="h2">Gentle first.<br>Firmer as weeks pass.</h2></div>
+        <p>On two days you choose each week, families past due get a reminder. Families who promised a date, or agreed a plan of 2, 3 or 4 parts, are skipped until it's due.</p>
+      </div>
+      <div class="lad-wrap">
+        <div class="lad" aria-label="Example: four families over four weeks of reminders">
+          <span class="sweep" aria-hidden="true"></span>
+          <span class="hd">Family</span><span class="hd">Week 1</span><span class="hd">Week 2</span><span class="hd">Week 3</span><span class="hd">Week 4</span>
+          <div class="fam"><b>The Obis</b><small>Ada, JSS 2A</small></div>
+          <span class="c sent" style="--t:0">Gentle reminder ✓</span><span class="c paid" style="--t:1">Paid · stopped</span><span class="c none">—</span><span class="c none">—</span>
+          <div class="fam"><b>The Bellos</b><small>Tunde, JSS 1B</small></div>
+          <span class="c sent" style="--t:0">Gentle reminder ✓</span><span class="c skip" style="--t:1">Promised Friday · skipped</span><span class="c sent" style="--t:2">Reminder ✓</span><span class="c paid" style="--t:3">Paid · stopped</span>
+          <div class="fam"><b>The Okafors</b><small>Chika and Emeka</small></div>
+          <span class="c sent" style="--t:0">Gentle reminder ✓</span><span class="c skip" style="--t:1">Plan in 3 parts · skipped</span><span class="c skip" style="--t:2">Keeping to plan · skipped</span><span class="c skip" style="--t:3">Keeping to plan · skipped</span>
+          <div class="fam"><b>The Adeyemis</b><small>Tobi, Primary 5</small></div>
+          <span class="c sent" style="--t:0">Gentle reminder ✓</span><span class="c sent" style="--t:1">Reminder ✓</span><span class="c firm" style="--t:2">Firmer reminder ✓</span><span class="c firm" style="--t:3">Firmer reminder ✓</span>
+        </div>
+      </div>
+      <div class="lad-key"><span><i style="background:var(--pine)"></i>Reminder sent</span><span><i style="background:var(--mint-tint);box-shadow:inset 0 0 0 1px var(--line)"></i>Skipped: promise or plan</span><span><i style="box-shadow:inset 0 0 0 2px var(--acc)"></i>Paid, so reminders stop</span></div>
+    </div>
+  </section>
+
+  <!-- ======== THE DESK AND THE GATE ======== -->
+  <section class="desk" id="desk">
+    <div class="wrap">
+      <div class="panel desk-panel">
+        <div>
+          <p class="label">The desk and the gate</p>
+          <h2 class="h2">Cash needs two people.<br>The gate needs one word.</h2>
+          <ul class="points">
+            <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><b>A second person for cash and discounts</b><span>Above the limit you set, a payment at the desk waits for your approval before it counts.</span></div></li>
+            <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 9h6M9 13h6M9 17h3"/></svg></span><div><b>Clearance follows your rule</b><span>A student is cleared when the term is settled or a plan is kept. An override needs a reason and an end date.</span></div></li>
+            <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></span><div><b>The gate sees a name and a word</b><span>CLEARED or SEE THE BURSAR, never an amount. A gate login opens on that screen and nothing else.</span></div></li>
+          </ul>
+        </div>
+        <div class="desk-cards" aria-hidden="true">
+          <div class="appr">
+            <span class="k">Needs a second person</span>
+            <b>Cash ₦50,000</b>
+            <small>Tunde Bello, JSS 1B · recorded by Funmi</small>
+            <span class="acts"><span>Decline</span><span class="yes">Approve</span></span>
+            <span class="done">✓ Approved by Mrs Adebayo</span>
+          </div>
+          <div class="gatemini">
+            <div class="gm-top"><span>Main gate</span><span>Greenfield</span></div>
+            <div class="gm-stack">
+              <div class="gm gm-a"><i>AO</i><b>Ada Obi</b><small>JSS 2A</small><span class="vd ok">CLEARED</span></div>
+              <div class="gm gm-b"><i>TB</i><b>Tunde Bello</b><small>JSS 1B</small><span class="vd no">SEE THE BURSAR</span></div>
+            </div>
+            <p class="gm-foot">No amounts at the gate</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== THE PROPRIETOR'S MORNING ======== -->
+  <section class="morning" id="morning" data-anim>
+    <div class="wrap">
+      <div class="shead">
+        <div><p class="label">The proprietor's morning</p><h2 class="h2">The whole term<br>on one screen.</h2></div>
+        <p>What's collected of what's expected, yesterday's close, what waits for you, and who owes by how late. In the app, on the web, and at 7am on WhatsApp.</p>
+      </div>
+      <div class="ov">
+        <div class="ov-ring">
+          <p class="label" style="color:var(--muted)">First term · 2026/2027</p>
+          <div class="ring-box">
+            <svg class="ring-svg" viewBox="0 0 120 120" aria-hidden="true"><circle class="t" cx="60" cy="60" r="50"/><circle class="f" cx="60" cy="60" r="50" pathLength="1"/></svg>
+            <div class="ring-in"><b class="num" data-to="74">74%</b><small>collected</small></div>
+          </div>
+          <p><b class="num" data-naira="38420000">₦38,420,000</b> of ₦52,140,000 expected</p>
+        </div>
+        <div class="ov-tiles">
+          <div class="tile"><span class="k">Yesterday</span><b class="num" data-naira="2340000">₦2,340,000</b><small>61 payments</small></div>
+          <div class="tile"><span class="k">Matched by themselves</span><b class="num" data-to="58">58</b><small>of 61</small></div>
+          <div class="tile warn"><span class="k">To match</span><b class="num" data-to="3">3</b><small>with suggestions</small></div>
+          <div class="tile warn"><span class="k">Waiting for you</span><b class="num" data-to="1">1</b><small>cash at the desk</small></div>
+          <div class="aging">
+            <span class="k">Still owed: ₦13,720,000</span>
+            <div class="ag"><span>Under 30 days</span><i style="--w:1"></i><span>₦6.2m</span></div>
+            <div class="ag"><span>30 to 60 days</span><i style="--w:.79"></i><span>₦4.9m</span></div>
+            <div class="ag"><span>Over 60 days</span><i class="late" style="--w:.42"></i><span>₦2.6m</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== START ======== -->
+  <section class="start" id="start">
+    <div class="wrap">
+      <h2 class="h2">Ready before resumption</h2>
+      <p class="sub">Set up in a week, at your pace. Your students and fees stay yours, and you can export them any time.</p>
+      <div class="track">
+        <span class="rail"></span><span class="hop" aria-hidden="true"></span>
+        <ol class="steps3">
+          <li class="sc"><span class="n" style="--d:0s">1</span><h3>Bring your students.</h3><p>Upload your list. Every line is checked first, families are grouped by phone number, and nothing is added twice.</p><q>412 students · 268 families</q></li>
+          <li class="sc"><span class="n" style="--d:1.92s">2</span><h3>Connect your bank.</h3><p>Moniepoint, Flutterwave or Paystack. Taskiem gives every student their own account number on it.</p><q>412 account numbers issued</q></li>
+          <li class="sc"><span class="n" style="--d:3.84s">3</span><h3>Bill the term.</h3><p>Set each class's fees once. Taskiem invoices every student and sends each family their invoice.</p><q>First term billed</q></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== CLOSE ======== -->
+  <section class="close" id="begin" data-anim>
+    <div class="wrap">
+      <svg class="drawn" viewBox="0 0 100 100" role="img" aria-label="Taskiem">
+        <rect class="bg" width="100" height="100" rx="26" fill="#0d3b2e"/>
+        <path class="s1" pathLength="1" d="M27 40H61" stroke="#c8f169" stroke-width="11" stroke-linecap="round" fill="none"/>
+        <path class="s2" pathLength="1" d="M42 22V58Q42 74 58 74H64" stroke="#c8f169" stroke-width="11" stroke-linecap="round" fill="none"/>
+        <circle class="dt" cx="78" cy="74" r="7" fill="#ffffff"/>
+      </svg>
+      <h2 aria-label="Start the term with Taskiem."><span class="wd"><span style="--i:0">Start</span></span> <span class="wd"><span style="--i:1">the</span></span> <span class="wd"><span style="--i:2">term</span></span> <span class="wd"><span style="--i:3">with</span></span> <span class="wd"><span style="--i:4">Taskiem.</span></span></h2>
+      <div class="cta-row">
+        <a class="btn btn-main btn-big mag" href="#begin">Chat with Taskiem on WhatsApp <span class="arr">→</span></a>
+        <a class="btn btn-alt btn-big mag" href="#begin">Start on the web</a>
+      </div>
+      <p class="fine">Free for 14 days. Hosted in Nigeria. Prices in naira.</p>
+      <a class="back-link" href="index.html">← Taskiem for businesses</a>
+    </div>
+  </section>
+</main>
+
+{{FOOTER}}
+
+<script>
+(() => {
+  const root = document.documentElement;
+  root.classList.add('js');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const naira = n => '₦' + Math.round(n).toLocaleString('en-NG');
+
+  /* theme */
+  const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  try { const t = localStorage.getItem('tk-theme'); if (t === 'dark' || t === 'light') root.dataset.theme = t; } catch (e) {}
+  $('#theme').addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    root.dataset.theme = next;
+    try { localStorage.setItem('tk-theme', next); } catch (e) {}
+  });
+
+  /* hero: spotlight follows the pointer */
+  const hero = $('#hero');
+  hero.addEventListener('pointermove', e => {
+    const r = hero.getBoundingClientRect();
+    hero.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%');
+    hero.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%');
+  });
+
+  /* magnetic buttons */
+  if (!reduce && matchMedia('(pointer: fine)').matches) {
+    $$('.mag').forEach(b => {
+      b.addEventListener('pointermove', e => {
+        const r = b.getBoundingClientRect();
+        b.style.transform = `translate(${(e.clientX - r.left - r.width / 2) * .18}px, ${(e.clientY - r.top - r.height / 2) * .3}px)`;
+      });
+      b.addEventListener('pointerleave', () => { b.style.transform = ''; });
+    });
+  }
+
+  /* hero: one phone, three people */
+  const phone = $('#phone'), msgs = $('#msgs'), chead = $('#chead'), chips = $('#chips'), slot = $('#slot');
+  const tabs = $$('.ch');
+  const convs = [0, 1, 2].map(i => $('#c' + i));
+  let run = 0, cur = 0;
+  function setWord(text) {
+    const w = document.createElement('span');
+    w.className = 'w in';
+    w.innerHTML = text + '<span class="dot"></span>';
+    slot.appendChild(w);
+    $$('.w', slot).forEach(o => { if (o !== w) { o.classList.add('out'); setTimeout(() => o.remove(), 800); } });
+    setTimeout(() => w.classList.remove('in'), 30);
+  }
+  async function show(i, first) {
+    const id = ++run; cur = i;
+    const c = convs[i], d = c.dataset;
+    tabs.forEach((t, k) => { t.setAttribute('aria-selected', k === i); t.style.setProperty('--p', 0); });
+    if (!first) {
+      setWord(d.word);
+      chips.querySelectorAll('.chip').forEach(ch => ch.classList.remove('show'));
+      phone.classList.add('flip');
+      await wait(330);
+      if (id !== run) return;
+    }
+    phone.dataset.skin = d.skin;
+    chead.innerHTML = `<span class="back">‹</span><span class="av">${d.av}</span><div><b>${d.name}</b><small>${d.sub}</small></div><span class="via">${d.via}</span>`;
+    const frag = c.content.cloneNode(true);
+    const chipList = [...frag.querySelectorAll('.cl li')];
+    frag.querySelector('.cl').remove();
+    msgs.innerHTML = '';
+    msgs.appendChild(frag);
+    chips.innerHTML = '';
+    chipList.forEach(li => { const s = document.createElement('span'); s.className = 'chip ' + li.dataset.side; s.setAttribute('style', li.getAttribute('style')); s.textContent = li.textContent; chips.appendChild(s); });
+    phone.classList.remove('flip');
+    const ms = $$('.m', msgs);
+    const gate = d.skin === 'gate';
+    if (reduce) {
+      if (gate) ms.slice(0, -1).forEach(m => m.classList.add('hid'));
+      chips.querySelectorAll('.chip').forEach(ch => ch.classList.add('show'));
+      return;
+    }
+    ms.forEach(m => m.classList.add('hid'));
+    const typing = document.createElement('div');
+    typing.className = 'typing hid'; typing.innerHTML = '<i></i><i></i><i></i>';
+    msgs.appendChild(typing);
+    await wait(first ? 500 : 450);
+    for (let k = 0; k < ms.length; k++) {
+      const m = ms[k];
+      if (id !== run) return;
+      if (gate) {
+        await wait(k ? 2600 : 300);
+      } else if (m.classList.contains('out')) {
+        await wait(700);
+      } else if (m.classList.contains('note')) {
+        await wait(900);
+      } else {
+        typing.classList.remove('hid'); msgs.appendChild(typing);
+        await wait(1000);
+        typing.classList.add('hid');
+      }
+      if (id !== run) return;
+      if (m.hasAttribute('data-picked')) { const p = $('[data-pick]', msgs); if (p) { p.classList.add('on'); setTimeout(() => p.classList.remove('on'), 250); } await wait(450); }
+      if (gate) ms.forEach(x => { if (x !== m) x.classList.add('hid'); });
+      msgs.insertBefore(m, typing);
+      m.classList.remove('hid'); m.classList.add('pop');
+      tabs[i].style.setProperty('--p', (k + 1) / ms.length);
+      if (m.dataset.chip) m.dataset.chip.split(' ').forEach((n, j) => setTimeout(() => { const ch = chips.children[+n]; if (ch && id === run) ch.classList.add('show'); }, (gate ? 1100 : 250) + j * 450));
+    }
+    await wait(gate ? 3000 : 3600);
+    if (id === run) show((i + 1) % convs.length);
+  }
+  tabs.forEach((t, k) => t.addEventListener('click', () => show(k)));
+  show(0, true);
+
+  /* money finds the right child */
+  (() => {
+    const sec = $('#match'), txs = $$('.tx', sec), kid = k => $(`.kid[data-k="${k}"]`, sec);
+    const tm = $('#tomatch'), tmOk = $('#tmOk');
+    if (reduce) return;
+    let run = 0, inView = false;
+    const sleep = (ms, id) => new Promise((ok, no) => setTimeout(() => id === run ? ok() : no('stop'), ms));
+    const setKid = (k, p, st) => { const el = kid(k); el.style.setProperty('--p', p); $('.kst', el).textContent = st; };
+    const hit = el => { el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 900); };
+    async function cycle() {
+      const id = ++run;
+      try {
+        txs.forEach(t => t.classList.add('off'));
+        setKid('ada', 0, '₦185,000 to go'); setKid('tunde', .4, '₦110,000 to go'); setKid('chika', 0, '₦120,000 to go'); setKid('emeka', 0, '₦120,000 to go');
+        tmOk.classList.add('hide'); tm.style.opacity = .45;
+        await sleep(900, id);
+        txs[0].classList.remove('off'); await sleep(700, id);
+        hit(kid('ada')); setKid('ada', 1, 'Paid ✓'); await sleep(1800, id);
+        txs[1].classList.remove('off'); await sleep(700, id);
+        hit(kid('chika')); hit(kid('emeka')); setKid('chika', 1, 'Paid · shared transfer'); setKid('emeka', 1, 'Paid · shared transfer'); await sleep(1800, id);
+        txs[2].classList.remove('off'); await sleep(700, id);
+        tm.style.opacity = 1; hit(tm); await sleep(1600, id);
+        tmOk.classList.remove('hide'); hit(kid('tunde')); setKid('tunde', .55, '₦85,000 to go'); await sleep(4200, id);
+        if (inView) cycle();
+      } catch (e) { if (e !== 'stop') throw e; }
+    }
+    new IntersectionObserver(es => es.forEach(e => {
+      if (e.isIntersecting && !inView) { inView = true; cycle(); }
+      else if (!e.isIntersecting && inView) {
+        inView = false; run++;
+        txs.forEach(t => t.classList.remove('off'));
+        setKid('ada', 1, 'Paid ✓'); setKid('tunde', .55, '₦85,000 to go'); setKid('chika', 1, 'Paid · shared transfer'); setKid('emeka', 1, 'Paid · shared transfer');
+        tmOk.classList.remove('hide'); tm.style.opacity = 1;
+      }
+    }), { threshold: .3 }).observe(sec);
+  })();
+
+  /* the canvas: always drawn; a test run ticks each step in turn */
+  $$('[data-wf]').forEach(wf => {
+    const frame = $('.wf-canvas', wf), stage = $('.wf-stage', wf), W = 1160, H = 440;
+    const narrow = () => matchMedia('(max-width:700px)').matches;
+    function fit() {
+      if (narrow()) { stage.style.transform = ''; frame.style.height = ''; frame.style.overflowX = ''; return; }
+      const s = Math.min(1, Math.max(frame.clientWidth / W, .66));
+      stage.style.transform = `scale(${s})`;
+      frame.style.height = Math.round(H * s) + (s < 1 ? 56 : 0) + 'px';
+      frame.style.overflowX = s * W > frame.clientWidth + 1 ? 'auto' : 'hidden';
+    }
+    fit();
+    if ('ResizeObserver' in window) new ResizeObserver(fit).observe(frame); else addEventListener('resize', fit);
+    if (reduce) return;
+    const cards = $$('.wf-card[data-run]', stage).sort((a, b) => a.dataset.run - b.dataset.run);
+    const edges = $$('.wf-edges path[data-e]', stage).sort((a, b) => a.dataset.e - b.dataset.e);
+    const pulse = $('.wf-pulse', stage), test = $('.wf-btn.test', wf);
+    let run = 0, inView = false;
+    const sleep = (ms, id) => new Promise((ok, no) => setTimeout(() => id === run ? ok() : no('stop'), ms));
+    const travel = (path, ms, id) => new Promise((ok, no) => {
+      const len = path.getTotalLength(), t0 = performance.now();
+      pulse.style.opacity = 1;
+      const f = now => {
+        if (id !== run) return no('stop');
+        const p = Math.min(1, (now - t0) / ms), e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+        const pt = path.getPointAtLength(len * e);
+        pulse.setAttribute('cx', pt.x); pulse.setAttribute('cy', pt.y);
+        p < 1 ? requestAnimationFrame(f) : ok();
+      };
+      requestAnimationFrame(f);
+    });
+    async function cycle() {
+      const id = ++run;
+      try {
+        cards.forEach(c => c.classList.remove('ran')); edges.forEach(e => e.classList.remove('hot'));
+        await sleep(500, id);
+        test.classList.add('press'); await sleep(260, id); test.classList.remove('press');
+        await sleep(250, id);
+        for (let i = 0; i < cards.length; i++) {
+          if (!narrow()) await travel(edges[i], i === 3 ? 1100 : 520, id); else await sleep(450, id);
+          edges[i].classList.add('hot'); cards[i].classList.add('ran');
+          await sleep(220, id);
+        }
+        pulse.style.opacity = 0;
+        await sleep(3600, id);
+        if (inView) cycle();
+      } catch (e) { if (e !== 'stop') throw e; }
+    }
+    new IntersectionObserver(es => es.forEach(e => {
+      if (e.isIntersecting && !inView) { inView = true; cycle(); }
+      else if (!e.isIntersecting && inView) { inView = false; run++; pulse.style.opacity = 0; cards.forEach(c => c.classList.add('ran')); edges.forEach(e => e.classList.add('hot')); }
+    }), { threshold: .25 }).observe(frame);
+  });
+
+  /* the proprietor's numbers count up when they arrive */
+  function countUp(el) {
+    const to = +(el.dataset.naira || el.dataset.to), money = !!el.dataset.naira, pct = el.textContent.trim().endsWith('%');
+    const t0 = performance.now(), dur = 1400;
+    const f = now => {
+      const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3), v = to * e;
+      el.textContent = money ? naira(v) : Math.round(v) + (pct ? '%' : '');
+      if (p < 1) requestAnimationFrame(f);
+    };
+    requestAnimationFrame(f);
+  }
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return;
+    const el = e.target;
+    el.classList.add('go');
+    if (el.id === 'morning') $$('[data-naira],[data-to]', el).forEach(countUp);
+    io.unobserve(el);
+  }), { threshold: .3 });
+  if (!reduce) $$('[data-anim]').forEach(el => {
+    if (el.getBoundingClientRect().top > innerHeight) { el.classList.add('wait'); io.observe(el); }
+  });
+})();
+</script>
+</body>
+</html>

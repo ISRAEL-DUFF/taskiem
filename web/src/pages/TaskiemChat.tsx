@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PayrollRunCard } from "./PayrollRun";
+import { parsePayrollCard } from "../lib/payrollrun";
+import { PayslipChatCard } from "./Payslip";
+import { parsePayslipCard } from "../lib/payslip";
 import { useSavedPicks } from "./SavedPicks";
 import { Link, useSearchParams } from "react-router-dom";
 import { TOOLS, type ToolKey } from "../lib/tools";
@@ -595,6 +599,26 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
                     onReply={(reply, text) => say({ reply, text })}
                     openTool={(k, from, start) => c.openTool(k, from, start)}
                   />
+                </div>
+              );
+          }
+          // This month's payroll (P4b-3): its card, drawn from Payrolla now.
+          if (m.kind === "payroll_run") {
+            const card = parsePayrollCard(m.text);
+            if (card)
+              return (
+                <div className="tk-chart-row" data-msg={m.id}>
+                  <PayrollRunCard id={card.run_id} period={card.period} />
+                </div>
+              );
+          }
+          // A payslip (P4b-4): the employee's own card, drawn from Payrolla now.
+          if (m.kind === "payslip") {
+            const card = parsePayslipCard(m.text);
+            if (card)
+              return (
+                <div className="tk-chart-row" data-msg={m.id}>
+                  <PayslipChatCard id={card.payslip_id} period={card.period} />
                 </div>
               );
           }
