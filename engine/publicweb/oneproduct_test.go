@@ -105,8 +105,49 @@ func TestOneProductPage(t *testing.T) {
 		t.Fatalf("sold out: %d %s", sw.Code, b)
 	}
 
-	// Without the business's WhatsApp, its chat link; with neither, none.
+	// Not taking orders, in each way: no Order via WhatsApp either (it is
+	// ordering too), only the words saying why.
+	for _, c := range []struct {
+		name, says string
+		set        func(p *StorefrontPage, e *formEnv)
+	}{
+		{"closed", "is closed right now.", func(p *StorefrontPage, _ *formEnv) { p.Status = "closed" }},
+		{"paused", "is not taking orders online right now.", func(p *StorefrontPage, _ *formEnv) { p.OrdersPaused = true }},
+		{"not open yet", "Orders are not open yet.", func(_ *StorefrontPage, e *formEnv) { e.s.Submit = nil }},
+		{"sold out", "is sold out right now.", func(p *StorefrontPage, _ *formEnv) { p.Lists["products"][1].Stock = &none }},
+	} {
+		p := oneProductPage(&left)
+		if c.name != "not open yet" {
+			c.set(&p, nil)
+		}
+		e := formServer(t, p)
+		if c.name == "not open yet" {
+			c.set(&p, e)
+		}
+		e.h = e.s.Handler()
+		b := get(e.h, "GET", sfHost, "/ear-cleaner").Body.String()
+		if !strings.Contains(b, c.says) || strings.Contains(b, "op-whats") || strings.Contains(b, "wa.me") || strings.Contains(b, `name="token"`) {
+			t.Errorf("%s: %s", c.name, b)
+		}
+	}
+
+	// No line of its own: the item's words, but never words with a link
+	// (CreateOneProduct's rule).
 	p := oneProductPage(&left)
+	p.Model.Fronts[1].Tagline = ""
+	p.Lists["products"][1].Description = "Cleans gently.\nOrder at https://cheap.example/ear"
+	e = formServer(t, p)
+	if body, _ := e.form(t, "/ear-cleaner"); strings.Contains(body, "cheap.example") || strings.Contains(body, `class="op-reason"`) {
+		t.Error("the reason from words with a link")
+	}
+	p.Lists["products"][1].Description = "Cleans gently.\nSafe for children."
+	e = formServer(t, p)
+	if body, _ := e.form(t, "/ear-cleaner"); !strings.Contains(body, `<p class="op-reason">Cleans gently. Safe for children.</p>`) {
+		t.Error("the reason from the item's words")
+	}
+
+	// Without the business's WhatsApp, its chat link; with neither, none.
+	p = oneProductPage(&left)
 	p.Model.WhatsLink, p.Model.ChatLink = "", "https://taskiem.test/m/5zw3sc3g"
 	e = formServer(t, p)
 	if body, _ := e.form(t, "/ear-cleaner"); !strings.Contains(body, `href="https://taskiem.test/m/5zw3sc3g"`) || !strings.Contains(body, "Order in a chat") {

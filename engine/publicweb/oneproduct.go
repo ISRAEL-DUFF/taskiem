@@ -115,7 +115,9 @@ func (s *Server) serveOneProduct(w http.ResponseWriter, r *http.Request, site Si
 	d := oneProductData{formData: fd, Headline: f.Name, Reason: f.Tagline}
 	d.Title = f.Name + " · " + p.Model.Card.Name
 	if d.Reason == "" {
-		d.Reason = clipRunes(firstLine(it.Description), 300)
+		// The rule CreateOneProduct made the front's line by: the item's
+		// words, none when they hold a link.
+		d.Reason = storefront.ReasonFrom(it.Description)
 	}
 	op := storefront.OneProductSettings{}
 	if f.OneProduct != nil {
@@ -188,6 +190,9 @@ func (s *Server) serveOneProduct(w http.ResponseWriter, r *http.Request, site Si
 		d.Shut = it.Name + " is sold out right now."
 	}
 	if d.Shut != "" {
+		// Order via WhatsApp is ordering too: not while orders are not
+		// taken.
+		d.Whats, d.WhatsLabel = "", ""
 		s.renderPrivate(w, r, http.StatusOK, "oneproduct.html", d)
 		return true
 	}

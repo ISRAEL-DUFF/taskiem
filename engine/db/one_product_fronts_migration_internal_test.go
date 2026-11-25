@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -38,6 +39,12 @@ func TestOneProductFrontsMigrationUpDownUp(t *testing.T) {
 		}
 		return strings.Contains(def, "one-product")
 	}
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := conn.Exec(ctx, q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
 	for round := 0; round < 2; round++ {
 		if _, err := p.UpTo(ctx, 820); err != nil {
 			t.Fatal(err)
@@ -45,11 +52,29 @@ func TestOneProductFrontsMigrationUpDownUp(t *testing.T) {
 		if !takes() {
 			t.Fatalf("round %d, up: a One product front refused", round)
 		}
+		if round == 0 {
+			exec(`INSERT INTO tenants (id, name, plan_id) VALUES ('00000000-0000-0000-0000-0000000000a1', 'Ada Stores', gen_random_uuid())`)
+			exec(`INSERT INTO storefronts (id, tenant_id, slug, draft, created_by) VALUES ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000a1',
+				'ada-stores', '{"name": "Ada Stores"}', 'user:ada')`)
+		}
+		// A One product front made while it is up.
+		slug := fmt.Sprintf("ear-%d", round)
+		exec(`INSERT INTO storefront_fronts (id, tenant_id, storefront_id, slug, kind, name, position, enabled, options) VALUES (gen_random_uuid(),
+			'00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', $1, 'one-product', 'Smart Ear Cleaner', $2, true,
+			'{"promise": "Pay on delivery nationwide", "stock_line": true}')`, slug, round+1)
 		if _, err := p.DownTo(ctx, 819); err != nil {
 			t.Fatal(err)
 		}
 		if takes() {
 			t.Fatalf("round %d, down: a One product front still taken", round)
+		}
+		// Down, it is an ordinary front of one list, its settings left out.
+		var kind, options string
+		if err := conn.QueryRow(ctx, `SELECT kind, options::text FROM storefront_fronts WHERE slug = $1`, slug).Scan(&kind, &options); err != nil {
+			t.Fatal(err)
+		}
+		if kind != "custom" || options != "{}" {
+			t.Fatalf("round %d, down: the One product front is %s %s", round, kind, options)
 		}
 	}
 }

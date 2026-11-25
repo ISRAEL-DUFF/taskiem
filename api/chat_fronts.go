@@ -49,8 +49,14 @@ var frontKindWords = map[string]string{
 // waFrontCommand acts on a fronts command; false when cmd is not one.
 func (s *Server) waFrontCommand(ctx context.Context, c *chat, text, cmd string) (bool, error) {
 	var do func() error
+	pw, onPage := readPageWords(text)
+	if onPage && pw.make {
+		// "make a page for …" is a One product page only when it names a
+		// product; other words go on as they did before it.
+		onPage = s.pageNamesProduct(ctx, c, pw)
+	}
 	switch {
-	case sellOnPageCmd.MatchString(text) || pageForCmd.MatchString(text):
+	case onPage:
 		// "sell Ear cleaner on a page" (chat_oneproduct.go), before a sale.
 		do = func() error { return s.waSellOnPage(ctx, c, text) }
 	case cmd == "fronts" || cmd == "my fronts":

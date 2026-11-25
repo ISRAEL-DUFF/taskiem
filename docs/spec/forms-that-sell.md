@@ -352,6 +352,21 @@ Built 25 November 2026 on the decisions of §12.
 - **Done when** (`TestOneProductEndToEnd`, with the database): in WhatsApp, "sell smart ear cleaner on a page 1 for 25000, 2 for 45,000, 3 for 65k" shows the page and, on yes, makes it from the catalogue row, its workflow from `storefront-one-product` published and the page live at `/smart-ear-cleaner`; the public host draws the promise, the headline, the chips, the packages, the areas, the notice and the price bar; a buyer orders two to Lekki paying at the door (₦46,500) and the order is in Orders with the package as one line; on the web the front says what it sells, its settings change (a chip of another icon refused) and are published, and a second is added from the product with its warning. Playwright `one-product.spec.ts` does the web part and the buyer's on the public host, with axe in both themes at 360 and 390 px.
 - **Not built:** a video on the page. Catalogue rows hold photos only (the media store takes images), so "a video where the owner adds one to the row" needs a video column and media for it first: a decision for the founder.
 
+**Review fixes** (25 November 2026):
+
+1. **Packages read whole.** Every character after the product's name is a package ("N for PRICE", the price as `45000`, `45,000`, `45 000`, `45k` or `₦45,000`) or what stands between two (commas, `and`); anything else is refused with `wa.page.not_understood`, naming the words not understood, so "1 for 25k and free delivery for Lagos 2 at 3 for 7k" is no longer read as two packages, and "100 for 2m" is refused by the packages' check, not dropped. A package under a quarter of the product's own price an item is warned about on the confirmation and in `SellWarnings` (`PackageWarning`), as one dearer than it is. `TestSellOnPageArgs`, `TestOneProductChatFixes`, `TestPackagesField`.
+2. **The name.** Only an explicit "N for PRICE" starts packages (`at` after a number is the name's), and "add a page for …" takes the longest catalogue name the words start with: "iPhone 13 at 500k" is the iPhone 13 with words not understood, not the iPhone in thirteens. `TestSellOnPageArgs`.
+3. "sell … on a page of its own" is read. `TestSellOnPageArgs`, `TestOneProductChatFixes`.
+4. **The address shown is the one made**: `storefront.NextFrontSlug` (reserved or empty is `page`, taken is `-2`), used by `CreateFront` and, through `FreeFrontSlug`, by the confirmation. `TestPackagesField`, `TestOneProductChatFixes`.
+5. **"make a page for …"** is a One product page only when its words name a product of the catalogue; other words go on as before L2 (the English intent `sell_on_page` is "add a page for" alone). `TestOneProductChatFixes`.
+6. **Order via WhatsApp** is drawn only while the page takes orders: not closed, paused, not open yet or sold out. `TestOneProductPage`.
+7. **The reason to buy** with no line of its own follows `CreateOneProduct`'s rule (`storefront.ReasonFrom`: the item's words on one line, none when they hold a link). `TestOneProductPage`.
+8. **The template.** A One product order form keeps the page's payments, so with payments connected it can be paid online: `storefront-one-product` keeps the order flow's payment link and refund branches, and its summary and description now say so (paid at the door, or online where the page takes payments; a declined paid order asks about a refund). Its keywords are unchanged and the builder evals hold their baselines. `TestOneProductTemplateSaysHowItIsPaid`.
+9. **Two yeses at once make one page**: the question's nonce is the yes's key; the session is let go of only by the yes that still finds it (`claimShopAsk`). `TestOneProductChatFixes`.
+10. `POST /v1/storefront/fronts` with `kind: one-product` before there is a page is 409 "make your page first", as every kind is. `TestOneProductWebRefusals`.
+
+Tests added besides: the page held under the approval rule stays off (`TestOneProductChatHeldForApproval`); a One product front with Orders off is 409 and a non-One-product front's `settings` 400 (`TestOneProductWebRefusals`); 00820 down with a One product front in it (`TestOneProductFrontsMigrationUpDownUp`).
+
 ## 18. As built (L3)
 
 Built 25 November 2026 on the decisions of §12, with the two findings of the L0/L1 review that were L3's (a keep taken for any live form; a restore link used up by opening it).

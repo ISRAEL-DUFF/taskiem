@@ -9452,6 +9452,11 @@
       "reviewed": false,
       "context": "Draft, not reviewed: sell <product> on a page without a product, or with packages that could not be read"
     },
+    "wa.page.not_understood": {
+      "text": "Kò yé mi *{bit}*. Kọ àwọn àpò lẹ́yìn orúkọ ọjà náà, ọ̀kọ̀ọ̀kan bí iye mélòó fún iye owó wo: *sell Ear cleaner on a page 1 for 25000, 2 for 45000*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: words after the product's name that are not packages; {bit} is the words not understood, as typed"
+    },
     "wa.page.orders_off": {
       "text": "Ojú-ìwé tó ń tà ń gba àṣẹ: tan Orders nínú Settings ná, kí o tún gbìyànjú.",
       "reviewed": false,
@@ -9490,7 +9495,7 @@
     "wa.page.warning": {
       "text": "Àkíyèsí: {warning}",
       "reviewed": false,
-      "context": "Draft, not reviewed: sell <product> on a page: a package dearer per item than the product's own price (a warning, not a refusal)"
+      "context": "Draft, not reviewed: sell <product> on a page: a package dearer per item than the product's own price, or under a quarter of it (a warning, not a refusal)"
     },
     "wa.page.not_made": {
       "text": "A kò ṣe ojú-ìwé náà: {reason}",

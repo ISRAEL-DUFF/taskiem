@@ -261,13 +261,20 @@ func checkPackages(p xformField) error {
 }
 
 // PackageWarning says a package costs more per item than the product's
-// own price; a warning when publishing, not a refusal (a bundle may carry
-// a gift). Empty when it does not.
+// own price, or under a quarter of it (most likely a price typed wrong:
+// "2 for 45" for ₦45,000); a warning when publishing, not a refusal (a
+// bundle may carry a gift, a sale may be deep). Empty when neither.
 func PackageWarning(item string, p Package, priceKobo int64) string {
-	if p.Qty <= 0 || priceKobo <= 0 || p.PriceKobo <= priceKobo*int64(p.Qty) {
+	if p.Qty <= 0 || priceKobo <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("The %s package of %s costs %s an item, more than its own price of %s.", PackageLabel(p.Qty, p.PriceKobo), item, FormatNaira(p.UnitKobo()), FormatNaira(priceKobo))
+	switch {
+	case p.PriceKobo > priceKobo*int64(p.Qty):
+		return fmt.Sprintf("The %s package of %s costs %s an item, more than its own price of %s.", PackageLabel(p.Qty, p.PriceKobo), item, FormatNaira(p.UnitKobo()), FormatNaira(priceKobo))
+	case p.PriceKobo*4 < priceKobo*int64(p.Qty):
+		return fmt.Sprintf("The %s package of %s costs %s an item, under a quarter of its own price of %s: check the price.", PackageLabel(p.Qty, p.PriceKobo), item, FormatNaira(p.UnitKobo()), FormatNaira(priceKobo))
+	}
+	return ""
 }
 
 // PackagesForm is an order form that sells one product in packages, with

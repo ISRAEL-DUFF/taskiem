@@ -866,3 +866,36 @@ func TestChoicePickersExist(t *testing.T) {
 		}
 	}
 }
+
+// The One product page's template (forms that sell §5.4) says how its
+// orders are paid as its flow takes them: its form keeps the page's
+// payments, so where the flow can send a payment link or offer a refund,
+// the description says so, and never that every order is paid at the door.
+func TestOneProductTemplateSaysHowItIsPaid(t *testing.T) {
+	tpl, ok := templates.Default().Get("storefront-one-product")
+	if !ok {
+		t.Fatal("no storefront-one-product")
+	}
+	var def struct {
+		Steps []struct {
+			ID string `json:"id"`
+		} `json:"steps"`
+	}
+	if err := json.Unmarshal(tpl.Definition, &def); err != nil {
+		t.Fatal(err)
+	}
+	has := map[string]bool{}
+	for _, s := range def.Steps {
+		has[s.ID] = true
+	}
+	words := strings.ToLower(tpl.Summary + " " + tpl.Description)
+	if has["link"] && !strings.Contains(words, "payment link") {
+		t.Errorf("the flow sends a payment link the description does not name: %q", tpl.Description)
+	}
+	if has["refund"] && !strings.Contains(words, "refund") {
+		t.Errorf("the flow offers a refund the description does not name: %q", tpl.Description)
+	}
+	if has["link"] && !strings.Contains(words, "online") {
+		t.Errorf("orders paid online, described as paid at the door only: %q", tpl.Summary)
+	}
+}

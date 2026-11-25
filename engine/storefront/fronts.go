@@ -391,6 +391,43 @@ func FrontSlug(name string) string {
 	return s
 }
 
+// NextFrontSlug is the address a new front named name gets beside the
+// addresses taken: its FrontSlug, "page" when that is empty or one the
+// page uses itself, and "-2", "-3"… after it while taken.
+func NextFrontSlug(name string, taken []string) string {
+	base := FrontSlug(name)
+	if CheckFrontSlug(base) != nil {
+		base = "page"
+	}
+	slug := base
+	for n := 2; slices.Contains(taken, slug); n++ {
+		slug = fmt.Sprintf("%s-%d", strings.TrimRight(string([]rune(base)[:min(len([]rune(base)), 36)]), "-"), n)
+	}
+	return slug
+}
+
+// FreeFrontSlug is the address CreateFront would give a front named name
+// now, for a confirmation that shows it before the front is made.
+func FreeFrontSlug(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, name string) (string, error) {
+	sf, err := Get(ctx, tx, tenant)
+	if err != nil {
+		return "", err
+	}
+	return freeFrontSlug(ctx, tx, sf.ID, strings.TrimSpace(name))
+}
+
+func freeFrontSlug(ctx context.Context, tx pgx.Tx, storefront uuid.UUID, name string) (string, error) {
+	rows, err := tx.Query(ctx, `SELECT slug FROM storefront_fronts WHERE storefront_id = $1`, storefront)
+	if err != nil {
+		return "", err
+	}
+	taken, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return "", err
+	}
+	return NextFrontSlug(name, taken), nil
+}
+
 // CheckFrontSlug refuses an address a front cannot have.
 func CheckFrontSlug(slug string) error {
 	switch {
@@ -447,21 +484,9 @@ func CreateFront(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in NewFront) 
 	if _, err := ensureFirstFront(ctx, tx, sf); err != nil {
 		return Front{}, err
 	}
-	var taken []string
-	rows, err := tx.Query(ctx, `SELECT slug FROM storefront_fronts WHERE storefront_id = $1`, sf.ID)
+	slug, err := freeFrontSlug(ctx, tx, sf.ID, name)
 	if err != nil {
 		return Front{}, err
-	}
-	if taken, err = pgx.CollectRows(rows, pgx.RowTo[string]); err != nil {
-		return Front{}, err
-	}
-	base := FrontSlug(name)
-	if CheckFrontSlug(base) != nil {
-		base = "page"
-	}
-	slug := base
-	for n := 2; slices.Contains(taken, slug); n++ {
-		slug = fmt.Sprintf("%s-%d", strings.TrimRight(string([]rune(base)[:min(len([]rune(base)), 36)]), "-"), n)
 	}
 	id := uuid.Must(uuid.NewV7())
 	settings := []byte("{}")

@@ -141,15 +141,12 @@ func (s *Server) addFront(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
-	if req.Kind == storefront.OneProduct {
-		s.addOneProduct(w, r, storefront.NewOneProduct{Name: req.Name, Tagline: req.Tagline, Item: req.Item, Packages: req.Packages, Choose: req.Choose})
-		return
-	}
 	k, ok := storefront.FrontKindOf(req.Kind)
-	if !ok {
+	if !ok && req.Kind != storefront.OneProduct {
 		s.fail(w, r, fmt.Errorf("%w: no kind of front %q", errBadRequest, req.Kind))
 		return
 	}
+	// Every kind, One product too, needs the page first.
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		_, err := storefront.Get(r.Context(), tx, p.TenantID)
 		return err
@@ -158,6 +155,10 @@ func (s *Server) addFront(w http.ResponseWriter, r *http.Request) {
 			err = fmt.Errorf("%w: make your page first", errConflict)
 		}
 		s.fail(w, r, err)
+		return
+	}
+	if req.Kind == storefront.OneProduct {
+		s.addOneProduct(w, r, storefront.NewOneProduct{Name: req.Name, Tagline: req.Tagline, Item: req.Item, Packages: req.Packages, Choose: req.Choose})
 		return
 	}
 	var v frontView

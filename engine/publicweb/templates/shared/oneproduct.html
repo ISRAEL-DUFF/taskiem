@@ -26,8 +26,8 @@ posting to its own address. */}}<!doctype html>
 {{end}}<section id="order" class="op-order" aria-labelledby="op-order-h">
 <h2 id="op-order-h">{{.Label}}</h2>
 {{if .Ordering}}{{template "orderform" .}}{{else}}<p class="notice" role="status">{{.Shut}}</p>
-{{end}}{{with .Whats}}<p class="op-whats"><a class="btn btn-block" href="{{.}}" rel="noopener">{{template "i-whatsapp"}}{{$.WhatsLabel}}</a><span class="hint">Having trouble with the form? Order in a message instead.</span></p>
-{{end}}</section>
+{{end}}{{if .Ordering}}{{with .Whats}}<p class="op-whats"><a class="btn btn-block" href="{{.}}" rel="noopener">{{template "i-whatsapp"}}{{$.WhatsLabel}}</a><span class="hint">Having trouble with the form? Order in a message instead.</span></p>
+{{end}}{{end}}</section>
 </div>
 {{if and .Ordering .Price}}<div class="op-bar"><p class="op-bar-price"><strong>{{.Price}}</strong>{{with .PriceNote}}<span>{{.}}</span>{{end}}</p><a class="btn btn-primary btn-brand" href="#order">{{.Label}}</a></div>
 {{end}}{{if .Ordering}}{{template "sfkeep" .}}{{end}}{{template "ffoot" .}}

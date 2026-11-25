@@ -54,6 +54,30 @@ func TestPackagesField(t *testing.T) {
 	if w := storefront.PackageWarning("Ear cleaner", storefront.Package{Qty: 2, PriceKobo: 4500000}, 2500000); w != "" {
 		t.Errorf("a cheaper package warned: %q", w)
 	}
+	// Far below the catalogue (under a quarter an item): most likely a
+	// price typed wrong ("2 for 45"), warned; a quarter itself is not.
+	if w := storefront.PackageWarning("Ear cleaner", storefront.Package{Qty: 2, PriceKobo: 4500}, 2500000); !strings.Contains(w, "₦22.50 an item") ||
+		!strings.Contains(w, "under a quarter") {
+		t.Errorf("a price far below: %q", w)
+	}
+	if w := storefront.PackageWarning("Ear cleaner", storefront.Package{Qty: 2, PriceKobo: 1250000}, 2500000); w != "" {
+		t.Errorf("a quarter warned: %q", w)
+	}
+	// FrontSlug's address beside those taken, as CreateFront gives it and
+	// a confirmation shows it: reserved or empty is "page", taken "-2".
+	for _, c := range [][3]string{{"Smart Ear Cleaner", "", "smart-ear-cleaner"}, {"Smart Ear Cleaner", "smart-ear-cleaner", "smart-ear-cleaner-2"},
+		{"Admin", "", "page"}, {"!!!", "page", "page-2"}, {"API", "page page-2", "page-3"}} {
+		if got := storefront.NextFrontSlug(c[0], strings.Fields(c[1])); got != c[2] {
+			t.Errorf("NextFrontSlug(%q, %q) = %q, want %q", c[0], c[1], got, c[2])
+		}
+	}
+	// A reason to buy from the item's words, none when they hold a link.
+	if r := storefront.ReasonFrom("See inside\nyour ear."); r != "See inside your ear." {
+		t.Errorf("reason: %q", r)
+	}
+	if r := storefront.ReasonFrom("Buy now at https://cheap.example/x"); r != "" {
+		t.Errorf("reason with a link: %q", r)
+	}
 
 	pkg := func(xform string) string {
 		return `{"type":"object","properties":{"package":{"type":"object","x-form":{"widget":"packages",` + xform + `}}}}`

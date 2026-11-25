@@ -1304,7 +1304,7 @@ paths:
       tags:
       - Storefront
       summary: Add a front of a kind
-      description: Makes the kind's table for the business (needs table.edit), then the front, off, with a list of the table and the kind's actions, off. A One product front (kind one-product, forms-that-sell §5.4) is made from a product of the catalogue instead (item, with its packages; one of one at its price when none), on the catalogue's own table, its order form selling the product delivered and paid at the door, off; refused while the Storefront or Orders area is off (409 area_off). Its packages' warnings say one costs more per item than the product.
+      description: Makes the kind's table for the business (needs table.edit), then the front, off, with a list of the table and the kind's actions, off. A One product front (kind one-product, forms-that-sell §5.4) is made from a product of the catalogue instead (item, with its packages; one of one at its price when none), on the catalogue's own table, its order form selling the product delivered and paid at the door, off; refused while the Storefront or Orders area is off (409 area_off). Every kind is 409 before the business has a page. Its packages' warnings say one costs more per item than the product, or under a quarter of it.
       security:
       - sessionCookie: []
         csrfHeader: []

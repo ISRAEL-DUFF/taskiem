@@ -191,11 +191,8 @@ func CreateOneProduct(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in NewOn
 		name = trimRunes(it.Name, 80)
 	}
 	tagline := strings.TrimSpace(in.Tagline)
-	if tagline == "" && !hasLink(it.Description) {
-		tagline = strings.Join(strings.Fields(it.Description), " ")
-		if r := []rune(tagline); len(r) > 120 {
-			tagline = strings.TrimSpace(string(r[:119])) + "…"
-		}
+	if tagline == "" {
+		tagline = ReasonFrom(it.Description)
 	}
 	cols := sf.CatalogueColumns
 	f, err := CreateFront(ctx, tx, tenant, NewFront{Name: name, Kind: OneProduct, Table: sf.CatalogueTable, TableName: table, Columns: &cols, Tagline: tagline, NoActions: true})
@@ -223,6 +220,21 @@ func CreateOneProduct(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in NewOn
 		return OneProductFront{}, err
 	}
 	return OneProductFront{Front: f, Action: a, Item: it, Warnings: warnings}, nil
+}
+
+// ReasonFrom is the reason to buy a One product page takes from its item's
+// words when it has none of its own: the words on one line, up to 120
+// characters; none when they hold a link (a page carries no link the
+// owner did not put on it as one).
+func ReasonFrom(description string) string {
+	if hasLink(description) {
+		return ""
+	}
+	r := strings.Join(strings.Fields(description), " ")
+	if x := []rune(r); len(x) > 120 {
+		r = strings.TrimSpace(string(x[:119])) + "…"
+	}
+	return r
 }
 
 // oneProductKind is the One product kind's preset.
