@@ -298,6 +298,18 @@ A Food dish's options go in its `options` cell as a list of groups: `[{"name": "
 
 Fronts are run from chat too ([below](#fronts-from-chat)).
 
+### Forms that sell a product in packages
+
+An order form can sell **one product in packages** at prices of their own, "1 for ₦25,000, 2 for ₦45,000, 3 for ₦65,000" ([forms that sell](spec/forms-that-sell.md#16-as-built-l0-l1)). On a front's page, **Add an order form** picks the product from its list, up to six packages (how many and the price for all of them, with your own words for each, or "2 items · ₦45,000" drawn for you), for a product in sizes and colours one choice for the whole package or one for each item, the button and the line above it. It takes the home page's order form's payment, delivery areas and paying at the door; **Set up** gives it the business's order workflow (the riders' one when deliveries are on), and it is shown once switched on. A form of the Forms page becomes one with **Sell something with this form** ([forms](forms.md#a-form-that-sells)).
+
+- **The page.** The product at the top with its photo and line, and **Secure checkout** when it is paid through the payment page; the packages as choices, one the stock cannot fill greyed with **Not enough in stock**; the total with the area's fee; the order form's own **line above the button** in a warning colour ("Do not order if you are not ready to receive it in 2 to 4 days"; a form selling one product says "Please order only when you are ready to receive it." until the owner writes theirs, and `-` shows none). It works without JavaScript.
+- **The price is the package's.** The server prices the order from the published packages, never from what the browser sends; a package of three takes three from the stock, refused when the stock cannot fill it; the price check prices the package's lines as the package, from the page as published. A package dearer per item than the product's own price is a **warning** when it is saved and published, not a refusal: a bundle may carry a gift.
+- **The run** gets the package as one line of `trigger.body.basket` (and `lines`) and `trigger.submission.lines`, with `package_qty` and `package_kobo`; `total_kobo` has the area's fee. The order workflow runs unchanged: accept in chat, the customer told, the order offered to riders, paid at the door. Orders in the web app and the phone app say "Package of 2 for ₦45,000" under the line.
+- **A basket of some items**: an order form's basket may show only the rows its `items` name; a basket of one row sells that one product, drawn at the top.
+- **One form on a website.** An order form's card, and **On your website** under Page, give the code for that one form ([embed sites](embed-sites.md#one-order-form)).
+
+The **One product** kind of front (the whole landing page made from one catalogue row: a promise line, photos, up to six feature chips from a fixed set of icons, a stock line) is checked with the other kinds and not offered until its page is drawn (forms that sell L2).
+
 ## Your own domain
 
 A business that already owns a domain can serve its page there instead of the preview address ([spec 6.6](spec/storefronts.md#66-addresses-domains-and-sharing)): `adakitchen.ng`, or a part of a domain it uses for something else, such as `shop.example.com`. This is Phase 5, S6. Buying a domain through the domain platform waits for its contract; embedding the page on a website comes later.
@@ -416,7 +428,9 @@ Customers' texts are in the business's language (its default chat language, Sett
 | `GET /v1/storefront/qr` | The address as a QR code |
 | `GET /v1/storefront/domains`, `POST /v1/storefront/domains` | The business's [own domains](#your-own-domain), and adding one |
 | `POST /v1/storefront/domains/{id}/verify`, `/primary`, `DELETE /v1/storefront/domains/{id}` | Checking a domain's TXT record, making it the primary, removing it |
-| `GET /v1/storefront/actions`, `PUT /v1/storefront/actions/{kind}` | The forms and their settings |
+| `GET /v1/storefront/actions`, `PUT /v1/storefront/actions/{kind}` | The forms and their settings (an order form's `notice`, the line above its button) |
+| `POST /v1/storefront/fronts/{id}/actions` with `kind: order` and `sells`, `PUT /v1/storefront/actions/{id}/sells`, `GET /v1/storefront/fronts/{id}/sellable` | An order form selling a product in packages (or a basket of some items): adding one, changing what it sells (answering `warnings`), the products it can sell |
+| `GET /v1/storefront/embed?action=<id>` | One order form's code for a website: `frame` with `script`, or `plain` |
 | `GET /v1/storefront/orders`, `GET /v1/storefront/orders/{reference}` | Orders, questions, call-backs and bookings; `?reveal=true` with `pii.reveal`. One order comes with the money matched to it (`payments`; undone with `POST /v1/money/order-payments/{id}/undo`, [matching](matching.md)) |
 | `PUT /v1/storefront/bookings` | The services table, its mapping and when bookings are taken |
 | `GET /v1/storefront/services` | The services copy and the availability in effect |

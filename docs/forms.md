@@ -89,16 +89,23 @@ Every file is scanned for malware before the submission is accepted. The scanner
 
 ## Storefront forms and their fields
 
-A storefront's forms are forms too ([fronts](spec/fronts.md), decision 0059): each is an action of a front, with its own questions written the same way (a JSON Schema object with `x-form` hints), its answers reaching the run as `trigger.answers` apart from Taskiem's record of the submission (`trigger.submission`). Beside the field types above, a storefront form draws on its front's list with one of four fields, each checked again on the server and, where something is held, in the database:
+A storefront's forms are forms too ([fronts](spec/fronts.md), decision 0059): each is an action of a front, with its own questions written the same way (a JSON Schema object with `x-form` hints), its answers reaching the run as `trigger.answers` apart from Taskiem's record of the submission (`trigger.submission`). Beside the field types above, a storefront form draws on its front's list with one of these fields, each checked again on the server and, where something is held, in the database:
 
 | Field | Used by | What the customer does | What is held |
 | --- | --- | --- | --- |
-| **basket** | Order now (Shop, Food) | Picks items and how many, with a Food dish's options | Nothing: prices are checked again before the run, stock on the catalogue only |
+| **basket** | Order now (Shop, Food) | Picks items and how many, with a Food dish's options; `items` shows only those rows | Nothing: prices are checked again before the run, stock on the catalogue only |
+| **packages** | An order form that sells one product ([forms that sell](spec/forms-that-sell.md) §5.2) | Picks one of up to six packages, each a number of the item at a price of its own; a size or colour for all of it, or for each item | Nothing: the package is priced from the published form, a package of N taking N of the stock |
 | **time** | Book, Book the space | Picks a service and a slot, or a space by the day or the hour on its list's own calendar | A claim on the calendar, one party at a time with setup time for a space |
 | **dates and quantity** | Hire now | Picks an item, a first and a last day, and how many | A claim on the item for those days, refused beyond its count |
 | **quantity against a count** | Buy tickets, Enrol | Picks an event or a class and how many | A claim on the item while the order lives, refused beyond its tickets or places |
 
 Claims are one table (`storefront_claims`), taken by the public host with the submission in one transaction under the list's lock, so two customers cannot both take the last canopy or seat. A question form with questions of its own (a front's blank form) asks only those. A storefront form never asks for a file. See [storefronts](storefronts.md) for the kinds.
+
+## A form that sells
+
+A form never asks for a product, a basket or a time itself: a field drawing on a storefront's lists (`x-form.widget` `basket`, `packages`, `time`, `hire` or `count`) in a form that starts a workflow is refused, with the way to sell. A form that sells is an **order form of the storefront** ([forms that sell](spec/forms-that-sell.md) §5.1), so it is priced, stocked, ordered and run as any order.
+
+**Sell something with this form** (the Forms page, on a live public form; `POST /v1/forms/{id}/sell`, `workflow.publish` and `storefront.manage`) makes it one: a product from the page's list in up to six packages (or a basket of some items), on the home page or a front picked, with the form's own questions. The name, phone, email and address it asked become the order form's own; its other questions are kept (a file question is refused). The workflow becomes the order form's: its trigger names it, its reads of `trigger.body.<question>` move to `trigger.body.customer.<name, phone, email, address>` and `trigger.answers.<question>`, and it is published, with the page. The form **keeps its address**: `/f/<id>` and `/embed/f/<id>` lead to the order form (`?item=` kept), and the Forms page says it sells (`sells_as`). It is refused while the **Storefront** or **Orders** area is off, naming it (`area_off`), and the page offers to turn it on; before the page is published; under four-eyes publishing; and for a workflow that reads `trigger.form`.
 
 ## The form connector
 
