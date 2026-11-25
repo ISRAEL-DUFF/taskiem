@@ -97,12 +97,14 @@ String _say(Object e) => switch (e) {
   _ => 'Something went wrong (${whatWentWrong(e)}). Try again.',
 };
 
-/// How setting the PIN is confirmed here: the passkey on this phone, a
-/// code to the phone, an authenticator code; null when none can.
-String? pinWay(MePin p, {required bool passkey, bool byCode = false}) {
+/// How setting the PIN is confirmed here: a code to the phone first (what
+/// everyone has), else the passkey on this phone ([byPasskey] when the
+/// person chose it), else an authenticator code; null when none can.
+String? pinWay(MePin p, {required bool passkey, bool byPasskey = false}) {
   final ways = p.ways;
-  if (ways.contains('passkey') && passkey && !(byCode && ways.contains('code'))) return 'passkey';
-  if (ways.contains('code')) return 'code';
+  final canPasskey = ways.contains('passkey') && passkey;
+  if (ways.contains('code') && !(byPasskey && canPasskey)) return 'code';
+  if (canPasskey) return 'passkey';
   if (ways.contains('totp')) return 'totp';
   return null;
 }
@@ -136,7 +138,7 @@ class _PinFormState extends State<PinForm> {
   final _totp = TextEditingController();
   String? _problem;
   bool _busy = false;
-  bool _byCode = false;
+  bool _byPasskey = false;
 
   /// Where the code went (masked), once sent.
   String? _sentTo;
@@ -151,7 +153,7 @@ class _PinFormState extends State<PinForm> {
     super.dispose();
   }
 
-  String? get _way => pinWay(widget.pin, passkey: widget.passkey, byCode: _byCode);
+  String? get _way => pinWay(widget.pin, passkey: widget.passkey, byPasskey: _byPasskey);
 
   void _setBusy(bool b) {
     setState(() => _busy = b);
@@ -291,7 +293,9 @@ class _PinFormState extends State<PinForm> {
         TkCta(label: _busy ? (way == 'code' && !sent ? 'Sending…' : 'Saving…') : action, onTap: _busy ? null : (way == 'code' && !sent ? _sendCode : _save)),
         if (sent) Center(child: TkLink(label: 'Send the code again', bold: true, onTap: _busy ? null : _sendCode)),
         if (way == 'passkey' && widget.pin.ways.contains('code'))
-          Center(child: TkLink(label: 'Use a code to my phone instead', bold: true, onTap: _busy ? null : () => setState(() => (_byCode = true, _problem = null)))),
+          Center(child: TkLink(label: 'Use a code to my phone instead', bold: true, onTap: _busy ? null : () => setState(() => (_byPasskey = false, _problem = null)))),
+        if (way == 'code' && !sent && widget.passkey && widget.pin.ways.contains('passkey'))
+          Center(child: TkLink(label: 'Use my passkey instead', bold: true, onTap: _busy ? null : () => setState(() => (_byPasskey = true, _problem = null)))),
         if (way == 'code' && !sent)
           Padding(
             padding: const EdgeInsets.only(top: 4),

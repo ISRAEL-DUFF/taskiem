@@ -97,12 +97,12 @@ class _FingerprintOnSheetState extends State<FingerprintOnSheet> {
     try {
       final me = await widget.auth.api.getMeFingerprint();
       final passkey = me.proofs.contains('passkey') && await passkeys.available();
-      // The PIN first: it is what people type on a phone; then a passkey,
-      // then a code to the phone, then an authenticator.
+      // The PIN first: it is what people type on a phone; then a code to
+      // the phone, then a passkey, then an authenticator.
       final ways = [
         if (me.proofs.contains('pin')) 'pin',
-        if (passkey) 'passkey',
         if (me.proofs.contains('code')) 'code',
+        if (passkey) 'passkey',
         if (me.proofs.contains('totp')) 'totp',
       ];
       if (mounted) setState(() => (_me = me, _ways = ways, _way = ways.isEmpty ? null : ways.first));

@@ -252,7 +252,7 @@ void main() {
     await drain(t);
   });
 
-  testWidgets('Change PIN with the passkey sends {pin, passkey}; a code instead is offered', (t) async {
+  testWidgets('Change PIN: a code first; the passkey when chosen sends {pin, passkey}', (t) async {
     phone(t);
     final api = you();
     api.routes['GET /v1/me/pin'] = (_) => pin(ways: const ['code', 'passkey']);
@@ -262,6 +262,9 @@ void main() {
     api.routes['PUT /v1/me/pin'] = (_) => pin(ways: const ['code', 'passkey']);
     await _page(t, api, passkey: true);
     await press(t, find.text('Change PIN'));
+    // A code to the phone is the first way; the passkey is offered.
+    expect(find.bySemanticsLabel('Send me a code'), findsOneWidget);
+    await press(t, find.text('Use my passkey instead'));
     expect(find.text('Use a code to my phone instead'), findsOneWidget);
     await _pin(t, '4027', '4027');
     await snap(t, 'pin-change');
@@ -285,6 +288,7 @@ void main() {
     await _page(t, api);
     await press(t, find.text('Change PIN'));
     expect(find.text('Use a code to my phone instead'), findsNothing);
+    expect(find.text('Use my passkey instead'), findsNothing);
     await _pin(t, '4027', '4027');
     await press(t, find.bySemanticsLabel('Send me a code'));
     await typeIn(t, find.byKey(const ValueKey('pin-code')), '482913');
