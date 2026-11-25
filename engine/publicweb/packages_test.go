@@ -194,6 +194,25 @@ func TestBasketItems(t *testing.T) {
 	if !strings.Contains(body, `name="q.3" value="1"`) || !strings.Contains(body, `name="q.2"`) || strings.Contains(body, `name="q.4"`) || strings.Contains(body, "sell-one") {
 		t.Fatalf("a basket of some: %s", body)
 	}
+	// The basket's items hold on submit too: a row the form does not
+	// name is never ordered, whatever the browser posts.
+	e = formServer(t, p)
+	_, tok := e.form(t, "/a/some")
+	*e.now = e.now.Add(20 * time.Second)
+	w := e.post("/a/some", url.Values{"token": {tok}, "website": {""}, "name": {"Bola Ade"}, "phone": {"08031234567"}, "q.4": {"2"}})
+	if w.Code == http.StatusSeeOther || len(e.inbox.rows) != 0 {
+		t.Fatalf("row 4 ordered from a basket of 3 and 2: %d", w.Code)
+	}
+	w = e.post("/a/some", url.Values{"token": {tok}, "website": {""}, "name": {"Bola Ade"}, "phone": {"08031234567"}, "q.4": {"2"}, "q.3": {"1"}})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("an order of row 3: %d %s", w.Code, w.Body.String())
+	}
+	for ref, row := range e.inbox.rows {
+		sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, row.payload)
+		if err != nil || len(sub.Basket) != 1 || sub.Basket[0].ID != "3" {
+			t.Fatalf("the lines: %+v %v", sub.Basket, err)
+		}
+	}
 }
 
 // Every theme draws the packages field and its notice.
