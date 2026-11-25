@@ -1304,7 +1304,7 @@ paths:
       tags:
       - Storefront
       summary: Add a front of a kind
-      description: Makes the kind's table for the business (needs table.edit), then the front, off, with a list of the table and the kind's actions, off.
+      description: Makes the kind's table for the business (needs table.edit), then the front, off, with a list of the table and the kind's actions, off. A One product front (kind one-product, forms-that-sell §5.4) is made from a product of the catalogue instead (item, with its packages; one of one at its price when none), on the catalogue's own table, its order form selling the product delivered and paid at the door, off; refused while the Storefront or Orders area is off (409 area_off). Its packages' warnings say one costs more per item than the product.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -1326,6 +1326,22 @@ paths:
                   maxLength: 80
                 kind:
                   type: string
+                item:
+                  type: string
+                  maxLength: 64
+                  description: A One product front's product, a row of the catalogue
+                packages:
+                  type: array
+                  maxItems: 6
+                  items:
+                    $ref: '#/components/schemas/Package'
+                choose:
+                  type: string
+                  enum: [all, each, '']
+                tagline:
+                  type: string
+                  maxLength: 120
+                  description: A One product front's reason to buy; the product's words when empty
       responses:
         '201':
           description: The front
@@ -1855,7 +1871,7 @@ paths:
       tags:
       - Storefront
       summary: Change a front
-      description: Its name, line, address, place or switch. On a published page the page is published again with its checks, so a front is turned on only when the page may show it. The home page keeps its address and stays on.
+      description: Its name, line, address, place or switch, and a One product front's settings (its promise line, up to six feature chips each an icon of the fixed set and a few words, and whether the stock line shows). On a published page the page is published again with its checks, so a front is turned on only when the page may show it. The home page keeps its address and stays on.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -1888,6 +1904,8 @@ paths:
                   type: boolean
                 position:
                   type: integer
+                settings:
+                  $ref: '#/components/schemas/OneProductSettings'
       responses:
         '200':
           description: The front
@@ -56753,6 +56771,60 @@ components:
         items:
           type: integer
           description: How many items its list shows
+        settings:
+          description: A One product front's settings; null for another kind
+          oneOf:
+          - $ref: '#/components/schemas/OneProductSettings'
+          - type: 'null'
+        sells:
+          type: object
+          description: What a One product front's order form sells
+          required: [action_id, item, name, packages]
+          properties:
+            action_id:
+              type: string
+              format: uuid
+            item:
+              type: string
+            name:
+              type: string
+            packages:
+              type: array
+              items:
+                $ref: '#/components/schemas/Package'
+            choose:
+              type: string
+        warnings:
+          type: array
+          items:
+            type: string
+          description: A new One product front's packages that cost more per item than the product
+    OneProductSettings:
+      type: object
+      additionalProperties: false
+      description: A One product front's settings (forms-that-sell §5.4)
+      properties:
+        promise:
+          type: string
+          maxLength: 80
+          description: The line at the top, in the page's colour; none when empty
+        chips:
+          type: array
+          maxItems: 6
+          items:
+            type: object
+            additionalProperties: false
+            required: [icon, text]
+            properties:
+              icon:
+                type: string
+                enum: [truck, cash, shield, star, clock, check, gift, leaf, phone, sparkle, heart, return]
+              text:
+                type: string
+                maxLength: 40
+        stock_line:
+          type: boolean
+          description: Shows how many are left, from the product's stock where it is kept
     StorefrontAction:
       type: object
       required: [kind, enabled, label, payment, options, workflow_id]

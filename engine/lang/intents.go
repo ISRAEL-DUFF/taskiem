@@ -53,6 +53,9 @@ const (
 	IntentAddFront Intent = "add_front"
 	IntentFrontOn  Intent = "front_on"
 	IntentFrontOff Intent = "front_off"
+	// A One product page from chat (forms that sell §7): "add a page for
+	// <product>"; English's "sell <product> on a page" is read by the API.
+	IntentSellOnPage Intent = "sell_on_page"
 	// Invoices and the money log from chat (docs/invoices.md#from-chat,
 	// docs/money-log.md#from-chat) in the other languages. English's own
 	// words ("invoice", "bill", "spent", "expense", "cash in", "cash out")
@@ -101,7 +104,7 @@ const (
 // Intents are every intent, in a fixed order.
 var Intents = []Intent{IntentHelp, IntentStatus, IntentApprovals, IntentCancel, IntentYes, IntentNo, IntentSwitch, IntentRun, IntentBuild, IntentLanguage,
 	IntentTables, IntentAdd, IntentFind, IntentPublish, IntentMakePage, IntentMyPage, IntentOrders, IntentOpenShop, IntentCloseShop, IntentQR, IntentReady, IntentDelivered,
-	IntentFronts, IntentAddFront, IntentFrontOn, IntentFrontOff,
+	IntentFronts, IntentAddFront, IntentFrontOn, IntentFrontOff, IntentSellOnPage,
 	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount, IntentStock, IntentTakeOff,
 	IntentSignup, IntentConnect, IntentInvite, IntentPlan, IntentNewTable, IntentChangeRow, IntentDeleteRow, IntentOwes, IntentPaid, IntentAsk}
 
@@ -142,7 +145,7 @@ type Words struct {
 
 // prefixIntents take what follows them; the others are whole messages.
 var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage, IntentAdd, IntentFind, IntentPublish, IntentCloseShop, IntentReady, IntentDelivered,
-	IntentAddFront, IntentFrontOn, IntentFrontOff, IntentOrders,
+	IntentAddFront, IntentFrontOn, IntentFrontOff, IntentOrders, IntentSellOnPage,
 	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount, IntentStock, IntentTakeOff, IntentConnect, IntentInvite, IntentNewTable,
 	IntentChangeRow, IntentDeleteRow}
 

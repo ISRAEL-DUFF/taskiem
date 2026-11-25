@@ -81,6 +81,9 @@ type chatShop struct {
 	Kind      string              `json:"kind,omitempty"`
 	Table     string              `json:"table,omitempty"`
 	Columns   *storefront.Columns `json:"columns,omitempty"`
+	// Packages are a One product page's packages being confirmed
+	// (chat_oneproduct.go).
+	Packages []storefront.Package `json:"packages,omitempty"`
 }
 
 type shopChoice struct {
@@ -1547,6 +1550,8 @@ func (s *Server) waShopApply(ctx context.Context, c *chat) error {
 		return s.shopSwitchFront(ctx, c)
 	case "front_action_on":
 		return s.shopTurnOnFrontAction(ctx, c)
+	case "sell_page":
+		return s.shopSellOnPage(ctx, c)
 	case "front_deliveries_on":
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return err

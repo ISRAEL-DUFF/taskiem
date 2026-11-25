@@ -31,6 +31,22 @@ type frontView struct {
 	// Table is the front's list's table and Items how many it shows.
 	Table *uuid.UUID `json:"table_id"`
 	Items int        `json:"items"`
+	// Warnings are what a new One product front's packages say against
+	// the item's price (dearer per item), never a refusal.
+	Warnings []string `json:"warnings,omitempty"`
+	// Sells is what a One product front's order form sells: the action,
+	// the item and its packages (forms that sell §5.4); nil for another
+	// kind, or one whose form sells nothing now.
+	Sells *frontSells `json:"sells,omitempty"`
+}
+
+// frontSells is the product a One product front's order form sells.
+type frontSells struct {
+	Action   uuid.UUID            `json:"action_id"`
+	Item     string               `json:"item"`
+	Name     string               `json:"name"`
+	Packages []storefront.Package `json:"packages"`
+	Choose   string               `json:"choose,omitempty"`
 }
 
 type kindView struct {
@@ -82,6 +98,11 @@ func frontViews(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]frontView, 
 			}
 			break
 		}
+		if f.Kind == storefront.OneProduct {
+			if v.Sells, err = oneProductSells(ctx, tx, tenant, f.ID); err != nil {
+				return nil, err
+			}
+		}
 		out = append(out, v)
 	}
 	return out, nil
@@ -107,12 +128,23 @@ func (s *Server) addFront(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name string `json:"name"`
 		Kind string `json:"kind"`
+		// A One product front (forms that sell §5.4): the catalogue row it
+		// sells, its packages and how sizes are chosen, and its reason to
+		// buy (the item's words when empty).
+		Item     string               `json:"item"`
+		Packages []storefront.Package `json:"packages"`
+		Choose   string               `json:"choose"`
+		Tagline  string               `json:"tagline"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
+	if req.Kind == storefront.OneProduct {
+		s.addOneProduct(w, r, storefront.NewOneProduct{Name: req.Name, Tagline: req.Tagline, Item: req.Item, Packages: req.Packages, Choose: req.Choose})
+		return
+	}
 	k, ok := storefront.FrontKindOf(req.Kind)
 	if !ok {
 		s.fail(w, r, fmt.Errorf("%w: no kind of front %q", errBadRequest, req.Kind))
@@ -261,6 +293,10 @@ func (s *Server) deleteFront(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// oneProductTemplate is the workflow a One product front's order form
+// gets, unless the business's orders go to its riders.
+const oneProductTemplate = "storefront-one-product"
+
 // actionTemplates are the workflow templates that start on each kind of
 // action (§8).
 var actionTemplates = map[string]string{"order": "storefront-order", "enquiry": "storefront-enquiry", "callback": "storefront-callback", "booking": "storefront-booking", "hire": "storefront-hire",
@@ -304,9 +340,9 @@ func (s *Server) setupAction(w http.ResponseWriter, r *http.Request) {
 // held is set, and nothing made, when a workflow is deployed for it
 // already.
 func (s *Server) setupActionTx(ctx context.Context, tx pgx.Tx, p *Principal, id uuid.UUID, audit func(action, target string, detail map[string]any) error) (uuid.UUID, bool, error) {
-	var kind, label, front string
-	if err := tx.QueryRow(ctx, `SELECT a.kind, a.label, f.name FROM storefront_actions a JOIN storefront_fronts f ON f.id = a.front_id WHERE a.id = $1`, id).
-		Scan(&kind, &label, &front); err != nil {
+	var kind, label, front, frontKind string
+	if err := tx.QueryRow(ctx, `SELECT a.kind, a.label, f.name, f.kind FROM storefront_actions a JOIN storefront_fronts f ON f.id = a.front_id WHERE a.id = $1`, id).
+		Scan(&kind, &label, &front, &frontKind); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return uuid.Nil, false, storefront.ErrNotFound
 		}
@@ -320,6 +356,11 @@ func (s *Server) setupActionTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 		return uuid.Nil, false, err
 	}
 	name := actionTemplates[kind]
+	if kind == "order" && frontKind == storefront.OneProduct {
+		// A One product page's orders, paid at the door (forms that sell
+		// §7).
+		name = oneProductTemplate
+	}
 	// An order form of a business whose orders go to its riders gets the
 	// same workflow, so its orders are offered to them too (forms that
 	// sell §5.6).
@@ -359,4 +400,32 @@ func templateForAction(tpl *templates.Template, id uuid.UUID) (*templates.Templa
 		return nil, err
 	}
 	return &named, nil
+}
+
+// oneProductSells is what a One product front's first order form sells.
+func oneProductSells(ctx context.Context, tx pgx.Tx, tenant, front uuid.UUID) (*frontSells, error) {
+	var id uuid.UUID
+	var form []byte
+	err := tx.QueryRow(ctx, `SELECT id, form FROM storefront_actions WHERE front_id = $1 AND kind = 'order' AND form IS NOT NULL ORDER BY position, slug LIMIT 1`, front).Scan(&id, &form)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	p, ok := storefront.FormPackages(form)
+	if !ok {
+		return nil, nil
+	}
+	out := &frontSells{Action: id, Item: p.Item, Packages: p.Packages, Choose: p.Choose}
+	items, _, err := storefront.FrontItems(ctx, tx, tenant, front)
+	if err != nil && !errors.Is(err, storefront.ErrInvalid) {
+		return nil, err
+	}
+	for _, it := range items {
+		if it.ID == p.Item {
+			out.Name = it.Name
+		}
+	}
+	return out, nil
 }

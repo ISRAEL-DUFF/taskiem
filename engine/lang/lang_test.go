@@ -280,6 +280,12 @@ func TestMatchIntent(t *testing.T) {
 		{"ƙara front Abinci", []lang.Tag{lang.HA, lang.EN}, lang.IntentAddFront, "Abinci"},
 		{"gbanyụọ front Nri", []lang.Tag{lang.IG, lang.EN}, lang.IntentFrontOff, "Nri"},
 		{"tinye front Nri", []lang.Tag{lang.IG, lang.EN}, lang.IntentAddFront, "Nri"},
+		// A One product page (forms that sell §7), "add a page for …".
+		{"add a page for Ear cleaner", all, lang.IntentSellOnPage, "Ear cleaner"},
+		{"abeg make page for Ear cleaner 1 for 25k", []lang.Tag{lang.PCM, lang.EN}, lang.IntentSellOnPage, "Ear cleaner 1 for 25k"},
+		{"yi shafi don Man shafawa", []lang.Tag{lang.HA, lang.EN}, lang.IntentSellOnPage, "Man shafawa"},
+		{"ṣe ojú-ìwé fún Ọṣẹ dúdú", []lang.Tag{lang.YO, lang.EN}, lang.IntentSellOnPage, "Ọṣẹ dúdú"},
+		{"mee peeji maka Ude", []lang.Tag{lang.IG, lang.EN}, lang.IntentSellOnPage, "Ude"},
 		{"wetin fail today", []lang.Tag{lang.PCM, lang.EN}, lang.IntentStatus, ""},
 		{"status", []lang.Tag{lang.PCM, lang.EN}, lang.IntentStatus, ""},
 		{"Fagilé", []lang.Tag{lang.YO, lang.EN}, lang.IntentCancel, ""},

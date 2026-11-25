@@ -324,7 +324,7 @@ func chatIntentOn(on areas.State, in lang.Intent) bool {
 	case lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut, lang.IntentOwes, lang.IntentPaid:
 		return on.On(areas.Money)
 	case lang.IntentMakePage, lang.IntentMyPage, lang.IntentOpenShop, lang.IntentCloseShop, lang.IntentQR, lang.IntentReady, lang.IntentDelivered,
-		lang.IntentFronts, lang.IntentAddFront, lang.IntentFrontOn, lang.IntentFrontOff:
+		lang.IntentFronts, lang.IntentAddFront, lang.IntentFrontOn, lang.IntentFrontOff, lang.IntentSellOnPage:
 		return on.On(areas.Storefront)
 	case lang.IntentOrders:
 		return on.On(areas.Orders)

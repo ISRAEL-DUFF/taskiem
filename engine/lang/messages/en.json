@@ -11028,6 +11028,76 @@
       "text": "Which one: {names}? Say it again with their full name.",
       "reviewed": true,
       "context": "Chat words (api/payroll_chat_words.go): a name that matches more than one person"
+    },
+    "wa.page.how": {
+      "text": "Write it like *sell Ear cleaner on a page*, with packages if you like: *sell Ear cleaner on a page 1 for 25000, 2 for 45000*. The product must be on your list.",
+      "reviewed": true,
+      "context": "sell <product> on a page without a product, or with packages that could not be read"
+    },
+    "wa.page.orders_off": {
+      "text": "A page that sells takes orders: turn on Orders in Settings first, then try again.",
+      "reviewed": true,
+      "context": "sell <product> on a page while the Orders part is off"
+    },
+    "wa.page.no_item": {
+      "text": "No product called *{name}* on your list. Add it first: *add product {name} 25000*",
+      "reviewed": true,
+      "context": "sell <product> on a page: no product of that name"
+    },
+    "wa.page.which": {
+      "text": "More than one product has that name: {items}. Write its full name.",
+      "reviewed": true,
+      "context": "sell <product> on a page: the name matched several products"
+    },
+    "wa.page.no_price": {
+      "text": "*{name}* has no price on your list. Give it one first: *price {name} 25000*",
+      "reviewed": true,
+      "context": "sell <product> on a page: the product has no price"
+    },
+    "wa.page.exists": {
+      "text": "*{name}* has its own page already: {link}",
+      "reviewed": true,
+      "context": "sell <product> on a page: a One product page sells it already"
+    },
+    "wa.page.bad_packages": {
+      "text": "Those packages cannot be used: {reason} Write each as how many for what price, like *1 for 25000, 2 for 45000*.",
+      "reviewed": true,
+      "context": "sell <product> on a page: the packages typed were refused (more than six, a number twice, a price too small)"
+    },
+    "wa.page.confirm": {
+      "text": "Make a page for *{name}*?\nIt shows its photos and words, your promise, and *Order now* with {packages}, delivered and paid at the door.\nIts address: {link}",
+      "reviewed": true,
+      "context": "sell <product> on a page: confirming; packages are like \"1 item · ₦25,000; 2 items · ₦45,000\""
+    },
+    "wa.page.warning": {
+      "text": "Note: {warning}",
+      "reviewed": true,
+      "context": "sell <product> on a page: a package dearer per item than the product's own price (a warning, not a refusal)"
+    },
+    "wa.page.not_made": {
+      "text": "The page was not made: {reason}",
+      "reviewed": true,
+      "context": "sell <product> on a page refused after yes"
+    },
+    "wa.page.made_off": {
+      "text": "Made the page for *{name}*. It stays off until its orders are set up:",
+      "reviewed": true,
+      "context": "sell <product> on a page: made, but the order workflow waits for an approval; the approval's words follow"
+    },
+    "wa.page.made_unpublished": {
+      "text": "Made the page for *{name}* and turned it on.",
+      "reviewed": true,
+      "context": "sell <product> on a page: made, but the storefront itself is not published yet; how to publish follows"
+    },
+    "wa.page.made": {
+      "text": "Your page for *{name}* is on: {link}\nChange its promise, its feature chips and its packages under Fronts in the web app.",
+      "reviewed": true,
+      "context": "sell <product> on a page: made and live"
+    },
+    "wa.page.pay_at_door": {
+      "text": "Buyers pay at the door, in cash or by transfer. To take payments online too, connect Paystack.",
+      "reviewed": true,
+      "context": "sell <product> on a page: made, with no online payments connected"
     }
   }
 }

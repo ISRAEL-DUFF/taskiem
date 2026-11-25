@@ -9445,6 +9445,76 @@
       "text": "Wanne: {names}? Sake faɗi da cikakken sunansa.",
       "reviewed": false,
       "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): a name that matches more than one person"
+    },
+    "wa.page.how": {
+      "text": "Rubuta shi kamar *sell Ear cleaner on a page*, tare da fakitoci idan kana so: *sell Ear cleaner on a page 1 for 25000, 2 for 45000*. Dole kayan ya kasance a jerinka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page without a product, or with packages that could not be read"
+    },
+    "wa.page.orders_off": {
+      "text": "Shafin da ke sayarwa yana karɓar oda: kunna Orders a Settings tukuna, sannan ka sake gwadawa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page while the Orders part is off"
+    },
+    "wa.page.no_item": {
+      "text": "Babu kaya mai suna *{name}* a jerinka. Ka ƙara shi tukuna: *add product {name} 25000*",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: no product of that name"
+    },
+    "wa.page.which": {
+      "text": "Fiye da kaya ɗaya suna da wannan suna: {items}. Rubuta cikakken sunansa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: the name matched several products"
+    },
+    "wa.page.no_price": {
+      "text": "*{name}* ba shi da farashi a jerinka. Ka ba shi farashi tukuna: *price {name} 25000*",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: the product has no price"
+    },
+    "wa.page.exists": {
+      "text": "*{name}* yana da shafinsa tuni: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: a One product page sells it already"
+    },
+    "wa.page.bad_packages": {
+      "text": "Ba za a iya amfani da waɗannan fakitoci ba: {reason} Rubuta kowanne a matsayin guda nawa a kan farashi nawa, kamar *1 for 25000, 2 for 45000*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: the packages typed were refused (more than six, a number twice, a price too small)"
+    },
+    "wa.page.confirm": {
+      "text": "A yi shafi don *{name}*?\nZai nuna hotunansa da kalmominsa, alƙawarinka, da *Order now* tare da {packages}, ana kai shi kuma a biya a ƙofa.\nAdireshinsa: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: confirming; packages are like \"1 item · ₦25,000; 2 items · ₦45,000\""
+    },
+    "wa.page.warning": {
+      "text": "Lura: {warning}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: a package dearer per item than the product's own price (a warning, not a refusal)"
+    },
+    "wa.page.not_made": {
+      "text": "Ba a yi shafin ba: {reason}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page refused after yes"
+    },
+    "wa.page.made_off": {
+      "text": "An yi shafin *{name}*. Zai kasance a kashe har sai an shirya odarsa:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: made, but the order workflow waits for an approval; the approval's words follow"
+    },
+    "wa.page.made_unpublished": {
+      "text": "An yi shafin *{name}* kuma an kunna shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: made, but the storefront itself is not published yet; how to publish follows"
+    },
+    "wa.page.made": {
+      "text": "Shafinka na *{name}* yana kunne: {link}\nCanza alƙawarinsa, alamominsa da fakitocinsa a Fronts a manhajar yanar gizo.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: made and live"
+    },
+    "wa.page.pay_at_door": {
+      "text": "Masu saye suna biya a ƙofa, da kuɗi hannu ko ta tura kuɗi. Don karɓar kuɗi ta yanar gizo ma, haɗa Paystack.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: sell <product> on a page: made, with no online payments connected"
     }
   }
 }

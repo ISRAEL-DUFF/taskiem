@@ -1466,7 +1466,7 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 		}
 		return true, s.waStartBuild(ctx, c, arg)
 	case lang.IntentMakePage, lang.IntentMyPage, lang.IntentOrders, lang.IntentOpenShop, lang.IntentCloseShop, lang.IntentQR, lang.IntentReady, lang.IntentDelivered,
-		lang.IntentFronts, lang.IntentAddFront, lang.IntentFrontOn, lang.IntentFrontOff:
+		lang.IntentFronts, lang.IntentAddFront, lang.IntentFrontOn, lang.IntentFrontOff, lang.IntentSellOnPage:
 		// The storefront commands in any language: answered as their
 		// English command (N6).
 		if c.state != stateIdle {
@@ -2132,6 +2132,11 @@ func shopCommandOf(i lang.Intent, arg string) string {
 			return ""
 		}
 		return "add front " + strings.TrimSpace(arg)
+	case lang.IntentSellOnPage:
+		if strings.TrimSpace(arg) == "" {
+			return ""
+		}
+		return "add a page for " + strings.TrimSpace(arg)
 	case lang.IntentFrontOn, lang.IntentFrontOff:
 		if strings.TrimSpace(arg) == "" {
 			return ""

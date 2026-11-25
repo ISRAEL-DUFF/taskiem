@@ -32,6 +32,7 @@
     "publish": ["publish"],
     "close_shop": ["close my shop", "close shop"],
     "add_front": ["add front"],
+    "sell_on_page": ["add a page for", "make a page for"],
     "front_on": ["turn on front"],
     "front_off": ["turn off front"],
     "order_ready": ["ready"],
