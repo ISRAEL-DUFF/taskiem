@@ -1,0 +1,261 @@
+<!--page {"title": "Inventory · Taskiem", "description": "Keep your stock by chat: every change on record, counts that explain themselves, low stock reordered from your supplier in one tap, materials apart from products, and a list of everything your business owns.", "path": "/inventory"}-->
+<style>
+/* the hero: a stock card whose numbers move */
+.inv{width:100%;max-width:440px;border-radius:24px;background:#fff;color:#13261f;box-shadow:0 40px 80px -40px rgba(0,0,0,.6);overflow:hidden;font-size:14px}
+.inv-top{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #e3e9e3}
+.inv-top b{font-size:16px}
+.inv-top span{font-family:var(--f-mono);font-size:11.5px;color:#5b6b64}
+.inv-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:12px 16px;border-top:1px solid #eef1ec}
+.inv-row:first-of-type{border-top:0}
+.inv-row b{font-size:14.5px}
+.inv-row small{font-size:12px;color:#5b6b64}
+.inv-n{font-family:var(--f-mono);font-weight:700;font-size:15px;text-align:right;font-variant-numeric:tabular-nums}
+.inv-bar{grid-column:1/-1;height:6px;border-radius:6px;background:#eef1ec;overflow:hidden}
+.inv-bar u{display:block;height:100%;width:var(--w);border-radius:6px;background:#0d3b2e;transition:width .8s var(--spring),background .4s}
+.inv-row.low .inv-bar u{background:#ffb45c}
+.inv-row .tag{display:none;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:#fdf0dc;color:#8a3410;margin-left:6px}
+.inv-row.low .tag{display:inline-block}
+.inv-feed{padding:10px 16px 14px;background:#f6f8f4;border-top:1px solid #e3e9e3;display:flex;flex-direction:column;gap:6px;min-height:84px}
+.inv-feed span{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#43544c;animation:pop .5s var(--spring)}
+.inv-feed span b{font-family:var(--f-mono);font-size:11.5px;color:#0d3b2e}
+/* the record */
+.mv{display:grid;gap:8px}
+.mv li{display:grid;grid-template-columns:84px minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 14px;border-radius:14px;background:var(--ground);border:1px solid var(--line);font-size:14px;color:var(--ink);animation:mvin 9s infinite;animation-delay:calc(var(--k) * 1s)}
+.mv li em{font-style:normal;font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:8px;background:var(--mint-tint);color:var(--head);text-align:center}
+.mv li b{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--head)}
+.mv li small{display:block;font-size:12px;color:var(--muted)}
+@keyframes mvin{0%,3%{opacity:0;transform:translateX(-14px)}8%,92%{opacity:1;transform:none}98%,100%{opacity:0}}
+.mvsum{margin-top:10px;display:flex;justify-content:space-between;padding:12px 14px;border-radius:14px;background:var(--pine);color:var(--lime);font-weight:800}
+.cmds{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px}
+.cmds code{font-family:var(--f-mono);font-size:13px;padding:6px 10px;border-radius:10px;background:var(--card);border:1px solid var(--line);color:var(--ink)}
+/* counting the shelf: a scanner line, and what's missing valued at cost */
+.scan{position:relative;display:grid;gap:8px}
+.scan .item{display:grid;grid-template-columns:minmax(0,1fr) 70px 70px;gap:8px;align-items:center;padding:10px 14px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);font-size:13.5px;color:#fff}
+.scan .item span{font-family:var(--f-mono);font-size:12.5px;text-align:right;color:rgba(255,255,255,.75)}
+.scan .item.miss span:last-child{color:var(--amber);font-weight:700}
+.scan .head{display:grid;grid-template-columns:minmax(0,1fr) 70px 70px;gap:8px;padding:0 14px;font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+.scan .head span{text-align:right}
+.beam{position:absolute;left:-6px;right:-6px;height:2px;top:20px;background:var(--lime);box-shadow:0 0 14px 3px rgba(200,241,105,.6);border-radius:2px;animation:beam 4s ease-in-out infinite}
+@keyframes beam{0%{top:24px}50%{top:calc(100% - 8px)}100%{top:24px}}
+.shrink{margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:rgba(255,180,92,.14);border:1px solid rgba(255,180,92,.4);color:#fff;font-size:14px}
+.shrink b{color:var(--amber);font-family:var(--f-mono)}
+/* reorder: a purchase order goes round */
+.po{display:grid;gap:10px}
+.po-head{display:flex;justify-content:space-between;align-items:baseline}
+.po-head b{font-size:17px;color:var(--head)}
+.po-head span{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.po-lines{display:grid;gap:6px;font-size:14px}
+.po-lines div{display:flex;justify-content:space-between}
+.po-lines b{font-variant-numeric:tabular-nums;color:var(--head)}
+.po-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:4px}
+.po-steps i{font-style:normal;display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:700;color:var(--muted);text-align:center}
+.po-steps i::before{content:"";height:5px;border-radius:5px;background:var(--line);animation:pos 10s infinite;animation-delay:calc(var(--k) * 1.5s)}
+@keyframes pos{0%,3%{background:var(--line)}7%,90%{background:var(--acc)}100%{background:var(--line)}}
+.po-owed{margin-top:4px;display:flex;justify-content:space-between;padding:10px 12px;border-radius:12px;background:var(--mint-tint);font-size:13.5px;color:var(--head)}
+/* materials: fabric drawn down by dresses */
+.mat{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center}
+.mat .box{padding:16px;border-radius:18px;text-align:center}
+.mat .prod{background:var(--pine);color:#fff}
+.mat .prod b{display:block;font-size:16px}
+.mat .prod small{color:var(--lime);font-weight:700}
+.mat .stock{background:var(--ground);border:1px solid var(--line);color:var(--ink)}
+.mat .stock b{display:block;font-size:16px;color:var(--head)}
+.mat .stock .m{display:block;margin-top:6px;font-family:var(--f-mono);font-size:22px;font-weight:700;color:var(--head);font-variant-numeric:tabular-nums}
+.mat .arrow{font-family:var(--f-mono);font-size:12px;color:var(--muted);text-align:center;line-height:1.3}
+.mat .arrow i{display:block;font-style:normal;font-size:22px;color:var(--acc);animation:nudge 1.6s ease-in-out infinite}
+@keyframes nudge{50%{transform:translateX(5px)}}
+.matlist{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
+.matlist span{font-size:12.5px;font-weight:700;padding:6px 11px;border-radius:999px;background:var(--ground);border:1px solid var(--line);color:var(--ink)}
+.matlist span.m2{background:var(--mint-tint)}
+/* things we have */
+.twh{display:grid;gap:8px}
+.twh li{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 14px;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#fff;font-size:14px}
+.twh li i{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgba(200,241,105,.16);color:var(--lime);font-style:normal;font-weight:800}
+.twh li small{display:block;font-size:12px;color:rgba(255,255,255,.6)}
+.twh .st{font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:var(--lime);color:var(--pine)}
+.twh .st.b{background:var(--amber)}
+.twh .st.s{background:rgba(255,255,255,.18);color:#fff}
+.twh li.flip .st{animation:stflip 6s infinite}
+@keyframes stflip{0%,45%{background:var(--lime);color:var(--pine)}50%,95%{background:var(--amber);color:var(--pine)}}
+</style>
+{{HEADER}}
+<main>
+  <section class="hero phero">
+    <div class="hero-bleed" id="hero">
+      <div class="wrap">
+        <div class="hero-panel">
+          <div class="hero-copy">
+            <p class="label">Inventory</p>
+            <h1 style="margin-top:16px">Know what's on the shelf. <em>Always.</em></h1>
+            <p class="lede">Keep your stock by chat. Every sale, delivery and count is on record, low items are reordered from your supplier in one tap, and you always know what's missing and what it cost you.</p>
+            <div class="cta-row">
+              <a class="btn btn-lime btn-big mag" href="/contact" data-go="chat">Keep my stock <span class="arr">→</span></a>
+              <a class="btn btn-ghost btn-big mag" href="#reorder">See a reorder</a>
+            </div>
+          </div>
+          <div class="pvis" aria-hidden="true">
+            <div class="inv">
+              <div class="inv-top"><b>What you count</b><span>Ada's Kitchen</span></div>
+              <div class="inv-row" data-i="0" data-n="22" data-r="5"><span><b>Rice, 25kg bag</b><span class="tag">Low</span><br><small>reorder at 5</small></span><span class="inv-n">22</span><span class="inv-bar"><u style="--w:73%"></u></span></div>
+              <div class="inv-row" data-i="1" data-n="40" data-r="12"><span><b>Indomie, carton</b><span class="tag">Low</span><br><small>reorder at 12</small></span><span class="inv-n">40</span><span class="inv-bar"><u style="--w:67%"></u></span></div>
+              <div class="inv-row" data-i="2" data-n="9" data-r="6"><span><b>Groundnut oil, 5L</b><span class="tag">Low</span><br><small>reorder at 6</small></span><span class="inv-n">9</span><span class="inv-bar"><u style="--w:45%"></u></span></div>
+              <div class="inv-feed" id="invfeed"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section class="frow" data-reveal>
+      <div class="fcopy">
+        <p class="label">By chat</p>
+        <h2 class="h2">Every change, on record.</h2>
+        <p>Say it the way you would to a shop assistant. Each change is read back first and saved on <b>yes</b>, with who made it and why. A count is the sum of its changes, so any number on the shelf can be explained.</p>
+        <div class="cmds"><code>add 50 cartons of Indomie at 8,500</code><code>sold 3 bags of rice 45,000 cash</code><code>adjust rice -2 spoilt</code><code>stock rice</code><code>stock</code></div>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <p class="label" style="color:var(--muted);margin-bottom:12px">Rice, 25kg bag · today</p>
+          <ul class="mv">
+            <li style="--k:0"><em>Received</em><span>From Dangote Stores<small>P-1188 · Tunde, 09:10</small></span><b>+10</b></li>
+            <li style="--k:1"><em>Sale</em><span>Cash, S-7QX4KD<small>Funmi, 10:14</small></span><b>−3</b></li>
+            <li style="--k:2"><em>Adjust</em><span>Spoilt in the rain<small>Ada, 13:02</small></span><b>−2</b></li>
+            <li style="--k:3"><em>Order</em><span>From your page, ADA-1234<small>accepted, 14:40</small></span><b>−1</b></li>
+          </ul>
+          <div class="mvsum"><span>Started at 12</span><span>Now 16</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow flip" data-reveal>
+      <div class="fcopy">
+        <p class="label">Counting the shelf</p>
+        <h2 class="h2">Count it. See what's missing, in naira.</h2>
+        <p>Count in the chat, item by item, or fill the sheet and scan barcodes. Taskiem compares the shelf with what it should hold, and values what's missing at cost. A big gap is flagged as a leak, for you to close with a reason.</p>
+        <div class="cmds"><code>count rice 12, indomie 40: rats</code><code>count</code></div>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard dark">
+          <div class="scan">
+            <span class="beam"></span>
+            <div class="head"><span>Item</span><span>Expected</span><span>Counted</span></div>
+            <div class="item"><span style="text-align:left;color:#fff">Rice, 25kg bag</span><span>16</span><span>16</span></div>
+            <div class="item miss"><span style="text-align:left;color:#fff">Indomie, carton</span><span>40</span><span>37</span></div>
+            <div class="item"><span style="text-align:left;color:#fff">Groundnut oil, 5L</span><span>9</span><span>9</span></div>
+            <div class="item miss"><span style="text-align:left;color:#fff">Tomato paste, tin</span><span>48</span><span>44</span></div>
+          </div>
+          <div class="shrink"><span>Missing this week, at cost</span><b>₦29,300</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow" id="reorder" data-reveal>
+      <div class="fcopy">
+        <p class="label">Reordering</p>
+        <h2 class="h2">Low stock, reordered in one tap.</h2>
+        <p>Set a reorder level for each item. When it runs low, <b>Order what is low</b> drafts one order per supplier. Approve it, and your supplier gets it on WhatsApp to confirm. When the goods arrive, the count goes up and the cost is set, and Taskiem keeps track of what you still owe.</p>
+        <ul><li>Orders above your limit wait for a second person.</li><li>A supplier on Taskiem gets it straight into their own orders, with your credit terms.</li></ul>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="po">
+            <div class="po-head"><b>Order P-1188 · Dangote Stores</b><span>drafted from what's low</span></div>
+            <div class="po-lines"><div><span>10 × Rice, 25kg bag</span><b>₦395,000</b></div><div><span>6 × Groundnut oil, 5L</span><b>₦119,000</b></div></div>
+            <div class="po-steps"><i style="--k:0">Drafted</i><i style="--k:1">Sent</i><i style="--k:2">Confirmed</i><i style="--k:3">Received</i><i style="--k:4">Paid</i></div>
+            <div class="po-owed"><span>Owed to Dangote Stores</span><b>₦514,000 → ₦0</b></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow flip" data-reveal>
+      <div class="fcopy">
+        <p class="label">Materials</p>
+        <h2 class="h2">Count what you use, not only what you sell.</h2>
+        <p>Fabric, thread, flour, packaging: count the things you make with, even if you never sell them. Tell Taskiem how much each product uses, and every sale draws the material down by itself.</p>
+        <ul><li>A bottle and a pack of six can share one count.</li><li>A purchase can be just spending, stock, or something you keep, and Taskiem remembers your choice for each supplier's item.</li></ul>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="mat">
+            <div class="box prod"><b>Ankara dress</b><small>1 sold</small></div>
+            <div class="arrow"><i>→</i>uses 3 m</div>
+            <div class="box stock"><b>Ankara fabric</b><span class="m" id="fabric">60 m</span></div>
+          </div>
+          <div class="matlist"><span>Thread, spool</span><span>Buttons, pack</span><span class="m2">Labels: "Fuel", "Staff welfare", "Client job: Mrs Ade"</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow" data-reveal>
+      <div class="fcopy">
+        <p class="label">Things we have</p>
+        <h2 class="h2">Everything your business owns, in one list.</h2>
+        <p>The generator, the sewing machines, the shop laptop. Things you keep rather than count get a row each, with what they cost and where they came from. Mark one sold, broken, given away or gone, and the list stays true.</p>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard dark">
+          <ul class="twh">
+            <li><i>G</i><span>Generator, 7.5 kVA<small>₦1,150,000 · March 2026</small></span><span class="st">Have</span></li>
+            <li class="flip"><i>S</i><span>Sewing machine, Singer<small>₦285,000 · from Singer Ltd</small></span><span class="st">Have</span></li>
+            <li><i>L</i><span>Shop laptop<small>₦420,000 · July 2025</small></span><span class="st">Have</span></li>
+            <li><i>F</i><span>Chest freezer<small>₦310,000 · 2024</small></span><span class="st s">Sold</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><p class="label">And the rest</p><h2 class="h2">Inventory that keeps up with you.</h2></div>
+      <ul class="facts" data-reveal>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11h11L21 8H6.2"/><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/></svg></span><b>Sales lower stock</b><span>From the counter, your page, the chat or trade orders, each one moves the count once.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7h10l-3-3M16 17H6l3 3"/></svg></span><b>Matched to the money</b><span>A sale by transfer or on the terminal waits for its payment, and is matched when it lands.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg></span><b>An evening total</b><span>After closing: today's sales by cash, transfer and terminal, and what sold most.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/></svg></span><b>Sold on credit</b><span><code>sold 3 bags of rice 45,000 credit to Ada</code> moves the stock and records what she owes.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span><b>A morning low list</b><span>A ready-made workflow sends the items at or below their reorder level every morning.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 11l2 2 4-4"/></svg></span><b>Who may change it</b><span>Decide who can see stock and who can change it. Every change says who made it.</span></li>
+      </ul>
+    </section>
+
+    <section class="pclose">
+      <div class="in">
+        <h2>Start counting with one message.</h2>
+        <div class="cta-row"><a class="btn btn-lime btn-big mag" href="/contact" data-go="chat">Keep my stock <span class="arr">→</span></a><a class="btn btn-ghost btn-big mag" href="/pricing">See pricing</a></div>
+      </div>
+    </section>
+  </div>
+</main>
+{{FOOTER}}
+<script>
+(() => {
+  // the hero card: movements arrive, the counts follow, and an item goes low
+  const feed = document.getElementById('invfeed'), rows = [...document.querySelectorAll('.inv-row')];
+  if (!feed) return;
+  const set = (r, n) => {
+    const max = +r.dataset.max || (r.dataset.max = Math.max(+r.dataset.n, 30));
+    r.dataset.n = n; r.querySelector('.inv-n').textContent = n;
+    r.querySelector('.inv-bar u').style.setProperty('--w', Math.max(4, Math.min(100, n / max * 100)) + '%');
+    r.classList.toggle('low', n <= +r.dataset.r);
+  };
+  const start = rows.map(r => +r.dataset.n);
+  const STEPS = [[0, -3, 'Sale · cash', 'S-7QX4KD'], [1, -4, 'Order · your page', 'ADA-1234'], [0, -10, 'Sale · transfer', 'S-7QX4L2'], [2, -4, 'Sale · terminal', 'S-7QX4M1'], [0, -6, 'Sale · cash', 'S-7QX4N8'], [0, +10, 'Received · Dangote', 'P-1188']];
+  const show = (k, t, ref, ch) => {
+    const s = document.createElement('span');
+    s.innerHTML = `<span>${t}: ${rows[k].querySelector('b').textContent}</span><b>${ch > 0 ? '+' : '−'}${Math.abs(ch)} · ${ref}</b>`;
+    feed.prepend(s); while (feed.children.length > 3) feed.lastChild.remove();
+  };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { STEPS.slice(0, 3).forEach(([k, ch, t, ref]) => show(k, t, ref, ch)); return; }
+  let i = 0;
+  setInterval(() => {
+    if (i === STEPS.length) { rows.forEach((r, k) => set(r, start[k])); feed.innerHTML = ''; i = 0; return; }
+    const [k, ch, t, ref] = STEPS[i++];
+    set(rows[k], Math.max(0, +rows[k].dataset.n + ch)); show(k, t, ref, ch);
+  }, 1700);
+  // materials: each dress sold takes 3 m of fabric
+  const fab = document.getElementById('fabric');
+  let m = 60;
+  setInterval(() => { m = m <= 12 ? 60 : m - 3; fab.textContent = m + ' m'; fab.animate([{ transform: 'scale(1.12)' }, { transform: 'none' }], { duration: 400 }); }, 2200);
+})();
+</script>

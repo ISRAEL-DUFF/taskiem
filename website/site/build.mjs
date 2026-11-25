@@ -51,7 +51,7 @@ const svg = async (f) => (await readFile(path.join(brand, f), "utf8")).trim();
 const MARK = await svg("mark.svg"), MARKREV = await svg("mark-reversed.svg"), WORD = await svg("wordmark.svg"), WORDREV = await svg("wordmark-reversed.svg");
 
 // ---------- shared parts ----------
-const NAV = [["What it does", "/#control"], ["Trade", "/#trade"], ["Your page", "/storefront"], ["Schools", "/schools"], ["Pricing", "/pricing"]];
+const NAV = [["What it does", "/#control"], ["Inventory", "/inventory"], ["Trade", "/#trade"], ["Your page", "/storefront"], ["Schools", "/schools"], ["Pricing", "/pricing"]];
 const header = (current) => `<header class="top">
   <div class="wrap">
     <div class="bar">
@@ -78,7 +78,7 @@ const footer = `<footer class="foot">
       </div>
       <nav class="foot-cols" aria-label="Footer">
         <div><p class="label">Product</p><a href="/#control">What it does</a><a href="/#trade">Trade</a><a href="/storefront">Your page</a><a href="/pricing">Pricing</a></div>
-        <div><p class="label">Features</p><a href="/security">Security</a><a href="/tables">Your records</a><a href="/schools">Schools</a></div>
+        <div><p class="label">Features</p><a href="/inventory">Inventory</a><a href="/security">Security</a><a href="/tables">Your records</a><a href="/schools">Schools</a></div>
         <div><p class="label">Company</p><a href="/partners">For fintechs</a><a href="/about">About</a><a href="/contact">Contact</a>${legal}</div>
       </nav>
     </div>
