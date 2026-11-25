@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSort, columnOf, conditionCount, filterFits, importWords, pageFileName, readPageFile, versionTitle, filtersParam, freeId, grouped, keptFilters, layout, move, newPart, partWords, publishWords, rowsWord, toneClass, viewWithFilters, whoWords, withUses, type DrawnFilter, type DrawnPage, type DrawnPart, type PageDoc, type PageDetail, type PageVersion } from "./pages";
+import { canSort, columnOf, columnsFor, conditionCount, filterFits, importWords, pageFileName, readPageFile, versionTitle, filtersParam, freeId, grouped, keptFilters, layout, move, newPart, partWords, publishWords, rowsWord, toneClass, viewWithFilters, whoWords, withUses, type DrawnFilter, type DrawnPage, type DrawnPart, type PageDoc, type PageDetail, type PageVersion } from "./pages";
 import type { Table } from "./tables";
 
 const tickets: Table = {
@@ -120,6 +120,11 @@ describe("pages", () => {
 
   it("sets each list and table to use the filters that fit its table", () => {
     expect(filterFits({ id: "m", type: "mine", column: "email" }, tickets)).toBe(true);
+    // Mine on a phone column too (g-pages-mine).
+    const withPhone: Table = { ...tickets, columns: [...tickets.columns, { name: "phone", title: "Phone", type: "phone", required: false, personal: true }] };
+    expect(filterFits({ id: "m", type: "mine", column: "phone" }, withPhone)).toBe(true);
+    expect(columnsFor(withPhone, "mine").map((c) => c.name)).toEqual(["email", "phone"]);
+    expect(filterFits({ id: "m", type: "mine", column: "title" }, withPhone)).toBe(false);
     expect(filterFits({ id: "d", type: "dates", column: "title" }, tickets)).toBe(false);
     const doc: PageDoc = {
       page: "page/v1",

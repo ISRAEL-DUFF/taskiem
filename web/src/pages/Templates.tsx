@@ -3,7 +3,19 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post } from "../api";
 import { useAdvanced, useAuth } from "../auth";
 import { Help } from "../onboarding";
-import { byCategory, initialValues, inputKind, lineLabel, toParams, WEEKDAYS, type Template, type TemplateParam } from "../lib/templates";
+import {
+  byCategory,
+  initialValues,
+  inputKind,
+  installedWords,
+  lineLabel,
+  recipeWords,
+  toParams,
+  WEEKDAYS,
+  type RecipeInstalled,
+  type Template,
+  type TemplateParam,
+} from "../lib/templates";
 import { Badge, ErrorBox, Field, PageHeader, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { RolePicker } from "../forms/RolePicker";
@@ -21,8 +33,17 @@ export function Templates() {
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
   const query = params.get("q") ?? "";
-  const { data, error } = useLoad(() => get<{ templates: Template[] }>(`/v1/templates${query ? `?q=${encodeURIComponent(query)}` : ""}`), [query]);
+  // Recipes: the templates that make a tool used from the chat (made tools §13).
+  const tools = params.get("tool") === "true";
+  const { data, error } = useLoad(() => {
+    const qs = new URLSearchParams();
+    if (query) qs.set("q", query);
+    if (tools) qs.set("tool", "true");
+    const s = qs.toString();
+    return get<{ templates: Template[] }>(`/v1/templates${s ? `?${s}` : ""}`);
+  }, [query, tools]);
   const selected = params.get("id");
+  const keep = (extra: Record<string, string>) => ({ ...(query ? { q: query } : {}), ...(tools ? { tool: "true" } : {}), ...extra });
   const groups = useMemo(() => byCategory(data?.templates ?? []), [data]);
   const current = data?.templates.find((t) => t.id === selected);
   return (
@@ -53,6 +74,14 @@ export function Templates() {
           </button>
         )}
       </form>
+      <div className="segmented template-kinds" role="group" aria-label="Which templates">
+        <button type="button" aria-pressed={!tools} onClick={() => setParams(query ? { q: query } : {})}>
+          All
+        </button>
+        <button type="button" aria-pressed={tools} onClick={() => setParams({ ...(query ? { q: query } : {}), tool: "true" })} data-testid="recipes">
+          Tools for the chat
+        </button>
+      </div>
       <Help topic="templates" />
       <ErrorBox error={error} />
       {data && data.templates.length === 0 && <div className="empty card">No template matches. Try other words, or build it with AI from the Workflows page.</div>}
@@ -61,7 +90,7 @@ export function Templates() {
           key={current.id}
           template={current}
           canCreate={can("workflow.edit")}
-          onBack={() => setParams(query ? { q: query } : {})}
+          onBack={() => setParams(keep({}))}
         />
       ) : (
         groups.map(([category, list]) => (
@@ -69,12 +98,13 @@ export function Templates() {
             <h2 className="capitalize">{category}</h2>
             <div className="template-grid">
               {list.map((t) => (
-                <button key={t.id} className="card template-card" onClick={() => setParams(query ? { q: query, id: t.id } : { id: t.id })}>
+                <button key={t.id} className="card template-card" onClick={() => setParams(keep({ id: t.id }))}>
                   <span className="list-icon" aria-hidden="true">
                     <Icon name={categoryIcon(category)} />
                   </span>
                   <strong>{t.title}</strong>
                   <span>{t.summary}</span>
+                  {t.tool && <span className="chip tool-chip">Use it from the chat: /{t.tool.command}</span>}
                   <span className="hint">
                     {usesWords(t.connectors, advanced)}
                     {!t.available && " · needs a connector not available here"}
@@ -94,6 +124,8 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
   const nav = useNavigate();
   const [values, setValues] = useState(() => initialValues(t.params));
   const [name, setName] = useState("");
+  // A recipe installed: its draft, and the command it was given.
+  const [installed, setInstalled] = useState<{ id: string; tool: RecipeInstalled }>();
   const tables = t.tables ?? [];
   const act = useAction();
   const fieldErrors = useMemo(() => {
@@ -106,7 +138,7 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
   }, [act.error]);
   const create = () =>
     act.run(async () => {
-      const r = await post<{ id: string; tables?: { name: string; status: string; error?: string }[] }>(`/v1/templates/${t.id}/instantiate`, {
+      const r = await post<{ id: string; tool?: RecipeInstalled; tables?: { name: string; status: string; error?: string }[] }>(`/v1/templates/${t.id}/instantiate`, {
         params: toParams(t.params, values),
         name: name.trim() || undefined,
       });
@@ -115,6 +147,12 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
         throw new Error(
           `The draft was created (find it under Workflows), but ${notMade.map((x) => `the table ${x.name} could not be made: ${x.error ?? "unknown reason"}`).join("; ")}.`,
         );
+      }
+      // A recipe says the command it was given before moving on: the one
+      // asked for may have been taken.
+      if (r.tool) {
+        setInstalled({ id: r.id, tool: r.tool });
+        return;
       }
       nav(`/workflows/${r.id}`);
     }, false);
@@ -133,6 +171,24 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
           <Badge key={tag} value={tag} />
         ))}
       </p>
+      {t.tool && (
+        <div className="notice recipe-tool" data-testid="recipe-tool">
+          <strong>
+            Use it from the chat: /{t.tool.command} · {t.tool.name}
+          </strong>
+          <ul>
+            {recipeWords(t.tool).map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {installed && (
+        <div className="notice ok" role="status" data-testid="recipe-installed">
+          <strong>Saved as a draft.</strong> {installedWords(installed.tool)} Publish it and it is in everyone's tools.{" "}
+          <Link to={`/workflows/${installed.id}`}>Open the draft</Link>
+        </div>
+      )}
       <h3>Steps</h3>
       <ol className="plain-steps" aria-label="Steps">
         {t.steps.map((l, i) => (

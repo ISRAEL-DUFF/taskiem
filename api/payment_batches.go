@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/saved"
 )
@@ -68,6 +69,15 @@ type batchView struct {
 	PaidKobo int64 `json:"paid_kobo"`
 	Waiting  int   `json:"waiting"`
 	Failed   int   `json:"failed"`
+	// The foot (paying people H7): the fees the payments account quoted
+	// for the rows, how many rows it quoted none for (their fee shows
+	// after paying), and, while the batch waits to be confirmed, the
+	// balance, how much it is short by and which rows fit, in order.
+	FeesKobo    int64       `json:"fees_kobo"`
+	FeesUnknown int         `json:"fees_unknown"`
+	BalanceKobo *int64      `json:"balance_kobo"`
+	ShortKobo   int64       `json:"short_kobo"`
+	Fit         []uuid.UUID `json:"fit,omitempty"`
 }
 
 func (s *Server) paymentBatchRoutes(r chi.Router) {
@@ -105,6 +115,14 @@ func batchTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, owner bool) (batchVie
 		}
 		b.TotalKobo += x.AmountKobo
 		b.Count++
+		switch {
+		case x.FeeKobo != nil && x.Status == "paid":
+			b.FeesKobo += *x.FeeKobo
+		case x.FeeQuoteKobo != nil:
+			b.FeesKobo += *x.FeeQuoteKobo
+		default:
+			b.FeesUnknown++
+		}
 		switch x.Status {
 		case "paid":
 			b.PaidKobo += x.AmountKobo
@@ -139,6 +157,8 @@ func (s *Server) createBatch(w http.ResponseWriter, r *http.Request) {
 		Rows   []batchRow `json:"rows"`
 		CopyOf *uuid.UUID `json:"copy_of"`
 		From   string     `json:"from"`
+		// Where: the chat its one diary line goes to, as for one payment.
+		Where string `json:"where"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -183,7 +203,27 @@ func (s *Server) createBatch(w http.ResponseWriter, r *http.Request) {
 	if from == "" {
 		from = "tools"
 	}
-	s.prepareBatch(w, r, in.Rows, strings.TrimSpace(in.Title), in.Kind, in.CopyOf, from)
+	where, err := s.diaryWhere(ctx, p.TenantID, p.UserID, in.Where)
+	if err != nil {
+		s.payFail(w, r, err)
+		return
+	}
+	out, _, err := s.prepareBatchView(r, in.Rows, strings.TrimSpace(in.Title), in.Kind, in.CopyOf, from)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if where != nil {
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE payment_batches SET diary_where = $2 WHERE id = $1`, out.ID, *where)
+			return err
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	s.batchMoney(ctx, p.TenantID, &out)
+	writeJSON(w, http.StatusCreated, map[string]any{"batch": out})
 }
 
 // rowLabel is how a held row is named back: its saved name, or the
@@ -265,10 +305,11 @@ func (s *Server) batchRowsOf(ctx context.Context, tenant, id uuid.UUID, owner bo
 // one passkey for the batch; each row still prepared is then claimed and
 // sent as one payment is (within the payer's limit at once; over it, or to
 // a changed account or one staff never paid, waiting for the owner's OK).
-// A row refused now (the same payment again without again) stays prepared,
-// said in the results; one whose account (or the business's payments
-// account) changed since it was prepared is cancelled, said
-// account_changed (provider_changed), to be prepared again.
+// A row refused now (the same payment again without again, one not the
+// payer's to confirm) ends refused, with why, said in the results, so the
+// batch ends, and is told, when its other rows have; one whose account (or
+// the business's payments account) changed since it was prepared is
+// cancelled, said account_changed (provider_changed), to be prepared again.
 func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 	id, ok := s.batchID(w, r)
 	if !ok {
@@ -308,6 +349,12 @@ func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 	// The rows the person saw, exactly: none added meanwhile.
 	if !sameIDs(list, in.Payments) {
 		s.payFail(w, r, refusePay(http.StatusConflict, "changed", "The batch changed since it was shown: look at it again."))
+		return
+	}
+	// The balance covers the rows and their fees, or it says by how much
+	// it is short and which rows fit.
+	if err := s.batchCovers(ctx, p.TenantID, id, owner); err != nil {
+		s.payFail(w, r, err)
 		return
 	}
 	method, ok := s.payPasskey(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpBatch, "batch:"+id.String(), "Payments", "paying")
@@ -355,6 +402,22 @@ func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 	}
 	var out batchView
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		// A row refused at confirming (the same payment again unasked, a
+		// payment that is not theirs to confirm, one only an owner pays)
+		// ends refused, with why: the batch then ends, and is told, when
+		// its other rows have, rather than wait on a row nobody sends.
+		ended := false
+		for _, res := range results {
+			if res.Code == "" || res.Code == "not_sent" || res.Code == "not_approved" || res.Code == "not_prepared" {
+				continue
+			}
+			tag, err := tx.Exec(ctx, `UPDATE payments SET status = 'rejected', reason = $2, needs_ok = '', finished_at = now()
+				WHERE id = $1 AND batch_id = $3 AND status = 'prepared' AND run_id IS NULL`, res.Payment, res.Problem, id)
+			if err != nil {
+				return err
+			}
+			ended = ended || tag.RowsAffected() > 0
+		}
 		if _, err := tx.Exec(ctx, `UPDATE payment_batches SET status = 'sent', confirmed_by = $2, confirmed_at = now() WHERE id = $1 AND status = 'prepared'
 			AND NOT EXISTS (SELECT 1 FROM payments WHERE batch_id = $1 AND status = 'prepared')`, id, p.Actor()); err != nil {
 			return err
@@ -365,6 +428,29 @@ func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := markAwaitingTx(ctx, tx, out.Payments, p); err != nil {
 			return err
+		}
+		// The batch's one diary line, where it was paid from.
+		var where *string
+		if err := tx.QueryRow(ctx, `SELECT diary_where FROM payment_batches WHERE id = $1`, id).Scan(&where); err != nil {
+			return err
+		}
+		if where != nil && out.Count > 0 {
+			var had bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM chat_history WHERE batch_id = $1) OR EXISTS (SELECT 1 FROM link_messages WHERE batch_id = $1)`,
+				id).Scan(&had); err != nil {
+				return err
+			}
+			if !had {
+				if err := s.payDiaryTx(ctx, tx, p, where, batchDiaryText(out), nil, &id); err != nil {
+					return err
+				}
+			}
+		}
+		if ended {
+			// Maybe the last row to end: the batch's result is told now.
+			if err := chatBatchClosedTx(ctx, tx, p.TenantID, id); err != nil {
+				return err
+			}
 		}
 		return auditTx(r, tx, "payment.batch_confirm", id.String(), map[string]any{"rows": len(list), "total_kobo": out.TotalKobo, "waiting": out.Waiting})
 	}); err != nil {
@@ -580,8 +666,15 @@ func (s *Server) prepareBatchView(r *http.Request, rows []batchRow, title, kind 
 	}
 	id := uuid.Must(uuid.NewV7())
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO payment_batches (id, tenant_id, title, kind, copy_of, status, created_by) VALUES ($1, $2, $3, $4, $5, 'preparing', $6)`,
-			id, p.TenantID, title, kind, copyOf, p.Actor())
+		// A person's batch has its one diary line in their Taskiem chat,
+		// unless it was paid from a business's (createBatch's where).
+		var where *string
+		if p.UserID != uuid.Nil {
+			t := "taskiem"
+			where = &t
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO payment_batches (id, tenant_id, title, kind, copy_of, status, created_by, diary_where) VALUES ($1, $2, $3, $4, $5, 'preparing', $6, $7)`,
+			id, p.TenantID, title, kind, copyOf, p.Actor(), where)
 		return err
 	}); err != nil {
 		return batchView{}, nil, err
@@ -679,6 +772,7 @@ func (s *Server) getBatch(w http.ResponseWriter, r *http.Request) {
 		s.payFail(w, r, err)
 		return
 	}
+	s.batchMoney(r.Context(), principalFrom(r.Context()).TenantID, &out)
 	writeJSON(w, http.StatusOK, map[string]any{"batch": out})
 }
 
@@ -843,4 +937,65 @@ func (s *Server) mayMatchSaved(p *Principal) bool {
 		return true
 	}
 	return s.limiter("pay-match:"+p.Actor(), time.Hour/100, 100).Allow()
+}
+
+// batchMoney fills a batch's foot: the balance, and while it waits to be
+// confirmed, how much it is short by and which rows fit, in order (each
+// row with its quoted fee).
+func (s *Server) batchMoney(ctx context.Context, tenant uuid.UUID, b *batchView) {
+	rl, err := s.payRail(ctx, tenant)
+	if err != nil || rl == nil {
+		return
+	}
+	n, ok := s.payBalance(ctx, tenant, *rl)
+	if !ok {
+		return
+	}
+	b.BalanceKobo = &n
+	if b.Status != "prepared" {
+		return
+	}
+	var need, used int64
+	for _, x := range b.Payments {
+		if x.Status != "prepared" {
+			continue
+		}
+		cost := x.AmountKobo
+		if x.FeeQuoteKobo != nil {
+			cost += *x.FeeQuoteKobo
+		}
+		need += cost
+		if used+cost <= n {
+			used += cost
+			b.Fit = append(b.Fit, x.ID)
+		}
+	}
+	if need > n {
+		b.ShortKobo = need - n
+	}
+}
+
+// batchCovers refuses a batch whose rows and fees the balance does not
+// cover (409 short), saying by how much and how many rows fit.
+func (s *Server) batchCovers(ctx context.Context, tenant, id uuid.UUID, owner bool) error {
+	var b batchView
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		b, err = batchTx(ctx, tx, id, owner)
+		return err
+	}); err != nil {
+		return err
+	}
+	s.batchMoney(ctx, tenant, &b)
+	if b.ShortKobo <= 0 || b.BalanceKobo == nil {
+		return nil
+	}
+	rows := 0
+	for _, x := range b.Payments {
+		if x.Status == "prepared" {
+			rows++
+		}
+	}
+	return refusePay(http.StatusConflict, "short", fmt.Sprintf("Your balance is %s: %s short for all %d. The first %d fit: take some out, or add money first.",
+		invoicing.Naira(*b.BalanceKobo), invoicing.Naira(b.ShortKobo), rows, len(b.Fit)))
 }

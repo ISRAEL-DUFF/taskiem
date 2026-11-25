@@ -428,8 +428,14 @@ func (s *Server) issueBusinessNumber(ctx context.Context, tenant uuid.UUID, c *c
 		m, err = loadReceiveMoney(ctx, tx, tenant)
 		return err
 	}); err != nil || m == nil || m.AccountNumber != nil {
+		if err == nil && m != nil {
+			// Its number findable for wallet to wallet, if it is not yet.
+			s.keepWalletAccount(ctx, tenant)
+		}
 		return err
 	}
+	// Issued: its number findable for wallet to wallet (paying people H7).
+	defer s.keepWalletAccount(context.WithoutCancel(ctx), tenant)
 	name := business
 	if r := []rune(name); len(r) > 31 {
 		name = strings.TrimSpace(string(r[:31]))

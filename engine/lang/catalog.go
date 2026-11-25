@@ -41,6 +41,10 @@ type Entry struct {
 	Reviewed bool `json:"reviewed"`
 	// Context says where English sends it (en.json only).
 	Context string `json:"context,omitempty"`
+	// Same: the text is the same as English on purpose (a brand, a bare
+	// placeholder, a Pidgin word English shares); without it a translation
+	// that reads as English is a word left untranslated (build-plan-gaps H8).
+	Same bool `json:"same,omitempty"`
 }
 
 // Catalog is every catalogue, loaded.
@@ -225,7 +229,7 @@ func Placeholders(s string) []string {
 type Problem struct {
 	Language Tag
 	ID       string
-	Kind     string // missing | extra | placeholders | empty
+	Kind     string // missing | extra | placeholders | empty | english
 	Detail   string
 }
 
@@ -263,6 +267,8 @@ func (c *Catalog) Check() []Problem {
 				out = append(out, Problem{info.Tag, id, "missing", "falls back to English"})
 			case !slices.Equal(Placeholders(e.Text), Placeholders(t.Text)):
 				out = append(out, Problem{info.Tag, id, "placeholders", fmt.Sprintf("English has %v, this has %v", Placeholders(e.Text), Placeholders(t.Text))})
+			case t.Text == e.Text && !t.Same:
+				out = append(out, Problem{info.Tag, id, "english", "still the English words; translate it, or mark it same when English is right"})
 			}
 		}
 		for id := range f.Messages {

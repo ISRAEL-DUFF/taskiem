@@ -5,6 +5,7 @@
 // signing in, then opens.
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
@@ -53,6 +54,14 @@ String? appPageOf(Uri uri, {String server = taskiemUrl}) {
   // (people-chatting §9): the group's name, photo and count, then Join.
   final g = RegExp(r'^/g/([A-Za-z0-9]{4,40})/?$').firstMatch(uri.path);
   if (g != null) return '/g/${g[1]}';
+  // One of the business's pages, with the filters a Tell me message's page
+  // button set (pages H5): the page's short name, and its filters only as
+  // an object of short words by filter id.
+  final pg = RegExp(r'^/pages/([a-z][a-z0-9-]{1,23})/?$').firstMatch(uri.path);
+  if (pg != null) {
+    final f = pageFiltersOf(uri.queryParameters['filters']);
+    return f == null ? '/pages/${pg[1]}' : Uri(path: '/pages/${pg[1]}', queryParameters: {'filters': jsonEncode(f)}).toString();
+  }
   if (!_opens.hasMatch(uri.path)) return null;
   final with_ = uri.queryParameters['with'];
   if (uri.path == '/chat' && with_ != null) {
@@ -72,6 +81,25 @@ String? appPageOf(Uri uri, {String server = taskiemUrl}) {
     }).toString();
   }
   return uri.path.endsWith('/') && uri.path.length > 1 ? uri.path.substring(0, uri.path.length - 1) : uri.path;
+}
+
+/// A page link's filters (`?filters={"day":"today"}`), as the page's
+/// filters by id: at most four, each id a filter's and each value a word of
+/// up to 100 letters; null when there are none or they are not that.
+Map<String, String>? pageFiltersOf(String? raw) {
+  if (raw == null || raw.isEmpty || raw.length > 600) return null;
+  try {
+    final m = jsonDecode(raw);
+    if (m is! Map || m.isEmpty || m.length > 4) return null;
+    final out = <String, String>{};
+    for (final MapEntry(:key, :value) in m.entries) {
+      if (key is! String || value is! String || !RegExp(r'^[a-z][a-z0-9_-]{0,23}$').hasMatch(key) || value.length > 100) return null;
+      out[key] = value;
+    }
+    return out;
+  } on FormatException {
+    return null;
+  }
 }
 
 /// A password reset's token from its link (the server's /reset-password

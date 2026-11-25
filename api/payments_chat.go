@@ -137,7 +137,7 @@ func (s *Server) waPayCommand(ctx context.Context, c *chat, text string) (bool, 
 		return true, c.say(ctx, s, c.t("wa.pay.which_bank"))
 	}
 	in := payIn{Payee: cmd.Payee, AccountNumber: cmd.AccountNumber, BankName: cmd.BankName, AmountKobo: cmd.AmountKobo,
-		Purpose: cmd.Purpose, PurposeNote: cmd.PurposeNote, Note: cmd.Note, From: "chat"}
+		Purpose: cmd.Purpose, PurposeNote: cmd.PurposeNote, Note: cmd.Note, From: "chat", Where: "taskiem"}
 	owner := slices.Contains(c.p.Roles, "owner")
 	x, err := s.preparePayment(ctx, c.tenant.ID, c.p.UserID, owner, in, c.p.Actor())
 	var pr payRefused
@@ -176,6 +176,21 @@ func (s *Server) payPreparedWords(c *chat, x payment) string {
 		what = x.PurposeNote
 	}
 	lines := []string{c.t("wa.pay.prepared", "amount", invoicing.Naira(x.AmountKobo), "to", whatsapp.SafeText(to), "bank", x.BankName, "account", x.Account, "for", whatsapp.SafeText(what))}
+	// The fee and the balance after, before it is confirmed (Settled 4),
+	// and the route when it is wallet to wallet (Settled 7).
+	var fee int64
+	switch {
+	case x.Route == "wallet":
+		lines = append(lines, c.t("wa.pay.wallet"))
+	case x.FeeQuoteKobo != nil:
+		fee = *x.FeeQuoteKobo
+		lines = append(lines, c.t("wa.pay.fee", "amount", invoicing.Naira(x.AmountKobo), "fee", invoicing.Naira(fee)))
+	default:
+		lines = append(lines, c.t("wa.pay.fee_after"))
+	}
+	if x.BalanceKobo != nil {
+		lines = append(lines, c.t("wa.pay.balance_after", "amount", invoicing.Naira(*x.BalanceKobo-x.AmountKobo-fee)))
+	}
 	if x.FirstPayment {
 		lines = append(lines, c.t("wa.pay.first"))
 	}

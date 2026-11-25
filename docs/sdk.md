@@ -36,7 +36,7 @@ export default workflow({
 
 ## Expressions
 
-A value is a literal, a CEL string (`"=trigger.body.amount"`), or an arrow function over the context `{ trigger, steps, env, run, secrets, item, index }`, compiled to CEL when the workflow is built:
+A value is a literal, a CEL string (`"=trigger.body.amount"`), or an arrow function over the context `{ trigger, steps, env, run, secrets, saved, item, index }`, compiled to CEL when the workflow is built:
 
 | Code | CEL |
 | --- | --- |
@@ -47,6 +47,9 @@ A value is a literal, a CEL string (`"=trigger.body.amount"`), or an arrow funct
 | `({ trigger }) => cel.size(trigger.body.xs.filter((x) => x.ok))` | `size(trigger.body.xs.filter(x, x.ok))` |
 | `.some(...)`, `.every(...)`, `.map(...)` | `.exists(...)`, `.all(...)`, `.map(...)` |
 | `cel.in(x, list)` | `x in list` |
+| `({ saved }) => saved.price_list.body` | `saved.price_list.body` |
+
+`saved` is the business's saved things, read when the run starts ([wd/v1](contracts/wd-v1.md) rule 10): its fields are typed by kind (`SavedThing`: `SavedPerson`, `SavedPlace`, `SavedText`, `SavedFile` and the rest; `SAVED_FIELDS` lists them), and `savedRef("price-list", "body")` writes `=saved.price_list.body` for a name with a dash or a leading digit. A saved file's `file` is the link `notify.message({ file: ({ saved }) => saved.price_list })` sends.
 
 Only what has a CEL meaning compiles. `==` (use `===`), `?.`, `??`, `.length` (use `cel.size`), JavaScript library calls, and variables from outside the function are refused with the field they are in and what to use instead. Comparisons inside comparisons need parentheses, because JavaScript and CEL rank them differently. Anything beyond expressions belongs in a `code` step.
 

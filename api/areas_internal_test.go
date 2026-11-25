@@ -67,6 +67,12 @@ func init() {
 		alwaysOn[r] = "the Schools area, which the schools package refuses itself when off"
 	}
 	alwaysOn["POST /v1/forms/{id}/links"] = "links to a form, not business links"
+	for _, r := range []string{
+		"POST /v1/payroll/approvers/{user}/link", "POST /v1/payroll/approvers/{user}/link/confirm", "DELETE /v1/payroll/approvers/{user}/link",
+	} {
+		alwaysOn[r] = "links an approver to their Payrolla user (payroll_connect.go), not business links; payroll is its own permission, not an area"
+	}
+	alwaysOn["POST /v1/payroll/payslips/{payslip}/link"] = "Payrolla's link to one payslip (payroll_payment.go), not business links"
 	alwaysOn["GET /v1/chat-links/{code}"] = "a business's public card for its chat link, read by anyone; whether it takes chats is its own setting"
 	alwaysOn["GET /v1/me/storefront-orders"] = "a person's own orders across businesses, found by their phone, not a business's storefront"
 	alwaysOn["POST /v1/me/storefront-orders/confirm"] = "a person's own orders across businesses, found by their phone, not a business's storefront"

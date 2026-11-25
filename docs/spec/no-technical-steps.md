@@ -250,7 +250,7 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
   - `STOP` (or `/stop`, or blocking the bot) stops that business's messages on that channel at once, and the bot confirms it.
   - `START`, or a new link, resumes them.
   - Anything else an outsider sends gets one fixed answer: who messages them here, and how to stop. Members' commands, approvals and building are never offered to a contact; a person who is both is a member on their linked account.
-  - On WhatsApp, an organisation's [public menu](../whatsapp.md#public-menus) on its own number keeps working as it does.
+  - On WhatsApp, an organisation's [public menu](../whatsapp.md#the-customer-menu) on its own number keeps working as it does.
 - **AI builder:**
   - A rule: messages to someone outside the business, or to staff who are not members, use `notify@1` `message` with the phone from the form or table. A goal that names Telegram or WhatsApp does not change that. A form never asks for a chat id, a username or a Telegram id.
   - Forms whose answers lead to messaging the person use `verify: phone` when the message carries anything personal (a leave decision, a balance).

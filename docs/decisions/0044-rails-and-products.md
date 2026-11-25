@@ -1,6 +1,6 @@
 # 0044 — Rails are building blocks; products are connected, never rebuilt
 
-Date: 2026-10-22 · Status: **Accepted** 2026-10-22 (build plan: [rails and products](../spec/rails-and-products.md))
+Date: 2026-10-22 · Status: **Accepted** 2026-10-22 (build plan: [rails and products](../spec/rails-and-products.md)); the note of 22 November 2026 amended by [0074](0074-payroll-run-from-taskiem.md) (proposed): payroll is approved, locked and paid from Taskiem with Payrolla's own code, no longer by a link into Payrolla
 
 ## Context
 

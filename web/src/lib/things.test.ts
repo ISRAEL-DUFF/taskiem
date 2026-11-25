@@ -8,6 +8,8 @@ import {
   priceProblem,
   profitWords,
   rowsOf,
+  searchThings,
+  thingsOnly,
   spendingLine,
   spendingName,
   spendingPath,
@@ -201,5 +203,36 @@ describe("a change's Idempotency-Key", () => {
     const b = keyFor(a, statusRequest("sold", "120,000"), make);
     expect(b.key).toBe("k2");
     expect(keyFor(b, statusRequest("sold", "120,000", "transfer"), make).key).toBe("k3");
+  });
+});
+
+describe("H2: Things we have for stock only, searched, and its supplier", () => {
+  const can = (...perms: string[]) => (p: string) => perms.includes(p);
+  it("is Money's only page for table.read without invoices", () => {
+    expect(thingsOnly(can("table.read"))).toBe(true);
+    expect(thingsOnly(can("table.read", "invoice.read"))).toBe(false);
+    expect(thingsOnly(can("invoice.read"))).toBe(false);
+    expect(thingsOnly(can())).toBe(false);
+  });
+  it("searches name, label, supplier, serial, note and order, every word", () => {
+    const list = [
+      row({ id: "a", name: "Generator", supplier: "Singer Ltd", serial: "G-1", label: "Machines" }),
+      row({ id: "b", name: "Overlock machine", supplier: "Singer Ltd", order_reference: "PO-0100" }),
+      row({ id: "c", name: "Standing fan", note: "In the shop" }),
+    ];
+    expect(searchThings(list, "").map((t) => t.id)).toEqual(["a", "b", "c"]);
+    expect(searchThings(list, "singer").map((t) => t.id)).toEqual(["a", "b"]);
+    expect(searchThings(list, "g-1").map((t) => t.id)).toEqual(["a"]);
+    expect(searchThings(list, "po-0100").map((t) => t.id)).toEqual(["b"]);
+    expect(searchThings(list, "shop fan").map((t) => t.id)).toEqual(["c"]);
+    expect(searchThings(list, "singer fan")).toEqual([]);
+  });
+  it("changes the supplier, or takes it off", () => {
+    const t = { serial: "", note: "", supplier_id: "s1" };
+    const f = { serial: "", warranty: "", note: "" };
+    expect(detailsRequest(t, { ...f, supplierId: "s1" })).toEqual({});
+    expect(detailsRequest(t, { ...f, supplierId: "s2" })).toEqual({ supplier_id: "s2" });
+    expect(detailsRequest(t, { ...f, supplierId: "" })).toEqual({ clear_supplier: true });
+    expect(detailsRequest({ serial: "", note: "" }, { ...f, supplierId: "" })).toEqual({});
   });
 });

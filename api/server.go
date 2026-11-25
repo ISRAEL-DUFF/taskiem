@@ -25,6 +25,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/time/rate"
 
+	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/catalogue"
@@ -159,6 +160,9 @@ type Server struct {
 	// oldColumnsChecked are the businesses whose workflows were checked
 	// for the catalogue's old stock columns since start (stock_oldcolumns.go).
 	oldColumnsChecked sync.Map
+	// payrollNames are each business's Payrolla employee names, kept a
+	// few minutes for the chat (payroll_names.go).
+	payrollNames payrollNameCache
 	// DocsURL is where the web app's help links point (TASKIEM_DOCS_URL);
 	// empty shows the in-product help only.
 	DocsURL string
@@ -207,6 +211,9 @@ type Server struct {
 	// (the public host's inbox key, storefront.InboxKey of
 	// TASKIEM_PUBLIC_KEY); nil: the family inbox is not drained here.
 	SchoolInboxKey []byte
+	// SavedFiles makes the links to saved files the chat outbox sends; nil:
+	// SavedFileLinks on the store's pool and PublicURL (saved_file_links.go).
+	SavedFiles notify.FileLinks
 	// Forms are hosted forms' api side (S7); nil: forms cannot be deployed.
 	Forms *forms.Service
 	// Email is inbound email's api side (N10); MailDomain is where
@@ -449,6 +456,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/auth/sso/{id}/start", s.ssoStart)
 		r.Get("/auth/sso/oidc/callback", s.oidcCallback)
 		r.Get("/connections/oauth/callback", s.oauthConnectionCallback) // providers send the browser back here (oauthconnections.go)
+		r.Get("/payrolla/callback", s.oauthConnectionCallback)          // Payrolla's registered callback, the same handler (P4b-1)
 		// Connect links sent from chat: the token is the authority, for one
 		// connection (connect_links.go).
 		r.Get("/connect/{token}", s.getConnectLink)
@@ -466,6 +474,8 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/signup", s.signupOptions)
 		r.Get("/app/config", s.appConfig)                      // the phone app's config (app_config.go)
 		r.Get("/chat-links/{code}", s.getChatLinkCard)         // a business's card for its chat link (customer_links.go)
+		r.Get("/saved-files/{token}", s.openSavedFileLink)     // a saved file a message carried, by its link (saved_file_links.go)
+		r.Get("/pay-receipts/{token}/pdf", s.publicPayReceipt) // a payment's receipt sent to the person paid (payments_receipt.go)
 		s.peoplePublicRoutes(r)                                // a person's card at their link (people.go)
 		s.groupPublicRoutes(r)                                 // a group's preview at its link (people_groups.go)
 		r.Get("/transparency/lawful-requests", s.lawfulCounts) // the published count of lawful requests (lawful.go)
@@ -563,7 +573,6 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermSecretManage)).Get("/whatsapp/number/templates", s.getWhatsAppTemplates) // the own number's templates (whatsapp_templates.go)
 			r.With(s.need(PermSecretManage), s.tenantWide).Post("/whatsapp/number/templates/check", s.checkWhatsAppTemplates)
 			r.With(s.need(PermSecretManage), s.tenantWide).Post("/whatsapp/number/templates/{name}/submit", s.submitWhatsAppTemplate)
-			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/whatsapp/public-menu", s.putWhatsAppPublicMenu)
 			r.With(s.need(PermWorkflowRead)).Get("/reach", s.getReach)
 			// The business's chat link (customer_links.go, docs/spec/taskiem-for-everyone.md §8.2).
 			r.With(s.need(PermOrders)).Get("/customers/chat-link", s.getChatLink)
@@ -824,6 +833,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermRunStart)).Get("/scan/offers", s.scanOffers)
 			r.With(s.need(PermRunStart)).Post("/tools/{command}/read", s.readToolRoute)
 			r.With(s.need(PermRunStart)).Post("/tools/{command}/start", s.startToolRoute)
+			r.With(s.need(PermRunStart)).Post("/tools/{command}/files", s.holdToolFileRoute)
 			r.With(s.need(PermRunStart)).Post("/tools/{command}/confirm", s.confirmToolRoute)
 			r.With(s.need(PermRunStart)).Put("/tools/{command}/settings", s.setToolSettings)
 			r.With(s.need(PermRunStart)).Post("/tools/buttons/{button}", s.pressButtonRoute)
@@ -930,10 +940,38 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/pay-account", s.putStaffAccount)
 			// Payroll is Payrolla's (payroll.go): its runs in Taskiem's screens,
 			// and staff linked to its employees.
-			r.With(s.need(PermPayrollRead)).Get("/payroll", s.getPayroll)
-			r.With(s.need(PermPayrollRead)).Get("/payroll/runs/{run}", s.getPayrollRun)
+			r.With(s.need(PermPayrollSee)).Get("/payroll", s.getPayroll)
+			r.With(s.need(PermPayrollSee)).Get("/payroll/runs/{run}", s.getPayrollRun)
+			// This month's run (payroll_runs.go; P4b-3): prepared and changed
+			// with payroll.prepare, decided with payroll.approve and
+			// Payrolla's code.
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs", s.preparePayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/adjustments", s.adjustPayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Delete("/payroll/runs/{run}/adjustments/{id}", s.unadjustPayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/exclusions", s.excludePayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Delete("/payroll/runs/{run}/exclusions/{id}", s.putBackPayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/compute", s.computePayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/cancel", s.cancelPayrollRun)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/confirmations", s.startPayrollRunCode)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/approve", s.decidePayrollRun("approve"))
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/lock", s.decidePayrollRun("lock"))
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/reject", s.rejectPayrollRun)
 			r.With(s.need(PermPayrollRead)).Get("/payroll/staff", s.getPayrollStaff)
 			r.With(s.need(PermPayrollRead), s.tenantWide).Put("/staff/{user}/payrolla", s.putStaffPayrolla)
+			// Connecting Payrolla in one step, reconnecting, and linking
+			// approvers (payroll_connect.go; P4b-1).
+			r.With(s.need(PermPayrollPeople)).Get("/payroll/connection", s.getPayrollConnection)
+			r.With(s.tenantWide).Post("/payroll/connect", s.connectPayroll) // owners only, checked inside
+			r.With(s.need(PermPayrollPeople)).Get("/payroll/approvers", s.getPayrollApprovers)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/approvers/{user}/link", s.startPayrollLink)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/approvers/{user}/link/confirm", s.confirmPayrollLink)
+			r.With(s.need(PermPayrollPeople), s.tenantWide).Delete("/payroll/approvers/{user}/link", s.unlinkPayroll)
+			// Staff and pay from Taskiem (payroll_team.go; P4b-2).
+			r.Group(s.payrollTeamRoutes)
+			// Settings and the tax and pension schedules (payroll_reports.go; P4b-5).
+			r.Group(s.payrollReportsRoutes)
+			// After locking: paying, and payslips (payroll_payment.go; P4b-4).
+			r.Group(s.payrollPaymentRoutes)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)
@@ -1088,7 +1126,7 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 		defer func() {
 			if v := recover(); v != nil {
 				ref := errorRef()
-				s.Logger.Error("panic in handler", "path", r.URL.Path, "panic", v, "reference", ref)
+				s.Logger.Error("panic in handler", "path", loggedPath(r.URL.Path), "panic", v, "reference", ref)
 				writeInternal(w, ref)
 			}
 		}()
@@ -1170,7 +1208,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "capability"})
 	default:
 		ref := errorRef()
-		s.Logger.Error("request failed", "path", r.URL.Path, "err", err, "reference", ref)
+		s.Logger.Error("request failed", "path", loggedPath(r.URL.Path), "err", err, "reference", ref)
 		writeInternal(w, ref)
 	}
 }

@@ -11,6 +11,8 @@ import { FieldText } from "./FieldText";
 import { SavedFill } from "../pages/SavedFill";
 import { placeAddressFit } from "../lib/saved";
 import { toolSavedKind } from "../lib/toolsaved";
+import { deviceKindOf, type FieldSchema } from "../lib/forms";
+import { DeviceField } from "./DeviceField";
 
 interface Props {
   schema: JSONSchema | undefined;
@@ -36,9 +38,16 @@ export function SchemaForm({ schema, value, onChange, expressions = true, source
   };
   return (
     <div>
-      {Object.entries(props).map(([k, s]) => (
-        <SchemaField key={k} name={k} schema={s} required={required.has(k)} value={value?.[k]} onChange={(v) => update(k, v)} expressions={expressions} sources={sources} saved={saved} />
-      ))}
+      {Object.entries(props).map(([k, s]) => {
+        // A tool's location, photo, signature or code (build-plan-gaps
+        // H3): asked of the browser at the tap, as a form step's are.
+        const device = saved && !expressions ? deviceKindOf(s as FieldSchema) : undefined;
+        return device ? (
+          <DeviceField key={k} name={k} kind={device} schema={s as FieldSchema} required={required.has(k)} value={value?.[k]} onChange={(v) => update(k, v)} />
+        ) : (
+          <SchemaField key={k} name={k} schema={s} required={required.has(k)} value={value?.[k]} onChange={(v) => update(k, v)} expressions={expressions} sources={sources} saved={saved} />
+        );
+      })}
     </div>
   );
 }

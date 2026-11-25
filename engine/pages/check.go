@@ -29,6 +29,9 @@ type Env struct {
 	Signal func(workflow, name string) string
 	// Workflow says whether the business has a workflow by this name.
 	Workflow func(name string) bool
+	// SavedKind is a kind of saved things the business made, by its name
+	// (any case; G5); nil, none.
+	SavedKind func(name string) (SavedKind, bool)
 }
 
 // ReservedName reports whether a page's name is one of Taskiem's own
@@ -95,6 +98,9 @@ func Check(p *Page, env Env) []Problem {
 				checkActionEnv(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, env)
 			}
 		}
+		if rs := b.RowStatus; rs != nil && rs.Workflow != "" && (env.Workflow == nil || !env.Workflow(rs.Workflow)) {
+			ps.add(at+"/status/workflow", "%s shows where each row's run of %s is, which the business does not have.", name, rs.Workflow)
+		}
 		if b.Source == nil {
 			continue
 		}
@@ -103,13 +109,21 @@ func Check(p *Page, env Env) []Problem {
 			for j, a := range b.Actions {
 				checkActionEnv(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, env)
 			}
+			if b.Board != nil && b.Board.Move != nil {
+				checkActionEnv(&ps, at+"/board/move", *b.Board.Move, env)
+			}
 			continue
 		}
 		for j, a := range b.Actions {
 			checkActionEnv(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, env)
 		}
 		var t datatables.Table
-		if b.Source.Records != "" {
+		if b.Source.Saved != "" {
+			var ok bool
+			if t, ok = savedChecks(&ps, at, name, b, env); !ok {
+				continue
+			}
+		} else if b.Source.Records != "" {
 			var ok bool
 			if t, ok = recordsChecks(&ps, at, name, b, env); !ok {
 				continue
@@ -122,8 +136,10 @@ func Check(p *Page, env Env) []Problem {
 				continue
 			}
 		}
-		if _, err := b.Source.query(t, nil); err != nil {
-			ps.add(at+"/source", "%s: %s.", name, plainQueryError(err))
+		if b.Source.Saved == "" {
+			if _, err := b.Source.query(t, nil); err != nil {
+				ps.add(at+"/source", "%s: %s.", name, plainQueryError(err))
+			}
 		}
 		col := func(path, c, what string) (datatables.Column, bool) {
 			found, ok := columnOf(t, c)
@@ -170,6 +186,15 @@ func Check(p *Page, env Env) []Problem {
 					checkReads(&ps, at+"/item/state/text", b.Item.State.Text, t, name)
 				}
 			}
+		case "board", "chart":
+			if b.Item != nil {
+				checkReads(&ps, at+"/item/title", b.Item.Title, t, name)
+				checkReads(&ps, at+"/item/sub", b.Item.Sub, t, name)
+				if b.Item.State != nil {
+					checkReads(&ps, at+"/item/state/text", b.Item.State.Text, t, name)
+				}
+			}
+			checkG4Env(&ps, at, name, b, t, env)
 		case "table":
 			for j, c := range b.Columns {
 				found, ok := col(fmt.Sprintf("%s/columns/%d/column", at, j), c.Column, "shows the column")
@@ -186,6 +211,10 @@ func Check(p *Page, env Env) []Problem {
 		}
 		for j, a := range b.Actions {
 			checkActionReads(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, t, name)
+		}
+		if rs := b.RowStatus; rs != nil {
+			checkReads(&ps, at+"/status/run", rs.Run, t, name)
+			checkReads(&ps, at+"/status/to", rs.To, t, name)
 		}
 		if d := b.Detail; d != nil {
 			checkReads(&ps, at+"/detail/title", d.Title, t, name)
@@ -211,6 +240,9 @@ func Check(p *Page, env Env) []Problem {
 // or dates filter on a personal column cannot: its values are masked for
 // a viewer without table.read, and narrowing by them would show them.
 func (f Filter) fits(t datatables.Table) string {
+	if IsSaved(t.Name) && f.Type != "search" {
+		return "saved things are narrowed by a search only"
+	}
 	if v, ok := RecordViewOf(t.Name); ok {
 		// A view's column read from its sealed envelope (a rider's name) is
 		// never narrowed by: that is SQL, and the value is not there.
@@ -269,8 +301,8 @@ func (f Filter) fits(t datatables.Table) string {
 		if !ok {
 			return fmt.Sprintf("the table %s has no column %s", tableTitle(t), f.Column)
 		}
-		if col.Type != "email" {
-			return fmt.Sprintf("Mine reads a column of email addresses, and %s is not one", columnTitle(col))
+		if col.Type != "email" && col.Type != "phone" {
+			return fmt.Sprintf("Mine reads a column of email addresses or phone numbers, and %s is neither", columnTitle(col))
 		}
 		if IsRecords(t.Name) {
 			return fmt.Sprintf("%s is the customer's, and hidden on the page", columnTitle(col))

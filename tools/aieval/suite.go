@@ -51,6 +51,9 @@ type Case struct {
 // CaseContext is the part of the builder's context a case sets.
 type CaseContext struct {
 	LinkedBusinesses []builder.LinkedBusiness `json:"linked_businesses,omitempty"`
+	// SavedThings are the business's saved things by name and kind
+	// (saved objects S3), which a goal may name with @ (build plan M6).
+	SavedThings []builder.SavedThing `json:"saved_things,omitempty"`
 }
 
 var difficulties = []string{"easy", "medium", "hard"}

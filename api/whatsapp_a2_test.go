@@ -549,7 +549,13 @@ func TestWhatsAppTemplateCosts(t *testing.T) {
 	}
 }
 
-func TestWhatsAppPublicMenu(t *testing.T) {
+// The menu on a business's own number is its customers' tools (build plan
+// H6: the separate public menu retired). Publishing a tool for customers
+// is what offers it: no list, no switch. A workflow that is no customers'
+// tool is never on it; a business with none answers nothing to "menu"; the
+// shared number has no menu; and a flood from one number is mostly
+// dropped.
+func TestWhatsAppCustomerMenu(t *testing.T) {
 	w := newWAWorld(t)
 	w.flows()
 	w.graph.AddNumber(pnA, tokA, "+234 800 000 0001")
@@ -558,17 +564,12 @@ func TestWhatsAppPublicMenu(t *testing.T) {
 	beta := w.tenant(t, "Beta", "owner@beta.test")
 	pay := alpha.must(201, "POST", "/v1/workflows", map[string]any{"name": "Pay supplier", "definition": json.RawMessage(waPayFlow)})["id"].(string)
 	alpha.must(200, "POST", "/v1/workflows/"+pay+"/versions/1/publish", nil)
-	hidden := publishFlow(t, alpha, waLoanFlow)
-
-	// Only with the tenant's own number; workflow.publish.
-	menu := map[string]any{"enabled": true, "workflows": []any{map[string]any{"workflow_id": pay, "label": "Pay a supplier"}}}
-	alpha.must(409, "PUT", "/v1/whatsapp/public-menu", menu)
+	publishFlow(t, alpha, waLoanFlow)
+	publishFlow(t, alpha, custTrackDef)
 	alpha.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "own_app": false})
 	beta.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnB, "waba_id": "300000000000002", "access_token": tokB, "own_app": false})
-	w.member(t, alpha, "viewer@alpha.test", "viewer").must(403, "PUT", "/v1/whatsapp/public-menu", menu)
-	if v := alpha.must(200, "PUT", "/v1/whatsapp/public-menu", menu); v["public_menu"] != true || len(v["public_workflows"].([]any)) != 1 {
-		t.Fatalf("menu: %v", v)
-	}
+	// The old menu's route is gone.
+	alpha.must(404, "PUT", "/v1/whatsapp/public-menu", map[string]any{"enabled": true})
 
 	const stranger = "+2348099990001"
 	say := func(pnid, from, text string) []whatsapptest.Sent {
@@ -580,7 +581,7 @@ func TestWhatsAppPublicMenu(t *testing.T) {
 		t.Fatalf("hello answered: %+v", got)
 	}
 	got := say(pnA, stranger, "menu")
-	if len(got) != 1 || got[0].From != pnA || !strings.Contains(got[0].Text, "1. Pay a supplier") || strings.Contains(got[0].Text, "loan") {
+	if len(got) != 1 || got[0].From != pnA || !strings.Contains(got[0].Text, "1. Track an order") || strings.Contains(got[0].Text, "Pay supplier") || strings.Contains(got[0].Text, "2.") {
 		t.Fatalf("menu: %+v", got)
 	}
 	got = say(pnA, stranger, "1")
@@ -589,16 +590,16 @@ func TestWhatsAppPublicMenu(t *testing.T) {
 	}
 	tok := got[0].FlowToken
 	// The form's answers through the endpoint of Taskiem's app.
-	st, resp := w.flowCall(t, "/channels/whatsapp/flows", waSecret, "data_exchange", "INPUTS", tok, map[string]any{"n1": "700", "t2": "0123456789", "c3": "1"})
+	st, resp := w.flowCall(t, "/channels/whatsapp/flows", waSecret, "data_exchange", "INPUTS", tok, map[string]any{"t1": "A-77"})
 	if st != 200 || flowToken(t, resp) != tok {
 		t.Fatalf("answers: %d %v", st, resp)
 	}
 	got = w.sendTo(t, "/channels/whatsapp", pnA, waSecret, stranger, whatsapptest.FlowCompleted(tok))
-	if len(got) != 1 || len(got[0].Buttons) != 2 || !strings.Contains(got[0].Text, "••••6789") {
+	if len(got) != 1 || len(got[0].Buttons) != 2 || !strings.Contains(got[0].Text, "A-77") {
 		t.Fatalf("confirmation: %+v", got)
 	}
 	got = say(pnA, stranger, "yes")
-	if len(got) != 1 || !strings.Contains(got[0].Text, "has started") {
+	if len(got) != 1 || !strings.Contains(got[0].Text, "The answer comes here") {
 		t.Fatalf("start: %+v", got)
 	}
 	runs := alpha.must(200, "GET", "/v1/runs", nil)["runs"].([]any)
@@ -606,18 +607,24 @@ func TestWhatsAppPublicMenu(t *testing.T) {
 		t.Fatalf("runs: %s", toJSON(runs))
 	}
 	if !strings.Contains(toJSON(alpha.must(200, "GET", "/v1/audit", nil)), `"whatsapp_public:+234•`) {
-		t.Error("the public start is not audited with the number masked")
+		t.Error("the customer's start is not audited with the number masked")
 	}
-	// Only the public workflows: "2" is not on the menu.
+	// Its answer comes back to the number.
+	w.env.Drain(t)
+	before := len(w.graph.Sent(stranger))
+	w.tick(t)
+	if got := w.graph.Sent(stranger)[before:]; len(got) != 1 || !strings.Contains(got[0].Text, "Tracking A-77") {
+		t.Fatalf("answer: %+v", got)
+	}
+	// Only the customers' tools: "2" is not on the menu.
 	say(pnA, stranger, "menu")
 	if got := say(pnA, stranger, "2"); len(got) != 1 || !strings.Contains(got[0].Text, "Reply with a number") {
 		t.Errorf("not on the menu: %+v", got)
 	}
-	_ = hidden
 
-	// Beta offers no menu: what the stranger writes is their
-	// conversation with Beta, unanswered until Beta's people answer.
-	if got := say(pnB, stranger, "hello"); len(got) != 0 {
+	// Beta offers its customers no tools: what the stranger writes is
+	// their conversation with Beta, "menu" too.
+	if got := say(pnB, stranger, "menu"); len(got) != 0 {
 		t.Errorf("beta: %+v", got)
 	}
 	// Alpha's form token is not Beta's. (Another customer: the menu
@@ -640,7 +647,7 @@ func TestWhatsAppPublicMenu(t *testing.T) {
 	const flooder = "+2348099990002"
 	n := 0
 	for range 12 {
-		n += len(say(pnA, flooder, "hi"))
+		n += len(say(pnA, flooder, "menu"))
 	}
 	if n > 6 {
 		t.Errorf("%d replies to 12 messages", n)

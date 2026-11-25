@@ -1087,6 +1087,9 @@ func taskCountsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, now time.Tim
 type chatTask struct {
 	In   staffTaskIn `json:"in"`
 	Line string      `json:"line"`
+	// Typed: the person typed "@Tunde …" (not the model, not a form): the
+	// task made is a use of Give someone a task (chat-menus.md §6.1).
+	Typed bool `json:"typed,omitempty"`
 }
 
 var (
@@ -1621,7 +1624,7 @@ func (s *Server) waTaskSaid(ctx context.Context, c *chat, text string) (bool, er
 	if said.Photo {
 		line += ", with a photo"
 	}
-	d := chatData{Task: &chatTask{In: said, Line: line}}
+	d := chatData{Task: &chatTask{In: said, Line: line, Typed: !c.understood && c.in.Reply == ""}}
 	if err := s.saveSession(ctx, c, stateConfirming, d, 15*time.Minute); err != nil {
 		return true, err
 	}
@@ -1669,6 +1672,12 @@ func (s *Server) waTaskReply(ctx context.Context, c *chat, cmd string) error {
 	}
 	if err != nil {
 		return err
+	}
+	// A task made from words typed: a use of Give someone a task, where
+	// the person may use it (chat-menus.md §6.1; the model's pick and a
+	// form count where they are read).
+	if a, ok := chatActionByID("staff.give"); ok && ct.Typed && s.mayAct(c, s.chatAreas(ctx, c), a) {
+		s.actionUsed(ctx, c, a.ID)
 	}
 	if t == nil {
 		return c.say(ctx, s, "Done: "+ct.Line+". Each time it falls due, it is a task of its own.")

@@ -22,6 +22,7 @@ import '../chat/approve.dart' show TkTextBox;
 import '../app/notify.dart' show PhoneNotifications, PushNote, youChatOf;
 import '../app/presence.dart';
 import '../chat/people_cards.dart' show PayoutAccountPage;
+import '../chat/payroll_team.dart' show openMyPay;
 import '../chat/saved_accounts.dart' show SavedAccountsPage;
 import '../chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
 import '../chat/people_contacts.dart' show ContactMatch, ContactsMatchScreen, DevicePhoneContacts, PeopleContactsScreen, PhoneContacts, contactsDay, recheckContacts;
@@ -820,6 +821,16 @@ class YouSettingsScreen extends StatelessWidget {
                   square: look.violet,
                   onTap: () => tkPush<void>(context, PinScreen(auth: auth, now: now)),
                 ),
+                // My pay (P4b-2): a staff member's own salary account in
+                // Payrolla; those who see payroll find it on Payroll.
+                if (auth.me != null && auth.me!.personal != true && !auth.can('payroll.read'))
+                  TkListRow(
+                    title: 'My pay',
+                    sub: 'Your salary account in Payrolla',
+                    icon: 'b-cash',
+                    square: look.lime,
+                    onTap: () => unawaited(openMyPay(context, auth, backLabel: 'Back to You')),
+                  ),
               ],
             ),
             // Saved addresses (§13): kept on your side, offered when ordering.

@@ -52,8 +52,13 @@ type Update struct {
 	// Location is a shared location (message.location) as a maps link.
 	Location string
 	// ReplyTo is the message this one replies to, quoting it
-	// (message.reply_to_message), 0 for none.
-	ReplyTo int64
+	// (message.reply_to_message), 0 for none; ReplyText its words (its
+	// text, or its caption).
+	ReplyTo   int64
+	ReplyText string
+	// Forwarded: the message was forwarded from someone else
+	// (forward_origin, or forward_date from older clients).
+	Forwarded bool
 }
 
 // Contact is a shared phone contact.
@@ -136,8 +141,12 @@ type tgMessage struct {
 		Longitude float64 `json:"longitude"`
 	} `json:"location"`
 	ReplyTo *struct {
-		MessageID int64 `json:"message_id"`
+		MessageID int64  `json:"message_id"`
+		Text      string `json:"text"`
+		Caption   string `json:"caption"`
 	} `json:"reply_to_message"`
+	ForwardOrigin json.RawMessage `json:"forward_origin"`
+	ForwardDate   int64           `json:"forward_date"`
 }
 
 // imageTypes are the files read as photos when sent uncompressed.
@@ -180,7 +189,12 @@ func Parse(body []byte) (Update, error) {
 		u.Kind, u.ChatID, u.ChatType, u.MessageID = "message", m.Chat.ID, m.Chat.Type, m.MessageID
 		if m.ReplyTo != nil {
 			u.ReplyTo = m.ReplyTo.MessageID
+			u.ReplyText = m.ReplyTo.Text
+			if u.ReplyText == "" {
+				u.ReplyText = m.ReplyTo.Caption
+			}
 		}
+		u.Forwarded = len(m.ForwardOrigin) > 0 && string(m.ForwardOrigin) != "null" || m.ForwardDate > 0
 		u.Text = m.Text
 		if u.Text == "" {
 			u.Text = m.Caption

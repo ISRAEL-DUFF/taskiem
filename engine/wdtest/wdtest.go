@@ -159,6 +159,14 @@ type Expect struct {
 	// Calls: instance or step id -> number of attempts sent (a step id
 	// counts every instance of it).
 	Calls map[string]int `json:"calls,omitempty"`
+	// Answer is the answer the workflow's tool gives (made tools §7),
+	// drawn from the run's outputs as the chat draws it (a customers' tool
+	// from its public outputs alone), matched as Outputs: {"text": ...}
+	// for a text answer; {"title", "ref", "state": {"text"}, "lines":
+	// [{"label", "value"}]} for a card; {"title", "rows": [{"title",
+	// "sub"}]} for a list (a list in full, each row by the keys it gives).
+	// The run must complete, and the workflow declare a tool's answer.
+	Answer any `json:"answer,omitempty"`
 }
 
 // Result is one case's outcome.
@@ -900,6 +908,41 @@ func (r *runner) check() {
 			r.res.Failures = append(r.res.Failures, fmt.Sprintf("calls.%s: want %d, got %d", k, e.Calls[k], n))
 		}
 	}
+	if e.Answer != nil {
+		r.checkAnswer(e.Answer)
+	}
+}
+
+// checkAnswer draws the tool's answer from the completed run's outputs
+// and matches it with want.
+func (r *runner) checkAnswer(want any) {
+	t := r.def.Tool
+	if t == nil || t.Answer == nil {
+		r.res.Failures = append(r.res.Failures, "answer: the workflow declares no tool with an answer")
+		return
+	}
+	if len(r.h) == 0 || r.h[len(r.h)-1].Type != history.RunCompleted {
+		r.res.Failures = append(r.res.Failures, "answer: the run did not complete, so there is no answer")
+		return
+	}
+	var done history.RunCompletedPayload
+	if v, err := expr.DecodeJSON(r.h[len(r.h)-1].Payload); err == nil {
+		if m, ok := v.(map[string]any); ok {
+			done.Outputs, _ = m["outputs"].(map[string]any)
+		}
+	}
+	outputs := done.Outputs
+	if outputs == nil {
+		outputs = map[string]any{}
+	}
+	if t.Audience() == wd.ToolForCustomers {
+		outputs = wd.PublicOutputs(r.def, outputs)
+	}
+	got := normalise(wd.DrawAnswer(t.Answer, outputs, nil))
+	if path, ok := match(normalise(want), got, ""); !ok {
+		b, _ := json.Marshal(got)
+		r.res.Failures = append(r.res.Failures, fmt.Sprintf("answer%s: does not match; got %s", path, b))
+	}
 }
 
 func (r *runner) status(order []*inst) string {
@@ -1081,7 +1124,7 @@ func caseSaved(def *wd.Definition, given map[string]any) map[string]any {
 func SampleSaved(name string) map[string]any {
 	out := map[string]any{"name": name, "title": "Sample " + name, "kind": "text"}
 	for _, f := range []string{"note", "body", "phone", "email", "address", "birthday", "line", "area", "landmark", "bank_name", "bank_code",
-		"account_name", "type", "provider", "number", "name_on_it", "file_name", "file_type"} {
+		"account_name", "type", "provider", "number", "name_on_it", "file_name", "file_type", "file"} {
 		out[f] = "sample-" + f
 	}
 	return out

@@ -131,7 +131,7 @@ test("without Payrolla, the Payroll page says payroll is in Payrolla and how to 
   await expect(page.getByRole("heading", { level: 1, name: "Payroll" })).toBeVisible();
   const note = page.getByTestId("payroll-not-connected");
   await expect(note).toContainText("worked out, approved and paid in Payrolla");
-  await expect(page.getByTestId("payroll-connect")).toHaveAttribute("href", "/connections?connect=payrolla");
+  await expect(page.getByTestId("payroll-connect")).toHaveAttribute("href", "/payroll/settings");
   await expect(page.getByTestId("payroll-run")).toHaveCount(0);
   await fits(page, 390);
   await noAxe(page, "Payroll, not connected");

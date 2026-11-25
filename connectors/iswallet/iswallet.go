@@ -333,9 +333,11 @@ func (c *client) transfer(ctx context.Context, req connector.Request) (connector
 	}
 	if rec != nil {
 		// A transfer is synchronous, so a record not yet terminal is
-		// still being posted: wait for it rather than send again.
+		// still being posted: its outcome is not known, so it is never
+		// taken as failed (a payment's fallback to the bank would pay twice):
+		// it is looked up again and, if it stays so, parks.
 		if !rec.Terminal {
-			return connector.Response{}, fmt.Errorf("iswallet: transfer %s is still %s: %w", rec.ResourceID, rec.Status, effects.ErrRetryable)
+			return connector.Response{}, fmt.Errorf("iswallet: transfer %s is still %s: %w", rec.ResourceID, rec.Status, effects.ErrUnknownOutcome)
 		}
 		return connector.Response{Output: map[string]any{"transfer_id": rec.ResourceID, "status": rec.Status, "amount": rec.Amount, "currency": rec.Currency}}, nil
 	}

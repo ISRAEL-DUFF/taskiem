@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/connectors/payrolla"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/remote"
 )
@@ -56,6 +57,12 @@ func (s *Server) applyRemote(r *http.Request, wf uuid.UUID) []remote.Status {
 // come through the subscription of the partner that holds the client.
 func declareConnectionSubscriptions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, c *connector.Connector, name string, creds map[string]string) (bool, error) {
 	if creds["shared_client"] == "true" {
+		return false, nil
+	}
+	// A Payrolla key connection holds none: Taskiem's own subscription
+	// comes with connecting in one step (P4b-1), and a key keeps working
+	// as it did.
+	if c.Manifest.ID == payrollaID && !payrolla.OwnSubscription(creds) {
 		return false, nil
 	}
 	declared := false

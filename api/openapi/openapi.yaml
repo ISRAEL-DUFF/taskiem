@@ -1940,6 +1940,38 @@ paths:
                 $ref: '#/components/schemas/CustomerInvoice'
         default:
           $ref: '#/components/responses/Error'
+  /v1/invoices/{id}/pdf:
+    get:
+      operationId: getInvoicePDF
+      tags:
+      - Invoices
+      summary: An invoice's PDF
+      description: 'A5, with an embedded font (build plan H6): the business, the number, its state and dates, who it is to with their address (from a saved person''s or business''s place when it was made with @name), its lines, the total, what was paid and what is due. Made on demand; nothing is kept. The customer''s details are masked unless the caller holds pii.reveal and asks with reveal=true, which is audited.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/invoices/{id}/send:
     post:
       operationId: sendInvoice
@@ -6478,7 +6510,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: payroll.read
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
       parameters:
       - name: cursor
         in: query
@@ -6499,6 +6531,9 @@ paths:
                 required: [connected, runs]
                 properties:
                   connected: {type: boolean}
+                  ended: {type: boolean, description: 'The Payrolla connection ended (P4b-1): owners see Reconnect Payrolla'}
+                  is_owner: {type: boolean}
+                  auth: {type: string, enum: [oauth, key], description: 'Connected in one step, or with a pasted key (whose owner sees Reconnect Payrolla)'}
                   connection: {type: string}
                   test: {type: boolean}
                   company:
@@ -6512,6 +6547,890 @@ paths:
                     items:
                       $ref: '#/components/schemas/PayrollRun'
                   next_cursor: {type: string}
+                  may_prepare: {type: boolean, description: 'payroll.prepare: Prepare this month''s payroll (P4b-3)'}
+                  this_month:
+                    type: object
+                    description: 'This month, for the Payroll page''s This month panel: its period (2026-11), in words, and its run when there is one'
+                    required: [period, label, month]
+                    properties:
+                      period: {type: string}
+                      label: {type: string}
+                      month: {type: string}
+                      run:
+                        $ref: '#/components/schemas/PayrollRun'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs:
+    post:
+      operationId: preparePayrollRun
+      tags:
+      - Payments
+      summary: Prepare a month's payroll
+      description: 'Payrolla makes the run for the period (`period` 2026-11; companies paid weekly or every two weeks send `period_start` and `period_end`) and works it out at once; the pay date is the period''s last day unless given. A run Payrolla could not work out is made all the same, with `compute_error` in words (fix it in Payrolla''s settings, then Recalculate). 409 `duplicate_run` names the period''s run (`run_id`). `key` is the id the form made when it opened. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                period: {type: string, pattern: '^\d{4}-\d{2}$'}
+                period_start: {type: string, format: date}
+                period_end: {type: string, format: date}
+                pay_date: {type: string, format: date}
+                key: {type: string, maxLength: 100}
+      responses:
+        '201':
+          description: Prepared
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/adjustments:
+    post:
+      operationId: adjustPayrollRun
+      tags:
+      - Payments
+      summary: Add a bonus or a deduction
+      description: 'For one person in a run not approved yet, with a reason (an advance repaid is a deduction). The amount is before tax: tax and pension apply as usual. The run is worked out again. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [employee_id, type, amount_kobo, reason, key]
+              properties:
+                employee_id: {type: string, format: uuid}
+                type: {type: string, enum: [bonus, deduction, BONUS, DEDUCTION]}
+                amount_kobo: {type: integer, minimum: 100}
+                reason: {type: string, maxLength: 200}
+                key: {type: string, maxLength: 100}
+      responses:
+        '201':
+          description: Added, and the run worked out again
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/adjustments/{id}:
+    delete:
+      operationId: unadjustPayrollRun
+      tags:
+      - Payments
+      summary: Remove a bonus or a deduction
+      description: 'The run is worked out again. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: key
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 100
+      responses:
+        '200':
+          description: Removed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/exclusions:
+    post:
+      operationId: excludePayrollRun
+      tags:
+      - Payments
+      summary: Leave someone out this month
+      description: 'This run only, with a reason; they are paid again next month. Someone left out already is taken as done. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [employee_id, reason, key]
+              properties:
+                employee_id: {type: string, format: uuid}
+                reason: {type: string, maxLength: 200}
+                key: {type: string, maxLength: 100}
+      responses:
+        '201':
+          description: Left out, and the run worked out again
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/exclusions/{id}:
+    delete:
+      operationId: putBackPayrollRun
+      tags:
+      - Payments
+      summary: Put someone back
+      description: 'Someone left out is put back in the run, worked out again. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: key
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 100
+      responses:
+        '200':
+          description: Put back
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/compute:
+    post:
+      operationId: computePayrollRun
+      tags:
+      - Payments
+      summary: Recalculate
+      description: 'Payrolla works the run out again (one not approved yet). A run still not worked out answers `compute_error`. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Worked out again
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/cancel:
+    post:
+      operationId: cancelPayrollRun
+      tags:
+      - Payments
+      summary: Cancel this payroll
+      description: 'Before approval only; an approved run is cancelled in Payrolla. Refusals in words: 409 `reconnect`, `scope_required`, `invalid_state` (the run has moved on); 404 when Payrolla has no such run.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  compute_error: {type: string, description: "Payrolla couldn't work it out: why, in words, with Recalculate"}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/confirmations:
+    post:
+      operationId: startPayrollRunCode
+      tags:
+      - Payments
+      summary: Ask Payrolla for a code to approve, lock, pay now or pay the failed ones again
+      description: 'Payrolla checks first that this person may do it (the run''s state, their role, separation of duties), then sends their linked Payrolla user a code for this one action on this run. `sent_to` says where it went; `safer` suggests an authenticator app where it went by text. Refusals in words: 403 `sod` (they prepared it; `approvers` names who may), 409 `not_linked` (with `link`), 403 `not_an_approver`, 403 `cannot_pay` (pay_now, retry_failed), 409 `no_factor`, 422 `no_account` (`people` with no account to be paid into, on lock), 429 `too_many_codes`, 409 `invalid_state`, `awaiting_funds` (with `short_by_kobo`), `already_paying`, `nothing_to_retry`, `scope_required`, `reconnect`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action, key]
+              properties:
+                action: {type: string, enum: [approve, lock, pay_now, retry_failed]}
+                key: {type: string, maxLength: 100}
+      responses:
+        '202':
+          description: A code is on its way
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [challenge, sent_to, safer]
+                properties:
+                  challenge:
+                    type: object
+                    required: [challenge_id, channel, expires_at]
+                    properties:
+                      challenge_id: {type: string}
+                      channel: {type: string, enum: [TOTP, SMS, EMAIL]}
+                      destination_hint: {type: string}
+                      expires_at: {type: string}
+                  sent_to: {type: string}
+                  safer: {type: boolean}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/approve:
+    post:
+      operationId: approvePayrollRun
+      tags:
+      - Payments
+      summary: Approve, with the code
+      description: 'The code goes to Payrolla once and is kept nowhere. Then Lock and pay. Refusals as for the code, and 422 `code_invalid` (type it again), 410 `code_expired`, `code_locked` or `code_used` (send a new code).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string, maxLength: 20}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, payment, words]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  payment:
+                    type: object
+                    required: [status, total_kobo, paid, failed, returned, pending]
+                    properties:
+                      status: {type: string}
+                      scheduled_for: {type: string}
+                      total_kobo: {type: integer}
+                      paid: {type: integer}
+                      failed: {type: integer}
+                      returned: {type: integer}
+                      pending: {type: integer}
+                  words: {type: string, description: '"Approved. Lock and pay?", or "Locked. Payrolla pays 48 people ₦9,200,000 on 28 Nov."'}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/lock:
+    post:
+      operationId: lockPayrollRun
+      tags:
+      - Payments
+      summary: Lock and pay, with the code
+      description: 'Locking schedules the payment: Payrolla pays everyone on the pay date (at once if it has come). A locked payroll can''t be unlocked. The code goes to Payrolla once and is kept nowhere. Refusals as for approving, and 422 `no_account`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string, maxLength: 20}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, payment, words]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  payment:
+                    type: object
+                    required: [status, total_kobo, paid, failed, returned, pending]
+                    properties:
+                      status: {type: string}
+                      scheduled_for: {type: string}
+                      total_kobo: {type: integer}
+                      paid: {type: integer}
+                      failed: {type: integer}
+                      returned: {type: integer}
+                      pending: {type: integer}
+                  words: {type: string, description: '"Approved. Lock and pay?", or "Locked. Payrolla pays 48 people ₦9,200,000 on 28 Nov."'}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/pay-now:
+    post:
+      operationId: payPayrollRunNow
+      tags:
+      - Payments
+      summary: Pay now, with the code
+      description: 'A locked payroll paid now instead of on its pay date (P4b-4). Needs payroll.approve and a linked Payrolla user who may pay. The code goes to Payrolla once and is kept nowhere. Refusals as for the code, and 409 `awaiting_funds` (the wallet is short; `short_by_kobo`), `already_paying`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string, maxLength: 20}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, payment, words]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  payment:
+                    type: object
+                    required: [status, total_kobo, paid, failed, returned, pending]
+                    properties:
+                      status: {type: string}
+                      scheduled_for: {type: string}
+                      total_kobo: {type: integer}
+                      paid: {type: integer}
+                      failed: {type: integer}
+                      returned: {type: integer}
+                      pending: {type: integer}
+                  words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/retry-failed:
+    post:
+      operationId: retryPayrollRunFailed
+      tags:
+      - Payments
+      summary: Pay the failed ones again, with the code
+      description: 'Each failed payment is sent again to the person''s current account; payments the bank returned are not (P4b-4). Refusals as for the code, and 409 `nothing_to_retry`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string, maxLength: 20}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, payment, words]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  payment:
+                    type: object
+                    required: [status, total_kobo, paid, failed, returned, pending]
+                    properties:
+                      status: {type: string}
+                      scheduled_for: {type: string}
+                      total_kobo: {type: integer}
+                      paid: {type: integer}
+                      failed: {type: integer}
+                      returned: {type: integer}
+                      pending: {type: integer}
+                  words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/payslips/{payslip}:
+    get:
+      operationId: getPayrollPayslip
+      tags:
+      - Payments
+      summary: Anyone's payslip, from the run
+      description: 'Taskiem''s own card (P4b-4): the full breakdown, the employer''s name and RC number, and the payment. payroll.read only: preparing or approving payroll is not enough. Read from Payrolla now and kept nowhere; who opened it is recorded, with no pay. 409 `payslip_not_final` before the payroll is locked.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.read
+      parameters:
+      - name: payslip
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The payslip
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [payslip]
+                properties:
+                  payslip:
+                    $ref: '#/components/schemas/PayrollPayslip'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/payslips/{payslip}/pdf:
+    get:
+      operationId: getPayrollPayslipPDF
+      tags:
+      - Payments
+      summary: Save a payslip as PDF
+      description: 'Made when asked, with the business''s name, and not kept (payroll.read).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.read
+      parameters:
+      - name: payslip
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The PDF, made now with the business's name and not kept
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/payslips/{payslip}/link:
+    post:
+      operationId: sendPayrollPayslipLink
+      tags:
+      - Payments
+      summary: Payrolla's 7-day link to a payslip, for someone not on Taskiem
+      description: 'The person confirms the last four digits of their phone before it opens. Shown once, kept nowhere. 409 `payslip_links_off` until the owner allows payslip links in Payrolla.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.read
+      x-taskiem-all-environments: true
+      parameters:
+      - name: payslip
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                key: {type: string, maxLength: 100}
+      responses:
+        '201':
+          description: The link
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [url, expires_at]
+                properties:
+                  url: {type: string, format: uri}
+                  expires_at: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/me/payslips:
+    get:
+      operationId: getMyPayslips
+      tags:
+      - Payments
+      summary: My payslips
+      description: 'A staff member''s own payslips, newest first, as the Payrolla employee they are linked to (`linked: false` when they are not). Their own pay only.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: Their payslips
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [linked, payslips]
+                properties:
+                  linked: {type: boolean}
+                  payslips:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [payslip_id, run_id, period, month, pay_date, gross_kobo, net_kobo, state, words]
+                      properties:
+                        payslip_id: {type: string}
+                        run_id: {type: string}
+                        period: {type: string, description: November 2026}
+                        month: {type: string}
+                        pay_date: {type: string}
+                        gross_kobo: {type: integer}
+                        net_kobo: {type: integer}
+                        state: {type: string, enum: [paid, waiting, failed, returned]}
+                        words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/me/payslips/{payslip}:
+    get:
+      operationId: getMyPayslip
+      tags:
+      - Payments
+      summary: One of my payslips
+      description: 'The card, for the employee it is for only: anyone else''s is not found.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: payslip
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The payslip
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [payslip]
+                properties:
+                  payslip:
+                    $ref: '#/components/schemas/PayrollPayslip'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/me/payslips/{payslip}/pdf:
+    get:
+      operationId: getMyPayslipPDF
+      tags:
+      - Payments
+      summary: Save my payslip as PDF
+      description: 'Made when asked, with the business''s name, and not kept.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: payslip
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The PDF, made now with the business's name and not kept
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}/reject:
+    post:
+      operationId: rejectPayrollRun
+      tags:
+      - Payments
+      summary: Reject, with a note
+      description: 'Sends the run back to be fixed. No code: it moves no money; the person must be linked. Whoever prepared it is told, with the note. 400 `note_required`; refusals as for approving.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [note, key]
+              properties:
+                note: {type: string, maxLength: 300}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Sent back
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, words]
+                properties:
+                  run:
+                    $ref: '#/components/schemas/PayrollRun'
+                  words: {type: string}
         default:
           $ref: '#/components/responses/Error'
   /v1/payroll/runs/{run}:
@@ -6520,12 +7439,12 @@ paths:
       tags:
       - Payments
       summary: One payroll run, from Payrolla
-      description: 'The run and its timeline, each person''s net pay and whether it arrived (`state`: paid, waiting, failed or returned, with Payrolla''s reason), the staff member each is in Taskiem, and Payrolla''s approval link while it waits for approval.'
+      description: 'The run and its timeline, each person''s net pay and whether it arrived (`state`: paid, waiting, failed or returned, with Payrolla''s reason), the staff member each is in Taskiem, and Payrolla''s approval link while it waits for approval where it can''t be approved here. From P4b-3: each line''s breakdown (gross, each earning, deduction and employer''s contribution by name, net), the bonuses and deductions and who is left out, who is new, who left and whose pay changed since the last payroll, the wallet against the total (`funding.short_by_kobo`), and what this person may do (`may`).'
       security:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: payroll.read
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
       parameters:
       - name: run
         in: path
@@ -6559,6 +7478,89 @@ paths:
                       approved_at: {type: [string, 'null']}
                       locked_at: {type: [string, 'null']}
                   approval_url: {type: string, format: uri}
+                  adjustments:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, employee_id, name, type, amount_kobo, reason]
+                      properties:
+                        id: {type: string}
+                        employee_id: {type: string}
+                        name: {type: string}
+                        type: {type: string, enum: [bonus, deduction]}
+                        amount_kobo: {type: integer}
+                        reason: {type: string}
+                  exclusions:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, employee_id, name, reason]
+                      properties:
+                        id: {type: string}
+                        employee_id: {type: string}
+                        name: {type: string}
+                        reason: {type: string}
+                  changes:
+                    type: object
+                    additionalProperties: false
+                    required: [new, left, pay_changed]
+                    properties:
+                      since: {type: string, description: The last payroll compared with}
+                      new: {type: array, items: {type: string}}
+                      left: {type: array, items: {type: string}}
+                      pay_changed:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: false
+                          required: [name, from_kobo, to_kobo]
+                          properties:
+                            name: {type: string}
+                            from_kobo: {type: integer}
+                            to_kobo: {type: integer}
+                  funding:
+                    type: object
+                    additionalProperties: false
+                    required: [has_wallet, available_kobo, needed_kobo, short_by_kobo]
+                    properties:
+                      has_wallet: {type: boolean}
+                      available_kobo: {type: integer}
+                      needed_kobo: {type: integer}
+                      short_by_kobo: {type: integer}
+                      words: {type: string, description: '"Your Payrolla wallet has … short by ₦120,000. Add money before 28 Nov."'}
+                  may:
+                    type: object
+                    additionalProperties: false
+                    required: [prepare, approve, linked, reconnect]
+                    properties:
+                      prepare: {type: boolean}
+                      approve: {type: boolean}
+                      linked: {type: boolean, description: Linked to a Payrolla user who may approve}
+                      reconnect: {type: boolean, description: The connection can't do it here; an owner reconnects}
+                  not_worked_out: {type: string, description: 'A DRAFT run: Payrolla couldn''t work it out, in words, with Recalculate'}
+                  pays_on: {type: string}
+                  payment:
+                    type: object
+                    additionalProperties: false
+                    description: 'After locking (P4b-4): what is happening to the payment, in words ("Pays on 28 Nov", "Waiting for money: short by ₦120,000", "Paying", "Paid", "Paid, 2 not paid"), the counts, and what this person may do'
+                    required: [status, words, tone, total_kobo, paid, failed, returned, pending, short_by_kobo, may_pay_now, may_retry, may_payslips, cannot_pay]
+                    properties:
+                      status: {type: string, enum: [NOT_SCHEDULED, SCHEDULED, AWAITING_FUNDS, PAYING, COMPLETED, PARTIALLY_COMPLETED, FAILED]}
+                      words: {type: string}
+                      tone: {type: string, enum: [ok, warn, bad, info, '']}
+                      scheduled_for: {type: string}
+                      total_kobo: {type: integer}
+                      paid: {type: integer}
+                      failed: {type: integer}
+                      returned: {type: integer}
+                      pending: {type: integer}
+                      short_by_kobo: {type: integer}
+                      may_pay_now: {type: boolean, description: Pay now before the pay date, with a code (payroll.approve and Payrolla's can_pay)}
+                      may_retry: {type: boolean, description: Pay the failed ones again, with a code}
+                      may_payslips: {type: boolean, description: Open anyone's payslip from the run (payroll.read)}
+                      cannot_pay: {type: boolean, description: 'Linked, but Payrolla''s role does not allow paying: "In Payrolla you can''t send payments. Ask the owner."'}
                   counts:
                     type: object
                     required: [paid, waiting, failed, returned]
@@ -6582,6 +7584,20 @@ paths:
                         state: {type: string, enum: [paid, waiting, failed, returned]}
                         reference: {type: string}
                         reason: {type: string}
+                        gross_kobo: {type: integer}
+                        total_earnings_kobo: {type: integer}
+                        total_deductions_kobo: {type: integer}
+                        items:
+                          type: array
+                          items:
+                            type: object
+                            additionalProperties: false
+                            required: [kind, code, label, amount_kobo]
+                            properties:
+                              kind: {type: string, enum: [earning, deduction, employer]}
+                              code: {type: string}
+                              label: {type: string, description: 'In plain words: Basic, Housing, Tax (PAYE), Pension (yours), Pension (employer''s), NHF'}
+                              amount_kobo: {type: integer}
                         staff:
                           oneOf:
                           - type: 'null'
@@ -6654,6 +7670,274 @@ paths:
                         department: {type: string}
                         status: {type: string}
                         linked_to: {type: [string, 'null'], format: uuid}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/connection:
+    get:
+      operationId: getPayrollConnection
+      tags:
+      - Payments
+      summary: How Payroll is connected to Payrolla
+      description: 'P4b-1: the business''s Payrolla connection (made in one step, `auth: oauth`, or with a pasted key, `auth: key`), whether it ended (`ended`: revoked in Payrolla or a refused refresh; owners see Reconnect Payrolla), the company and what the owner allowed, the modes it can be connected in one step here, and whether this person is the owner and may link their own Payrolla account (`payroll.approve`).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.approve'
+      responses:
+        '200':
+          description: The connection
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [connected, is_owner, may_link, modes]
+                properties:
+                  connected: {type: boolean}
+                  ended: {type: boolean}
+                  is_owner: {type: boolean}
+                  may_link: {type: boolean}
+                  modes:
+                    type: array
+                    items: {type: string}
+                  connection:
+                    type: object
+                    additionalProperties: false
+                    required: [id, name, status, auth, test]
+                    properties:
+                      id: {type: string, format: uuid}
+                      name: {type: string}
+                      status: {type: string, enum: [active, expired]}
+                      auth: {type: string, enum: [oauth, key]}
+                      test: {type: boolean}
+                      company:
+                        type: object
+                        properties:
+                          id: {type: string}
+                          name: {type: string}
+                      scopes:
+                        type: array
+                        items: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/connect:
+    post:
+      operationId: connectPayroll
+      tags:
+      - Payments
+      summary: Connect Payrolla in one step, or reconnect it
+      description: 'Owners only (403 `owner_only`). Answers Payrolla''s consent page to send the browser to (OAuth 2.0 with PKCE through Taskiem''s OAuth machinery) and binds the request to this browser; Payrolla sends it back to `/v1/payrolla/callback`. `sign_up` fills in Payrolla''s sign-up for a business not on Payrolla yet: the company''s name (the business''s, unless given), its RC number and the owner''s email. A business already connected (with a key, or a connection that ended) is reconnected: the same connection moves onto the new tokens (`reconnect: true`). 503 `oauth_unavailable` when Taskiem is not registered with Payrolla for the mode here.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                mode: {type: string, enum: [live, test]}
+                sign_up: {type: boolean}
+                company_name: {type: string, maxLength: 200}
+                rc_number: {type: string, maxLength: 20}
+                email: {type: string, maxLength: 254}
+      responses:
+        '200':
+          description: The consent page
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [url, reconnect, expires_in]
+                properties:
+                  url: {type: string}
+                  reconnect: {type: boolean}
+                  expires_in: {type: integer}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/approvers:
+    get:
+      operationId: getPayrollApprovers
+      tags:
+      - Payments
+      summary: Who may approve and pay in Payrolla, and who they are in Taskiem
+      description: 'Payrolla''s list of the company''s Owners, Admins and Approvers (`GET /connect/approvers`), with whether each can approve, pay and get codes, the Taskiem person linked to them (Payrolla''s `linked_as` is the record; Taskiem keeps no copy), whether that is this person (`me`), and the one with this person''s email first (`suggested`). 409 `scope_required` when the connection cannot (a key without Approve and pay: an owner reconnects), `reconnect` when Payrolla is not connected.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.approve'
+      responses:
+        '200':
+          description: The approvers
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [approvers, me, may_link, is_owner]
+                properties:
+                  approvers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PayrollApprover'
+                  me:
+                    oneOf:
+                    - $ref: '#/components/schemas/PayrollApprover'
+                    - type: 'null'
+                  may_link: {type: boolean}
+                  is_owner: {type: boolean}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/approvers/{user}/link:
+    post:
+      operationId: startPayrollLink
+      tags:
+      - Payments
+      summary: Link my Payrolla account (send the code)
+      description: 'Payrolla sends that Payrolla user a code on their own factor (their authenticator app, their phone or their email) to link this person to them. `key` is the id the sheet made when it opened, kept through its retries (the Idempotency-Key is a hash of it with the connection and the route). `sent_to` says where the code went; `safer` suggests an authenticator app where it went by text. One Payrolla user per person: 409 `already_linked`. Refusals in words: 409 `no_factor`, 429 `too_many_codes`, `scope_required`, `reconnect`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                key: {type: string, maxLength: 100}
+      responses:
+        '202':
+          description: A code is on its way
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [challenge, sent_to, safer]
+                properties:
+                  challenge:
+                    type: object
+                    required: [challenge_id, channel, expires_at]
+                    properties:
+                      challenge_id: {type: string}
+                      channel: {type: string, enum: [TOTP, SMS, EMAIL]}
+                      destination_hint: {type: string}
+                      expires_at: {type: string}
+                  sent_to: {type: string}
+                  safer: {type: boolean}
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unlinkPayroll
+      tags:
+      - Payments
+      summary: Unlink a Payrolla account
+      description: 'Removes the Payrolla user''s link to Taskiem. Owners unlink anyone; anyone unlinks themselves (403 `owner_only` otherwise). `key` is the id the screen made for this change.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.approve'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: key
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Unlinked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [unlinked]
+                properties:
+                  unlinked: {type: boolean}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/approvers/{user}/link/confirm:
+    post:
+      operationId: confirmPayrollLink
+      tags:
+      - Payments
+      summary: Link my Payrolla account (type the code)
+      description: 'The code the Payrolla user received, sent to Payrolla once and kept nowhere (not stored, logged or audited). `key` is the sheet''s id for this attempt: each attempt at a code gets its own. Refusals in words: 422 `code_invalid` (type it again), 410 `code_expired`, `code_locked` or `code_used` (send a new code), 409 `already_linked`, `no_factor`, 429 `too_many_codes`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string, maxLength: 20}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: Linked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [approver]
+                properties:
+                  approver:
+                    type: object
+                    properties:
+                      user_id: {type: string}
+                      name: {type: string}
+                      role: {type: string}
+                      can_approve: {type: boolean}
+                      can_pay: {type: boolean}
         default:
           $ref: '#/components/responses/Error'
   /v1/payments:
@@ -6746,6 +8030,18 @@ paths:
                 from:
                   type: string
                   enum: [tools, chat, message, card, workflow]
+                tell_payee:
+                  type: boolean
+                  description: 'Tell the person paid in their chat once the bank confirms (a rider, a staff member; not for wages, an owner''s own account or refunds). On by default.'
+                send_receipt:
+                  type: boolean
+                  description: A receipt to send the person paid, for one not on Taskiem.
+                order_reference:
+                  type: string
+                  description: 'An order whose refund this pays back to its customer (Pay it back; needs storefront.manage): it is a refund, no more than the order owes (400 `over_owed`), one on its way or paid at a time (409 `refund_on_its_way`), the order waiting for a refund (409 `not_owed`); once paid, the order is refunded and its customer told.'
+                where:
+                  type: string
+                  description: 'The chat it was paid from, for its diary line: `taskiem` (the person''s own Taskiem chat) or a linked business''s link id. 400 `where` for a chat that is not theirs.'
       responses:
         '201':
           description: Prepared
@@ -6827,6 +8123,12 @@ paths:
                   description: The person's six-digit PIN, typed in the app's own pad (never sent in a message)
                 again:
                   type: boolean
+                tell_payee:
+                  type: boolean
+                  description: The sheet's Tell them in the chat, as it is confirmed
+                send_receipt:
+                  type: boolean
+                  description: The sheet's Send them a receipt, as it is confirmed
       responses:
         '202':
           description: Sent, or waiting for the owner's OK
@@ -6872,6 +8174,208 @@ paths:
                 properties:
                   payment:
                     $ref: '#/components/schemas/Payment'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/balance:
+    get:
+      operationId: getPayBalance
+      tags:
+      - Payments
+      summary: What people are paid from
+      description: 'The payments account people are paid from (`from`, as the owner knows it: "your Taskiem wallet", "Paystack"; empty with none), its balance when it says one, whether the fee is known before paying (`quotes_fee`; else "The fee shows after paying"), and for a Taskiem wallet the wallet''s own account number to add money to (paying people H7, Settled 2).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      responses:
+        '200':
+          description: The balance
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [from, available_kobo, wallet, quotes_fee]
+                properties:
+                  from: {type: string}
+                  available_kobo: {type: [integer, 'null']}
+                  wallet: {type: boolean}
+                  quotes_fee: {type: boolean}
+                  add_money:
+                    type: object
+                    description: For a Taskiem wallet, the wallet's own account number, to add money to it; left out otherwise
+                    additionalProperties: false
+                    required: [bank_name, account_number, account_name]
+                    properties:
+                      bank_name: {type: string}
+                      account_number: {type: string}
+                      account_name: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/receipt:
+    get:
+      operationId: getPaymentReceipt
+      tags:
+      - Payments
+      summary: A paid payment's receipt
+      description: 'Who paid whom, how much, what for, when, the bank and the account''s last four digits; never who approved, the balance or the fee. `url` is a signed link to its PDF, to send the person paid (empty without a public address). 409 `not_paid` for a payment the bank did not receive.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The receipt
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [receipt, url]
+                properties:
+                  receipt:
+                    $ref: '#/components/schemas/PayReceipt'
+                  url: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/receipt/pdf:
+    get:
+      operationId: getPaymentReceiptPDF
+      tags:
+      - Payments
+      summary: A paid payment's receipt, as a PDF
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/again:
+    post:
+      operationId: payAgain
+      tags:
+      - Payments
+      summary: Try a payment again
+      description: 'A payment that failed, or that the bank sent back, prepared again as it was asked for (the same payee, amount and what for; its diary line in the same chat), checked as any payment is. Nothing is sent: it is confirmed as any payment is. 409 `not_failed` for one that did not fail.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      responses:
+        '201':
+          description: Prepared again
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payment]
+                properties:
+                  payment:
+                    $ref: '#/components/schemas/Payment'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/share:
+    post:
+      operationId: sharePaymentReceipt
+      tags:
+      - Payments
+      summary: Send a paid payment's receipt back into a chat
+      description: '`where` `taskiem`: a receipt card in the person''s own Taskiem chat; a link id: a message from them, with the receipt''s link, in their conversation with that business (the person who sent the account details sees it was paid; needs chat.trade).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [where]
+              properties:
+                where: {type: string}
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [shared]
+                properties:
+                  shared:
+                    type: string
+                    enum: [taskiem, link]
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pay-receipts/{token}/pdf:
+    get:
+      operationId: openPayReceipt
+      tags:
+      - Payments
+      summary: A payment's receipt, by its link
+      description: 'For anyone, signed in or not: the PDF of a paid payment''s receipt at the signed link the payer sends the person paid (Send them a receipt). 404 for a link that is not signed or a payment no longer paid. Thirty a minute per address.'
+      security: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: No such receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/pay-limits:
@@ -7389,6 +8893,9 @@ paths:
                 from:
                   type: string
                   enum: [tools, chat, message, card, workflow]
+                where:
+                  type: string
+                  description: 'The chat its one diary line goes to: `taskiem` or a linked business''s link id.'
       responses:
         '201':
           description: Prepared
@@ -9731,7 +11238,7 @@ paths:
         in: query
         schema:
           type: string
-        description: One or more of invoice, bill, order, purchase, customer, comma separated; all when none.
+        description: One or more of invoice, bill, order, purchase, customer, service (the business's services, storefront.manage) and saved (the person's own saved things and their business's, by name and kind only), comma separated; when none, invoice, bill, order, purchase and customer.
       - name: cursor
         in: query
         schema:
@@ -15714,6 +17221,13 @@ paths:
                   format: uuid
                 clear_label:
                   type: boolean
+                supplier_id:
+                  type: string
+                  format: uuid
+                  description: From whom it came, one of the business's suppliers
+                clear_supplier:
+                  type: boolean
+                  description: Takes its supplier off (not said)
                 sale_price_kobo:
                   type: integer
                   minimum: 1
@@ -18066,6 +19580,31 @@ paths:
                 format: binary
         default:
           $ref: '#/components/responses/Error'
+  /v1/saved-files/{token}:
+    get:
+      operationId: openSavedFileLink
+      tags:
+      - Saved
+      summary: A saved file a message carried
+      description: 'For anyone, signed in or not: the link a workflow''s message gave a business''s saved file (build plan H6; made when the message was sent, good for a week). A redirect to the file in the business''s storage, for five minutes; 404 once the link has expired or the saved thing was removed. Thirty a minute per address.'
+      security: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '302':
+          description: To the file
+        '404':
+          description: No such link, or it expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/chat-links/{code}:
     get:
       operationId: getChatLinkCard
@@ -19987,6 +21526,864 @@ paths:
         schema:
           type: string
         description: '`access_denied` when the person denied.'
+      responses:
+        '302':
+          description: Redirects the browser
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/banks:
+    get:
+      operationId: listPayrollBanks
+      tags:
+      - Payments
+      summary: 'Banks a salary account can be at'
+      description: 'P4b-2: the banks Payrolla pays salaries into, by CBN''s code, for the forms that take a salary account.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [banks]
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [code, name]
+                      properties:
+                        code: {type: string}
+                        name: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/team:
+    get:
+      operationId: getPayrollTeam
+      tags:
+      - Payments
+      summary: 'Payroll → Team'
+      description: 'P4b-2: everyone in Payrolla (read from Payrolla when the page opens; nothing kept), those who left last, each with their account masked (the bank, its name for the account, the last four digits), a waiting account change, the staff member they are in Taskiem, and their monthly pay to those with `payroll.read` or `payroll.prepare` (which comes with it). `staff` are the business''s people not yet in Payrolla, for Add to payroll (to `payroll.prepare`). `may` says what this person may do. Refusals in words: 409 `reconnect`, `scope_required`.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [team, staff, may, connection]
+                properties:
+                  team:
+                    type: array
+                    items: {$ref: '#/components/schemas/PayrollTeamMember'}
+                  staff:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [user_id, name]
+                      properties:
+                        user_id: {type: string, format: uuid}
+                        name: {type: string}
+                        email: {type: string}
+                        phone: {type: string}
+                  may: {$ref: '#/components/schemas/PayrollTeamMay'}
+                  connection: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addPayrollEmployee
+      tags:
+      - Payments
+      summary: 'Add someone to payroll'
+      description: 'Adds an employee to Payrolla (payroll.prepare), their account checked with the bank first: the bank''s name for it comes back in `employee.bank.account_name`. A phone or an email is needed, for their payslip. Added from a staff member (`staff_user`, Add to payroll on their page), they get that person''s Taskiem id as Payrolla''s `external_ref` and the staff link is made at once. `key` is the id the form made when it opened (the Idempotency-Key is a hash of it with the connection and the route). The account number goes to Payrolla once and is not kept, logged or audited. Refusals in words: 422 `invalid_bank`, 400 `contact`, `pay`, `start_date`, 409 `already_in_payrolla` (with `employee_id`, to open them), `phone_taken`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key, first_name, last_name, start_date, pay]
+              properties:
+                key: {type: string, maxLength: 100}
+                first_name: {type: string, maxLength: 80}
+                last_name: {type: string, maxLength: 80}
+                phone: {type: string}
+                email: {type: string}
+                start_date: {type: string, format: date}
+                department: {type: string, maxLength: 80}
+                cost_center: {type: string, maxLength: 80}
+                pay: {$ref: '#/components/schemas/PayrollPayInput'}
+                bank:
+                  type: object
+                  additionalProperties: false
+                  required: [bank_code, account_number]
+                  properties:
+                    bank_code: {type: string}
+                    account_number: {type: string}
+                staff_user: {type: [string, 'null'], format: uuid}
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [employee]
+                properties:
+                  employee: {$ref: '#/components/schemas/PayrollTeamMember'}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/team/{employee}:
+    get:
+      operationId: getPayrollEmployee
+      tags:
+      - Payments
+      summary: 'One person on the payroll'
+      description: 'P4b-2: one employee as Payroll → Team shows them.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare'
+      parameters:
+      - name: employee
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [employee, may]
+                properties:
+                  employee: {$ref: '#/components/schemas/PayrollTeamMember'}
+                  may: {$ref: '#/components/schemas/PayrollTeamMay'}
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: changePayrollEmployee
+      tags:
+      - Payments
+      summary: 'Change someone''s details or pay'
+      description: 'Changes only what is sent (payroll.prepare): name, email, department, cost centre, or pay from a date (`pay.from`, today by default; `words` says when it starts). There is no job title (Payrolla keeps none: 422 `job_title`) and a phone is not changed from Taskiem (422 `phone_change`). 400 `nothing` when nothing is sent.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: employee
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                key: {type: string, maxLength: 100}
+                first_name: {type: string}
+                last_name: {type: string}
+                email: {type: string}
+                department: {type: string}
+                cost_center: {type: string}
+                pay: {$ref: '#/components/schemas/PayrollPayInput'}
+                phone: {type: string, description: "Refused in words: Payrolla's phone is changed in Payrolla."}
+                job_title: {type: string, description: "Refused in words: Payrolla keeps no job title."}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [employee]
+                properties:
+                  employee: {$ref: '#/components/schemas/PayrollTeamMember'}
+                  words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/team/{employee}/bank:
+    post:
+      operationId: askPayrollBankChange
+      tags:
+      - Payments
+      summary: 'Change someone''s salary account'
+      description: 'A new salary account (payroll.prepare), checked with the bank and held until an approver other than this person approves it with Payrolla''s code; `words`: "Held until another approver approves it. They''re paid into ••6789 until then." The account number goes to Payrolla once and is not kept. 422 `invalid_bank`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: employee
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key, bank_code, account_number]
+              properties:
+                key: {type: string, maxLength: 100}
+                bank_code: {type: string}
+                account_number: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [employee]
+                properties:
+                  employee: {$ref: '#/components/schemas/PayrollTeamMember'}
+                  words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/team/{employee}/end:
+    post:
+      operationId: endPayrollEmployee
+      tags:
+      - Payments
+      summary: 'End someone''s employment'
+      description: 'Ends their employment in Payrolla today (payroll.prepare): Payrolla can''t set a last day, so `confirm` must be `yes` (400 `confirm` says so otherwise).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      x-taskiem-all-environments: true
+      parameters:
+      - name: employee
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key, confirm]
+              properties:
+                key: {type: string, maxLength: 100}
+                confirm: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [employee]
+                properties:
+                  employee: {$ref: '#/components/schemas/PayrollTeamMember'}
+                  words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/name-check:
+    post:
+      operationId: payrollNameCheck
+      tags:
+      - Payments
+      summary: 'The bank''s name for a salary account'
+      description: 'Before a salary account is saved (payroll.prepare): the bank''s name for it, through the business''s payments connection (`checked: true`, with `account_name`). Without one, `checked: false` and `words` say Payrolla names it when it is saved. Nothing is kept.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.prepare
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [bank_code, account_number]
+              properties:
+                bank_code: {type: string}
+                account_number: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [checked]
+                properties:
+                  checked: {type: boolean}
+                  account_name: {type: string}
+                  bank: {type: string}
+                  last4: {type: string}
+                  words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/settings:
+    get:
+      operationId: getPayrollSettings
+      tags:
+      - Payments
+      summary: How the payroll is set up in Payrolla
+      description: 'Read from Payrolla when asked (P4b-5), in plain words: how often people are paid, the state tax is paid to, whether someone else must approve (separation of duties), how payroll is paid for, whether a PAYE tax number is on file, and the deductions in force (PAYE, pension rates, NHF, NHIS). Read-only: `change_url` is Payrolla''s settings page. 409 `reconnect` when Payrolla is not connected.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
+      responses:
+        '200':
+          description: The setup
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [settings, is_owner]
+                properties:
+                  is_owner: {type: boolean}
+                  settings:
+                    type: object
+                    additionalProperties: false
+                    required: [company, rows, deductions, separation_of_duties]
+                    properties:
+                      company:
+                        type: object
+                        additionalProperties: {type: string}
+                      rows:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PayrollSettingRow'
+                      deductions:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PayrollSettingRow'
+                      not_set_up: {type: string, description: 'Payrolla has no deductions set up yet.'}
+                      since: {type: string, description: 'Since when the deductions are in force ("1 Jan 2026").'}
+                      change_url: {type: string, description: 'Payrolla''s settings page, where it is changed.'}
+                      separation_of_duties: {type: boolean}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/schedules:
+    get:
+      operationId: listPayrollSchedules
+      tags:
+      - Payments
+      summary: The tax and pension schedules
+      description: 'The PAYE, pension (one a PFA), NHF and NHIS schedules of each locked payroll, newest first, each with its total, people and whether it is to pay or paid (P4b-5). Read from Payrolla when asked, never kept. Needs Payrolla''s `reports:read`: 409 `scope_required` otherwise, in words (an owner is asked to reconnect and allow Read statutory reports).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
+      responses:
+        '200':
+          description: The schedules
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [schedules]
+                properties:
+                  schedules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PayrollSchedule'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/schedules/{id}:
+    get:
+      operationId: getPayrollSchedule
+      tags:
+      - Payments
+      summary: One schedule, a line per person
+      description: 'Each person''s amount; on a pension schedule each PFA and pension PIN masked to its last four (`masked`). Treated like a payslip: behind sign-in, never in a message, never kept. 404 for one Payrolla does not have; 409 `scope_required` as for the list.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollScheduleDetail'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/schedules/{id}/reveal:
+    post:
+      operationId: revealPayrollSchedule
+      tags:
+      - Payments
+      summary: See a pension schedule's PINs and PFAs in full
+      description: 'For `passkey`, a challenge asked for `payroll.reveal` on the schedule (403 `step_up` otherwise); recorded in the audit, with no PIN. 400 for a schedule with nothing hidden.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                passkey:
+                  $ref: '#/components/schemas/PasskeyCredential'
+      responses:
+        '200':
+          description: The schedule in full
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollScheduleDetail'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/schedules/{id}/download:
+    post:
+      operationId: downloadPayrollSchedule
+      tags:
+      - Payments
+      summary: A schedule as a spreadsheet
+      description: 'A CSV made now and kept nowhere: name and amount, and on a pension schedule the PFA and pension PIN, for which it needs a passkey asked for `payroll.reveal` on it (403 `step_up` otherwise). Each is recorded in the audit.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                passkey:
+                  $ref: '#/components/schemas/PasskeyCredential'
+      responses:
+        '200':
+          description: The spreadsheet
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [filename, csv]
+                properties:
+                  filename: {type: string}
+                  csv: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/bank-changes:
+    get:
+      operationId: getPayrollBankChanges
+      tags:
+      - Payments
+      summary: 'Payroll → Account changes'
+      description: 'P4b-2: the salary account changes waiting for an approver, read from Payrolla: each with the employee, the bank and its name for the new account, its last four digits, how it was asked (`in_taskiem`, `by_employee`, `in_payrolla`), who asked when it was someone in Taskiem, and whether this person asked (`mine`: they can''t approve it).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'payroll.read|payroll.prepare|payroll.approve'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [changes, may]
+                properties:
+                  changes:
+                    type: array
+                    items: {$ref: '#/components/schemas/PayrollBankChange'}
+                  may: {$ref: '#/components/schemas/PayrollTeamMay'}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/bank-changes/{change}/code:
+    post:
+      operationId: startBankChangeCode
+      tags:
+      - Payments
+      summary: 'Approve an account change (send the code)'
+      description: 'Payrolla sends this person''s linked approver a code for approving one held change (payroll.approve). Whoever asked for it is refused: 403 `same_person` ("You asked for this account change, so someone else must approve it."), unless they are the company''s only approver. Other refusals in words: 409 `not_linked`, `no_factor`, `decided`, 403 `not_an_approver`, 429 `too_many_codes`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: change
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key]
+              properties:
+                key: {type: string, maxLength: 100}
+      responses:
+        '202':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [challenge, sent_to, safer]
+                properties:
+                  challenge:
+                    type: object
+                    required: [challenge_id, channel, expires_at]
+                    properties:
+                      challenge_id: {type: string}
+                      channel: {type: string, enum: [TOTP, SMS, EMAIL]}
+                      destination_hint: {type: string}
+                      expires_at: {type: string}
+                  sent_to: {type: string}
+                  safer: {type: boolean}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/bank-changes/{change}/approve:
+    post:
+      operationId: approveBankChange
+      tags:
+      - Payments
+      summary: 'Approve an account change (type the code)'
+      description: 'The approver''s code, sent to Payrolla once and kept nowhere; each attempt has its own `key`. The employee is paid into the new account from then on. Refusals in words: 422 `code_invalid`, 410 `code_expired`, `code_locked`, `code_used`, 403 `same_person`, 409 `decided`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: change
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [change, words]
+                properties:
+                  change: {$ref: '#/components/schemas/PayrollBankChange'}
+                  words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/bank-changes/{change}/reject:
+    post:
+      operationId: rejectBankChange
+      tags:
+      - Payments
+      summary: 'Reject an account change'
+      description: 'Rejects a held change with a short note (payroll.approve; no code: it moves no money). The current account stays. 400 `note` without one.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: change
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [note, key]
+              properties:
+                note: {type: string}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [change, words]
+                properties:
+                  change: {$ref: '#/components/schemas/PayrollBankChange'}
+                  words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/me:
+    get:
+      operationId: getMyPay
+      tags:
+      - Payments
+      summary: 'My pay'
+      description: 'P4b-2: a staff member''s own record in Payrolla, when they are linked to their employee (`linked: false` otherwise): their salary account masked, a change waiting for their employer, and their phone as Payrolla has it (changed in Payrolla only). No pay figures.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [linked]
+                properties:
+                  linked: {type: boolean}
+                  me:
+                    type: object
+                    additionalProperties: false
+                    required: [name, status, bank, waiting_change]
+                    properties:
+                      name: {type: string}
+                      phone: {type: string}
+                      status: {type: string}
+                      bank:
+                        oneOf:
+                        - type: 'null'
+                        - $ref: '#/components/schemas/PayrollTeamBank'
+                      waiting_change:
+                        oneOf:
+                        - type: 'null'
+                        - $ref: '#/components/schemas/PayrollBankChange'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/me/bank-change:
+    post:
+      operationId: startMyBankChange
+      tags:
+      - Payments
+      summary: 'Change my salary account (send the code)'
+      description: 'The person asks to be paid into a new account: Payrolla checks it with the bank and texts them a code naming it. `account_name` and `last4` are shown ("Is this your account?") before they type the code. Acts as the person themselves. Refusals in words: 422 `unreachable` (no phone on Payrolla), 409 `same_account`, `left`, `not_linked_staff`, 429 `too_many_codes` (30 minutes).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key, bank_code, account_number]
+              properties:
+                key: {type: string, maxLength: 100}
+                bank_code: {type: string}
+                account_number: {type: string}
+      responses:
+        '202':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [challenge, account_name, last4, bank, sent_to]
+                properties:
+                  challenge:
+                    type: object
+                    required: [challenge_id, channel, expires_at]
+                    properties:
+                      challenge_id: {type: string}
+                      channel: {type: string, enum: [TOTP, SMS, EMAIL]}
+                      destination_hint: {type: string}
+                      expires_at: {type: string}
+                  account_name: {type: string}
+                  last4: {type: string}
+                  bank: {type: string}
+                  sent_to: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/me/bank-change/confirm:
+    post:
+      operationId: confirmMyBankChange
+      tags:
+      - Payments
+      summary: 'Change my salary account (type the code)'
+      description: 'The code Payrolla texted the person, sent once and kept nowhere. The change is then held for the employer to approve; `words`: "Held for your employer to approve. You''re paid into ••6789 until then." Refusals in words: 422 `code_invalid`, 410 `code_expired` (also a code Payrolla has no record of), `code_locked`, `code_used`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code, key]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string}
+                key: {type: string, maxLength: 100}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [change, words]
+                properties:
+                  change: {$ref: '#/components/schemas/PayrollBankChange'}
+                  words: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payrolla/callback:
+    get:
+      operationId: payrollaCallback
+      tags:
+      - Connectors
+      summary: Payrolla's OAuth callback
+      description: 'Where Payrolla sends the browser back after Connect Payrolla (the redirect URI registered with Payrolla), served by the same handler as `/v1/connections/oauth/callback`. Redirects to the web app''s Payroll settings with `?linked=<id>`, or `?error=<message>` ("You didn''t allow Taskiem in Payrolla. Nothing changed" for `access_denied`).'
+      security: []
+      parameters:
+      - name: code
+        in: query
+        schema:
+          type: string
+      - name: state
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: error
+        in: query
+        schema:
+          type: string
+      - name: error_description
+        in: query
+        schema:
+          type: string
       responses:
         '302':
           description: Redirects the browser
@@ -23676,7 +26073,7 @@ paths:
       tags:
       - You
       summary: Their tools
-      description: 'Through the door (`customer.tools`), the business''s tools for its customers (made tools T5, decision 0073): those it deploys in prod with `tool.for` `customers`, and the entries of its public menu carried over (migration 00569). Only tools a customer may start: none whose steps move money, none whose workflow names roles, none whose inputs a form cannot carry (nested, or more than ten). Each with its form; never its care, roles or steps.'
+      description: 'Through the door (`customer.tools`), the business''s tools for its customers (made tools T5, decision 0073): those it deploys in prod with `tool.for` `customers` (its customer menu: the separate public menu was retired, migration 00640). Only tools a customer may start: none whose steps move money, none whose workflow names roles, none whose inputs a form cannot carry (nested, or more than ten). Each with its form; never its care, roles or steps.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -37317,6 +39714,48 @@ paths:
           description: Removed
         default:
           $ref: '#/components/responses/Error'
+  /v1/saved/{id}/runs:
+    get:
+      operationId: listSavedRuns
+      tags:
+      - Saved
+      summary: The runs that read a saved thing
+      description: 'The latest fifty runs of the business''s workflows that read this saved thing when they started (build plan H6, `saved_uses`), newest first: the workflow, its version, the name it was read by, the steps that read it and how the run stands now (empty once the run is no longer kept). A person''s own saved things are never read by runs.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The runs
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - runs
+                properties:
+                  runs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedUse'
+                additionalProperties: false
+        '404':
+          description: No such saved thing of the business.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/saved/{id}/reveal:
     post:
       operationId: revealSaved
@@ -38323,7 +40762,7 @@ paths:
       tags:
       - Tools
       summary: Start a tool
-      description: 'Its values checked against its form, then its care: a tool whose steps only read starts at once (201, with the values as read, the echo); any other answers 200 with a confirm and the values to show, to send back with the same values. Held to the workflow''s roles. An Idempotency-Key header makes a start at once safe to retry.'
+      description: 'Its values checked against its form, then its care: a tool whose steps only read starts at once (201, with the values as read, the echo); any other answers 200 with a confirm and the values to show, to send back with the same values. Held to the workflow''s roles. An Idempotency-Key header makes a start at once safe to retry. A location input is sent as the device read it ({lat, lng, accuracy_m, at, fix}), or {address} typed; a photo or a signature as {file: id} from POST /v1/tools/{command}/files; any of them {state: refused or unavailable, reason}. The server sets each one''s source and state (docs/spec/device-fields.md §17).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -38377,6 +40816,85 @@ paths:
                 $ref: '#/components/schemas/ToolStart'
         '422':
           description: The values do not fit the tool's form
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  problems:
+                    type: array
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tools/{command}/files:
+    post:
+      operationId: holdToolFile
+      tags:
+      - Tools
+      summary: Send a photo or a signature for a tool's input
+      description: 'A members'' tool may take a location, a photo and a signature among its inputs (docs/spec/device-fields.md §17). A photo or a signature is sent first, on its own, as the multipart part named by its input (app: "app" from the phone app, whose photo is taken with its camera; else it is marked sent), through the forms'' file rules (a photo JPEG or PNG, cleaned to at most 2,000 px; a signature a PNG of at most 1 MB; scanned for malware; private). It is held a day for this person, this tool and this input; the start names it as {file: id} (a signature with {signed_by} beside it) and takes it once. 422 when the input takes no file or the file is not one it takes. Held to the workflow''s roles.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      parameters:
+      - name: command
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The tool's command
+      - name: environment
+        in: query
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                app:
+                  type: string
+                  description: '"app" when the phone app sends it'
+              additionalProperties:
+                type: string
+                format: binary
+                description: The photo or the signature, named by its input
+      responses:
+        '201':
+          description: Held for the start
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [field, file]
+                properties:
+                  field:
+                    type: string
+                  file:
+                    type: object
+                    required: [id, name, type, size, sha256]
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      type:
+                        type: string
+                      size:
+                        type: integer
+                      sha256:
+                        type: string
+        '422':
+          description: The input takes no file, or not this one
           content:
             application/json:
               schema:
@@ -38520,6 +41038,11 @@ paths:
         schema:
           type: boolean
         description: Only templates another workflow can use as a step (decision 0047).
+      - name: tool
+        in: query
+        schema:
+          type: boolean
+        description: Only recipes, the templates that make a tool used from the chat (made tools §13).
   /v1/templates/{id}:
     get:
       operationId: getTemplate
@@ -39225,47 +41748,6 @@ paths:
       responses:
         '204':
           $ref: '#/components/responses/NoContent'
-        default:
-          $ref: '#/components/responses/Error'
-  /v1/whatsapp/public-menu:
-    put:
-      operationId: putWhatsAppPublicMenu
-      tags:
-      - WhatsApp
-      summary: Set the WhatsApp public menu
-      description: What the tenant's number offers people who are not members.
-      security:
-      - sessionCookie: []
-        csrfHeader: []
-      - sessionToken: []
-      - apiKey: []
-      x-taskiem-permission: workflow.publish
-      x-taskiem-all-environments: true
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WhatsAppPublicMenuRequest'
-        required: true
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WhatsAppNumber'
-        '400':
-          description: More than 9 workflows, a bad label, a repeat, or an unknown workflow.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: The organisation has no number of its own.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/workflows:
@@ -41183,6 +43665,339 @@ paths:
                 additionalProperties: false
         default:
           $ref: '#/components/responses/Error'
+  /v1/page-choices:
+    get:
+      operationId: listPageChoices
+      tags:
+      - Pages
+      summary: The tools and workflows a page may use
+      description: >-
+        What the editor's plain-words path offers beside the tables (pages H5): the business's members' tools in use that the caller
+        may start (their roles), whether each answers at once (only those feed a part), their outputs and the values they ask (a personal one is never kept on a page
+        as a fixed value); and its workflows in use (one name each; every one to a caller with workflow.read, else only those their role may start), with the signals a page may send them (a signal step with
+        "pages": true) and the approval steps they wait at. Names and types only. For the editor (page.edit); publishing checks
+        every choice again.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tools, workflows, saved_kinds]
+                properties:
+                  saved_kinds:
+                    type: array
+                    description: The business's kinds of saved things (G5), for a list of them; each field's key, label, type and whether it is kept private (never a value).
+                    items:
+                      type: object
+                      required: [name, fields]
+                      properties:
+                        name:
+                          type: string
+                        fields:
+                          type: array
+                          items:
+                            type: object
+                            required: [key, label, type, private]
+                            properties:
+                              key:
+                                type: string
+                              label:
+                                type: string
+                              type:
+                                type: string
+                              private:
+                                type: boolean
+                            additionalProperties: false
+                      additionalProperties: false
+                  tools:
+                    type: array
+                    items:
+                      type: object
+                      required: [command, name, answers, outputs, inputs]
+                      properties:
+                        command:
+                          type: string
+                        name:
+                          type: string
+                        answers:
+                          type: boolean
+                          description: Whether it answers at once (changes nothing), so may feed a part.
+                        outputs:
+                          type: array
+                          items:
+                            type: object
+                            required: [name, title, type]
+                            properties:
+                              name:
+                                type: string
+                              title:
+                                type: string
+                              type:
+                                type: string
+                            additionalProperties: false
+                        inputs:
+                          type: array
+                          items:
+                            type: object
+                            required: [name, title, personal]
+                            properties:
+                              name:
+                                type: string
+                              title:
+                                type: string
+                              personal:
+                                type: boolean
+                            additionalProperties: false
+                        list:
+                          type: object
+                          description: How the tool's own list answer reads each row (the output it lists, the row's title and line), for a list part over it.
+                          required: [from, title]
+                          properties:
+                            from:
+                              type: string
+                            title:
+                              type: string
+                            sub:
+                              type: string
+                          additionalProperties: false
+                      additionalProperties: false
+                  workflows:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, signals, approvals]
+                      properties:
+                        name:
+                          type: string
+                        signals:
+                          type: array
+                          items:
+                            type: string
+                        approvals:
+                          type: array
+                          items:
+                            type: object
+                            required: [step, name]
+                            properties:
+                              step:
+                                type: string
+                              name:
+                                type: string
+                            additionalProperties: false
+                      additionalProperties: false
+                additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/page-starters:
+    get:
+      operationId: listPageStarters
+      tags:
+      - Pages
+      summary: The starters a page can be made from
+      description: >-
+        G5: Tickets desk, Expenses this month, Leave, Stock count, Deliveries today, Waiting list and Service log, each a page with the tables and tools it brings, said in plain words (`makes`), and the kinds of part its page has. For the editor (page.edit).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [starters]
+                properties:
+                  starters:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PageStarter'
+                additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/page-starters/{id}/install:
+    post:
+      operationId: installPageStarter
+      tags:
+      - Pages
+      summary: Make a page from a starter, with its tables and tools
+      description: >-
+        Makes the starter's tables (table.edit; a name the business uses takes the next free one, tickets_2), its tools as workflows' drafts (workflow.edit; a command that is taken, the next free one, new-ticket-2, said in `tools`) and its page as a draft (page.edit, table.read; the next free name), the tools and the page made to read what was given. With `publish`, a caller who may publish workflows and pages publishes the tools and then the page through the Publish buttons' own checks (readiness, four-eyes, the page's Check); where one cannot be published now, the rest stay drafts and `waiting` says why. Audited `workflow.create` and `page.create` with the starter.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageBundleRequest'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBundleMade'
+        '403':
+          description: The caller may not make its tables (table.edit) or its tools (workflow.edit); nothing was made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such starter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/page-builds:
+    post:
+      operationId: describePage
+      tags:
+      - Pages
+      summary: Describe it, for a page
+      description: >-
+        G5: drafts a page from one sentence, in the background, with the tables and tools it would make, checked as a page is before it is published (corrected up to three times). The model is told the business's tables, its tools in use that the caller may start, its kinds of saved things and its pages' names, by name and type only: never a row, a value or a saved thing. Held to the AI builder's rate and monthly budget; its model calls are in the build's interactions (GET /v1/ai/builds/{id}/interactions, audit.read).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [goal]
+              properties:
+                goal:
+                  type: string
+                  maxLength: 4000
+                  description: What the page is for, in one sentence.
+              additionalProperties: false
+      responses:
+        '202':
+          description: Drafting
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, status]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                additionalProperties: false
+        '429':
+          description: Too many builds at once, or this month's AI budget is used up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: AI building is not set up on this deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/page-builds/{id}:
+    get:
+      operationId: getPageBuild
+      tags:
+      - Pages
+      summary: A page Describe it drafted
+      description: >-
+        The draft (`proposal`: the page, the tables and tools it would make, what still stops it) and, once drafted, `review`: what making it makes, what of the business's it uses and what the page shows, in plain words.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBuild'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/page-builds/{id}/make:
+    post:
+      operationId: makePageBuild
+      tags:
+      - Pages
+      summary: Make the page Describe it drafted
+      description: >-
+        Makes the draft's tables, tools and page as POST /v1/page-starters/{id}/install does, once; a draft with problems is refused (409).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageBundleRequest'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBundleMade'
+        '409':
+          description: Made already, not drafted yet, or the draft has problems.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/pages/{name}/blocks/{block}:
     get:
       operationId: getPageBlock
@@ -41218,6 +44033,11 @@ paths:
         schema:
           type: string
         description: A column the table part shows
+      - name: lane
+        in: query
+        schema:
+          type: string
+        description: "A board's column (G4, its value): that column's next cards, with cursor. A board takes no order."
       - name: desc
         in: query
         schema:
@@ -43369,6 +46189,11 @@ components:
           - 'null'
           format: uuid
           description: The AI build the version was saved from.
+        changes:
+          type: array
+          items:
+            type: string
+          description: What changed from the version before, in plain words (a tool's command, phrases, who it is for and its answer; who may start it; the steps). Left out for the first version, and for versions older than the latest thirty.
     Deployment:
       type: object
       required:
@@ -43604,7 +46429,7 @@ components:
           description: The tool's inputs schema, for its form (flat, ten fields at most)
         answer:
           type: string
-          description: text, card or list; left out when the tool tells only that it started (a public menu's entry)
+          description: text, card or list; left out when the tool declares no answer and tells only that it started
     ToolStart:
       type: object
       required:
@@ -43971,6 +46796,69 @@ components:
           $ref: '#/components/schemas/Timestamp'
         origin:
           type: string
+    SavedUse:
+      type: object
+      description: A run that read a saved thing at its start.
+      required:
+      - run_id
+      - workflow_id
+      - workflow
+      - version
+      - name
+      - steps
+      - read_at
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        workflow_id:
+          type: string
+          format: uuid
+        workflow:
+          type: string
+        version:
+          type: integer
+        name:
+          type: string
+          description: The saved thing's name as the run read it.
+        steps:
+          type: array
+          items:
+            type: string
+          description: The steps that read it, by id.
+        read_at:
+          $ref: '#/components/schemas/Timestamp'
+        status:
+          type: string
+          description: How the run stands now; left out once the run is no longer kept.
+      additionalProperties: false
+    RunSavedRead:
+      type: object
+      description: A business's saved thing a run read at its start.
+      required:
+      - id
+      - name
+      - kind
+      - steps
+      - read_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        title:
+          type: string
+          description: How it is shown; left out for a saved person (their name is personal data) unless the run is revealed.
+        kind:
+          type: string
+        steps:
+          type: array
+          items:
+            type: string
+        read_at:
+          $ref: '#/components/schemas/Timestamp'
+      additionalProperties: false
     RunDetail:
       type: object
       required:
@@ -43981,6 +46869,11 @@ components:
       properties:
         run:
           $ref: '#/components/schemas/RunSummary'
+        saved:
+          type: array
+          items:
+            $ref: '#/components/schemas/RunSavedRead'
+          description: The business's saved things the run read at its start, with the steps that read each (build plan H6).
         events:
           type: array
           items:
@@ -46964,6 +49857,54 @@ components:
             - created_at
             - last_used_at
       additionalProperties: false
+    PayrollSettingRow:
+      type: object
+      additionalProperties: false
+      required: [key, label, value]
+      properties:
+        key: {type: string}
+        label: {type: string}
+        value: {type: string}
+        warn: {type: boolean}
+        'on': {type: boolean}
+    PayrollSchedule:
+      type: object
+      additionalProperties: false
+      required: [id, run_id, kind, title, to, period, period_words, total_kobo, people, state, state_words]
+      properties:
+        id: {type: string}
+        run_id: {type: string}
+        kind: {type: string, enum: [paye, pension, nhf, nhis]}
+        title: {type: string, description: '"Tax (PAYE)", "Pension", "Housing fund (NHF)", "Health insurance (NHIS)"'}
+        to: {type: string, description: 'Who it is paid to; a pension PFA masked to its last four.'}
+        period: {type: string, description: '2026-11'}
+        period_words: {type: string}
+        total_kobo: {type: integer}
+        people: {type: integer}
+        state: {type: string, enum: [to_pay, paid, preparing]}
+        state_words: {type: string}
+        when: {type: string, description: '"Due 10 Dec" or "Paid 1 Dec"'}
+        reference: {type: string}
+    PayrollScheduleDetail:
+      type: object
+      additionalProperties: false
+      required: [schedule, lines, masked]
+      properties:
+        schedule:
+          $ref: '#/components/schemas/PayrollSchedule'
+        masked: {type: boolean, description: 'PINs and PFAs are masked to their last four.'}
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [employee_id, name, amount_kobo]
+            properties:
+              employee_id: {type: string}
+              name: {type: string}
+              amount_kobo: {type: integer}
+              pfa: {type: string}
+              pin: {type: string}
     StepUpRequest:
       type: object
       required:
@@ -46985,6 +49926,7 @@ components:
           - money.pay.approve
           - money.pay.batch
           - staff.account
+          - payroll.reveal
         target:
           type: string
           maxLength: 200
@@ -47539,6 +50481,23 @@ components:
         channel:
           type: string
           description: Where the build was asked for (`web`, `whatsapp`).
+        read_back:
+          type: array
+          description: The proposal's workflow in plain steps, its tool after them (the command it is called by, who may use it, what it asks and what it says back), as the chat reads it back (Describe it, build plan M6). Empty while it runs.
+          items:
+            type: object
+            required:
+            - number
+            - depth
+            - text
+            properties:
+              number:
+                type: string
+              depth:
+                type: integer
+              text:
+                type: string
+            additionalProperties: false
       additionalProperties: false
     AIInteractionList:
       type: object
@@ -49006,7 +51965,7 @@ components:
           description: Why the owner's OK is asked, comma-separated; `limit` over the payer's limit, `changed` an account changed since it was last paid, `first` an account staff never paid before. Empty when none.
         status:
           type: string
-          enum: [prepared, sending, waiting_ok, paid, failed, rejected, unknown, cancelled]
+          enum: [prepared, sending, waiting_ok, paid, failed, rejected, unknown, cancelled, reversed]
         reason:
           type: [string, 'null']
         fee_kobo:
@@ -49035,6 +51994,40 @@ components:
         awaits_your_ok:
           type: boolean
           description: 'Confirmed by you, and its run still waits for your own OK, which did not reach it: confirm it again (POST /v1/payments/{id}/confirm) to give it.'
+        fee_quote_kobo:
+          type: [integer, 'null']
+          description: 'The fee the payments account quoted before it was confirmed (the business pays it); null when it quotes none: the fee then shows once paid (`fee_kobo`).'
+        route:
+          type: string
+          enum: [bank, wallet]
+          description: 'How it goes: a bank transfer, or Taskiem wallet to Taskiem wallet (at once, no fee) when the account is another business''s Taskiem wallet.'
+        tell_payee:
+          type: boolean
+        send_receipt:
+          type: boolean
+        may_tell:
+          type: boolean
+          description: 'The person paid can be told in a chat of theirs (a rider, a staff member, for anything but wages or a refund): the sheet offers Tell them in the chat; else Send them a receipt.'
+        balance_kobo:
+          type: [integer, 'null']
+          description: The balance when it was prepared, where the payments account says it (the sheet shows the balance after).
+        refund_order:
+          type: string
+          description: The order whose refund it pays back, when it does
+    PayReceipt:
+      type: object
+      additionalProperties: false
+      required: [business, payee, bank_name, account, amount_kobo, for, paid_at, reference, route]
+      properties:
+        business: {type: string}
+        payee: {type: string}
+        bank_name: {type: string}
+        account: {type: string, description: The account number masked (••6789)}
+        amount_kobo: {type: integer}
+        for: {type: string}
+        paid_at: {type: string, format: date-time}
+        reference: {type: string}
+        route: {type: string, description: Bank transfer, or Taskiem wallet}
     PaymentBatch:
       type: object
       required: [id, title, kind, status, created_by, created_at, payments, total_kobo, count, paid_kobo, waiting, failed]
@@ -49061,6 +52054,22 @@ components:
         paid_kobo: {type: integer}
         waiting: {type: integer}
         failed: {type: integer}
+        fees_kobo:
+          type: integer
+          description: The fees quoted for the rows (paid fees once paid)
+        fees_unknown:
+          type: integer
+          description: Rows whose fee shows after paying
+        balance_kobo:
+          type: [integer, 'null']
+          description: The balance, where the payments account says it
+        short_kobo:
+          type: integer
+          description: How much the balance is short of the rows and their fees, while the batch waits to be confirmed
+        fit:
+          type: array
+          description: The rows that fit the balance, in order, while it is short
+          items: {type: string, format: uuid}
         held:
           type: array
           description: Rows held out when it was prepared, with why
@@ -49080,6 +52089,77 @@ components:
               payment: {type: string, format: uuid}
               code: {type: string}
               problem: {type: string}
+    PayrollApprover:
+      type: object
+      additionalProperties: false
+      required: [user_id, name, email, role, can_approve, can_pay, can_confirm, linked, suggested, me]
+      properties:
+        user_id: {type: string}
+        name: {type: string}
+        email: {type: string}
+        role: {type: string}
+        can_approve: {type: boolean}
+        can_pay: {type: boolean}
+        can_confirm: {type: boolean, description: 'They have somewhere to get codes (a phone, an email or an authenticator app)'}
+        linked:
+          oneOf:
+          - type: 'null'
+          - type: object
+            additionalProperties: false
+            required: [user_id, name]
+            properties:
+              user_id: {type: string, format: uuid}
+              name: {type: string}
+              since: {type: string}
+        suggested: {type: boolean, description: 'Not linked, with the same email as the person asking'}
+        me: {type: boolean}
+    PayrollPayslip:
+      type: object
+      additionalProperties: false
+      description: 'A payslip as Taskiem''s own card (P4b-4): read from Payrolla when opened, kept nowhere.'
+      required: [payslip_id, run_id, period, month, period_start, pay_date, employee, employer, gross_kobo, total_earnings_kobo, total_deductions_kobo, net_kobo, items, payment]
+      properties:
+        payslip_id: {type: string}
+        run_id: {type: string}
+        period: {type: string, description: November 2026}
+        month: {type: string}
+        period_start: {type: string}
+        pay_date: {type: string}
+        employee:
+          type: object
+          required: [id, name]
+          properties:
+            id: {type: string}
+            name: {type: string}
+            department: {type: string}
+        employer:
+          type: object
+          required: [name]
+          properties:
+            name: {type: string}
+            rc_number: {type: string}
+        gross_kobo: {type: integer}
+        total_earnings_kobo: {type: integer}
+        total_deductions_kobo: {type: integer}
+        net_kobo: {type: integer}
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, code, label, amount_kobo]
+            properties:
+              kind: {type: string, enum: [earning, deduction, employer]}
+              code: {type: string}
+              label: {type: string}
+              amount_kobo: {type: integer}
+        payment:
+          type: object
+          required: [status, state, words]
+          properties:
+            status: {type: string}
+            state: {type: string, enum: [paid, waiting, failed, returned]}
+            words: {type: string}
     PayrollRun:
       type: object
       additionalProperties: false
@@ -49096,6 +52176,90 @@ components:
         total_gross_kobo: {type: integer}
         total_net_kobo: {type: integer}
         awaiting_approval: {type: boolean}
+    PayrollTeamMay:
+      type: object
+      additionalProperties: false
+      required: [prepare, approve, see_pay]
+      properties:
+        prepare: {type: boolean}
+        approve: {type: boolean}
+        see_pay: {type: boolean}
+    PayrollPayInput:
+      type: object
+      additionalProperties: false
+      required: [gross_kobo]
+      properties:
+        gross_kobo: {type: integer, minimum: 1}
+        basic_kobo: {type: integer, minimum: 0}
+        housing_kobo: {type: integer, minimum: 0}
+        transport_kobo: {type: integer, minimum: 0}
+        pensionable: {type: [boolean, 'null']}
+        from: {type: string, format: date, description: 'On a change, the date the new pay starts; today when left out.'}
+    PayrollTeamBank:
+      type: object
+      additionalProperties: false
+      required: [bank, bank_code, account_name, last4]
+      properties:
+        bank: {type: string}
+        bank_code: {type: string}
+        account_name: {type: string, description: "The bank's own name for the account."}
+        last4: {type: string}
+    PayrollBankChange:
+      type: object
+      additionalProperties: false
+      required: [id, employee_id, bank, account_name, last4, via, mine, requested_at]
+      properties:
+        id: {type: string}
+        employee_id: {type: string}
+        employee: {type: string}
+        bank: {type: string}
+        account_name: {type: string}
+        last4: {type: string}
+        via: {type: string, enum: [in_taskiem, by_employee, in_payrolla]}
+        asked_by: {type: string}
+        mine: {type: boolean}
+        requested_at: {type: string}
+    PayrollTeamMember:
+      type: object
+      additionalProperties: false
+      required: [id, name, first_name, last_name, status, bank, waiting_change, staff]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        first_name: {type: string}
+        last_name: {type: string}
+        email: {type: string}
+        phone: {type: string}
+        department: {type: string}
+        start_date: {type: string}
+        status: {type: string, enum: [active, inactive, left]}
+        bank:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/PayrollTeamBank'
+        pay:
+          type: object
+          additionalProperties: false
+          required: [gross_kobo, basic_kobo, housing_kobo, transport_kobo, pensionable, from]
+          properties:
+            gross_kobo: {type: integer}
+            basic_kobo: {type: integer}
+            housing_kobo: {type: integer}
+            transport_kobo: {type: integer}
+            pensionable: {type: boolean}
+            from: {type: string}
+        waiting_change:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/PayrollBankChange'
+        staff:
+          oneOf:
+          - type: 'null'
+          - type: object
+            required: [user_id, name]
+            properties:
+              user_id: {type: string, format: uuid}
+              name: {type: string}
     StaffPayrolla:
       type: object
       additionalProperties: false
@@ -49477,6 +52641,9 @@ components:
         label_id:
           type: string
           format: uuid
+        label:
+          type: string
+          description: The name of the label kept for label_id (a merged label followed to the one kept); none without a label
         seller_item_id:
           type: string
           description: The linked supplier's own item
@@ -49598,9 +52765,21 @@ components:
           description: The person said it (else Taskiem did)
         kind:
           type: string
-          enum: [text, button, voice, photo, form, location, diary, chart, menu]
+          enum: [text, button, voice, photo, form, location, diary, chart, menu, receipt, paid_you, payroll_run, payslip]
+          description: 'A diary line may name a payment or a batch it is about (shown as it stands: paid, failed with Try again); receipt is a paid payment''s receipt sent into the chat; paid_you a payment to this person.'
         text:
           type: string
+        payment:
+          type: string
+          format: uuid
+          description: The payment a diary line, receipt or paid_you card is about
+        payment_status:
+          type: string
+          description: 'On a paid_you card, how its payment stands now (paid, or reversed when the bank sent it back)'
+        batch:
+          type: string
+          format: uuid
+          description: The batch of payments a diary line is about
         buttons:
           type: array
           items:
@@ -49924,11 +53103,11 @@ components:
       type: object
       additionalProperties: false
       required: [kind, id, name, when]
-      description: A thing "/" may tag
+      description: A thing "/" may tag; in a search also a service or a saved thing
       properties:
         kind:
           type: string
-          enum: [invoice, bill, order, purchase, customer]
+          enum: [invoice, bill, order, purchase, customer, service, saved]
         id:
           type: string
         name:
@@ -49944,6 +53123,20 @@ components:
           type: integer
         status:
           type: string
+        minutes:
+          type: integer
+          description: A service's minutes
+        saved_kind:
+          type: string
+          enum: [bank_account, person, place, text, file, provider_account, custom]
+          description: A saved thing's kind. A saved thing is answered by its name, kind and owner only, never its title or what it holds.
+        kind_name:
+          type: string
+          description: A made-up kind's name, for a saved thing of one
+        owner:
+          type: string
+          enum: [mine, business]
+          description: Whose saved thing it is
     ChatCard:
       type: object
       additionalProperties: false
@@ -52591,6 +55784,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LinkReaction'
+        payment:
+          type: string
+          format: uuid
+          description: The payment a diary line on our side is about (shown as it stands)
+        batch:
+          type: string
+          format: uuid
+          description: The batch of payments a diary line on our side is about
         starred:
           type: boolean
           description: You starred it
@@ -53312,6 +56513,10 @@ components:
           type: string
         email:
           type: string
+        address:
+          type: string
+          maxLength: 300
+          description: Where the customer is, printed on the invoice and its PDF; sealed with the rest of the customer. Filled from a saved person's or business's place when the invoice is made with @name in the chat.
         key:
           type: string
           maxLength: 100
@@ -57072,7 +60277,10 @@ components:
           type: string
         type:
           type: string
+          description: command is a recipe's tool's word after / (made tools §13), written as a command (Add Sale is add-sale); installing gives the next free one when it is taken. roles is who may use a recipe's tool, as role names in a list or typed with commas (owner, manager).
           enum:
+          - command
+          - roles
           - string
           - text
           - integer
@@ -57216,6 +60424,41 @@ components:
             type: array
             items:
               type: string
+        tool:
+          type: object
+          description: For a recipe (made tools §13), the tool it makes, used from the chat.
+          required:
+          - name
+          - about
+          - for
+          - answer
+          - command
+          - care
+          properties:
+            name:
+              type: string
+            about:
+              type: string
+            for:
+              type: string
+              enum: [members, customers, linked]
+            icon:
+              type: string
+            answer:
+              type: string
+              enum: [text, card, list, '']
+              description: What it says back; empty when it only says it ran.
+            command:
+              type: string
+              description: The word it is called by unless another is chosen at install.
+            care:
+              type: string
+              enum: [answers, 'yes', step_up]
+              description: How much it asks before it runs, worked out from its steps.
+            companion:
+              type: string
+              description: The schedule installed beside it (the daily report, watch and act), whose button opens the tool.
+          additionalProperties: false
         callable:
           type: object
           description: For a template another workflow can use as a step (decision 0047), its interface.
@@ -57369,6 +60612,35 @@ components:
           type: string
         problems:
           $ref: '#/components/schemas/Problems'
+        tool:
+          type: object
+          description: For a recipe (made tools §13), the command its tool was given, the next free one when the one asked for was taken, and the schedule installed beside it.
+          required:
+          - asked
+          - command
+          - changed
+          properties:
+            asked:
+              type: string
+            command:
+              type: string
+            changed:
+              type: boolean
+              description: The command asked for was taken (one of Taskiem's own words, or another tool's), so it was given the next free one.
+            companion:
+              type: object
+              description: The schedule installed as its own draft workflow, whose button opens the tool.
+              required:
+              - id
+              - name
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+              additionalProperties: false
+          additionalProperties: false
         variables:
           type: array
           description: Variables to set before it runs.
@@ -59176,6 +62448,11 @@ components:
                 type: string
                 enum:
                 - pending
+              changes:
+                type: array
+                items:
+                  type: string
+                description: What publishing it changes, in plain words, from the version live in prod (else the version before it). Left out when nothing is said.
             additionalProperties: false
       additionalProperties: false
     PublishDecided:
@@ -61041,25 +64318,6 @@ components:
         passkey:
           $ref: '#/components/schemas/PasskeyCredential'
       additionalProperties: false
-    WhatsAppPublicWorkflow:
-      type: object
-      required:
-      - workflow_id
-      - label
-      properties:
-        workflow_id:
-          type: string
-          format: uuid
-        label:
-          type: string
-          maxLength: 24
-        name:
-          type: string
-          description: The workflow's name (answers only).
-        command:
-          type: string
-          description: The customers' tool the entry is (made tools T5), made from its label and kept while the entry is (answers only).
-      additionalProperties: false
     WhatsAppTemplateStatus:
       type: object
       required:
@@ -61124,8 +64382,6 @@ components:
       required:
       - connected
       - own_app
-      - public_menu
-      - public_workflows
       - flows_enabled
       properties:
         connected:
@@ -61147,18 +64403,11 @@ components:
           - embedded_signup
         status:
           type: string
-        public_menu:
-          type: boolean
-          description: Numbers bound to no one get a menu of public workflows.
         webhook_path:
           type: string
           description: Where Meta sends the number's webhooks, relative to the edge host.
         flows_endpoint_path:
           type: string
-        public_workflows:
-          type: array
-          items:
-            $ref: '#/components/schemas/WhatsAppPublicWorkflow'
         flows_enabled:
           type: boolean
         shared_number:
@@ -61197,19 +64446,6 @@ components:
         own_app:
           type: boolean
           description: Default true.
-      additionalProperties: false
-    WhatsAppPublicMenuRequest:
-      type: object
-      required:
-      - enabled
-      properties:
-        enabled:
-          type: boolean
-        workflows:
-          type: array
-          maxItems: 9
-          items:
-            $ref: '#/components/schemas/WhatsAppPublicWorkflow'
       additionalProperties: false
     WhatsAppOutbox:
       type: object
@@ -62363,6 +65599,151 @@ components:
       type: object
       description: 'A row: id, the columns, created_at and updated_at, typed as the data API returns them.'
       additionalProperties: true
+    PageStarter:
+      type: object
+      required: [id, title, about, icon, page, makes, parts]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        about:
+          type: string
+        icon:
+          type: string
+        page:
+          type: string
+          description: The page's title.
+        makes:
+          type: array
+          items:
+            type: string
+          description: 'What it makes, a line each ("The table Tickets: Title, Customer…", "/new-ticket (New ticket): adds a row to Tickets, asking for…").'
+        parts:
+          type: array
+          items:
+            type: string
+          description: The kinds of part its page has, in order (figure, buttons, board…).
+      additionalProperties: false
+    PageBundleRequest:
+      type: object
+      properties:
+        publish:
+          type: boolean
+          description: Publish the tools and then the page once made, where the caller may and nothing holds it back.
+      additionalProperties: false
+    PageBundleMade:
+      type: object
+      required: [page, title, tables, tools, published, problems]
+      properties:
+        page:
+          type: string
+          description: The page's short name (the next free one when taken).
+        title:
+          type: string
+        tables:
+          type: array
+          items:
+            type: object
+            required: [name, title, asked, changed]
+            properties:
+              name:
+                type: string
+              title:
+                type: string
+              asked:
+                type: string
+              changed:
+                type: boolean
+                description: The name asked for was taken, so it was given this one.
+              id:
+                type: string
+            additionalProperties: false
+        tools:
+          type: array
+          items:
+            type: object
+            required: [command, asked, changed, name, workflow, state]
+            properties:
+              command:
+                type: string
+              asked:
+                type: string
+              changed:
+                type: boolean
+              name:
+                type: string
+              workflow:
+                type: string
+                format: uuid
+              state:
+                type: string
+                description: draft, published, pending_approval (four-eyes asks another person), not_ready, in_the_app (published through Git) or forbidden (four-eyes, and the caller is no person).
+            additionalProperties: false
+        published:
+          type: boolean
+          description: The tools and the page are in use.
+        waiting:
+          type: string
+          description: Why they are not, in plain words.
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageProblem'
+      additionalProperties: false
+    PageBuild:
+      type: object
+      required: [id, status, stage, error, goal, created_at, finished_at, page_name, proposal]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: running, proposed, failed or saved (made).
+        stage:
+          type: string
+        error:
+          type: [string, 'null']
+        goal:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: [string, 'null']
+          format: date-time
+        page_name:
+          type: [string, 'null']
+          description: The page made from it.
+        proposal:
+          type: [object, 'null']
+          additionalProperties: true
+          description: 'The draft: summary, page (page/v1), tables, tools (each {command, name, about, kind add or change, table, asks, sets, icon}), problems, warnings, rounds, valid_first_try.'
+        review:
+          type: object
+          required: [makes, uses, shows, title, parts]
+          properties:
+            makes:
+              type: array
+              items:
+                type: string
+            uses:
+              type: array
+              items:
+                type: string
+            shows:
+              type: array
+              items:
+                type: string
+            title:
+              type: string
+            parts:
+              type: array
+              items:
+                type: string
+          additionalProperties: false
+      additionalProperties: false
     PageDocument:
       type: object
       description: A page/v1 document (`schemas/page-v1.schema.json`, docs/contracts/page-v1.md).
@@ -62526,6 +65907,25 @@ components:
           type: array
           items:
             type: string
+        runs:
+          type: object
+          description: >-
+            For page.edit holders on GET: about how many runs the page's tools start a day (pages §13): the page's views a day over
+            the last seven days (a viewer counted once a minute, as a tool's answer is kept), times the tools its parts start
+            (the draft's, when there is one), beside the plan's run limits (0: none).
+          required: [views_a_day, tools, runs_a_day]
+          properties:
+            views_a_day:
+              type: integer
+            tools:
+              type: integer
+            runs_a_day:
+              type: integer
+            runs_per_day:
+              type: integer
+            runs_per_month:
+              type: integer
+          additionalProperties: false
       additionalProperties: false
     PageVersion:
       type: object
@@ -62673,6 +66073,34 @@ components:
             type:
             - boolean
             - 'null'
+        run_status:
+          type: object
+          description: >-
+            Where the row's run is (a list's or a table's status, pages H5): the run a column names, the one waiting (or that last
+            waited) under what the row names, or the one the page's address names; only a run of the part's workflow in prod.
+            The words for everyone the page opens to; the run, its times and who it waits for only with run.read.
+          required: [words, tone]
+          properties:
+            status:
+              type: string
+            words:
+              type: string
+            tone:
+              type: string
+            run:
+              type: string
+              format: uuid
+            started_at:
+              type: string
+              format: date-time
+            ended_at:
+              type: string
+              format: date-time
+            waiting_for:
+              type: array
+              items:
+                $ref: '#/components/schemas/ToolAnswerWait'
+          additionalProperties: false
       additionalProperties: false
     PageAction:
       type: object
@@ -62708,6 +66136,9 @@ components:
         'yes':
           type: boolean
           description: The person said Yes to a signal.
+        to:
+          type: string
+          description: "A board's card moved to this column (G4): the board's move tool is given filled in over the card and to, as a row's tool button is (action is not read)."
       additionalProperties: false
     PageActResult:
       type: object
@@ -62749,14 +66180,66 @@ components:
       additionalProperties: false
     PageBlock:
       type: object
-      description: One part as drawn. A heading has title and text; a figure label, value, shown, tone, lead, naira and maybe change and over; a list or table title, size, empty, count, rows, more and has_detail (a list groups, a table columns and order). G2 adds buttons (title, actions), a status (title, run, status, words, tone, started_at, ended_at, waiting_for) and parts a tool works out (from_tool; worked_at, or working while it runs). broken, error or unavailable replace the rest.
+      description: One part as drawn. A heading has title and text; a figure label, value, shown, tone, lead, naira and maybe change and over; a list or table title, size, empty, count, rows, more and has_detail (a list groups, a table columns and order). G2 adds buttons (title, actions), a status (title, run, status, words, tone, started_at, ended_at, waiting_for) and parts a tool works out (from_tool; worked_at, or working while it runs). G4 adds a board (title, size, empty, count, has_detail, lanes, move) and a chart (title, size, naira, empty, kind, points, ticks, zero, label_head, value_head, summary, over), every figure of which the server works out. broken, error or unavailable replace the rest.
       required: [id, type]
       properties:
         id:
           type: string
         type:
           type: string
-          enum: [heading, figure, list, table, buttons, status]
+          enum: [heading, figure, list, table, buttons, status, board, chart]
+        lanes:
+          type: array
+          description: A board's columns (G4), in order, each with its first cards (as a list's rows), how many it holds and the cursor for its next cards (GET /v1/pages/{name}/blocks/{block}?lane=).
+          items:
+            $ref: '#/components/schemas/PageLane'
+        move:
+          type: object
+          description: "A board's move (G4): moving a card to another column opens this tool's form, filled in (POST /v1/pages/{name}/act with to). disabled says why the caller may not use it (its roles)."
+          required: [label, tool]
+          properties:
+            label:
+              type: string
+            tool:
+              type: string
+            disabled:
+              type: string
+          additionalProperties: false
+        kind:
+          type: string
+          enum: [bars, line]
+          description: A chart's kind (G4).
+        points:
+          type: array
+          description: A chart's bars or a line's points, in order, each placed on the scale by the server (share, 0 at the scale's foot, 1 at its top).
+          items:
+            $ref: '#/components/schemas/PageChartPoint'
+        ticks:
+          type: array
+          description: A chart's scale marks, from its foot to its top.
+          items:
+            type: object
+            required: [value, shown, share]
+            properties:
+              value:
+                type: number
+              shown:
+                type: string
+              share:
+                type: number
+            additionalProperties: false
+        zero:
+          type: number
+          description: Where nought is on a chart's scale (the bars' foot), 0 to 1.
+        label_head:
+          type: string
+          description: The head of the chart's table's first column (Week, Kind).
+        value_head:
+          type: string
+          description: The head of the chart's table's figures (Amount, How many).
+        summary:
+          type: string
+          description: The chart in words, its accessible name ("Highest ₦4,500 (Week of 16 November); latest ₦1,200 (Week of 23 November), 4 in all.").
         actions:
           type: array
           description: The page's own buttons (a buttons part).
@@ -62901,6 +66384,51 @@ components:
         unavailable:
           type: string
           description: In place of a part over Taskiem's own records, why it is not drawn for this caller ("You cannot see orders.", or the area is turned off).
+      additionalProperties: false
+    PageLane:
+      type: object
+      description: One of a board's columns as drawn (G4).
+      required: [value, label, count, rows]
+      properties:
+        value:
+          type: string
+          description: The value its cards hold; send it as to to move a card here.
+        label:
+          type: string
+        count:
+          type: integer
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageRow'
+        more:
+          type:
+          - string
+          - 'null'
+          description: The cursor for this column's next cards (with lane); null at the end.
+      additionalProperties: false
+    PageChartPoint:
+      type: object
+      description: One of a chart's bars or a line's points (G4).
+      required: [label, long, value, shown, share, tick]
+      properties:
+        label:
+          type: string
+          description: Its words under the axis.
+        long:
+          type: string
+          description: Its words in the table and for a screen reader ("Week of 17 November").
+        value:
+          type: number
+        shown:
+          type: string
+          description: The value as written (naira, or a count).
+        share:
+          type: number
+          description: Its place on the scale, 0 to 1.
+        tick:
+          type: boolean
+          description: Whether its label is drawn under the axis (some are left to the table when there are many).
       additionalProperties: false
     PageDrawing:
       type: object

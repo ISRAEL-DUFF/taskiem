@@ -49,8 +49,12 @@ import 'bills_page.dart' show BillsPage, openBill;
 import 'menu_card.dart';
 import 'money_page.dart' show MoneyPage;
 import 'payments_page.dart' show SentPaymentsPage;
+import 'pay_diary.dart' show PayChatCard, PayDiaryLine;
 import 'payroll_page.dart' show PayrollPage;
+import 'payroll_run.dart' show PayrollChatCard, payrollCardOf;
+import 'payslip.dart' show PayslipChatCard, payslipCardOf;
 import 'pages_page.dart' show PagesPage, openPage;
+import 'recipes.dart' show openRecipes;
 import 'saved_accounts.dart' show SavedAccountsPage;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'purchases_page.dart' show openPurchase;
@@ -764,6 +768,9 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       if (d.briefs) (key: 'briefing', title: 'Briefing', icon: 'sparkle', line: "Today's numbers", onPick: () => pick(() => _showBriefing(d))),
       // Tasks, given and done: the Tasks screen.
       (key: 'tasks', title: 'Tasks', icon: 'check', line: 'To do, and given', onPick: () => pick(() => openTasks(context, d.chats.auth))),
+      // Ready-made tools (made tools §13): recipes to add, for builders.
+      if (can('workflow.edit'))
+        (key: 'recipes', title: 'Add a tool', icon: 'plus', line: 'Ready-made', onPick: () => pick(() => unawaited(openRecipes(context, d.chats.auth, backLabel: 'Back to Taskiem')))),
       // Clocking in and out, as "in" and "out" are said: for staff.
       if (!can('member.manage')) ...[
         (key: 'clock-in', title: 'Clock in', icon: 'clock', line: 'Start your shift', onPick: () => pick(() => d.say(text: 'in'))),
@@ -1257,11 +1264,26 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
               );
             }
           }
+          // This month's payroll (P4b-3): its card, drawn from Payrolla now.
+          if (m.kind == 'payroll_run') {
+            final card = payrollCardOf(m.text);
+            if (card != null) return PayrollChatCard(key: ValueKey('payroll-${x.id}'), auth: d.chats.auth, run: card.run, period: card.period);
+          }
+          // A payslip (P4b-4): the employee's own card, drawn from Payrolla now.
+          if (m.kind == 'payslip') {
+            final card = payslipCardOf(m.text);
+            if (card != null) return PayslipChatCard(key: ValueKey('payslip-${x.id}'), auth: d.chats.auth, payslip: card.payslip, period: card.period);
+          }
           if (m.kind == 'chart') {
             final chart = ChartData.parse(m.text);
             if (chart != null) return ChartCard(chart: chart);
           }
+          // A payment's (or a batch's) line says how it stands now (H7).
+          if (m.kind == 'diary' && (m.payment != null || m.batch != null)) {
+            return PayDiaryLine(auth: d.chats.auth, words: m.text, when: 'You, ${clock(m.createdAt)}', payment: m.payment, batch: m.batch);
+          }
           if (m.kind == 'diary') return DiaryLine(words: m.text, when: 'You, ${clock(m.createdAt)}');
+          if (m.kind == 'receipt' || m.kind == 'paid_you') return PayChatCard(auth: d.chats.auth, kind: m.kind, text: m.text, payment: m.payment, status: m.paymentStatus);
           // startsRun: a run is one side's.
           final first = prev == null || prev.m.inbound != m.inbound;
           return Padding(

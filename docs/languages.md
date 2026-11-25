@@ -18,7 +18,7 @@ Taskiem can talk to people on [WhatsApp](whatsapp.md), [USSD](ussd.md) and SMS i
 
 ## How it works
 
-**Catalogues.** Everything Taskiem says is a message id in `engine/lang/messages/<language>.json`. English (`en.json`) is the source: each entry has a `context` saying where it is sent. A message is filled with named placeholders such as `{workflow}`, which every translation must keep. A message missing from a catalogue is sent in English and logged once (`language catalogue: message missing`). A test fails the build when an English id is missing from any catalogue, when placeholders differ, or when a catalogue has an id English does not.
+**Catalogues.** Everything Taskiem says is a message id in `engine/lang/messages/<language>.json`. English (`en.json`) is the source: each entry has a `context` saying where it is sent. A message is filled with named placeholders such as `{workflow}`, which every translation must keep. A message missing from a catalogue is sent in English and logged once (`language catalogue: message missing`). A test fails the build when an English id is missing from any catalogue, when placeholders differ, or when a catalogue has an id English does not. It also fails when a translation is still the English words, unless the entry says `"same": true` (the English is right as it stands: a brand, a bare placeholder, a Pidgin word English shares); so a new message cannot ship untranslated (build-plan-gaps H8).
 
 **Words for commands.** `engine/lang/intents/<language>.json` lists, per language:
 
@@ -26,7 +26,8 @@ Taskiem can talk to people on [WhatsApp](whatsapp.md), [USSD](ussd.md) and SMS i
 - *prefixes*: words that start one, followed by what it is about (`abeg run payroll`, `bẹ̀rẹ̀ payroll`);
 - *fillers*: polite words a command may start with (`abeg`, `biko`, `don allah`);
 - *markers*: words typical of the language, used to recognise it;
-- *for_words*: the word for "for" in an invoice or an expense (`fún`, `don`, `maka`), besides English's `for` ([invoices and money](whatsapp.md#invoices-and-money-in-other-languages)).
+- *for_words*: the word for "for" in an invoice or an expense (`fún`, `don`, `maka`), besides English's `for` ([invoices and money](whatsapp.md#invoices-and-money-in-other-languages));
+- *topics*: the words a message about each of the [chat menus'](spec/chat-menus.md) topics tends to have, by the topic's id (`"money": ["owó", "ìnáwó"]`). With no model to read a message nothing recognised, the topic whose words it has, and no other as many, shows its menu: each language's best is scored, the person's language winning a tie (a weak match in it never beats a stronger English one), without accents or tone marks, a word of four letters or fewer whole (with an English ending such as *s*, *ed*, *ing*), a longer one as a word's start, so *owo* in Yoruba is the Money topic and *obi* does not find *obinrin*. A test holds every language to the catalogue's topics, with words for each.
 
 Messages are compared without case, accents or tone marks, so `bẹ́ẹ̀ni` and `beeni` match. English commands always work, whatever the language. Yes, no and cancel come only from these lists.
 
@@ -91,7 +92,7 @@ A native speaker of the language, ideally two who check each other, reviews it.
 
 1. Open `engine/lang/messages/<language>.json` beside `en.json`. For each entry, read the English `context` (where it is sent) and the draft. Fix the text. Keep every `{placeholder}` and every `*command*` word exactly as in English: commands are matched in English as well. Keep it short: buttons hold 20 characters, and USSD and SMS texts are folded to ASCII and must fit 160 characters (the tests check both).
 2. Set `"reviewed": true` on each entry you checked.
-3. Do the same for `engine/lang/intents/<language>.json`: the phrases and prefixes people would really type, and fillers and markers that are common in the language but not in English or the other three, the invoice, expense and cash words (`invoice`, `expense`, `cash_in`, `cash_out`) and `for_words`. A word must not mean a different command in English (a test checks).
+3. Do the same for `engine/lang/intents/<language>.json`: the phrases and prefixes people would really type, and fillers and markers that are common in the language but not in English or the other three, the invoice, expense and cash words (`invoice`, `expense`, `cash_in`, `cash_out`), `for_words`, and each topic's words (`topics`). A word must not mean a different command in English (a test checks).
 4. Add yourself to `"reviewers"` with the date (`"Ada Obi, 2026-11-02"`). When every entry is reviewed, set the file's `"reviewed": true` and change `"status"` from DRAFT to a line saying who reviewed it and when. A test refuses entries marked reviewed with no reviewer named.
 5. Run `go test ./engine/lang/` and open a pull request. The tester then uses the language on a test number, including voice notes, and records what failed.
 

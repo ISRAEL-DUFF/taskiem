@@ -31,6 +31,9 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'cards.dart';
 import 'code_scanner.dart';
+import 'form_request.dart' show formPlaceFinder, takeFormPhoto;
+import 'people_place.dart' show PlaceProblem, PlaceRefused, placeProblemWords;
+import 'signature_pad.dart' show Signed, signOnScreen;
 import 'groups.dart' show pickAction, pickOneOf;
 import 'saved_fill.dart';
 import 'words.dart';
@@ -358,6 +361,23 @@ class _FormValues {
   /// the code is the words typed.
   final scanned = <String, ScannedCode>{};
 
+  /// A tool's location, photo and signature (build-plan-gaps H3): the
+  /// location read at the tap (or a refusal), the photo taken with the
+  /// camera, the signature drawn on the pad.
+  final read = <String, Map<String, dynamic>>{};
+  final photos = <String, ({List<int> bytes, String name})>{};
+  final signed = <String, Signed>{};
+
+  /// Whether a device field holds an answer, a refusal included.
+  bool answered(SchemaField f) => read.containsKey(f.name) || photos.containsKey(f.name) || signed.containsKey(f.name);
+
+  /// Can't: a refusal is an answer (device fields §4).
+  void cannot(SchemaField f) {
+    photos.remove(f.name);
+    signed.remove(f.name);
+    read[f.name] = {'state': 'refused', 'reason': 'I cannot answer this here'};
+  }
+
   final List<SchemaField> fields;
   final boxes = <String, TextEditingController>{};
   final picked = <String, Object?>{};
@@ -419,7 +439,8 @@ class _FormValues {
     if (problem(f) != null) return false;
     if (!f.required) return true;
     return switch (f.kind) {
-      'yes_no' || 'device' || 'other' => true,
+      'yes_no' || 'other' => true,
+      'device' => answered(f),
       'choice' => picked[f.name] != null,
       'choices' => (picked[f.name] as List).isNotEmpty,
       _ => boxes[f.name]!.text.trim().isNotEmpty,
@@ -439,7 +460,9 @@ class _FormValues {
         case 'choices':
           if ((picked[f.name] as List).isNotEmpty) out[f.name] = picked[f.name];
         case 'device':
-          out[f.name] = {'state': 'unavailable', 'reason': 'this question cannot be answered in the app yet'};
+          // A photo or a signature goes first, on its own (the sheet's
+          // start); a location as read, or a refusal.
+          if (read[f.name] case final v?) out[f.name] = v;
         case 'money':
           final k = nairaKobo(boxes[f.name]!.text.trim());
           if (k != null) out[f.name] = k % 100 == 0 ? k ~/ 100 : k / 100;
@@ -461,7 +484,11 @@ class _FormValues {
 
 /// The tool's form: a field for each input, in a form group.
 class _SchemaForm extends StatelessWidget {
-  const _SchemaForm({required this.values, required this.onChanged, this.onSaved, this.onScan, this.picking, this.busy = false});
+  const _SchemaForm({required this.values, required this.onChanged, this.onSaved, this.onScan, this.onDevice, this.picking, this.busy = false});
+
+  /// A location, photo or signature input pressed: the phone is asked
+  /// now, after its why (build-plan-gaps H3).
+  final void Function(SchemaField f)? onDevice;
 
   /// A scan field's Scan pressed: the camera reads its code.
   final void Function(SchemaField f)? onScan;
@@ -477,11 +504,59 @@ class _SchemaForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fields = values.fields.where((f) => f.kind != 'device' && f.kind != 'other').toList();
+    final fields = values.fields.where((f) => f.kind != 'other' && (f.kind != 'device' || onDevice != null)).toList();
     return TkFormGroup(children: [for (final f in fields) _field(context, f)]);
   }
 
   String _label(SchemaField f) => f.required || f.kind == 'yes_no' ? f.label : '${f.label} (optional)';
+
+  /// A location, a photo or a signature (build-plan-gaps H3), asked as a
+  /// form step's are: its why until it is answered, then what it holds;
+  /// the phone asked only at the tap; Can't is an answer.
+  Widget _device(SchemaField f) {
+    final kind = f.prop['type'] as String? ?? '';
+    final got = values.read[f.name];
+    final cant = got?['state'] != null;
+    final photo = values.photos[f.name];
+    final sign = values.signed[f.name];
+    final why = f.prop['why'] is String ? 'Why: ${f.prop['why']}' : f.hint;
+    final (String action, String icon, String? said) = switch (kind) {
+      'location' => (
+        got != null && !cant ? 'Read it again' : 'Use my location',
+        'b-pin',
+        got != null && !cant ? (got['accuracy_m'] != null ? 'Read by your phone, to within ${got['accuracy_m']} m' : 'Read by your phone') : null,
+      ),
+      'photo' => (photo != null ? 'Take it again' : 'Take a photo', 'b-camera', photo != null ? 'Taken with your camera now' : null),
+      _ => (
+        sign != null ? 'Sign again' : 'Sign on the screen',
+        'b-note',
+        sign != null ? (sign.name != null ? 'Signed by ${sign.name}' : 'Signed on this phone') : null,
+      ),
+    };
+    return TkKitField(
+      label: _label(f),
+      hint: cant ? 'You said you can’t answer this' : (said ?? why),
+      field: false,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          TkSmallButton(label: action, icon: icon, primary: !values.answered(f), semantics: '$action: ${f.label}', onPressed: busy || onDevice == null ? null : () => onDevice!(f)),
+          if (!values.answered(f))
+            TkSmallButton(
+              label: 'Can’t',
+              semantics: 'I can’t answer ${f.label}',
+              onPressed: busy
+                  ? null
+                  : () {
+                      values.cannot(f);
+                      onChanged();
+                    },
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget _field(BuildContext context, SchemaField f) {
     final t = TkTheme.tokens(context);
@@ -536,6 +611,8 @@ class _SchemaForm extends StatelessWidget {
             },
           ),
         );
+      case 'device':
+        return _device(f);
       case 'scan':
         final read = values.scanned[f.name];
         final typed = values.boxes[f.name]!.text.trim();
@@ -754,6 +831,55 @@ class _MadeToolSheetState extends State<MadeToolSheet> {
     });
   }
 
+  /// A location, a photo or a signature input (build-plan-gaps H3): the
+  /// phone asked now, at the tap, after the input's why, as a form step's
+  /// are (form_request.dart): the location once, the camera (never the
+  /// gallery), the pad.
+  Future<void> _askDevice(SchemaField f) async {
+    final kind = f.prop['type'];
+    final why = f.prop['why'] as String?;
+    if (kind == 'location') {
+      try {
+        final at = await formPlaceFinder.here();
+        if (!mounted) return;
+        final now = DateTime.now().toUtc().toIso8601String().split('.').first;
+        setState(() => _values.read[f.name] = {'lat': at.lat, 'lng': at.lng, 'accuracy_m': ?at.accuracy?.round(), 'at': '${now}Z', 'fix': 'gps'});
+      } on PlaceRefused catch (e) {
+        if (!mounted) return;
+        setState(
+          () => _values.read[f.name] = e.problem == PlaceProblem.refused || e.problem == PlaceProblem.refusedForever
+              ? {'state': 'refused', 'reason': 'the phone was not allowed to read where I am'}
+              : {'state': 'unavailable', 'reason': 'the phone could not read where I am'},
+        );
+        showTkToast(context, placeProblemWords(e.problem), error: true);
+      }
+      return;
+    }
+    if (kind == 'photo') {
+      final p = await takeFormPhoto();
+      if (p == null || !mounted) return;
+      setState(() => (_values.photos[f.name] = p, _values.read.remove(f.name)));
+      return;
+    }
+    final got = await signOnScreen(context, title: f.label, why: why, askName: f.prop['ask_name'] == true, backLabel: 'Back to ${widget.tool.name}');
+    if (got == null || !mounted) return;
+    setState(() => (_values.signed[f.name] = got, _values.read.remove(f.name)));
+  }
+
+  /// The photos and signatures sent first, each held for this tool's
+  /// input (POST /v1/tools/{command}/files), and named by their id.
+  Future<void> _sendFiles(Map<String, dynamic> input) async {
+    final path = '/v1/tools/${Uri.encodeComponent(widget.tool.command)}/files';
+    for (final e in _values.photos.entries) {
+      final r = await widget.auth.transport.uploadFiles(path, files: [(field: e.key, bytes: e.value.bytes, filename: 'photo.jpg', type: 'image/jpeg')], fields: {'app': 'app'});
+      input[e.key] = {'file': HoldToolFileResponse.fromJson(r! as Map<String, dynamic>).file.id};
+    }
+    for (final e in _values.signed.entries) {
+      final r = await widget.auth.transport.uploadFiles(path, files: [(field: e.key, bytes: e.value.png, filename: 'signature.png', type: 'image/png')], fields: {'app': 'app'});
+      input[e.key] = {'file': HoldToolFileResponse.fromJson(r! as Map<String, dynamic>).file.id, 'signed_by': ?e.value.name};
+    }
+  }
+
   bool get _asks => _alwaysAsk || widget.tool.care.level != 'answers';
 
   void _done(String run, List<ToolStartValuesItem> values) {
@@ -783,6 +909,7 @@ class _MadeToolSheetState extends State<MadeToolSheet> {
     setState(() => (_busy = true, _problems = null, _error = null));
     final input = _values.input();
     try {
+      await _sendFiles(input);
       final s = await widget.auth.api.startTool(
         command: widget.tool.command,
         body: StartToolRequest(input: input, button: widget.button),
@@ -862,14 +989,15 @@ class _MadeToolSheetState extends State<MadeToolSheet> {
   Widget _form(BuildContext context) {
     final look = TkLook.of(context);
     final t = TkTheme.tokens(context);
-    final shown = _values.fields.where((f) => f.kind != 'device' && f.kind != 'other');
+    final shown = _values.fields.where((f) => f.kind != 'other');
+    final typed = shown.where((f) => f.kind != 'device');
     return TkFormSheet(
       title: widget.tool.name,
       crumb: '/${widget.tool.command}',
       action: _busy ? 'Starting…' : (_asks ? 'Next' : 'Run it'),
       onAction: _busy || !_values.ready ? null : _start,
       children: [
-        if (shown.isNotEmpty)
+        if (typed.isNotEmpty)
           TkFormGroup(
             title: 'Fill from words',
             children: [
@@ -894,7 +1022,7 @@ class _MadeToolSheetState extends State<MadeToolSheet> {
             ],
           ),
         if (shown.isNotEmpty)
-          _SchemaForm(values: _values, onChanged: () => setState(() {}), onSaved: _fromSaved, onScan: _scanInto, picking: _picking, busy: _busy)
+          _SchemaForm(values: _values, onChanged: () => setState(() {}), onSaved: _fromSaved, onScan: _scanInto, onDevice: _askDevice, picking: _picking, busy: _busy)
         else
           TkFormGroup(
             children: [

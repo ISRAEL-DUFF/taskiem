@@ -1,0 +1,29 @@
+{
+  "id": "expenses-month",
+  "title": "Expenses this month",
+  "about": "What was spent this month, a chart by week, every expense, and a button to log one.",
+  "icon": "money",
+  "tables": [
+    {"name": "expenses", "title": "Expenses", "columns": [
+      {"name": "what", "title": "What", "type": "text", "required": true},
+      {"name": "amount", "title": "Amount", "type": "number"},
+      {"name": "note", "title": "Note", "type": "text"}]}
+  ],
+  "tools": [
+    {"command": "log-expense", "name": "Log an expense", "about": "Records money spent, with what it was for", "kind": "recipe",
+     "recipe": "tool-add-a-record", "params": {"table": "expenses"}, "icon": "receipt"}
+  ],
+  "page": {"page": "page/v1", "name": "expenses-month", "title": "Expenses this month", "icon": "money", "about": "What was spent this month, by week",
+    "blocks": [
+      {"id": "total", "type": "figure", "label": "Spent this month", "value": "sum", "of": "amount", "lead": true,
+       "change": {"column": "created_at", "period": "month"}, "source": {"table": "expenses"}},
+      {"id": "count", "type": "figure", "label": "Expenses this month", "value": "count",
+       "change": {"column": "created_at", "period": "month"}, "source": {"table": "expenses"}},
+      {"id": "log", "type": "buttons", "actions": [{"label": "Log an expense", "tool": "log-expense"}]},
+      {"id": "weeks", "type": "chart", "title": "Spent by week", "source": {"table": "expenses"},
+       "chart": {"kind": "bars", "of": "amount", "by": "created_at", "period": "week", "last": 5}},
+      {"id": "rows", "type": "table", "title": "Expenses", "source": {"table": "expenses", "order": [{"column": "created_at", "desc": true}]},
+       "columns": [{"column": "what", "label": "What"}, {"column": "amount", "label": "Amount"}, {"column": "note", "label": "Note"}, {"column": "created_at", "label": "When"}],
+       "empty": "Nothing logged yet"}
+    ]}
+}

@@ -45,6 +45,20 @@ type OAuthClient struct {
 // URL, under PublicURL, is what they must have registered.
 const oauthCallbackPath = "/v1/connections/oauth/callback"
 
+// payrollaCallbackPath is where Payrolla sends the browser back
+// (registered with Payrolla: payrolla-reference/08-taskiem-answers.md),
+// served by the same handler as oauthCallbackPath.
+const payrollaCallbackPath = "/v1/payrolla/callback"
+
+// oauthCallbackFor is the callback path a connector's provider has
+// registered for Taskiem: Payrolla's own, else the connections callback.
+func oauthCallbackFor(c *connector.Connector) string {
+	if c != nil && c.Manifest.ID == payrollaID {
+		return payrollaCallbackPath
+	}
+	return oauthCallbackPath
+}
+
 // oauthBrowserCookie binds a linking request to the browser that started
 // it: the callback is taken only with it, so a consent link sent to
 // someone else cannot put their account into this organisation. Sent only
@@ -90,11 +104,24 @@ func (s *Server) oauthFor(c *connector.Connector, mode string) (oauthProvider, e
 	if s.PublicURL == "" {
 		return oauthProvider{}, fmt.Errorf("%w: connecting by OAuth needs TASKIEM_PUBLIC_URL, which is not set", errOAuthUnavailable)
 	}
-	authorize, token, revoke, err := o.Resolve(c.Manifest.BaseURL)
+	// ${server} is the mode's own address where it has one (Payrolla's
+	// token endpoint is on each deployment's API host).
+	server := c.Manifest.BaseURL
+	if u, ok := c.Manifest.ModeURL(mode); ok {
+		server = u
+	}
+	authorize, token, revoke, err := o.Resolve(server)
 	if err != nil {
 		return oauthProvider{}, fmt.Errorf("%w: %s cannot be linked on this platform: %w", errOAuthUnavailable, c.Manifest.Name, err)
 	}
-	return oauthProvider{authorize: authorize, token: token, revoke: revoke, server: strings.TrimRight(c.Manifest.BaseURL, "/"), client: client, redirect: s.oauthRedirectURI()}, nil
+	// A mode's own consent page (Payrolla's sign-in app per deployment).
+	if own, ok := c.Manifest.ModeAuthorizeURL(mode); !ok {
+		return oauthProvider{}, fmt.Errorf("%w: Taskiem does not know %s's sign-in page for %s connections on this platform; add a connection with its credentials instead",
+			errOAuthUnavailable, c.Manifest.Name, mode)
+	} else if own != o.AuthorizeURL {
+		authorize = own
+	}
+	return oauthProvider{authorize: authorize, token: token, revoke: revoke, server: strings.TrimRight(server, "/"), client: client, redirect: s.PublicURL + oauthCallbackFor(c)}, nil
 }
 
 // forAccount resolves the endpoints that live where the account does
@@ -136,8 +163,6 @@ func (s *Server) oauthModes(c *connector.Connector) []string {
 	}
 	return out
 }
-
-func (s *Server) oauthRedirectURI() string { return s.PublicURL + oauthCallbackPath }
 
 // connectorByID finds a tenant's connector by its manifest id (what the
 // connections table stores), as a connection names it.
@@ -188,7 +213,7 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 		s.failOAuth(w, r, err)
 		return
 	}
-	s.setOAuthBrowser(w, browser)
+	s.setOAuthBrowser(w, browser, c)
 	writeJSON(w, http.StatusOK, map[string]any{"url": link, "expires_in": int(secrets.OAuthRequestTTL.Seconds())})
 }
 
@@ -197,6 +222,18 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 // URL, with the state and the PKCE challenge (S256), the browser binding
 // to set as a cookie, and the name.
 func (s *Server) beginOAuthConnection(ctx context.Context, p *Principal, c *connector.Connector, env, name, chosen string) (consent, browser, _ string, err error) {
+	return s.beginOAuth(ctx, p, c, env, name, chosen, oauthBegin{})
+}
+
+// oauthBegin is what a linking request adds to the plain one: parameters
+// for the consent page (Payrolla's sign-up fields) and the connection the
+// callback moves onto the new tokens (reconnecting).
+type oauthBegin struct {
+	extra    url.Values
+	replaces *uuid.UUID
+}
+
+func (s *Server) beginOAuth(ctx context.Context, p *Principal, c *connector.Connector, env, name, chosen string, o oauthBegin) (consent, browser, _ string, err error) {
 	mode, err := connectionMode(c, nil, chosen)
 	if err != nil {
 		return "", "", "", err
@@ -220,10 +257,13 @@ func (s *Server) beginOAuthConnection(ctx context.Context, p *Principal, c *conn
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM connections WHERE environment = $1 AND connector = $2 AND name = $3)`, env, c.Manifest.ID, name).Scan(&exists); err != nil {
 			return err
 		}
-		if exists {
-			return fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, name, env)
+		if exists != (o.replaces != nil) {
+			if exists {
+				return fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, name, env)
+			}
+			return secrets.ErrNotFound
 		}
-		state, browser, verifier, err = s.Vault.BeginOAuthRequestTx(ctx, tx, p.TenantID, c.Ref(), env, name, mode, p.Actor())
+		state, browser, verifier, err = s.Vault.BeginOAuthReconnectTx(ctx, tx, p.TenantID, c.Ref(), env, name, mode, p.Actor(), o.replaces)
 		return err
 	})
 	if err != nil {
@@ -244,12 +284,17 @@ func (s *Server) beginOAuthConnection(ctx context.Context, p *Principal, c *conn
 	for k, v := range c.Manifest.Auth.OAuth2.AuthorizeParams {
 		q.Set(k, v)
 	}
+	for k, v := range o.extra {
+		if q.Get(k) == "" && len(v) > 0 && v[0] != "" {
+			q.Set(k, v[0])
+		}
+	}
 	return prov.authorize + "?" + q.Encode(), browser, name, nil
 }
 
 // setOAuthBrowser binds a linking request to this browser.
-func (s *Server) setOAuthBrowser(w http.ResponseWriter, browser string) {
-	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: browser, Path: oauthCallbackPath, MaxAge: int(secrets.OAuthRequestTTL.Seconds()), //nolint:gosec // Secure is TASKIEM_SECURE_COOKIES (on by default), as for the session cookie
+func (s *Server) setOAuthBrowser(w http.ResponseWriter, browser string, c *connector.Connector) {
+	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: browser, Path: oauthCallbackFor(c), MaxAge: int(secrets.OAuthRequestTTL.Seconds()), //nolint:gosec // Secure is TASKIEM_SECURE_COOKIES (on by default), as for the session cookie
 		HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode})
 }
 
@@ -272,7 +317,7 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	q := r.URL.Query()
 	ctx := r.Context()
 	cookie, _ := r.Cookie(oauthBrowserCookie)
-	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: "", Path: oauthCallbackPath, MaxAge: -1, HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode}) //nolint:gosec // as when it is set
+	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: "", Path: r.URL.Path, MaxAge: -1, HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode}) //nolint:gosec // as when it is set
 	if cookie == nil {
 		s.oauthDone(w, r, "", fmt.Errorf("%w: finish linking in the browser where you started it (start again from Connections)", errOAuthGrant))
 		return
@@ -297,7 +342,7 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	link := s.oauthLinkOf(ctx, req, c, q.Get("state"))
 	done := func(id string, err error) {
 		if link == nil {
-			s.oauthDone(w, r, id, err)
+			s.oauthDoneAt(w, r, oauthReturnFor(c), id, err)
 			return
 		}
 		if err == nil {
@@ -309,9 +354,15 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	}
 
 	if e := q.Get("error"); e != "" {
-		if e == "access_denied" {
+		switch {
+		case e == "access_denied" && c.Manifest.ID == payrollaID:
+			done("", fmt.Errorf("%w: you didn't allow Taskiem in Payrolla. Nothing changed", errOAuthGrant))
+		case e == "access_denied":
 			done("", fmt.Errorf("%w: you did not approve the connection in %s", errOAuthGrant, c.Manifest.Name))
-		} else {
+		default:
+			// A connect screen's error (Payrolla's INVALID_REDIRECT_URI and
+			// the rest) is Taskiem's registration being wrong: logged.
+			s.Logger.Error("oauth: the provider refused Taskiem's request", "connector", c.Manifest.ID, "error", e, "description", q.Get("error_description"))
 			done("", fmt.Errorf("%w: %s refused the request (%s: %s)", errOAuthProvider, c.Manifest.Name, e, q.Get("error_description")))
 		}
 		return
@@ -358,7 +409,10 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	if err == nil && c.Link != nil {
 		// The grant made into the account (Meta: the one Page, its own
 		// token, subscribed to Taskiem's app: rule 21).
-		creds, err = s.oauthLink(ctx, req.Tenant, c, prov, creds, token)
+		// In the connection's mode, so the connector reaches the right deployment.
+		if creds, err = s.oauthLink(ctx, req.Tenant, c, prov, withMode(creds, req.Mode), token); err == nil {
+			delete(creds, connector.ModeKey)
+		}
 		// What it made lasts as the connector says, not as the granted
 		// token did (a Page token does not expire).
 		expiresAt = nil
@@ -387,7 +441,13 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	var id uuid.UUID
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{req.Tenant}, func(tx pgx.Tx) error {
 		var err error
-		if id, err = s.Vault.CreateOAuthConnectionTx(ctx, tx, req.Tenant, req.Environment, c.Manifest.ID, req.Name, creds, expiresAt, req.Person); err != nil {
+		if req.Replaces != nil {
+			// Reconnecting: the same connection moves onto the new tokens.
+			id = *req.Replaces
+			if err := s.reconnectOAuthTx(ctx, tx, req, c, creds, expiresAt); err != nil {
+				return err
+			}
+		} else if id, err = s.Vault.CreateOAuthConnectionTx(ctx, tx, req.Tenant, req.Environment, c.Manifest.ID, req.Name, creds, expiresAt, req.Person); err != nil {
 			return err
 		}
 		if err := setConnectionMode(ctx, tx, id, req.Mode); err != nil {
@@ -400,7 +460,19 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 				return err
 			}
 		}
-		return secrets.SetRouteKeysTx(ctx, tx, req.Tenant, id, c.Manifest.RouteKeys(creds))
+		if err := secrets.SetRouteKeysTx(ctx, tx, req.Tenant, id, c.Manifest.RouteKeys(creds)); err != nil {
+			return err
+		}
+		// The connection's own subscriptions (registration: connection),
+		// made again on the new tokens when reconnecting, and the
+		// workflows' subscriptions applied again with them.
+		if _, err := declareConnectionSubscriptions(ctx, tx, req.Tenant, req.Environment, c, req.Name, creds); err != nil {
+			return err
+		}
+		if req.Replaces != nil {
+			return remote.RepairConnection(ctx, tx, req.Environment, c.Ref(), req.Name)
+		}
+		return nil
 	})
 	if err != nil {
 		var pgErr interface{ SQLState() string }
@@ -414,12 +486,33 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{req.Tenant}, func(tx pgx.Tx) error { return remote.Retry(ctx, tx, req.Environment, c.Ref()) }); err != nil {
 		s.Logger.Warn("remote subscriptions: retrying after a new connection", "err", err)
 	}
+	if s.Remote != nil {
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), remoteWait)
+		if err := s.Remote.ReconcileTenant(rctx, req.Tenant); err != nil {
+			s.Logger.Warn("remote subscriptions: applying a new connection's", "err", err)
+		}
+		cancel()
+	}
 	done(id.String(), nil)
 }
 
 // oauthDone sends the browser to the Connections page: ?linked=<id>, or
 // ?error=<what went wrong>, in words meant for the person.
 func (s *Server) oauthDone(w http.ResponseWriter, r *http.Request, linked string, err error) {
+	s.oauthDoneAt(w, r, "/connections", linked, err)
+}
+
+// oauthReturnFor is the page a linking ends on: Payroll's settings for
+// Payrolla (connected or reconnected from there), else Connections.
+func oauthReturnFor(c *connector.Connector) string {
+	if c.Manifest.ID == payrollaID {
+		return "/payroll/settings"
+	}
+	return "/connections"
+}
+
+// oauthDoneAt is oauthDone ending on page.
+func (s *Server) oauthDoneAt(w http.ResponseWriter, r *http.Request, page, linked string, err error) {
 	q := url.Values{}
 	if err != nil {
 		s.Logger.Warn("oauth connection refused", "err", err, "ip", clientIP(r))
@@ -438,7 +531,7 @@ func (s *Server) oauthDone(w http.ResponseWriter, r *http.Request, linked string
 	} else {
 		q.Set("linked", linked)
 	}
-	http.Redirect(w, r, s.PublicURL+"/connections?"+q.Encode(), http.StatusFound)
+	http.Redirect(w, r, s.PublicURL+page+"?"+q.Encode(), http.StatusFound)
 }
 
 var (

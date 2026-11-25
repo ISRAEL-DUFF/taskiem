@@ -1,0 +1,564 @@
+<title>Taskiem Landing Page</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+<style>
+/* Layout: loud stacked word-blocks up top, then full-bleed colour bands that tilt straight as they pass a sticky phone whose chat plays the band's story. */
+:root{
+  --pine:#0d3b2e; --lime:#c8f169; --coral:#ff7a59; --sun:#ffd447; --lilac:#c9b8ff; --white:#ffffff;
+  --ground:#f1f4ef; --card:#ffffff; --line:#d9e2d9; --head:#0d3b2e; --ink:#13261f; --body:#43544c; --muted:#5b6b64;
+  --btn:#0d3b2e; --btn-ink:#ffffff; --link:#0d3b2e;
+  --chat-bg:#efeae2; --chat-in:#ffffff; --chat-out:#d9fdd3; --chat-ink:#111b21; --chat-time:#667781; --chat-head:#f7f8f6;
+  --f-display:'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0d0e0c; --card:#161815; --line:#2b2e29; --head:#ededea; --ink:#ededea; --body:#b8bcb4; --muted:#9da29a;
+    --btn:#c8f169; --btn-ink:#0d3b2e; --link:#c8f169;
+    --chat-bg:#0b141a; --chat-in:#202c33; --chat-out:#005c4b; --chat-ink:#e9edef; --chat-time:#8696a0; --chat-head:#1f2c33;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0d0e0c; --card:#161815; --line:#2b2e29; --head:#ededea; --ink:#ededea; --body:#b8bcb4; --muted:#9da29a;
+  --btn:#c8f169; --btn-ink:#0d3b2e; --link:#c8f169;
+  --chat-bg:#0b141a; --chat-in:#202c33; --chat-out:#005c4b; --chat-ink:#e9edef; --chat-time:#8696a0; --chat-head:#1f2c33;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;overflow-x:clip}
+body{background:var(--ground);color:var(--body);font-family:var(--f-display);font-size:18px;line-height:1.55;overflow-x:clip;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--ground)}
+h1,h2,h3,p,ol,ul{margin:0}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.label{font-family:var(--f-mono);font-size:13px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;line-height:1.4}
+.num{font-variant-numeric:tabular-nums}
+:focus-visible{outline:3px solid var(--link);outline-offset:3px;border-radius:8px}
+
+/* ---------- header ---------- */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;padding-block:14px}
+.bar{display:flex;align-items:center;gap:16px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:10px 10px 10px 22px;box-shadow:0 8px 30px -18px rgba(13,59,46,.35)}
+.logo{display:flex;align-items:center;gap:10px;min-height:44px}
+.logo svg{display:block}
+.logo .mk{width:34px;height:34px}
+.logo .wm svg{height:24px;width:auto}
+.wm-rev{display:none}
+:root[data-theme="dark"] .wm-std{display:none} :root[data-theme="dark"] .wm-rev{display:block}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .wm-std{display:none} :root:not([data-theme="light"]) .wm-rev{display:block}}
+.nav{display:flex;gap:4px;margin-inline:auto}
+.nav a{font-weight:700;font-size:16px;color:var(--ink);padding:10px 14px;border-radius:12px;transition:background .2s}
+.nav a:hover{background:var(--ground)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:0 22px;border-radius:14px;font-weight:800;font-size:16px;border:2px solid transparent;transition:transform .18s cubic-bezier(.3,1.6,.6,1),box-shadow .18s;white-space:nowrap}
+.btn:hover{transform:translateY(-2px) rotate(-1deg)}
+.btn-main{background:var(--btn);color:var(--btn-ink)}
+.btn-alt{border-color:var(--btn);color:var(--link)}
+.btn-big{min-height:60px;padding:0 30px;font-size:18px;border-radius:18px}
+.theme{width:48px;height:48px;border-radius:14px;border:1px solid var(--line);background:var(--ground);color:var(--ink);display:grid;place-items:center;cursor:pointer}
+.theme svg{width:22px;height:22px}
+.theme .moon{display:none}
+:root[data-theme="dark"] .theme .sun{display:none} :root[data-theme="dark"] .theme .moon{display:block}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .theme .sun{display:none} :root:not([data-theme="light"]) .theme .moon{display:block}}
+@media (max-width:860px){.nav{display:none}.bar{justify-content:space-between}.bar .btn{margin-left:auto}}
+@media (max-width:460px){.bar .btn{display:none}}
+
+/* ---------- hero ---------- */
+.hero{padding-block:clamp(40px,7vw,96px) 0;text-align:center}
+.stack{display:flex;flex-direction:column;align-items:center;gap:clamp(6px,.8vw,12px);font-size:clamp(38px,8.6vw,116px)}
+.row{display:flex;justify-content:center;gap:clamp(6px,.8vw,12px);flex-wrap:wrap;max-width:100%}
+.blk{display:inline-block;font-weight:800;line-height:1;letter-spacing:-.045em;padding:.1em .22em .14em;border-radius:.2em;color:var(--pine);animation:drop .9s cubic-bezier(.2,1.5,.4,1) both;animation-delay:calc(var(--d,0) * 110ms + 120ms);transition:transform .35s cubic-bezier(.3,1.8,.5,1)}
+.blk:hover{transform:rotate(var(--tilt,-2deg)) scale(1.02)}
+.b-pine{background:var(--pine);color:var(--lime)}
+.b-coral{background:var(--coral)}
+.b-sun{background:var(--sun)}
+.b-lilac{background:var(--lilac)}
+.tile{display:grid;place-items:center;width:1.22em;aspect-ratio:1;max-width:100%;animation:spin 1.1s cubic-bezier(.2,1.4,.4,1) both;animation-delay:620ms}
+.tile svg{width:100%;height:100%;display:block}
+@keyframes drop{from{transform:translateY(-.7em) rotate(var(--r0,-6deg)) scale(.9)}to{transform:none}}
+@keyframes spin{from{transform:rotate(-200deg) scale(.4)}to{transform:none}}
+.lede{max-width:40ch;margin:clamp(28px,3.5vw,44px) auto 0;font-size:clamp(18px,1.6vw,21px);color:var(--body);text-wrap:pretty}
+.cta-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:28px}
+.fine{margin-top:16px;font-size:15px;color:var(--muted)}
+@media (max-width:520px){.cta-row .btn{width:100%}}
+
+/* marquee */
+.works{margin-top:clamp(48px,6vw,80px);padding-block:20px 8px}
+.works .label{color:var(--muted);text-align:center}
+.marquee{margin-top:16px;overflow:hidden;mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent)}
+.track{display:flex;gap:12px;width:max-content;animation:slide 38s linear infinite}
+.marquee:hover .track{animation-play-state:paused}
+.chip{display:inline-flex;align-items:center;gap:10px;min-height:46px;padding:0 18px;border-radius:999px;border:1px solid var(--line);background:var(--card);font-weight:700;font-size:16px;color:var(--ink);white-space:nowrap}
+.chip i{width:10px;height:10px;border-radius:50%;background:var(--c,var(--pine))}
+@keyframes slide{to{transform:translateX(-50%)}}
+
+/* ---------- feature bands ---------- */
+.features{margin-top:clamp(64px,8vw,120px)}
+.feat-head{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:16px 40px;margin-bottom:clamp(28px,4vw,48px)}
+.feat-head .label{color:var(--link)}
+.h2{font-weight:800;font-size:clamp(34px,4.6vw,62px);line-height:1.02;letter-spacing:-.035em;color:var(--head);text-wrap:balance}
+.feat-head p{max-width:38ch;color:var(--body)}
+.feat-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:clamp(24px,4vw,56px);align-items:start}
+.bands{display:flex;flex-direction:column;gap:clamp(20px,3vw,40px)}
+.band{--bg:var(--coral);--fg:var(--pine);--pill:var(--pine);--pill-ink:var(--lime);background:var(--bg);color:var(--fg);border-radius:32px;padding:clamp(28px,4.5vw,64px);min-height:min(78vh,700px);display:flex;flex-direction:column;justify-content:center;gap:clamp(18px,2vw,28px);transform-origin:50% 60%;will-change:transform}
+.band.sun{--bg:var(--sun)}
+.band.lilac{--bg:var(--lilac)}
+.band.pine{--bg:var(--pine);--fg:var(--white);--pill:var(--lime);--pill-ink:var(--pine)}
+.band .label{opacity:.8}
+.band.pine .label{color:var(--lime);opacity:1}
+.band-h{font-weight:800;text-transform:uppercase;font-size:clamp(36px,5.6vw,80px);line-height:.98;letter-spacing:-.03em;text-wrap:balance}
+.rot{display:block;margin-top:.12em}
+.rot-win{display:inline-block;height:1.16em;overflow:hidden;vertical-align:top;background:var(--pill);color:var(--pill-ink);border-radius:.18em;padding:0 .2em}
+.rot-list{display:flex;flex-direction:column;animation:rot 7.5s cubic-bezier(.7,0,.2,1) infinite}
+.rot-list span{display:block;height:1.16em;line-height:1.16em;white-space:nowrap}
+@keyframes rot{0%,27%{transform:translateY(0)}33%,60%{transform:translateY(-1.16em)}66%,94%{transform:translateY(-2.32em)}100%{transform:translateY(-3.48em)}}
+.band-p{max-width:44ch;font-size:clamp(17px,1.4vw,20px);font-weight:600;line-height:1.5}
+.band.pine .band-p{color:rgba(255,255,255,.86)}
+.band-chat{display:none}
+.stage{position:sticky;top:calc(env(safe-area-inset-top,0px) + 108px);display:grid;place-items:center}
+.stage::before{content:"";position:absolute;inset:8% -8%;border-radius:40%;background:var(--accent,var(--coral));filter:blur(50px);opacity:.45;transition:background .6s}
+@media (max-width:959px){
+  .feat-grid{grid-template-columns:minmax(0,1fr)}
+  .stage{display:none}
+  .band{min-height:0}
+  .band-chat{display:flex;border-radius:22px;max-height:none}
+}
+
+/* phone + chat */
+.phone{position:relative;width:340px;max-width:100%;height:min(680px,calc(100vh - 140px));min-height:520px;border-radius:48px;background:#0f1110;padding:11px;box-shadow:0 40px 80px -40px rgba(0,0,0,.55),inset 0 0 0 2px #2c302d;animation:float 6s ease-in-out infinite}
+@keyframes float{50%{transform:translateY(-10px) rotate(.6deg)}}
+.screen{height:100%;border-radius:38px;overflow:hidden;display:flex;flex-direction:column;background:var(--chat-bg)}
+.notch{position:absolute;top:20px;left:50%;width:96px;height:26px;margin-left:-48px;border-radius:20px;background:#0f1110;z-index:2}
+.chat-head{display:flex;align-items:center;gap:10px;padding:46px 16px 12px;background:var(--chat-head);color:var(--chat-ink);border-bottom:1px solid rgba(0,0,0,.06)}
+.chat-head svg{width:34px;height:34px;flex:none}
+.chat-head b{display:block;font-size:15px;line-height:1.2}
+.chat-head small{font-size:12px;color:var(--chat-time)}
+.chat{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:7px;padding:14px 12px;overflow:hidden;background:var(--chat-bg);color:var(--chat-ink);font-size:14px;line-height:1.42}
+.m{max-width:86%;padding:8px 11px 6px;border-radius:12px;background:var(--chat-in);box-shadow:0 1px 1px rgba(0,0,0,.1);align-self:flex-start;border-top-left-radius:4px;white-space:pre-line}
+.m.out{background:var(--chat-out);align-self:flex-end;border-top-left-radius:12px;border-top-right-radius:4px}
+.m time{display:block;text-align:right;font-size:11px;color:var(--chat-time);margin-top:2px;font-family:var(--f-display)}
+.m .acts{display:flex;gap:6px;margin-top:8px}
+.m .acts span{flex:1;text-align:center;padding:7px 6px;border-radius:8px;border:1px solid rgba(0,0,0,.12);font-weight:700;font-size:13px;color:#0a7c66}
+.m .big{display:block;font-size:22px;font-weight:800;letter-spacing:-.02em;margin:2px 0}
+.voice{display:flex;align-items:center;gap:8px;min-width:190px}
+.voice .play{width:0;height:0;border-left:11px solid var(--chat-time);border-top:7px solid transparent;border-bottom:7px solid transparent}
+.voice .wave{flex:1;height:22px;display:flex;align-items:center;gap:2px}
+.voice .wave i{flex:1;background:var(--chat-time);border-radius:2px;height:var(--h)}
+.typing{align-self:flex-start;display:flex;gap:4px;padding:12px 14px;border-radius:12px;border-top-left-radius:4px;background:var(--chat-in)}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--chat-time);animation:blink 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes blink{0%,60%,100%{opacity:.3;transform:none}30%{opacity:1;transform:translateY(-3px)}}
+.m.hid,.typing.hid{display:none}
+.m.pop{animation:pop .45s cubic-bezier(.2,1.5,.4,1)}
+@keyframes pop{from{transform:scale(.6) translateY(12px);opacity:0}}
+
+/* ---------- safety ---------- */
+.safety{margin-top:clamp(72px,9vw,140px)}
+.vault{background:var(--pine);color:var(--white);border-radius:36px;padding:clamp(28px,5vw,72px);display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:clamp(28px,4vw,64px);align-items:center;overflow:hidden}
+.vault .label{color:var(--lime)}
+.vault h2{margin-top:14px;font-weight:800;font-size:clamp(38px,5.4vw,76px);line-height:1;letter-spacing:-.04em;text-wrap:balance}
+.vault h2 .rot-win{--pill:var(--lime);background:var(--lime);color:var(--pine);margin-top:.1em}
+.points{list-style:none;padding:0;margin-top:clamp(24px,3vw,40px);display:grid;gap:18px}
+.points li{display:grid;grid-template-columns:44px minmax(0,1fr);gap:14px;align-items:start}
+.points .ic{width:44px;height:44px;border-radius:12px;background:var(--lime);color:var(--pine);display:grid;place-items:center}
+.points .ic svg{width:22px;height:22px}
+.points b{display:block;font-size:19px;color:var(--white)}
+.points span{color:rgba(255,255,255,.8);font-size:16px}
+.approve{background:#f1f4ef;color:#13261f;border-radius:26px;padding:26px;box-shadow:0 30px 60px -30px rgba(0,0,0,.6);transform:rotate(2deg);max-width:420px;justify-self:center;width:100%}
+.approve .label{color:#0d3b2e;opacity:.75}
+.approve h3{margin-top:8px;font-size:22px;line-height:1.2;letter-spacing:-.02em;color:#0d3b2e}
+.approve .amt{font-size:clamp(34px,3.4vw,44px);font-weight:800;letter-spacing:-.03em;color:#0d3b2e;margin-top:6px}
+.approve .who{display:flex;margin-top:14px}
+.approve .who i{width:34px;height:34px;border-radius:50%;border:3px solid #f1f4ef;margin-left:-8px;display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:800;color:#0d3b2e}
+.approve .who i:first-child{margin-left:0}
+.approve .pin{display:flex;gap:12px;justify-content:center;margin-top:22px}
+.approve .pin i{width:18px;height:18px;border-radius:50%;border:2px solid #0d3b2e;animation:pin 5s infinite;animation-delay:calc(var(--n) * .35s)}
+@keyframes pin{0%,8%{background:transparent}14%,82%{background:#0d3b2e}100%{background:transparent}}
+.approve .ok{margin-top:20px;display:flex;align-items:center;justify-content:center;gap:10px;min-height:54px;border-radius:16px;background:#0d3b2e;color:#c8f169;font-weight:800;font-size:17px;animation:okay 5s infinite}
+.approve .ok svg{width:20px;height:20px}
+@keyframes okay{0%,40%{transform:scale(1)}46%{transform:scale(1.06)}52%,100%{transform:scale(1)}}
+.approve .stamp{margin-top:12px;text-align:center;font-size:14px;color:#5b6b64}
+@media (max-width:900px){.vault{grid-template-columns:minmax(0,1fr)}.approve{transform:rotate(1deg)}}
+
+/* ---------- steps ---------- */
+.steps{margin-top:clamp(72px,9vw,140px)}
+.steps .h2{text-align:center;max-width:16ch;margin-inline:auto}
+.steps .sub{text-align:center;max-width:44ch;margin:16px auto 0}
+.deck{list-style:none;padding:0;margin-top:clamp(32px,5vw,64px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;counter-reset:s}
+.card{counter-increment:s;border-radius:28px;padding:30px;min-height:340px;display:flex;flex-direction:column;gap:14px;color:var(--pine);transition:transform .9s cubic-bezier(.2,1.3,.4,1);transition-delay:calc(var(--i) * 90ms)}
+.card:nth-child(1){background:var(--coral)}
+.card:nth-child(2){background:var(--sun)}
+.card:nth-child(3){background:var(--pine);color:var(--white)}
+.card::before{content:counter(s);font-family:var(--f-mono);font-weight:500;font-size:15px;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--pine);color:var(--lime)}
+.card:nth-child(3)::before{background:var(--lime);color:var(--pine)}
+.card h3{font-size:clamp(30px,3vw,40px);line-height:1;letter-spacing:-.035em;font-weight:800}
+.card p{font-weight:600;font-size:17px}
+.card:nth-child(3) p{color:rgba(255,255,255,.86)}
+.card q{margin-top:auto;align-self:flex-start;background:rgba(255,255,255,.55);border-radius:14px;border-top-left-radius:4px;padding:10px 14px;font-weight:700;font-size:15px;quotes:none}
+.card:nth-child(3) q{background:rgba(255,255,255,.12)}
+.deck.pre .card{transform:translate(calc((1 - var(--i)) * 104%),40px) rotate(calc((var(--i) - 1) * 7deg))}
+.deck.pre .card:nth-child(1){transform:translate(104%,40px) rotate(-7deg)}
+.deck.pre .card:nth-child(3){transform:translate(-104%,40px) rotate(7deg)}
+.deck.pre .card:nth-child(2){transform:translateY(24px) rotate(1deg)}
+@media (max-width:900px){.deck{grid-template-columns:minmax(0,1fr)}.card{min-height:0}.deck.pre .card{transform:translateY(40px) rotate(-2deg)!important}}
+
+/* ---------- close ---------- */
+.close{margin-top:clamp(80px,10vw,160px);padding-bottom:clamp(48px,6vw,80px);text-align:center}
+.close .stack{font-size:clamp(44px,9vw,120px)}
+footer{border-top:1px solid var(--line);padding-block:28px calc(28px + env(safe-area-inset-bottom,0px))}
+footer .wrap{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center;justify-content:space-between;font-size:15px;color:var(--muted)}
+footer nav{display:flex;flex-wrap:wrap;gap:4px 20px}
+footer nav a{font-weight:700;color:var(--ink);min-height:44px;display:inline-flex;align-items:center}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+  .track{flex-wrap:wrap;justify-content:center;width:auto}
+  .track [aria-hidden]{display:none}
+  .marquee{mask-image:none;-webkit-mask-image:none}
+}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="bar">
+      <a class="logo" href="#" aria-label="Taskiem home">
+        <span class="mk">{{MARK}}</span>
+        <span class="wm wm-std">{{WORD}}</span>
+        <span class="wm wm-rev">{{WORDREV}}</span>
+      </a>
+      <nav class="nav" aria-label="Sections">
+        <a href="#what">What it does</a>
+        <a href="#safety">Your money</a>
+        <a href="#start">Getting started</a>
+      </nav>
+      <a class="btn btn-main" href="#begin">Chat on WhatsApp</a>
+      <button class="theme" id="theme" type="button" aria-label="Switch light or dark">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <h1 class="stack" aria-label="Run your business from WhatsApp">
+        <span class="row" aria-hidden="true">
+          <span class="blk b-pine" style="--d:0;--r0:-8deg;--tilt:-3deg">Run your</span>
+          <span class="blk b-coral" style="--d:1;--r0:7deg;--tilt:2deg">business</span>
+        </span>
+        <span class="row" aria-hidden="true">
+          <span class="blk b-sun" style="--d:2;--r0:-5deg;--tilt:-1.5deg">from WhatsApp</span>
+          <span class="tile">{{MARK}}</span>
+        </span>
+      </h1>
+      <p class="lede">Tell Taskiem what to do in your own words. Remind the customers who owe you. Thank each one who pays. Pay your staff after you approve. It runs every day, whether you remember or not.</p>
+      <div class="cta-row">
+        <a class="btn btn-main btn-big" href="#begin">Chat with Taskiem on WhatsApp</a>
+        <a class="btn btn-alt btn-big" href="#begin">Start on the web</a>
+      </div>
+      <p class="fine">Free for 14 days. Pay in naira by card or transfer.</p>
+    </div>
+
+    <div class="works">
+      <p class="label">Works with what you already use</p>
+      <div class="marquee">
+        <div class="track">
+          <span class="chip" style="--c:#0ba4db"><i></i>Paystack</span>
+          <span class="chip" style="--c:#f5a623"><i></i>Flutterwave</span>
+          <span class="chip" style="--c:#0357ee"><i></i>Moniepoint</span>
+          <span class="chip" style="--c:#1dcf9f"><i></i>OPay</span>
+          <span class="chip" style="--c:#d4202c"><i></i>Interswitch</span>
+          <span class="chip" style="--c:#e2731d"><i></i>Remita</span>
+          <span class="chip" style="--c:#6b4ce6"><i></i>Termii</span>
+          <span class="chip" style="--c:#182cd1"><i></i>Mono</span>
+          <span class="chip" style="--c:#0f9d58"><i></i>Google Sheets</span>
+          <span class="chip" style="--c:#ffcc00"><i></i>MTN MoMo</span>
+          <span class="chip" style="--c:#2aabee"><i></i>Telegram</span>
+          <span aria-hidden="true" style="display:contents">
+            <span class="chip" style="--c:#0ba4db"><i></i>Paystack</span>
+            <span class="chip" style="--c:#f5a623"><i></i>Flutterwave</span>
+            <span class="chip" style="--c:#0357ee"><i></i>Moniepoint</span>
+            <span class="chip" style="--c:#1dcf9f"><i></i>OPay</span>
+            <span class="chip" style="--c:#d4202c"><i></i>Interswitch</span>
+            <span class="chip" style="--c:#e2731d"><i></i>Remita</span>
+            <span class="chip" style="--c:#6b4ce6"><i></i>Termii</span>
+            <span class="chip" style="--c:#182cd1"><i></i>Mono</span>
+            <span class="chip" style="--c:#0f9d58"><i></i>Google Sheets</span>
+            <span class="chip" style="--c:#ffcc00"><i></i>MTN MoMo</span>
+            <span class="chip" style="--c:#2aabee"><i></i>Telegram</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="what">
+    <div class="wrap">
+      <div class="feat-head">
+        <div>
+          <p class="label">What it does</p>
+          <h2 class="h2" style="margin-top:10px">The jobs you repeat,<br>done for you.</h2>
+        </div>
+        <p>Each one is a workflow: something Taskiem does for you again and again, on a schedule or when something happens.</p>
+      </div>
+
+      <div class="feat-grid">
+        <div class="bands">
+          <article class="band" data-accent="var(--coral)">
+            <p class="label">Customers who owe you</p>
+            <h3 class="band-h">Remind who owes you
+              <span class="rot"><span class="rot-win"><span class="rot-list"><span>every Friday</span><span>at month end</span><span>the day it's due</span><span aria-hidden="true">every Friday</span></span></span></span>
+            </h3>
+            <p class="band-p">Taskiem reads your debtors table and texts each person with a balance, with the amount they owe. Then it tells you who it reminded.</p>
+            <div class="band-chat chat">
+              <div class="m out">every Friday at 10am text the customers in my debtors table who still owe me<time>09:41</time></div>
+              <div class="m in">Here is what I will do every Friday at 10:00:
+1. Read your Debtors table.
+2. Text each person with a balance above ₦0: “Good morning {name}, your balance with Ada's Kitchen is ₦{balance}. Thank you.”
+3. Tell you who was reminded.
+Shall I set it up? Reply yes.<time>09:41</time></div>
+              <div class="m out">yes<time>09:42</time></div>
+              <div class="m in">Done. The first reminders go out on Friday at 10:00.<time>09:42</time></div>
+            </div>
+          </article>
+
+          <article class="band sun" data-accent="var(--sun)">
+            <p class="label">Payments</p>
+            <h3 class="band-h">Thank every customer who pays
+              <span class="rot"><span class="rot-win"><span class="rot-list"><span>on Paystack</span><span>on Moniepoint</span><span>on OPay</span><span aria-hidden="true">on Paystack</span></span></span></span>
+            </h3>
+            <p class="band-p">The moment a payment is confirmed, your customer hears from you, and you see it in the same chat.</p>
+            <div class="band-chat chat">
+              <div class="m out">when someone pays on Paystack, thank them by SMS and tell me<time>11:05</time></div>
+              <div class="m in">When Paystack confirms a payment, I will text the customer: “Thank you {name}, we received ₦{amount}. Ada's Kitchen.” Then I will tell you here. Set it up?<time>11:05</time></div>
+              <div class="m out">yes<time>11:06</time></div>
+              <div class="m in">Chidi Okafor paid<span class="big num" data-count="18500">₦18,500</span>Thank-you text sent.<time>14:22</time></div>
+            </div>
+          </article>
+
+          <article class="band lilac" data-accent="var(--lilac)">
+            <p class="label">Payday</p>
+            <h3 class="band-h">Pay your staff after you say yes
+              <span class="rot"><span class="rot-win"><span class="rot-list"><span>with your PIN</span><span>up to a limit</span><span>every month</span><span aria-hidden="true">with your PIN</span></span></span></span>
+            </h3>
+            <p class="band-p">On payday Taskiem reads your staff list, asks for your yes, pays each person and texts them. Nothing moves until you approve.</p>
+            <div class="band-chat chat">
+              <div class="m in">It's payday. Salaries for November:
+8 people from your Moniepoint account.<span class="big num" data-count="1240000">₦1,240,000</span>Approve with your PIN?<span class="acts"><span>See the list</span><span>Approve</span></span><time>08:00</time></div>
+              <div class="m out">Approve · PIN ••••<time>08:03</time></div>
+              <div class="m in">PIN accepted. Paying 8 people now.<time>08:03</time></div>
+              <div class="m in">All 8 paid, once each. Every person got a text.<time>08:04</time></div>
+            </div>
+          </article>
+
+          <article class="band pine" data-accent="var(--lime)">
+            <p class="label">Every evening</p>
+            <h3 class="band-h">Ask for it the way you talk
+              <span class="rot"><span class="rot-win"><span class="rot-list"><span>in English</span><span>in Pidgin</span><span>by voice note</span><span aria-hidden="true">in English</span></span></span></span>
+            </h3>
+            <p class="band-p">Type it or send a voice note. Taskiem reads back exactly what it understood before it does anything.</p>
+            <div class="band-chat chat">
+              <div class="m out"><span class="voice"><i class="play"></i><span class="wave"><i style="--h:30%"></i><i style="--h:70%"></i><i style="--h:45%"></i><i style="--h:90%"></i><i style="--h:60%"></i><i style="--h:35%"></i><i style="--h:80%"></i><i style="--h:50%"></i><i style="--h:65%"></i><i style="--h:25%"></i><i style="--h:75%"></i><i style="--h:40%"></i><i style="--h:55%"></i><i style="--h:30%"></i></span><span>0:07</span></span><time>12:10</time></div>
+              <div class="m in">I heard: “every evening tell me how much I sold today.”
+At 18:00 each day I will add up the payments into Moniepoint since midnight and send you the total. Set it up?<time>12:10</time></div>
+              <div class="m out">yes<time>12:11</time></div>
+              <div class="m in">Today: <span class="big num" data-count="86500">₦86,500</span>from 23 payments. Best hour: 13:00.<time>18:00</time></div>
+            </div>
+          </article>
+        </div>
+
+        <div class="stage" aria-hidden="true">
+          <div class="phone">
+            <span class="notch"></span>
+            <div class="screen">
+              <div class="chat-head">{{MARK}}<div><b>Taskiem</b><small>business account</small></div></div>
+              <div class="chat" id="phoneChat"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="safety" id="safety">
+    <div class="wrap">
+      <div class="vault">
+        <div>
+          <p class="label">Your money</p>
+          <h2>Nothing moves without
+            <span class="rot"><span class="rot-win"><span class="rot-list"><span>your yes</span><span>your PIN</span><span>your limit</span><span aria-hidden="true">your yes</span></span></span></span>
+          </h2>
+          <ul class="points">
+            <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><b>You approve every payment</b><span>Payments wait for your yes, with a PIN where you set one.</span></div></li>
+            <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 9h6M9 13h6M9 17h3"/></svg></span><div><b>Every action is on record</b><span>Who approved what, when, and what happened. Show it to your accountant.</span></div></li>
+            <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></span><div><b>Customers' details stay private</b><span>Phone numbers and balances are hidden from logs, from the AI, and from anyone you have not given access.</span></div></li>
+          </ul>
+        </div>
+        <div class="approve" aria-label="Example: a salary payment waiting for approval">
+          <p class="label">Waiting for you</p>
+          <h3>November salaries</h3>
+          <p class="amt num">₦1,240,000</p>
+          <div class="who" aria-hidden="true">
+            <i style="background:#ff7a59">AO</i><i style="background:#ffd447">BK</i><i style="background:#c9b8ff">CE</i><i style="background:#c8f169">DI</i><i style="background:#ff7a59">EN</i><i style="background:#ffd447">+3</i>
+          </div>
+          <div class="pin" aria-hidden="true"><i style="--n:0"></i><i style="--n:1"></i><i style="--n:2"></i><i style="--n:3"></i></div>
+          <div class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Approve and pay</div>
+          <p class="stamp">Paid once each, then recorded</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="steps" id="start">
+    <div class="wrap">
+      <h2 class="h2">Up and running in three messages</h2>
+      <p class="sub">Nothing to install and nothing to learn. You talk to Taskiem the way you talk to a manager.</p>
+      <ol class="deck" id="deck">
+        <li class="card" style="--i:0"><h3>Say it.</h3><p>In English or Pidgin, typed or as a voice note. Or pick one of the ready-made workflows.</p><q>every evening tell me how much I sold today</q></li>
+        <li class="card" style="--i:1"><h3>Connect once.</h3><p>Your Paystack, Moniepoint, OPay or Google Sheet. One screen, one key. Taskiem keeps it locked away.</p><q>Moniepoint connected</q></li>
+        <li class="card" style="--i:2"><h3>Approve and go.</h3><p>Taskiem reads back exactly what it will do and who it will message. Say yes. It starts.</p><q>yes</q></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="close" id="begin">
+    <div class="wrap">
+      <h2 class="stack" aria-label="Start with one message.">
+        <span class="row" aria-hidden="true">
+          <span class="blk b-lilac" style="--d:0;--r0:6deg;--tilt:2deg">Start with</span>
+        </span>
+        <span class="row" aria-hidden="true">
+          <span class="blk b-pine" style="--d:1;--r0:-6deg;--tilt:-2deg">one message.</span>
+        </span>
+      </h2>
+      <div class="cta-row" style="margin-top:36px">
+        <a class="btn btn-main btn-big" href="#begin">Chat with Taskiem on WhatsApp</a>
+        <a class="btn btn-alt btn-big" href="#begin">Start on the web</a>
+      </div>
+      <p class="fine">Free for 14 days. Hosted in Nigeria. Prices in naira.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Taskiem</span>
+    <nav aria-label="Footer">
+      <a href="#what">What it does</a>
+      <a href="#safety">Your money</a>
+      <a href="#start">Getting started</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const root = document.documentElement;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // theme switch
+  const dark = () => root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  try { const t = localStorage.getItem('tk-theme'); if (t === 'dark' || t === 'light') root.dataset.theme = t; } catch (e) {}
+  document.getElementById('theme').addEventListener('click', () => {
+    const next = dark() ? 'light' : 'dark';
+    root.dataset.theme = next;
+    try { localStorage.setItem('tk-theme', next); } catch (e) {}
+  });
+
+  // naira count-up
+  const naira = n => '₦' + Math.round(n).toLocaleString('en-NG');
+  function countUp(el) {
+    const end = +el.dataset.count, t0 = performance.now(), dur = 900;
+    const step = now => {
+      const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = naira(end * e);
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  // phone plays the active band's chat
+  const bands = [...document.querySelectorAll('.band')];
+  const phone = document.getElementById('phoneChat');
+  const stage = document.querySelector('.stage');
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  let run = 0, active = -1;
+  async function play(i) {
+    if (i === active) return;
+    active = i;
+    const id = ++run;
+    stage.style.setProperty('--accent', bands[i].dataset.accent);
+    phone.innerHTML = bands[i].querySelector('.band-chat').innerHTML;
+    if (reduce) return;
+    const msgs = [...phone.querySelectorAll('.m')];
+    msgs.forEach(m => m.classList.add('hid'));
+    const typing = document.createElement('div');
+    typing.className = 'typing hid';
+    typing.innerHTML = '<i></i><i></i><i></i>';
+    phone.appendChild(typing);
+    for (const m of msgs) {
+      await wait(m.classList.contains('out') ? 450 : 250);
+      if (id !== run) return;
+      if (!m.classList.contains('out')) {
+        phone.appendChild(typing); typing.classList.remove('hid');
+        await wait(900);
+        if (id !== run) return;
+        typing.classList.add('hid');
+      }
+      phone.insertBefore(m, typing);
+      m.classList.remove('hid'); m.classList.add('pop');
+      m.querySelectorAll('[data-count]').forEach(countUp);
+    }
+  }
+  if (stage && bands.length) {
+    play(0);
+    const io = new IntersectionObserver(es => {
+      es.forEach(e => { if (e.isIntersecting) play(bands.indexOf(e.target)); });
+    }, { rootMargin: '-45% 0px -45% 0px' });
+    bands.forEach(b => io.observe(b));
+  }
+
+  // bands tilt and straighten as they cross the middle of the screen
+  if (!reduce) {
+    let ticking = false;
+    const tilt = () => {
+      ticking = false;
+      const vh = innerHeight;
+      bands.forEach((b, i) => {
+        const r = b.getBoundingClientRect();
+        const d = Math.max(-1, Math.min(1, (r.top + r.height / 2 - vh / 2) / vh));
+        const sign = (i % 2 ? -1 : 1) * (innerWidth < 960 ? 0.4 : 1);
+        b.style.transform = `rotate(${(d * 4 * sign).toFixed(2)}deg) scale(${(1 - Math.abs(d) * 0.05).toFixed(3)})`;
+      });
+    };
+    addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(tilt); } }, { passive: true });
+    addEventListener('resize', tilt);
+    tilt();
+  }
+
+  // step cards deal out when they come into view (only if they start below the fold)
+  const deck = document.getElementById('deck');
+  if (!reduce && deck.getBoundingClientRect().top > innerHeight) {
+    deck.classList.add('pre');
+    const dio = new IntersectionObserver(es => {
+      if (es.some(e => e.isIntersecting)) { deck.classList.remove('pre'); dio.disconnect(); }
+    }, { threshold: 0.25 });
+    dio.observe(deck);
+  }
+
+  // the closing blocks drop in when reached
+  const close = document.querySelector('.close .stack');
+  if (!reduce && close.getBoundingClientRect().top > innerHeight) {
+    const blks = close.querySelectorAll('.blk');
+    blks.forEach(b => b.style.animationPlayState = 'paused');
+    const cio = new IntersectionObserver(es => {
+      if (es.some(e => e.isIntersecting)) { blks.forEach(b => b.style.animationPlayState = 'running'); cio.disconnect(); }
+    }, { threshold: 0.3 });
+    cio.observe(close);
+  }
+})();
+</script>

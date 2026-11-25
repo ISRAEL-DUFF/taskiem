@@ -14,6 +14,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 // A hosted form's fields (docs/spec/forms.md 6.2): each schema property
@@ -58,6 +59,18 @@ type field struct {
 	Checked bool
 	// Held is a file kept from an earlier sending of the page.
 	Held string
+	// Device is a device field's kind (formdevice.go): location, photo,
+	// scan or signature; Why is said before the device is asked.
+	Device     string
+	Why        string
+	AllowTyped bool
+	AskName    bool
+	Formats    string // a scan's, as the browser's reader names them
+	// What the field holds so far: Got in words; a location's reading
+	// (Lat, Lng, Acc, At, Fix) or State, or Address typed; a scan's
+	// Format; a signature's SignedBy; Cant when the person can't answer.
+	Got, Lat, Lng, Acc, At, Fix, State, Address, Format, SignedBy string
+	Cant                                                          bool
 
 	schema map[string]any
 	typ    string
@@ -116,6 +129,11 @@ func fields(schema map[string]any) map[string]*field {
 		f.Hidden = h["hidden"] == true
 		f.Prefill = h["prefill"] == true
 		widget := str(h["widget"])
+		if kind := wd.DeviceKind(p); kind != "" {
+			deviceField(f, kind, p)
+			out[name] = f
+			continue
+		}
 		switch {
 		case widget == "consent":
 			f.Widget, f.Consent = "consent", str(h["text"])

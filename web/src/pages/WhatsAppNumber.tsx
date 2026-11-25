@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { del, get, post, put, type WorkflowSummary } from "../api";
-import { useAuth } from "../auth";
+import { del, get, post, put } from "../api";
 import { canSubmit, statusWords, summaryLine, type TemplatesView, type TemplateView } from "../lib/whatsappTemplates";
 import { ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
 
@@ -11,10 +10,8 @@ interface NumberView {
   display_number?: string;
   own_app: boolean;
   status?: string;
-  public_menu: boolean;
   webhook_path?: string;
   flows_endpoint_path?: string;
-  public_workflows: { workflow_id: string; label: string; name?: string }[];
   flows_enabled: boolean;
   shared_number?: string;
   created_at?: string;
@@ -22,9 +19,9 @@ interface NumberView {
 }
 
 /** The organisation's own WhatsApp number (spec 11.4): people hear from it
- * instead of the shared number, and it can carry a public menu. */
+ * instead of the shared number, and customers who write "menu" to it get
+ * the business's tools for customers. */
 export function WhatsAppNumber() {
-  const { can } = useAuth();
   const view = useLoad(() => get<NumberView>("/v1/whatsapp/number"), []);
   const [form, setForm] = useState({ phone_number_id: "", waba_id: "", access_token: "", app_secret: "", verify_token: "", own_app: true });
   const [notice, setNotice] = useState("");
@@ -56,7 +53,7 @@ export function WhatsAppNumber() {
             Disconnect
           </button>
           <Templates />
-          {can("workflow.publish") && <PublicMenu view={v} onSaved={view.reload} />}
+          <CustomerMenu />
         </>
       ) : (
         <form
@@ -163,58 +160,17 @@ function Templates() {
   );
 }
 
-/** The public self-service menu: workflows anyone may start by writing to the number. */
-function PublicMenu({ view, onSaved }: { view: NumberView; onSaved: () => void }) {
-  const wfs = useLoad(() => get<{ workflows: WorkflowSummary[] }>("/v1/workflows"), []);
-  const [enabled, setEnabled] = useState(view.public_menu);
-  const [items, setItems] = useState(view.public_workflows.map((p) => ({ workflow_id: p.workflow_id, label: p.label })));
-  const act = useAction();
-  const chosen = new Set(items.map((i) => i.workflow_id));
+/** What customers get on the number: the business's tools for customers,
+ * each with its answer. There is no list to keep here: publishing a tool
+ * for customers is what puts it on the menu (made tools §11). */
+function CustomerMenu() {
   return (
-    <div data-testid="whatsapp-public-menu">
-      <h3>Public menu</h3>
+    <div data-testid="whatsapp-customer-menu">
+      <h3>Your menu for customers</h3>
       <p className="hint">
-        Anyone who writes to this number without a linked account sees these workflows and can start them, after filling in a WhatsApp form and confirming. They
-        run as <code>whatsapp_public:&lt;number&gt;</code> under your plan limits, with strict rate limits. Offer only what is safe for anyone to start.
+        Customers who write <strong>menu</strong> to this number see your tools for customers, fill in a WhatsApp form, say yes and get each tool's answer here.
+        A tool is on the menu once you publish it for customers, and off it once you stop. They are the same tools customers see in the Taskiem app.
       </p>
-      <p className="hint">
-        Each one is a tool for your customers. Tools you make for customers are on the menu too, and customers get each answer, showing only what the workflow
-        marks public.
-      </p>
-      <ErrorBox error={act.error ?? wfs.error} />
-      <label className="row">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Offer the menu
-      </label>
-      {items.map((it, i) => (
-        <div className="row" key={it.workflow_id}>
-          <span className="grow">{wfs.data?.workflows.find((w) => w.id === it.workflow_id)?.name ?? it.workflow_id}</span>
-          <input value={it.label} maxLength={24} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
-          <button onClick={() => setItems(items.filter((_, j) => j !== i))}>Remove</button>
-        </div>
-      ))}
-      {items.length < 9 && (
-        <select
-          value=""
-          onChange={(e) => {
-            const w = wfs.data?.workflows.find((x) => x.id === e.target.value);
-            if (w) setItems([...items, { workflow_id: w.id, label: w.name.slice(0, 24) }]);
-          }}
-        >
-          <option value="">Add a workflow…</option>
-          {wfs.data?.workflows
-            .filter((w) => !chosen.has(w.id))
-            .map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-        </select>
-      )}
-      <div className="toolbar" style={{ marginTop: 8 }}>
-        <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => (await put("/v1/whatsapp/public-menu", { enabled, workflows: items }), onSaved()), "Saved")}>
-          Save menu
-        </button>
-      </div>
     </div>
   );
 }

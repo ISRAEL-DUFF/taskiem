@@ -1,6 +1,6 @@
 # Saved objects: things a person or a business keeps, and calls up by name
 
-Status: **plan, settled** (19 November 2026), written with the founder. Being built: S0's server (saved accounts: the store, the name check, `@name` resolved; [decision 0071](../decisions/0071-saved-objects.md)) is built; the rest is not. The founder took every recommendation in §15 the same day. It is built in the phases of [the build plan for saved objects, made tools and payments](build-plan-saved-tools-payments.md).
+Status: **plan, settled** (19 November 2026), written with the founder. **S0 to S3 built** (20 to 21 November 2026; [decision 0071](../decisions/0071-saved-objects.md)): saved accounts, the kinds and the picker, saved things in actions and in workflows (see the build plan's S0 to S3 status lines). **H6 built 24 November 2026** ([build plan H6](build-plan-gaps.md#8-phase-h6-made-tools-and-saved-things-the-rest)): a workflow sends a saved file, each run's use of a saved thing is recorded and shown, the SDK's `saved` root, and an address on invoices made with `@name` (§6.3, §6.4, §12). The founder took every recommendation in §15 the same day. It is built in the phases of [the build plan for saved objects, made tools and payments](build-plan-saved-tools-payments.md).
 
 Builds on: [chat tools](chat-tools.md) (tags), [paying people from the chat](chat-pay-people.md) (a plan, not built: its payees), [Taskiem for everyone](taskiem-for-everyone.md) (You, the person's own scope, saved addresses), [people chatting with people](people-chatting.md), [data tables](../data-tables.md), [Schools in the chat](schools-in-the-chat.md).
 
@@ -122,7 +122,7 @@ In the Taskiem chat (and over WhatsApp, Telegram and Slack), an object stands fo
 | --- | --- |
 | "send 20k to @mum for her birthday" | The payee: the payment flow, filled in (§7) |
 | "deliver order P-7QX to @warehouse" | The place: the delivery's address, landmark and phone |
-| "invoice @acme 250k for the October job" | The person or business: who it is to, their email and address |
+| "invoice @acme 250k for the October job" | The person or business: who it is to, their email and address (the address on the invoice, its PDF, the web and the app: built in H6; the customer envelope gains `address`, migration 00642) |
 | "remind me when @car insurance is due" | The date field: a reminder on that day, and the year after |
 | "what's @generator's last service date?" | A field's value, answered from the object |
 | "share @bank-details with Ada" | The card, into Ada's chat |
@@ -136,6 +136,7 @@ Taskiem reads what kind an object is to know which of its details a command need
 
 - **Anywhere a form, an order or a sheet asks for** an address, a phone, a person, a bank account or a date, a **Saved** button offers the owner's objects of the right kind (saved addresses at checkout today, made general).
 - **Workflows** of a business or a workflows workspace may take the business's objects as inputs ("pay `@landlord` on the 1st"; "every Monday, send `@price-list` to the customers who ordered last week"). A workflow reads the object when it runs, so a changed object is used from the next run; a payment run still checks the account as the payments plan does. A person's own objects are never a business workflow's input.
+- **As built (H6).** A saved **file** in a run is its name, its type and which file it is (`saved-file:<id>`), never a link; a message step (`notify` tell or message) takes `file: =saved.price_list` (nothing but the saved root names one) and ends with the file's name and a short link made when the message is sent, good for a week (`saved_file_links`, 00644: kept as a hash; `GET /v1/saved-files/{token}` sends whoever opens it to the business's storage for five minutes), kept whole wherever the message is cut (the SMS's parts, the chat templates' line), by chat, SMS or email ("every Monday, email `@price-list`"). Each object a run reads is recorded (`saved_uses`, migration 00641: which object, which run of which workflow and version, the name it was read by, the steps that read it, when; the latest 200 for each object, and a purged run's go with it, 00643): the object's sheet lists **Runs that read it** (web and app, `GET /v1/saved/{id}/runs`, for those who may read runs) and the run's page **Saved things it read** (`saved` on `GET /v1/runs/{id}`, a saved person's title, their name, only when the run is revealed; an environment's key sees its environment's runs only). The TypeScript SDK has the `saved` root, its types by kind and `savedRef`.
 
 ## 7. Paying a saved account
 
@@ -206,6 +207,7 @@ A bank account is checked with the bank as it is saved; a name that does not mat
 - **Tags:** `links.Mention` gains the `saved` kind (the object's id on the sender's copy; the shared card's details on the receiver's), checked by `checkMentions` and its people-chat and customer-chat equivalents: the sender may use it, it is not archived, sensitive sharing was confirmed.
 - **API:** `/v1/me/saved` and `/v1/saved` (list, search, get, add, change, delete, reveal with a fresh proof), `/v1/me/saved-kinds` and `/v1/saved-kinds`, `/v1/saved/resolve?name=` (for the picker and commands; both owners when inside a business), and the import. OpenAPI, the app's generated client and the SDK as always.
 - **Commands:** `converse` resolves `@name` to an object before acting; the model is given names and kinds only (§8).
+- **Uses (H6):** `saved_uses` (00641), one row for each object a run reads; `GET /v1/saved/{id}/runs`; the run's `saved`. Invoices' sealed customer envelope holds `address` (00642).
 
 ## 13. Phases
 

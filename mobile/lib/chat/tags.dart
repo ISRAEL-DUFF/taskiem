@@ -235,6 +235,31 @@ TagSuggestion refTag(ChatRef r, DateTime now, {required String Function(DateTime
   return TagSuggestion(kind: r.kind, id: r.id, name: r.name, sub: sub.where((x) => x.isNotEmpty).join(' · '), badge: kindWords[r.kind], words: r.party);
 }
 
+/// found.ts foundSuggestion (menus-everywhere §6, g-search-saved): a
+/// service, with its price and minutes, or a saved thing, by its name, kind
+/// and whose it is only, as search everywhere shows them; null for a ref.
+/// [kindOne] is what one of a saved kind is called ("A bank account").
+TagSuggestion? foundTag(ChatRef r, {required String? Function(String kind) kindOne}) {
+  if (r.kind == 'service') {
+    final sub = [r.totalKobo != null ? naira(r.totalKobo!) : 'Price on the day', if ((r.minutes ?? 0) > 0) '${r.minutes} min'];
+    return TagSuggestion(kind: 'service', id: r.id, name: r.name, sub: sub.join(' · '));
+  }
+  if (r.kind == 'saved') {
+    final kind = r.savedKind == 'custom'
+        ? ((r.kindName ?? '').isNotEmpty ? 'A ${r.kindName!.toLowerCase()}' : 'One of your own kinds')
+        : (kindOne(r.savedKind ?? '') ?? 'A saved thing');
+    return TagSuggestion(
+      kind: 'saved',
+      id: r.id,
+      name: '@${r.name}',
+      sub: '$kind · ${r.owner == 'mine' ? 'Yours' : 'The business’s'}',
+      savedKind: r.savedKind,
+      savedOwner: r.owner,
+    );
+  }
+  return null;
+}
+
 /// refs.ts refSources: what each "/" word offers: "/invoice" invoices and
 /// bills, "/order" orders and purchases, the rest their own.
 Map<String, List<TagSuggestion>> refSources(List<TagSuggestion> list) {

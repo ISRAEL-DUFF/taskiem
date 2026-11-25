@@ -47,7 +47,7 @@ Events never carry bank account numbers, salary breakdowns or ID numbers. They d
 | `get_run_lines` | `GET /connect/runs/{run_id}/lines` | read | Each employee's net pay and payout status (`CONFIRMED`, `FAILED`, `REVERSED`, …), the provider's reference and the failure reason. Names are sealed |
 | `get_approval_link` | `GET /connect/runs/{run_id}/approval-link` | read | Where an approver reviews the run in Payrolla; safe to send |
 | `list_employees` | `GET /connect/employees` | read | `status`, `updated_since`, `cursor`, `limit`; names, emails and phones sealed |
-| `get_employee` | `GET /connect/employees/{employee_id}` | read | One employee, sealed the same way |
+| `get_employee` | `GET /connect/employees/{employee_id}` | read | One employee, sealed the same way; `taskiem_payslips` says whether Taskiem gives linked staff its own payslip card (connected in one step) or not (a key) |
 | `create_payslip_link` | `POST /connect/payslips/{payslip_id}/link` | unsafe write | A 7-day link to one payslip; the employee confirms the last four digits of their phone. Payrolla takes no idempotency key, so an answer lost in transit parks the step rather than asking twice. The link is sealed. Refused with `PAYSLIP_LINKS_DISABLED` until the owner allows it, and `PAYSLIP_NOT_FINAL` before the run is locked |
 | `list_events` | `GET /connect/events` | read | The last 30 days of the company's events, oldest first, after an event id: for catching up after an outage |
 
@@ -63,9 +63,33 @@ A refused key says what to do: `scope_required` (make a key with Read payroll an
 
 ## What is not here yet
 
-- **Approving in Taskiem.** There is no approve API, by Payrolla's design: an approver opens `approval_url` and confirms with their own factor in Payrolla. Taskiem will not embed Payrolla's screens (22 November 2026): it asks Payrolla for an approve API that accepts Taskiem's signed passkey approval, with the rest of running payroll from Taskiem ([the request](payrolla-api-requests.md)).
-- **Catching up by itself.** `list_events` replays the last 30 days, but nothing calls it automatically after an outage yet; Payrolla retries a failed delivery for about two days, and the owner can resend one.
-- **Connecting by OAuth.** Payrolla issues keys by hand only.
+Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-requests.md); Payrolla's replies [A](payrolla-reference/05-phase-a-response.md), [B](payrolla-reference/06-phase-b-response.md) and [C](payrolla-reference/07-phase-c-response.md)). Taskiem builds on it as P4b, in five slices ([decision 0074](../decisions/0074-payroll-run-from-taskiem.md), accepted; [the plan](../spec/chat-pay-people.md#p4b-slice-by-slice)). Built: 1–5, and the chat's words for staff, this month's changes and account changes.
+
+1. **Connecting in one step** (P4b-1), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-1-connect-in-one-step-keep-keys-reconnect-link-approvers)), live once Payrolla registers Taskiem:
+   - OAuth 2.0 with PKCE, with sign-up in the same step (`POST /v1/payroll/connect`; Payrolla sends the browser back to `/v1/payrolla/callback`);
+   - key connections keep working, and **Reconnect Payrolla** moves the same connection onto the tokens; the old key stays live in Payrolla (no call ends a key), so the owners are told to delete it in Payrolla, Settings → Connected apps;
+   - Taskiem's own `"*"` subscription per connection; `company.disconnected` and a refused refresh token end it;
+   - Taskiem people linked to Payrolla users with one code (`/v1/payroll/approvers`, `payroll.approve`).
+
+   Payrolla registers Taskiem first, from [our answers](payrolla-reference/08-taskiem-answers.md), drafted for the founder to send. The deployment then sets `TASKIEM_OAUTH_PAYROLLA_CLIENT_ID`/`_SECRET` (live), `TASKIEM_OAUTH_PAYROLLA_SANDBOX_CLIENT_ID`/`_SECRET` (test) and `TASKIEM_PAYROLLA_APP_URL` (production's sign-in app; the sandbox's is `payroller.surge.sh`, `TASKIEM_PAYROLLA_TEST_APP_URL` moves it).
+2. **Staff and pay from Taskiem** (P4b-2), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-2-staff-and-pay-from-taskiem)):
+   - adding, changing and ending employees (`/v1/payroll/team`, `payroll.prepare`);
+   - bank changes held for a second approver (`/v1/payroll/bank-changes`, approved with the approver's code);
+   - an employee's own salary account change (`/v1/payroll/me`, the code Payrolla texts them).
+3. **This month's run in Taskiem** (P4b-3), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-3-this-months-run-in-taskiem); `/v1/payroll/runs`, `payroll.prepare`, the run's card and the code typed in the WhatsApp or Telegram thread):
+   - prepare it, add a bonus or a deduction, leave someone out;
+   - approve and **Lock and pay**, confirmed with **Payrolla's own one-time code**, typed into Taskiem.
+
+   Approving is no longer a link into Payrolla, and there is no Taskiem-signed approval: Payrolla chose its own code instead.
+4. **After locking** (P4b-4), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-4-after-locking-paid-short-again-and-payslips)): the payment's progress (`GET /connect/runs/{id}/payment`), the wallet's shortfall told on the day and warned before it (connected in one step only; payrolls paying on or before a date counted together), **Pay now** and **Pay the failed ones again** with Payrolla's code, and payslips as Taskiem's own cards (`/v1/payroll/payslips`, `/v1/payroll/me/payslips`). `payrolla-tell-staff` now sends the 7-day payslip link to a staff member linked in Taskiem only on a key connection (which hears no `payslip.issued`); connected in one step, they get Taskiem's card instead.
+5. **Settings and the tax and pension schedules** (P4b-5), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-5-settings-and-the-tax-and-pension-schedules); `/v1/payroll/settings` and `/v1/payroll/schedules`, Payrolla's `reports:read`): the setup read-only, and each payroll's schedules with pension PINs shown only with a passkey.
+
+6. **The chat's words** for the team, this month's changes and account changes, **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-slice-by-slice), "As built: chat words"), through the same calls as the screens: "add musa to payroll" (the Add someone form), "raise zainab's pay to 500k from january", "move zainab to sales", "end musa's employment", "bonus 100k to zainab for q4 target", "deduct 20k from musa, advance repaid", "leave out ada this month, unpaid leave", "put ada back" (each asked yes first), "account changes", "approve zainab's account change" with Payrolla's code typed in the WhatsApp or Telegram thread (`POST /connect/bank-changes/{id}/confirmations`, then `…/approve`; `payroll_code_waits` action `bank_change`, migration 00723), "reject zainab's account change, why", and "change my salary account" (My pay).
+
+**Also not here yet:**
+
+- **Catching up by itself.** `list_events` replays the last 30 days, but nothing calls it automatically after an outage yet. Payrolla retries a failed delivery for about two days, and the owner can resend one.
+- **Production's OpenAPI file.** The sandbox's current file was fetched on 24 November 2026 (`payrolla-reference/api/payrolla-connect-v1-2026-11-24.yaml`, beside the 23 October copy); production's still served the older one that day.
 
 ## Templates
 
@@ -73,7 +97,7 @@ Seven templates work around Payrolla ([template library](../templates.md)), offe
 
 | Template | Starts on | Does |
 | --- | --- | --- |
-| `payrolla-tell-staff` | `payout.succeeded` | Tells the employee their pay arrived (on the WhatsApp they asked for updates on, else by SMS), and sends their payslip link when you allow it |
+| `payrolla-tell-staff` | `payout.succeeded` | Tells the employee their pay arrived (on the WhatsApp they asked for updates on, else by SMS), and sends their payslip link when you allow it, to someone not linked to a staff member, or to anyone on a key connection (a linked one, when Payrolla is connected in one step, gets Taskiem's own payslip card instead) |
 | `payrolla-payroll-summary` | `run.completed`, `run.partially_completed` | Tells the owner and a role who was paid, the total, and who was not and why |
 | `payrolla-approve-by-chat` | `run.computed` | Sends the approvers the total and `approval_url`; reminds them the day before payday if it is still not approved |
 | `payrolla-reversal-alert` | `payout.reversed` | Alerts the owner and the payroll admin whose pay came back |

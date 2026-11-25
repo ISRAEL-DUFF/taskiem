@@ -239,6 +239,18 @@ orders to suppliers leave the Stock screen for one of their own, Supplies.
 - **Add something we have**: a form sheet (name, what it cost, when it
   came, from whom over `pickOneOf`, the label through the line's label
   sheet), then "If you have them" (serial, warranty ends, note).
+- **H2 (24 November 2026):** Things we have has a search box (`TkSearchBox`)
+  under the top card, the rows it finds in one section, and "Nothing
+  matches" when none do; a row's **From** row is pressable for `table.edit`,
+  opening `pickOneOf` of the suppliers with Not said first. Add something
+  we have pre-selects the label suggested by its name, with "Suggested from
+  its name" under the field until one is picked. Someone with `table.read`
+  and no `invoice.read` finds the Money tab a **Go to** of Things we have
+  only, with a muted line that the money is for those who manage it. The
+  Stock page has a section **Kept, not counted** with a Things we have row.
+  On an order's question, Add to stock into a stock item counted in another
+  unit shows a field "How many g is one bag?" under the stock item, its
+  hint saying what it is counted in.
 - **An order's tracked lines** link to their rows: under What you ordered
   (an order to a supplier) and on a bill, one row "On Things we have"
   opening the list of that order's rows.

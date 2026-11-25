@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/saved"
 )
 
 type approvalItem struct {
@@ -80,6 +81,7 @@ func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 			if out[i].FirstPayment, err = s.firstPayment(ctx, tx, p.TenantID, out[i].Environment, opened); err != nil {
 				return err
 			}
+			out[i].Subject = maskSubjectAccounts(opened)
 		}
 		return nil
 	})
@@ -97,12 +99,57 @@ func (s *Server) firstPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	if !ok || env != "prod" {
 		return false, nil
 	}
-	account, bank := moneylog.SubjectAccount(subject)
-	if account == "" {
-		return false, nil
+	// One account (a supplier's payment), or a list's (riders' weekly pay,
+	// pay a list): a first payment when any of them is.
+	type acct struct{ number, bank string }
+	var list []acct
+	if a, b := moneylog.SubjectAccount(subject); a != "" {
+		list = append(list, acct{a, b})
 	}
-	paid, known, err := moneylog.PaidBefore(ctx, tx, subjects, tenant, account, bank)
-	return known && !paid, err
+	if m, ok := subject.(map[string]any); ok {
+		if xs, ok := m["accounts"].([]any); ok {
+			for _, x := range xs {
+				if a, b := moneylog.SubjectAccount(x); a != "" && len(list) < 200 {
+					list = append(list, acct{a, b})
+				}
+			}
+		}
+	}
+	for _, a := range list {
+		paid, known, err := moneylog.PaidBefore(ctx, tx, subjects, tenant, a.number, a.bank)
+		if err != nil {
+			return false, err
+		}
+		if known && !paid {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// maskSubjectAccounts shows an approval's subject with its account
+// numbers masked to their last four digits, as payments show them; a
+// list of accounts as how many there are.
+func maskSubjectAccounts(subject any) any {
+	m, ok := subject.(map[string]any)
+	if !ok {
+		return subject
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	if a, _ := moneylog.SubjectAccount(m); a != "" {
+		for _, k := range []string{"account_number", "nuban"} {
+			if _, ok := out[k]; ok {
+				out[k] = saved.Masked(moneylog.AccountDigits(fmt.Sprint(out[k])))
+			}
+		}
+	}
+	if xs, ok := out["accounts"].([]any); ok {
+		out["accounts"] = len(xs)
+	}
+	return out
 }
 
 // openApprovalsTx are the approvals waiting for p to decide (the

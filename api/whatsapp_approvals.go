@@ -393,6 +393,10 @@ func (s *Server) waSendOutbox(ctx context.Context, tenant uuid.UUID, items []wha
 			sendErr = s.sendSupplierItem(ctx, it)
 		case outboxPayment, outboxPaymentBatch:
 			sendErr = s.sendPayResultItem(ctx, it)
+		case outboxPayroll:
+			sendErr = s.sendPayrollItem(ctx, it)
+		case outboxPayee:
+			sendErr = s.sendPayeeItem(ctx, it)
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}
@@ -1001,7 +1005,7 @@ func (s *Server) getHandoff(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		out["workflow"], out["environment"], out["status"], out["step_up"], out["subject"], out["levels"] = wf, env, status, stepUp, opened, levels
+		out["workflow"], out["environment"], out["status"], out["step_up"], out["subject"], out["levels"] = wf, env, status, stepUp, maskSubjectAccounts(opened), levels
 		return nil
 	})
 	if err != nil {

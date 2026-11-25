@@ -32,6 +32,7 @@ import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
 import 'money_sheets.dart' show InvoiceAdd;
 import 'order_sheet.dart';
 import 'bills_page.dart' show openBill;
+import 'pay_diary.dart' show PayDiaryLine;
 import 'pay_chip.dart' show PayChip, mayHoldAccount, mayPayFromMessages;
 import 'pay_transfer.dart' show BillTransferSource, TransferLive, payBill;
 import 'invoices_page.dart' show openInvoice;
@@ -1720,7 +1721,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         if (member.contains(m.id)) return null;
         final next = nextOf[m.id];
         final lead = runs[m.id];
-        if (lead != null) return _DiaryRun(run: lead, other: d.conv.name, onOpen: _acts.onOpen);
+        if (lead != null) return _DiaryRun(run: lead, other: d.conv.name, onOpen: _acts.onOpen, auth: d.chats.auth);
         if (m.m.kind == 'taskiem') {
           return TaskiemNote(
             asked: m.m.asked ?? '',
@@ -1802,7 +1803,8 @@ bool _startsRun(LinkMessage prev, LinkMessage m) {
 /// Conversation.tsx DiaryRun: the newest change shows; the ones before it
 /// fold under it.
 class _DiaryRun extends StatefulWidget {
-  const _DiaryRun({required this.run, required this.other, this.onOpen});
+  const _DiaryRun({required this.run, required this.other, this.onOpen, required this.auth});
+  final Auth auth;
   final List<LinkMessage> run;
   final String other;
   final void Function(LinkDocCard card)? onOpen;
@@ -1816,6 +1818,10 @@ class _DiaryRunState extends State<_DiaryRun> {
 
   Widget _line(LinkMessage m, {Widget? more}) {
     final c = m.card;
+    // A payment made from this chat: its line says how it stands (H7).
+    if (c == null && (m.payment != null || m.batch != null)) {
+      return PayDiaryLine(auth: widget.auth, words: m.body ?? '', when: 'You, ${clock(m.createdAt)}', payment: m.payment, batch: m.batch);
+    }
     return DiaryLine(
       words: c != null ? cardLine(c, true, widget.other) : (m.body ?? ''),
       sub: c != null ? cardSub(c) : null,

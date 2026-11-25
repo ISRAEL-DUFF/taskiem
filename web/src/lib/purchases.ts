@@ -55,6 +55,9 @@ export interface PurchaseLine {
   stock_item_id?: string;
   uses?: number;
   label_id?: string;
+  /** The label kept's name, from the server (a merged label followed to
+   * the one kept); none when not labelled. */
+  label?: string;
   seller_item_id?: string;
   /** Taskiem's suggestion, not yet confirmed. */
   unconfirmed?: boolean;

@@ -202,7 +202,11 @@ func (s *Server) waBuildAnswer(ctx context.Context, c *chat, prop *builder.Propo
 		}
 	}
 	head.WriteString(c.t(headID, headKV...) + "\n\n")
-	steps, err := plainSteps(prop.Definition, s, c)
+	tplID := ""
+	if prop.Template != nil {
+		tplID = prop.Template.ID
+	}
+	steps, err := plainSteps(prop.Definition, tplID, s, c)
 	if err != nil {
 		return fail(c.t("wa.build.unreadable", "link", s.waLink(c, "/workflows")))
 	}
@@ -237,30 +241,104 @@ func (s *Server) waLink(c *chat, path string) string {
 }
 
 // plainSteps reads a definition aloud for a message, bounded to fit one.
-func plainSteps(doc []byte, s *Server, c *chat) (string, error) {
+func plainSteps(doc []byte, template string, s *Server, c *chat) (string, error) {
 	def, err := wd.Load(doc)
 	if err != nil {
 		return "", err
 	}
-	reg, err := s.Registry.For(context.Background(), c.tenant.ID.String())
+	// The read-back: its tool with the command it would be given, and a
+	// recipe's companion (review M6, 2).
+	prop, err := json.Marshal(map[string]any{"definition": json.RawMessage(doc), "template": map[string]any{"id": template, "params": map[string]any{}, "missing": []string{}}})
 	if err != nil {
 		return "", err
 	}
-	lines := wdtext.DescribeIn(def, reg, c.lang.Tag)
-	const maxLines = 25
-	extra := 0
-	if len(lines) > maxLines {
-		extra = len(lines) - maxLines
-		lines = lines[:maxLines]
+	lines := s.readBackOf(context.Background(), c.tenant.ID, prop, uuid.Nil, c.lang.Tag)
+	if len(lines) == 0 {
+		return "", errors.New("the draft cannot be read back")
 	}
-	out := "*" + whatsapp.SafeText(wdtext.Text([]wdtext.Line{{Text: def.Name}})) + "*\n" + whatsapp.SafeText(wdtext.Text(lines))
-	if extra > 0 {
-		out += "\n" + c.t("wa.build.more_steps", "count", strconv.Itoa(extra))
+	return plainStepsText(def.Name, lines, func(n int) string { return c.t("wa.build.more_steps", "count", strconv.Itoa(n)) }), nil
+}
+
+// The read-back's bounds in one message: 25 steps, 3200 bytes.
+const (
+	plainMaxLines = 25
+	plainMaxBytes = 3200
+)
+
+// plainStepsText is a read-back as one message: the name, the steps, and
+// the tool's lines (the trailing ones, "•" at the top level), which are
+// always kept, so a long draft never loses who may use its tool (review
+// M6, 6); steps beyond the bounds are counted (more), and a line too long
+// is cut at a character, never inside one.
+func plainStepsText(name string, lines []wdtext.Line, more func(int) string) string {
+	tail := len(lines)
+	for tail > 0 && lines[tail-1].Depth == 0 && lines[tail-1].Number == "•" {
+		tail--
 	}
-	if len(out) > 3200 {
-		out = out[:3200] + "…"
+	steps, tool := lines[:tail], lines[tail:]
+	head := "*" + whatsapp.SafeText(wdtext.Text([]wdtext.Line{{Text: name}})) + "*\n"
+	toolText := ""
+	if len(tool) > 0 {
+		toolText = "\n" + whatsapp.SafeText(wdtext.Text(tool))
 	}
-	return out, nil
+	room := plainMaxBytes - len(head) - len(toolText) - 80 // the count of steps left out
+	var kept []wdtext.Line
+	used := 0
+	for i, l := range steps {
+		if i == plainMaxLines {
+			break
+		}
+		one := whatsapp.SafeText(wdtext.Text([]wdtext.Line{l}))
+		if used+len(one)+1 > room {
+			if len(kept) == 0 && room > 0 {
+				// One step longer than the message: its start, whole characters.
+				l.Text = cutBytesAtRune(l.Text, room/2)
+				kept = append(kept, l)
+			}
+			break
+		}
+		kept = append(kept, l)
+		used += len(one) + 1
+	}
+	out := head + whatsapp.SafeText(wdtext.Text(kept))
+	if n := len(steps) - len(kept); n > 0 {
+		out += "\n" + more(n)
+	}
+	return out + toolText
+}
+
+// cutBytesAtRune is s cut to at most n bytes at a character's end, with "…".
+func cutBytesAtRune(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	cut := 0
+	for i := range s {
+		if i > n {
+			break
+		}
+		cut = i
+	}
+	return s[:cut] + "…"
+}
+
+// outputTitleAt is the title of the output a warning's path names
+// (/outputs/0), its name where it has none.
+func outputTitleAt(doc []byte, path string) string {
+	var d struct {
+		Outputs []struct {
+			Name  string `json:"name"`
+			Title string `json:"title"`
+		} `json:"outputs"`
+	}
+	i, err := strconv.Atoi(strings.TrimPrefix(path, "/outputs/"))
+	if err != nil || json.Unmarshal(doc, &d) != nil || i < 0 || i >= len(d.Outputs) {
+		return "?"
+	}
+	if d.Outputs[i].Title != "" {
+		return d.Outputs[i].Title
+	}
+	return d.Outputs[i].Name
 }
 
 // buildNotes are the warnings a person should read before saving, and
@@ -270,6 +348,12 @@ func buildNotes(c *chat, prop *builder.Proposal) string {
 	for _, w := range prop.Warnings {
 		switch w.Kind {
 		case "policy":
+			// A customers' tool showing something the business keeps is
+			// said in its own words, with the output (review M6, 1).
+			if w.Rule == builder.RuleCustomerToolPrivate {
+				notes = append(notes, c.t("wa.build.warn_customer_output", "output", whatsapp.SafeText(outputTitleAt(prop.Definition, w.Path))))
+				continue
+			}
 			notes = append(notes, c.t("wa.build.warn_policy"))
 		case "test":
 			notes = append(notes, c.t("wa.build.warn_test"))
@@ -436,7 +520,7 @@ func (s *Server) waBuildParam(ctx context.Context, c *chat, text string) error {
 	if err := s.saveSession(ctx, c, stateConfirming, chatData{Build: b}, waPendingTTL); err != nil {
 		return err
 	}
-	steps, err := plainSteps(doc, s, c)
+	steps, err := plainSteps(doc, b.Template, s, c)
 	if err != nil {
 		return err
 	}
@@ -457,10 +541,11 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 	var version int
 	var name string
 	var specs []builder.TableSpec
+	var rec *recipeInstall
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		var err error
 		var doc []byte
-		wf, version, doc, err = s.saveAIBuildTx(ctx, tx, c.p, b.ID, "", nil, func(action, target string, detail map[string]any) error {
+		wf, version, doc, rec, err = s.saveAIBuildTx(ctx, tx, c.p, b.ID, "", nil, func(action, target string, detail map[string]any) error {
 			return waAudit(ctx, tx, c.ch.Name(), c.p, action, target, detail)
 		})
 		if err == nil {
@@ -493,6 +578,14 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 		return err
 	}
 	msg := c.t("wa.build.saved", "name", whatsapp.SafeText(name), "link", s.waLink(c, "/workflows/"+wf.String()))
+	// A tool: the word it was given (the next free one when its own was
+	// taken), and the schedule a recipe brought (review M6, 2).
+	if rec != nil && rec.Changed {
+		msg += "\n" + c.t("wa.build.tool_taken", "asked", "/"+rec.Asked, "command", "/"+rec.Command)
+	}
+	if rec != nil && rec.Companion != nil {
+		msg += "\n" + c.t("wa.build.tool_companion", "name", whatsapp.SafeText(rec.Companion.Name))
+	}
 	// Then chat goes on: its tables, its settings, publishing.
 	next, err := s.waBuildFinish(ctx, c, &waBuild{ID: b.ID, Workflow: wf, Version: version, Name: name}, specs)
 	if err != nil {

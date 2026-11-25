@@ -89,6 +89,15 @@ type Handler struct {
 	// Platform is Taskiem's own clients by connector id (decision 0052),
 	// for deliveries to /hooks/platform/{connector}.
 	Platform map[string]Platform
+	// Heard is told each event a connection's own subscription delivers
+	// (registration: connection), once it is verified and recorded, for
+	// Taskiem's own reactions to it (Payrolla's company.disconnected ends
+	// the connection: api.PayrollaHeard). It is told again when the
+	// provider sends the event again, so it must be idempotent. It is told
+	// on the delivery's request, before the provider is answered: a
+	// reaction that calls out (the provider's API) does so off the request
+	// (api.TeamHeard). Nil: none.
+	Heard func(ctx context.Context, e HeardEvent)
 
 	apps    appGate
 	once    sync.Once
@@ -993,6 +1002,9 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
+		if h.Heard != nil && !test && spec.PerConnection() {
+			h.Heard(ctx, HeardEvent{Tenant: tenant, Environment: env, Connector: conn.Manifest.ID, Trigger: name, Connection: connection, Event: it.event, Body: body})
+		}
 		if route {
 			// An event without the key (or whose key expression fails)
 			// matches no sub-tenant: it is recorded as unrouted.
@@ -1024,6 +1036,18 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, http.StatusAccepted, results[0])
+}
+
+// HeardEvent is one verified event delivered to a connection's own
+// subscription.
+type HeardEvent struct {
+	Tenant      uuid.UUID
+	Environment string
+	Connector   string // the manifest id: payrolla
+	Trigger     string
+	Connection  string // the connection's name
+	Event       string
+	Body        []byte // the signed body, as delivered
 }
 
 // deliveryItem is one event of a verified delivery, as the trigger's

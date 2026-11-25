@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { get, patch, post, postOnce } from "../api";
+import { ApiError, get, patch, post, postOnce } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import { thingsOfLine } from "../lib/things";
@@ -9,14 +9,15 @@ import type { StockItemRow, StockItemsView } from "../lib/stock";
 import {
   NEW_STOCK,
   TREATMENTS,
+  askUses,
   choiceProblem,
   billLineOf,
   choiceWords,
   fromLine,
   knownLabel,
   labelChoices,
-  labelName,
   lineBody,
+  lineLabel,
   lineLocked,
   lineMark,
   madeStockItem,
@@ -24,6 +25,8 @@ import {
   suggestChoice,
   trackAskOf,
   trackAskWords,
+  usesProblem,
+  usesQuestion,
   type Choice,
   type LabelsView,
   type LineBody,
@@ -110,8 +113,16 @@ export async function resolveChoice(
     const k = `label:${name.toLowerCase()}`;
     labelId = made.get(k);
     if (!labelId) {
-      labelId = (await post<SpendLabel>("/v1/money/labels", { name })).id;
-      made.set(k, labelId);
+      // Making a label needs invoice.manage or table.edit, more than
+      // drafting or confirming may (H2 review fix 5): refused or failed,
+      // the line goes without it rather than failing the whole order.
+      try {
+        labelId = (await post<SpendLabel>("/v1/money/labels", { name })).id;
+        made.set(k, labelId);
+      } catch (e) {
+        if (!(e instanceof ApiError)) throw e;
+        labelId = undefined;
+      }
     }
   }
   let stockItemId = c.stockItemId;
@@ -146,9 +157,13 @@ export function TreatQuestion({
   locked = false,
   rememberable = true,
   suggested,
+  unit,
 }: {
   item: string;
   supplier: string;
+  /** The unit the line is bought in ("bag"), for how many of a stock item
+   * counted in another unit one of it is. */
+  unit?: string;
   category?: string;
   data: TreatData;
   /** What the business remembers of the item, or what the order line
@@ -166,6 +181,9 @@ export function TreatQuestion({
   suggested?: Choice;
 }) {
   const id = useId();
+  // How many of the stock item one is, as typed (Choice.uses holds it
+  // once it is a number).
+  const [usesText, setUsesText] = useState(value?.uses ? String(value.uses) : "");
   const open = !locked && (!memory || !!value);
   const sugg = useLoad(
     () =>
@@ -181,16 +199,32 @@ export function TreatQuestion({
   );
   // Not remembered: Taskiem's suggestion, once, as the starting answer.
   const seeded = useRef(false);
+  // The answer Taskiem seeded, while the person has not changed it.
+  const seed = useRef<Choice>(undefined);
   useEffect(() => {
     if (memory || value || seeded.current || !data.ready || !sugg.data) return;
     seeded.current = true;
-    onChange(
-      suggested
-        ? { ...suggested, label: suggested.label || (sugg.data[0]?.name ?? "") }
-        : suggestChoice(item, data.stockItems, data.tracked, sugg.data),
-      true,
-    );
+    seed.current = suggested
+      ? { ...suggested, label: suggested.label || (sugg.data[0]?.name ?? "") }
+      : suggestChoice(item, data.stockItems, data.tracked, sugg.data);
+    onChange(seed.current, true);
   }, [memory, value, suggested, data.ready, data.stockItems, data.tracked, sugg.data, item, onChange]);
+  // Whether the answer asks how many of its stock item one is (askUses):
+  // kept on the answer, so a sheet's Save waits for it (choiceProblem)
+  // and only an answer asked is sent (lineBody).
+  const unitOf = (v: Choice | undefined) =>
+    v?.treatment === "stock" && v.stockItemId && v.stockItemId !== NEW_STOCK
+      ? data.stockItems?.find((s) => s.id === v.stockItemId)?.unit
+      : undefined;
+  const su = open ? unitOf(value) : undefined;
+  const usesAsk = su !== undefined && askUses(unit, su) ? usesQuestion(su, unit, item) : undefined;
+  useEffect(() => {
+    if (!value || value.usesAsk === usesAsk) return;
+    const wasSeed = value === seed.current;
+    const next = { ...value, usesAsk };
+    if (wasSeed) seed.current = next;
+    onChange(next, wasSeed);
+  }, [value, usesAsk, onChange]);
   const stockName = (sid: string) =>
     data.stockItems?.find((s) => s.id === sid)?.name;
   const head = (
@@ -233,7 +267,17 @@ export function TreatQuestion({
       </div>
     );
   const c = value;
-  const set = (patch: Partial<Choice>) => onChange({ ...c, ...patch });
+  // Another stock item drops how many of the last one a line was (H2
+  // review fix 3): it is asked again of the new one, if at all.
+  const set = (patch: Partial<Choice>) => {
+    if (patch.stockItemId !== undefined && patch.stockItemId !== c.stockItemId) {
+      patch = { ...patch, uses: undefined, usesBad: false, usesKept: false };
+      setUsesText("");
+    }
+    onChange({ ...c, ...patch });
+  };
+  // The chosen stock item's unit (none for a new one, made in the line's).
+  const stockUnit = su;
   const problem = choiceProblem(c);
   const picks = labelChoices(data.labels, sugg.data);
   return (
@@ -287,6 +331,28 @@ export function TreatQuestion({
               <option value={NEW_STOCK}>A new stock item…</option>
             </select>
           </label>
+          {stockUnit !== undefined && usesAsk && (
+            <label className="field" data-testid="treat-uses">
+              <span>{usesAsk}</span>
+              <input
+                inputMode="numeric"
+                value={usesText}
+                placeholder="Like 1000"
+                aria-describedby={`${id}-uses-hint`}
+                aria-invalid={!!usesProblem(usesText)}
+                onChange={(e) => {
+                  setUsesText(e.target.value);
+                  const bad = !!usesProblem(e.target.value);
+                  const t = e.target.value.trim().replace(/,/g, "");
+                  set({ uses: !bad && t !== "" ? Number(t) : undefined, usesBad: bad });
+                }}
+              />
+              <small className="hint" id={`${id}-uses-hint`}>
+                {usesProblem(usesText) ||
+                  `${stockName(c.stockItemId ?? "") ?? "It"} is counted in ${stockUnit}. Said once, it is remembered for this item.`}
+              </small>
+            </label>
+          )}
           {c.stockItemId === NEW_STOCK && (
             <>
               <label className="field">
@@ -437,11 +503,13 @@ export function LineTreatMark({
   labels,
 }: {
   line: Pick<PurchaseLine, "treatment" | "label_id"> &
-    Partial<Pick<PurchaseLine, "id" | "received">>;
+    Partial<Pick<PurchaseLine, "id" | "received" | "label">>;
   labels: SpendLabel[] | undefined;
 }) {
   const mark = lineMark(line.treatment);
-  const name = labelName(labels, line.label_id) || "Not labelled";
+  // The server names the label kept, so a label merged since shows as
+  // the one it was merged into.
+  const name = lineLabel(line, labels) || "Not labelled";
   const { can } = useAuth();
   // Kept track of and come: its rows on Things we have, for those who may
   // see them (table.read); words only for the rest.
@@ -589,6 +657,7 @@ export function OrderLinesTreat({
             <TreatQuestion
               key={k}
               item={l.item}
+              unit={l.unit}
               supplier={purchase.supplier}
               data={treat.data}
               memory={l.unconfirmed ? undefined : own}

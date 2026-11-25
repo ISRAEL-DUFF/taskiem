@@ -77,6 +77,10 @@ type PurchaseLine struct {
 	StockItemID *uuid.UUID `json:"stock_item_id,omitempty"`
 	Uses        int64      `json:"uses,omitempty"`
 	LabelID     *uuid.UUID `json:"label_id,omitempty"`
+	// Label is the name of the label kept for LabelID (a merged label's,
+	// followed through merged_into), read with the line, so the screens
+	// never resolve it themselves; "" for none.
+	Label string `json:"label,omitempty"`
 	// SellerItemID is the linked supplier's own item, on an order to one.
 	SellerItemID string `json:"seller_item_id,omitempty"`
 	// Unconfirmed: the business has not said how to treat this item from
@@ -187,6 +191,8 @@ func checkChoiceTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *LineChoi
 // name.
 var lineCols = `l.id, l.purchase_order_id, l.position, l.name, l.unit, l.quantity, l.cost_kobo, l.received, l.delivered, l.treatment, l.stock_item_id, l.uses,
 	l.label_id, l.seller_item_id, l.to_confirm,
+	COALESCE((SELECT COALESCE(k.name, b.name) FROM spend_labels b LEFT JOIN spend_labels k ON k.tenant_id = b.tenant_id AND k.id = b.merged_into
+	  WHERE b.tenant_id = l.tenant_id AND b.id = l.label_id), ''),
 	CASE WHEN l.seller_item_id IS NOT NULL AND COALESCE(o.link_id, s.link_id) IS NOT NULL
 	  THEN EXISTS (SELECT 1 FROM item_links m WHERE m.tenant_id = l.tenant_id AND m.link_id = COALESCE(o.link_id, s.link_id) AND m.seller_item_id = l.seller_item_id)
 	  ELSE EXISTS (SELECT 1 FROM supplier_items m WHERE m.tenant_id = l.tenant_id AND m.supplier_id = o.supplier_id AND m.name_key = l.name_key) END`
@@ -199,7 +205,7 @@ func scanLine(r pgx.CollectableRow) (PurchaseLine, error) {
 	var seller *string
 	var known bool
 	if err := r.Scan(&l.ID, &l.order, &l.Position, &l.Item, &l.Unit, &l.Quantity, &l.CostKobo, &l.Received, &l.Delivered, &l.Treatment, &l.StockItemID, &l.Uses,
-		&l.LabelID, &seller, &l.toConfirm, &known); err != nil {
+		&l.LabelID, &seller, &l.toConfirm, &l.Label, &known); err != nil {
 		return l, err
 	}
 	if seller != nil {

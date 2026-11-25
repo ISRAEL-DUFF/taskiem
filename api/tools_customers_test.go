@@ -13,7 +13,7 @@ import (
 // Customers' tools (made tools T5): an order status tool for customers,
 // whose answer is a card of public outputs with a button to another
 // customers' tool and one to a members' tool; a track tool for customers;
-// a refund tool for members; and a public menu entry carried over.
+// and a refund tool for members.
 const (
 	custStatusDef = `{"schema":"wd/v1","id":"wf_status","version":1,"name":"Order status","trigger":{"type":"manual"},
 	"inputs":{"schema":{"type":"object","required":["ref"],"properties":{"ref":{"type":"string","title":"Order number","maxLength":20}}}},
@@ -39,11 +39,11 @@ const (
 )
 
 // A customer on the business's own WhatsApp number: menu lists the
-// customers' tools and the public menu's entry carried over (never a
-// members' tool); a pick sends the form; then yes, always; then the
-// answer, from public outputs only, with a button only to another
-// customers' tool, pressable by that customer alone. The menu's entry
-// still starts as it did. A tool whose care says it moves money is never
+// business's customers' tools and nothing else (never a members' tool, nor
+// a workflow that is no tool: there is no other list to put one on); a
+// pick sends the form; then yes, always; then the answer, from public
+// outputs only, with a button only to another customers' tool, pressable
+// by that customer alone. A tool whose care says it moves money is never
 // offered or started.
 func TestCustomerToolsWhatsApp(t *testing.T) {
 	ctx := context.Background()
@@ -60,10 +60,9 @@ func TestCustomerToolsWhatsApp(t *testing.T) {
 	alpha.must(200, "POST", "/v1/workflows/"+pay+"/versions/1/publish", nil)
 	alpha.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "own_app": false})
 	beta.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnB, "waba_id": "300000000000002", "access_token": tokB, "own_app": false})
-	// The menu's entry is given a command from its label: a customers' tool.
-	v := alpha.must(200, "PUT", "/v1/whatsapp/public-menu", map[string]any{"enabled": true, "workflows": []any{map[string]any{"workflow_id": pay, "label": "Pay a supplier"}}})
-	if pw := v["public_workflows"].([]any); len(pw) != 1 || pw[0].(map[string]any)["command"] != "pay-a-supplier" {
-		t.Fatalf("menu: %v", v)
+	// No list and no switch: the number's view says nothing of a menu.
+	if v := toJSON(alpha.must(200, "GET", "/v1/whatsapp/number", nil)); strings.Contains(v, "public") {
+		t.Errorf("number: %s", v)
 	}
 	// Members never see customers' tools as theirs.
 	if got := toJSON(alpha.must(200, "GET", "/v1/tools", nil)); strings.Contains(got, "order-status") || !strings.Contains(got, "give-back") {
@@ -76,7 +75,7 @@ func TestCustomerToolsWhatsApp(t *testing.T) {
 		return w.sendTo(t, "/channels/whatsapp", pnA, waSecret, from, whatsapptest.Text(text))
 	}
 	got := say(tolu, "menu")
-	if len(got) != 1 || !strings.Contains(got[0].Text, "1. Order status\n2. Pay a supplier\n3. Track an order") || strings.Contains(got[0].Text, "Refund") {
+	if len(got) != 1 || !strings.Contains(got[0].Text, "1. Order status\n2. Track an order") || strings.Contains(got[0].Text, "Refund") || strings.Contains(got[0].Text, "Pay supplier") || strings.Contains(got[0].Text, "3.") {
 		t.Fatalf("menu: %+v", got)
 	}
 	// A members' tool's command is the customer's words to the business,
@@ -161,26 +160,11 @@ func TestCustomerToolsWhatsApp(t *testing.T) {
 		t.Fatalf("pressed: %+v", got)
 	}
 
-	// The public menu's entry still starts as it did, with its reference.
-	say(ada, "menu")
-	got = say(ada, "2")
-	if len(got) != 1 || got[0].Flow != whatsapp.FlowInputs {
-		t.Fatalf("menu entry's form: %+v", got)
-	}
-	tok = got[0].FlowToken
-	if st, resp := w.flowCall(t, "/channels/whatsapp/flows", waSecret, "data_exchange", "INPUTS", tok, map[string]any{"n1": "700", "t2": "0123456789", "c3": "1"}); st != 200 || flowToken(t, resp) != tok {
-		t.Fatalf("menu entry's answers: %d %v", st, resp)
-	}
-	w.sendTo(t, "/channels/whatsapp", pnA, waSecret, ada, whatsapptest.FlowCompleted(tok))
-	if got := say(ada, "yes"); len(got) != 1 || !strings.Contains(got[0].Text, "has started. Your reference is") {
-		t.Fatalf("menu entry started: %+v", got)
-	}
-
 	// A tool whose care says it moves money is neither offered nor started,
 	// whatever was deployed.
 	const kemi = "+2348099990103"
 	say(kemi, "menu")
-	got = say(kemi, "3")
+	got = say(kemi, "2")
 	if len(got) != 1 || got[0].Flow != whatsapp.FlowInputs {
 		t.Fatalf("track's form: %+v", got)
 	}
@@ -204,31 +188,6 @@ func TestCustomerToolsWhatsApp(t *testing.T) {
 	// Nor does a deploy of Beta's take Alpha's tools.
 	if got := w.sendTo(t, "/channels/whatsapp", pnB, waSecret, tolu, whatsapptest.ButtonReply(btn, "Track it")); len(got) != 0 && !strings.Contains(got[0].Text, "not available") {
 		t.Errorf("alpha's button on beta's number: %+v", got)
-	}
-}
-
-// A tool's command may not be a public menu entry's (made tools T5): the
-// entry is a customers' tool by it.
-func TestCustomerToolsMenuCommandTaken(t *testing.T) {
-	w := newWAWorld(t)
-	w.graph.AddNumber(pnA, tokA, "+234 800 000 0001")
-	alpha := w.tenant(t, "Alpha", "owner@custmenu.test")
-	pay := alpha.must(201, "POST", "/v1/workflows", map[string]any{"name": "Pay supplier", "definition": json.RawMessage(waPayFlow)})["id"].(string)
-	alpha.must(200, "POST", "/v1/workflows/"+pay+"/versions/1/publish", nil)
-	alpha.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "own_app": false})
-	alpha.must(200, "PUT", "/v1/whatsapp/public-menu", map[string]any{"enabled": true, "workflows": []any{map[string]any{"workflow_id": pay, "label": "Track"}}})
-	wf := alpha.must(201, "POST", "/v1/workflows", map[string]any{"name": "Track an order", "definition": json.RawMessage(custTrackDef)})["id"].(string)
-	if e := alpha.must(409, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil); !strings.Contains(e["error"].(string), "public menu's Track") {
-		t.Errorf("taken: %v", e)
-	}
-	// A new entry on the menu skips a command a tool has.
-	def := strings.Replace(custTrackDef, `"command":"track"`, `"command":"follow"`, 1)
-	wf2 := alpha.must(201, "POST", "/v1/workflows", map[string]any{"name": "Follow", "definition": json.RawMessage(def)})["id"].(string)
-	alpha.must(200, "POST", "/v1/workflows/"+wf2+"/versions/1/publish", nil)
-	v := alpha.must(200, "PUT", "/v1/whatsapp/public-menu", map[string]any{"enabled": true, "workflows": []any{
-		map[string]any{"workflow_id": pay, "label": "Track"}, map[string]any{"workflow_id": wf, "label": "Follow"}}})
-	if got := toJSON(v["public_workflows"]); !strings.Contains(got, `"command":"track"`) || !strings.Contains(got, `"command":"follow-2"`) {
-		t.Errorf("commands: %s", got)
 	}
 }
 
@@ -352,7 +311,6 @@ func TestCustomerToolsWhatsAppList(t *testing.T) {
 	publishFlow(t, alpha, custOrdersDef)
 	publishFlow(t, alpha, custTrackDef)
 	alpha.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "own_app": false})
-	alpha.must(200, "PUT", "/v1/whatsapp/public-menu", map[string]any{"enabled": true, "workflows": []any{}})
 	const tolu, ada = "+2348099990201", "+2348099990202"
 	say := func(from, text string) []whatsapptest.Sent {
 		return w.sendTo(t, "/channels/whatsapp", pnA, waSecret, from, whatsapptest.Text(text))
@@ -407,47 +365,20 @@ func TestCustomerToolsWhatsAppList(t *testing.T) {
 	}
 }
 
-// The roles rule holds for customers (made tools T5): a menu entry whose
-// workflow names roles is never listed or started for a customer; a menu
-// entry whose workflow declares a members' tool is that tool's members'
-// alone; a menu entry never takes a tool's command, nor Taskiem's own
-// words or the routes' "buttons"; answers are read without a chain row,
-// and not without a limit.
+// The roles rule holds for customers (made tools T5): a customers' tool
+// whose workflow names roles is never listed or started for a customer; a
+// members' tool is never a customer's, whatever its command; a tool may
+// not be called buttons (a route's word); answers are read without a
+// chain row, and not without a limit.
 func TestCustomerToolsRolesAndCommands(t *testing.T) {
 	w := newDoorShopWorld(t)
 	owner := w.owner
-	ctx := context.Background()
-	roled := strings.Replace(waPayFlow, `"trigger":{"type":"manual"},`, `"trigger":{"type":"manual"},"roles":["manager"],`, 1)
-	roled = strings.Replace(roled, `"wf_pay"`, `"wf_roled"`, 1)
-	staffOnly := publishFlow(t, owner, roled)
-	members := publishFlow(t, owner, custRefundDef) // a members' tool, /give-back
-	open := publishFlow(t, owner, strings.Replace(waPayFlow, `"wf_pay"`, `"wf_open"`, 1))
-	track := publishFlow(t, owner, custTrackDef)
-	w.graph.AddNumber(pnA, tokA, "+234 800 000 0001")
-	owner.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "own_app": false})
-	v := owner.must(200, "PUT", "/v1/whatsapp/public-menu", map[string]any{"enabled": true, "workflows": []any{
-		map[string]any{"workflow_id": staffOnly, "label": "Managers"},
-		map[string]any{"workflow_id": members, "label": "Give back"},
-		map[string]any{"workflow_id": open, "label": "Buttons"},
-	}})
-	got := toJSON(v["public_workflows"])
-	// "give-back" is the members' tool's: the entry takes the next; Buttons
-	// is a route's word.
-	if !strings.Contains(got, `"command":"give-back-2"`) || !strings.Contains(got, `"command":"buttons-2"`) || !strings.Contains(got, `"command":"managers"`) {
-		t.Fatalf("commands: %s", got)
-	}
-	// And a menu entry never takes one of Taskiem's own words.
-	owner.must(200, "PUT", "/v1/whatsapp/public-menu", map[string]any{"enabled": true, "workflows": []any{
-		map[string]any{"workflow_id": staffOnly, "label": "Managers"},
-		map[string]any{"workflow_id": members, "label": "Give back"},
-		map[string]any{"workflow_id": open, "label": "Buttons"},
-		map[string]any{"workflow_id": track, "label": "Order"},
-	}})
-	var cmd string
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT command FROM whatsapp_public_workflows WHERE label = 'Order'`).Scan(&cmd); err != nil || cmd != "order-2" {
-		t.Errorf("a reserved word: %q %v", cmd, err)
-	}
-	// A tool may not be called buttons either.
+	roled := strings.Replace(custTrackDef, `"trigger":{"type":"manual"},`, `"trigger":{"type":"manual"},"roles":["manager"],`, 1)
+	roled = strings.Replace(strings.Replace(roled, `"wf_track"`, `"wf_roled"`, 1), `"command":"track"`, `"command":"managers"`, 1)
+	publishFlow(t, owner, roled)
+	publishFlow(t, owner, custRefundDef) // a members' tool, /give-back
+	publishFlow(t, owner, custTrackDef)
+	// A tool may not be called buttons.
 	if v := owner.must(200, "POST", "/v1/validate", map[string]any{"definition": json.RawMessage(strings.Replace(custTrackDef, `"command":"track"`, `"command":"buttons"`, 1))}); v["valid"] != false {
 		t.Errorf("a tool called buttons: %v", v)
 	}
@@ -456,19 +387,14 @@ func TestCustomerToolsRolesAndCommands(t *testing.T) {
 	toluID := personID(t, tolu)
 	id := tolu.must(201, "POST", "/v1/me/chats", map[string]any{"business_id": w.biz, "from": "shop"})["id"].(string)
 	tools := toJSON(tolu.must(200, "GET", "/v1/me/chats/"+id+"/tools", nil)["tools"])
-	// Only the open entry, and the customers' tool; never the one with
-	// roles, nor the one whose workflow is a members' tool.
-	if !strings.Contains(tools, `"command":"buttons-2"`) || !strings.Contains(tools, `"command":"track"`) || strings.Contains(tools, "managers") || strings.Contains(tools, "give-back") {
+	// Only the customers' tool; never the one with roles, nor the members'.
+	if !strings.Contains(tools, `"command":"track"`) || strings.Contains(tools, "managers") || strings.Contains(tools, "give-back") {
 		t.Fatalf("tools: %s", tools)
 	}
-	if e := tolu.must(409, "POST", "/v1/me/chats/"+id+"/tools/managers/start", map[string]any{"input": map[string]any{"amount": 5, "account_number": "0123456789", "currency": "NGN"}}); e["not_offered"] != true {
-		t.Errorf("roles at start: %v", e)
-	}
-	tolu.must(404, "POST", "/v1/me/chats/"+id+"/tools/give-back-2/start", map[string]any{"input": map[string]any{}})
-	tolu.must(404, "POST", "/v1/me/chats/"+id+"/tools/give-back/start", map[string]any{"input": map[string]any{}})
-	// The menu entry called buttons-2 starts as itself, not as a button.
-	if st := tolu.must(200, "POST", "/v1/me/chats/"+id+"/tools/buttons-2/start", map[string]any{"input": map[string]any{"amount": 5, "account_number": "0123456789", "currency": "NGN"}}); st["confirm"] == nil {
-		t.Errorf("buttons-2: %v", st)
+	tolu.must(404, "POST", "/v1/me/chats/"+id+"/tools/managers/start", map[string]any{"input": map[string]any{"ref": "A-1"}})
+	tolu.must(404, "POST", "/v1/me/chats/"+id+"/tools/give-back/start", map[string]any{"input": map[string]any{"ref": "A-1"}})
+	if st := tolu.must(200, "POST", "/v1/me/chats/"+id+"/tools/track/start", map[string]any{"input": map[string]any{"ref": "A-1"}}); st["confirm"] == nil {
+		t.Errorf("track: %v", st)
 	}
 
 	// Reading an answer: no chain row, and a limit.

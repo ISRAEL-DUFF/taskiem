@@ -444,6 +444,8 @@ export interface VersionInfo {
   git_request: string | null;
   /** The AI build this version was saved from (the AI co-authored it). */
   ai_build?: string | null;
+  /** What changed from the version before, in plain words. */
+  changes?: string[];
 }
 
 export interface GitSync {
@@ -578,6 +580,7 @@ export interface ConnectorInfo {
       pkce: boolean;
       fields_from_token?: Record<string, string>;
       platform_client_fields?: Record<string, string>;
+      linked_fields?: string[];
     };
   };
   /** For a connector with `auth.oauth2`: whether it can be connected by OAuth on this platform. */
@@ -638,6 +641,8 @@ export interface PublishRequest {
   requested_by: string;
   requested_at: string;
   status: string;
+  /** What publishing it changes, in plain words, from what is live. */
+  changes?: string[];
 }
 
 export interface PolicyVersion {
