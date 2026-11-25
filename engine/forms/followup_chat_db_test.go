@@ -78,7 +78,7 @@ func TestFormLeftFollowedUpOnWhatsApp(t *testing.T) {
 	if _, n := w.sent("sms"); n != 0 {
 		t.Fatal("a text beside the WhatsApp message")
 	}
-	if ok, err := w.keeps.RestoreOK(ctx, forms.TokenHash(m.Token)); err != nil || !ok {
+	if _, ok, err := w.keeps.RestoreOK(ctx, w.env.Tenant, forms.TokenHash(m.Token)); err != nil || !ok {
 		t.Fatalf("the WhatsApp link: %v %v", ok, err)
 	}
 	if slug, ok, err := w.keeps.Where(ctx, forms.TokenHash(m.Token)); err != nil || !ok || slug != "ada-kitchen" {
@@ -101,7 +101,7 @@ func TestFormLeftFollowedUpOnWhatsApp(t *testing.T) {
 		t.Fatalf("after the failure: %s %v", ch, wa)
 	}
 	token := strings.Fields(sms[strings.Index(sms, "/back/")+len("/back/"):])[0]
-	if ok, err := w.keeps.RestoreOK(ctx, forms.TokenHash(token)); err != nil || !ok {
+	if _, ok, err := w.keeps.RestoreOK(ctx, w.env.Tenant, forms.TokenHash(token)); err != nil || !ok {
 		t.Fatalf("the text's link: %v %v", ok, err)
 	}
 	// Once: the same failure again, or an unknown message, texts nothing.

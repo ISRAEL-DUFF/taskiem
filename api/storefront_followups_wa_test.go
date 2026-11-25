@@ -186,8 +186,10 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 	}
 
 	// A number not on WhatsApp: WhatsApp reports the send failed, and it
-	// goes by text, once.
+	// goes by text, once. (Another buyer: a page of their own, as a page
+	// keeps one contact.)
 	const noWA = "+2348035552222"
+	page = w.at(t, sellStoreAt, "/a/"+slug, nil).Body.String()
 	keep(page, url.Values{"contact": {"08035552222"}, "pkg": {"1"}})
 	if len(w.graph.Sent(noWA)) != 1 {
 		t.Fatalf("not sent on WhatsApp: %+v", w.graph.Sent(noWA))
@@ -229,6 +231,7 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 	}
 	const notAsked, asked = "+2348035553333", "+2348035554444"
 	keep(page, url.Values{"contact": {"08035553333"}, "pkg": {"1"}})
+	page = w.at(t, sellStoreAt, "/a/"+slug, nil).Body.String()
 	keep(page, url.Values{"contact": {"08035554444"}, "pkg": {"1"}, "wa": {"1"}})
 	if len(w.graph.Sent(notAsked)) != 0 || len(w.graph.Sent(asked)) != 1 {
 		t.Fatalf("opt-in: not asked %d, asked %d", len(w.graph.Sent(notAsked)), len(w.graph.Sent(asked)))

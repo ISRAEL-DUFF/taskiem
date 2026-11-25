@@ -23,15 +23,17 @@ type Keeps interface {
 	// does not follow up, or the page's order (sent, its status hash) is
 	// sent already.
 	Keep(ctx context.Context, action uuid.UUID, payload, sent []byte) (bool, error)
-	// RestoreOK reports whether a restore link still restores, using
-	// nothing up: what its page offers.
-	RestoreOK(ctx context.Context, tokenHash []byte) (bool, error)
+	// RestoreOK reports the form (its action) a restore link still
+	// restores, using nothing up: what its page offers. A link is its
+	// business's: tenant is the site's, and another business's link is
+	// unknown there.
+	RestoreOK(ctx context.Context, tenant uuid.UUID, tokenHash []byte) (uuid.UUID, bool, error)
 	// Restore claims a restore link once: its form or action and the
 	// choice; ok false when it is unknown, used or past its time.
-	Restore(ctx context.Context, tokenHash []byte) (Restored, bool, error)
+	Restore(ctx context.Context, tenant uuid.UUID, tokenHash []byte) (Restored, bool, error)
 	// Stop stops the follow-ups to the link's contact from its business;
 	// false when the link is unknown or past its time.
-	Stop(ctx context.Context, tokenHash []byte) (bool, error)
+	Stop(ctx context.Context, tenant uuid.UUID, tokenHash []byte) (bool, error)
 	// Where is the address (the slug) of the storefront a link not past
 	// its time belongs to, for the link opened on the form host.
 	Where(ctx context.Context, tokenHash []byte) (string, bool, error)
@@ -57,15 +59,18 @@ func (d dbKeeps) Keep(ctx context.Context, action uuid.UUID, payload, sent []byt
 	return ok, err
 }
 
-func (d dbKeeps) RestoreOK(ctx context.Context, tokenHash []byte) (bool, error) {
-	var ok bool
-	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_restore_ok($1)`, tokenHash).Scan(&ok)
-	return ok, err
+func (d dbKeeps) RestoreOK(ctx context.Context, tenant uuid.UUID, tokenHash []byte) (uuid.UUID, bool, error) {
+	var form *uuid.UUID
+	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_restore_ok($1, $2)`, tokenHash, tenant).Scan(&form)
+	if err != nil || form == nil {
+		return uuid.Nil, false, err
+	}
+	return *form, true, nil
 }
 
-func (d dbKeeps) Restore(ctx context.Context, tokenHash []byte) (Restored, bool, error) {
+func (d dbKeeps) Restore(ctx context.Context, tenant uuid.UUID, tokenHash []byte) (Restored, bool, error) {
 	var raw []byte
-	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_restore($1)`, tokenHash).Scan(&raw)
+	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_restore($1, $2)`, tokenHash, tenant).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && raw == nil) {
 		return Restored{}, false, nil
 	}
@@ -79,9 +84,9 @@ func (d dbKeeps) Restore(ctx context.Context, tokenHash []byte) (Restored, bool,
 	return r, true, nil
 }
 
-func (d dbKeeps) Stop(ctx context.Context, tokenHash []byte) (bool, error) {
+func (d dbKeeps) Stop(ctx context.Context, tenant uuid.UUID, tokenHash []byte) (bool, error) {
 	var ok bool
-	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_stop($1)`, tokenHash).Scan(&ok)
+	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_stop($1, $2)`, tokenHash, tenant).Scan(&ok)
 	return ok, err
 }
 

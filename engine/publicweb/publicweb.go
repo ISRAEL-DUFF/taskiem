@@ -172,9 +172,17 @@ type Server struct {
 	// Keeps writes the keeps of order forms left half-filled and claims
 	// their follow-ups' restore links (forms-that-sell §6); nil: no form
 	// follows up. FormKeeps limits keeps per client address; nil uses
-	// FormKeepsPerIP.
-	Keeps     Keeps
-	FormKeeps *formguard.Limiter
+	// FormKeepsPerIP. FormKeepContacts limits the different contacts one
+	// address names in keeps, across forms (nil: FormKeepContactsPerIP),
+	// and FormKeepHold the different contacts it names on one form before
+	// that form's follow-ups are held (nil: FormKeepHoldPerIP).
+	Keeps            Keeps
+	FormKeeps        *formguard.Limiter
+	FormKeepContacts *formguard.Limiter
+	FormKeepHold     *formguard.Limiter
+	// keepSeen remembers the contacts an address named on a form within
+	// the last two hours, so a contact named again is not counted again.
+	keepSeen *lru.Cache[string, bool]
 	// WAFollowups is the category of the template a follow-up goes by on
 	// WhatsApp (TASKIEM_WA_FOLLOWUP_TEMPLATE_CATEGORY: utility or
 	// marketing); "" when the deployment names none, and the consent line
@@ -279,6 +287,17 @@ func (s *Server) Handler() http.Handler {
 	if s.FormKeeps == nil {
 		b := FormKeepsPerIP
 		s.FormKeeps = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormKeepContacts == nil {
+		b := FormKeepContactsPerIP
+		s.FormKeepContacts = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormKeepHold == nil {
+		b := FormKeepHoldPerIP
+		s.FormKeepHold = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.keepSeen == nil {
+		s.keepSeen = lru.New[string, bool](SubmissionLimiterSize, 2*time.Hour)
 	}
 	if s.FormCodes == nil {
 		b := FormCodesPerIP

@@ -91,12 +91,14 @@ func (e errNotSent) Error() string { return "forms: follow-up not sent: " + e.ou
 
 // FollowUps takes the records past their wait and follows each up, or
 // says why not. One that fails is tried again once its claim lapses.
-func (s *Service) FollowUps(ctx context.Context) error {
+func (s *Service) FollowUps(ctx context.Context) error { return s.followUps(ctx, 50) }
+
+func (s *Service) followUps(ctx context.Context, n int) error {
 	if s.Messages == nil {
 		return nil
 	}
 	rows, err := s.Pool.Query(ctx, `SELECT id, tenant_id, action_id, front_id, site, contact, contact_kind, contact_hash, choice, last_keep_at, followup_on, held
-		FROM taskiem_form_left_due(50)`)
+		FROM taskiem_form_left_due($1)`, n)
 	if err != nil {
 		return err
 	}
@@ -119,7 +121,7 @@ func (s *Service) FollowUps(ctx context.Context) error {
 func (s *Service) followUp(ctx context.Context, x dueRow) error {
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
 		outcome, err := s.followUpTx(ctx, tx, x)
-		if err != nil || outcome == "followed" {
+		if err != nil || outcome == "followed" || outcome == "gone" {
 			return err
 		}
 		return s.mark(ctx, tx, x, outcome)
@@ -142,10 +144,20 @@ func (s *Service) mark(ctx context.Context, tx pgx.Tx, x dueRow, outcome string)
 }
 
 // followUpTx decides and, when it may, sends: "followed", an outcome why
-// not, or "" when the form's follow-ups are held.
+// not, "gone" when the record's page has its order (the record is
+// forgotten), or "" when the form's follow-ups are held.
 func (s *Service) followUpTx(ctx context.Context, tx pgx.Tx, x dueRow) (string, error) {
 	if !x.on {
 		return "off", nil
+	}
+	// The page's order was sent since (with another contact, a typo
+	// corrected): the page is done, and its record forgotten.
+	var done bool
+	if err := tx.QueryRow(ctx, `SELECT taskiem_form_left_done($1, $2)`, x.tenant, x.id).Scan(&done); err != nil {
+		return "", err
+	}
+	if done {
+		return "gone", nil
 	}
 	var wait int
 	var released *time.Time
@@ -156,12 +168,21 @@ func (s *Service) followUpTx(ctx context.Context, tx pgx.Tx, x dueRow) (string, 
 	if now.Sub(x.lastKeep) > time.Duration(wait)*time.Minute+StaleAfter {
 		return "stale", nil
 	}
+	// One follow-up of a business at a time, across the api's replicas:
+	// the day's and the month's caps are read and spent under this lock,
+	// held until the follow-up is recorded.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 901))`, x.tenant.String()); err != nil {
+		return "", err
+	}
 	var formDay, bizDay, bizMonth, keptToday int
 	var ordersDaily float64
 	var stopped bool
 	if err := tx.QueryRow(ctx, `SELECT form_day, business_day, business_month, kept_today, orders_daily::float8, stopped FROM taskiem_form_left_caps($1, $2, $3)`,
 		x.tenant, x.action, x.hash).Scan(&formDay, &bizDay, &bizMonth, &keptToday, &ordersDaily, &stopped); err != nil {
 		return "", err
+	}
+	if s.afterCaps != nil {
+		s.afterCaps()
 	}
 	if stopped {
 		return "stopped", nil
@@ -191,19 +212,21 @@ func (s *Service) followUpTx(ctx context.Context, tx pgx.Tx, x dueRow) (string, 
 			return "limit", nil
 		}
 	}
-	var took bool
-	if err := tx.QueryRow(ctx, `SELECT taskiem_form_followup_take($1)`, x.hash).Scan(&took); err != nil {
-		return "", err
-	}
-	if !took {
-		return "capped", nil
-	}
 	m, ok, err := s.followupMessage(ctx, tx, x)
 	if err != nil {
 		return "", err
 	}
 	if !ok {
 		return "stale", nil // the form or its product is no longer on the page
+	}
+	// The person's allowance across businesses, taken only for a message
+	// that is sent: a message the outbox then refuses rolls it back.
+	var took bool
+	if err := tx.QueryRow(ctx, `SELECT taskiem_form_followup_take($1)`, x.hash).Scan(&took); err != nil {
+		return "", err
+	}
+	if !took {
+		return "capped", nil
 	}
 	channel := sender.SMS
 	if x.kind == "email" {

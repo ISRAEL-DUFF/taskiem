@@ -42,7 +42,17 @@ type Keep struct {
 	// one page make one record, the phone's, and a keep from a page whose
 	// order is recorded already is dropped.
 	Page []byte `json:"page,omitempty"`
+	// Hold: the address that sent this keep named many different contacts
+	// on this form within about an hour, so the form's follow-ups are
+	// held for its owner to release (§6.5).
+	Hold bool `json:"hold,omitempty"`
 }
+
+// PageContacts is how many different contacts one page may name in its
+// keeps: one record a page, a later contact taking the place of an
+// earlier (a typo corrected), and a keep naming a fourth is refused
+// (taskiem_form_left_put), so one page cannot have strangers texted.
+const PageContacts = 3
 
 // Choice is what the buyer was buying: a package's quantity, or the
 // basket's lines, and the delivery area chosen.
@@ -206,6 +216,17 @@ func (s *Service) recordKeep(ctx context.Context, x keepRow) error {
 		site = &k.Site
 	}
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
+		if k.Hold && x.action != nil {
+			// Held as a run of keeps holds it, unless released today.
+			tag, err := tx.Exec(ctx, `UPDATE storefront_actions SET followup_held_at = now() WHERE id = $1 AND followup_on AND followup_held_at IS NULL
+				AND (followup_released_at IS NULL OR followup_released_at < date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')`, *x.action)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() > 0 {
+				s.log().Warn("forms: follow-ups held: one address named many contacts on one form", "tenant", x.tenant, "action", *x.action)
+			}
+		}
 		if k.Page != nil {
 			// The page's order is recorded already: it was sent, not left.
 			var sent bool
@@ -227,29 +248,42 @@ func (s *Service) recordKeep(ctx context.Context, x keepRow) error {
 }
 
 // Sent tells the records that a contact sent the form (scope: its
-// endpoint or action): within the wait the record is forgotten; after
-// the follow-up it came back. It answers "deleted", "came_back" or "".
-func (s *Service) Sent(ctx context.Context, tx pgx.Tx, tenant, scope uuid.UUID, contact string) (string, error) {
+// endpoint or action), from a page (the order's status hash; nil when not
+// known): within the wait the record of that contact or that page is
+// forgotten; after the follow-up it came back. It answers "deleted",
+// "came_back" or "".
+func (s *Service) Sent(ctx context.Context, tx pgx.Tx, tenant, scope uuid.UUID, contact string, page []byte) (string, error) {
 	if s.Messages == nil {
 		return "", nil
 	}
-	kind, value, err := Keep{Contact: contact}.ContactOf()
-	if err != nil {
-		return "", nil //nolint:nilerr // a contact that keys nothing matches no record
+	var hash []byte
+	if kind, value, err := (Keep{Contact: contact}).ContactOf(); err == nil {
+		hash = s.ContactHash(kind, value)
+	}
+	if hash == nil && page == nil {
+		return "", nil // nothing to match a record by
 	}
 	var out string
-	err = tx.QueryRow(ctx, `SELECT taskiem_form_left_sent($1, $2, $3)`, tenant, scope, s.ContactHash(kind, value)).Scan(&out)
+	err := tx.QueryRow(ctx, `SELECT taskiem_form_left_sent($1, $2, $3, $4)`, tenant, scope, hash, page).Scan(&out)
 	return out, err
 }
 
-// OrderSent is Sent for an order's buyer, by their phone and their email:
-// storefront.Orders' FormSent, in the transaction that records the order.
-func (s *Service) OrderSent(ctx context.Context, tx pgx.Tx, tenant, action uuid.UUID, phone, email string) error {
+// OrderSent is Sent for an order's buyer, by their phone, their email and
+// the page the order was sent from (its status hash): storefront.Orders'
+// FormSent, in the transaction that records the order. The page's record
+// goes whatever contact it holds, so a number mistyped and corrected
+// before the order is never followed up.
+func (s *Service) OrderSent(ctx context.Context, tx pgx.Tx, tenant, action uuid.UUID, phone, email string, page []byte) error {
+	if page != nil {
+		if _, err := s.Sent(ctx, tx, tenant, action, "", page); err != nil {
+			return err
+		}
+	}
 	for _, c := range []string{phone, email} {
 		if strings.TrimSpace(c) == "" {
 			continue
 		}
-		if _, err := s.Sent(ctx, tx, tenant, action, c); err != nil {
+		if _, err := s.Sent(ctx, tx, tenant, action, c, nil); err != nil {
 			return err
 		}
 	}

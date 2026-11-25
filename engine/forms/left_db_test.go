@@ -251,7 +251,7 @@ func TestFormLeftKeptAndPurged(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.in(func(tx pgx.Tx) error {
-		if err := w.svc.OrderSent(ctx, tx, w.env.Tenant, w.action, "", "Bola@Example.com"); err != nil {
+		if err := w.svc.OrderSent(ctx, tx, w.env.Tenant, w.action, "", "Bola@Example.com", nil); err != nil {
 			t.Fatal(err)
 		}
 		return nil
@@ -273,17 +273,17 @@ func TestFormLeftKeptAndPurged(t *testing.T) {
 		}
 		return nil
 	})
-	if ok, err := w.keeps.RestoreOK(ctx, forms.TokenHash(token)); err != nil || !ok {
-		t.Fatalf("the link's page: %v %v", ok, err)
+	if form, ok, err := w.keeps.RestoreOK(ctx, w.env.Tenant, forms.TokenHash(token)); err != nil || !ok || form != w.action {
+		t.Fatalf("the link's page: %v %v %v", form, ok, err)
 	}
-	r, ok, err := w.keeps.Restore(ctx, forms.TokenHash(token))
+	r, ok, err := w.keeps.Restore(ctx, w.env.Tenant, forms.TokenHash(token))
 	if err != nil || !ok || r.Action == nil || *r.Action != w.action || r.Choice.Package != 3 || r.Choice.Zone != "Yaba" {
 		t.Fatalf("restored: %+v %v %v", r, ok, err)
 	}
-	if _, ok, err := w.keeps.Restore(ctx, forms.TokenHash(token)); err != nil || ok {
+	if _, ok, err := w.keeps.Restore(ctx, w.env.Tenant, forms.TokenHash(token)); err != nil || ok {
 		t.Fatalf("restored twice: %v %v", ok, err)
 	}
-	if ok, err := w.keeps.RestoreOK(ctx, forms.TokenHash(token)); err != nil || ok {
+	if _, ok, err := w.keeps.RestoreOK(ctx, w.env.Tenant, forms.TokenHash(token)); err != nil || ok {
 		t.Fatalf("the link's page once used: %v %v", ok, err)
 	}
 	var restoreRow string
@@ -294,7 +294,7 @@ func TestFormLeftKeptAndPurged(t *testing.T) {
 	// once, and keeps it; it is counted.
 	for range 2 {
 		w.in(func(tx pgx.Tx) error {
-			return w.svc.OrderSent(ctx, tx, w.env.Tenant, w.action, "08031234567", "")
+			return w.svc.OrderSent(ctx, tx, w.env.Tenant, w.action, "08031234567", "", nil)
 		})
 	}
 	if rec := w.records()["phone"]; rec.back == nil {
@@ -312,7 +312,9 @@ func TestFormLeftKeptAndPurged(t *testing.T) {
 	if n, err := w.svc.PurgeLeft(ctx); err != nil || n != 0 {
 		t.Fatalf("purged too soon: %d %v", n, err)
 	}
-	w.admin(`UPDATE form_left SET expires_at = now() - interval '1 second'; UPDATE form_restores SET expires_at = now() - interval '1 second'`)
+	// (Its link was claimed more than a day ago: a record whose link was
+	// claimed lately lasts a day past the claim, TestFormLeftClaimedKept.)
+	w.admin(`UPDATE form_left SET expires_at = now() - interval '1 second'; UPDATE form_restores SET expires_at = now() - interval '1 second', used_at = now() - interval '25 hours'`)
 	if n, err := w.svc.PurgeLeft(ctx); err != nil || n != 2 {
 		t.Fatalf("purged: %d %v", n, err)
 	}
@@ -376,7 +378,7 @@ func TestFormLeftFollowedUp(t *testing.T) {
 	// The link's Stop stops this business's follow-ups to the number.
 	token := strings.TrimSpace(sms[strings.Index(sms, "/back/")+len("/back/"):])
 	token = strings.Fields(token)[0]
-	if ok, err := w.keeps.Stop(ctx, forms.TokenHash(token)); err != nil || !ok {
+	if ok, err := w.keeps.Stop(ctx, w.env.Tenant, forms.TokenHash(token)); err != nil || !ok {
 		t.Fatalf("stop: %v %v", ok, err)
 	}
 

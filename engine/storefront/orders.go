@@ -120,8 +120,9 @@ type Orders struct {
 	PreviewDomain string
 	// FormSent tells forms left half-filled that a buyer sent an order
 	// form, in the transaction that records the order
-	// (forms.Service.OrderSent); nil tells nothing.
-	FormSent func(ctx context.Context, tx pgx.Tx, tenant, action uuid.UUID, phone, email string) error
+	// (forms.Service.OrderSent), with the page it was sent from (its
+	// status hash, which the page's keeps name); nil tells nothing.
+	FormSent func(ctx context.Context, tx pgx.Tx, tenant, action uuid.UUID, phone, email string, page []byte) error
 	Logger   *slog.Logger
 	Now      func() time.Time
 }
@@ -742,7 +743,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	if o.FormSent != nil && x.action != nil && x.kind == "order" {
 		// A form left half-filled by this buyer: forgotten, or came back
 		// after its follow-up (forms-that-sell §6.1).
-		if err := o.FormSent(ctx, tx, x.tenant, *x.action, sub.Customer.Phone, sub.Customer.Email); err != nil {
+		if err := o.FormSent(ctx, tx, x.tenant, *x.action, sub.Customer.Phone, sub.Customer.Email, x.statusHash); err != nil {
 			return Order{}, err
 		}
 	}

@@ -2,6 +2,8 @@ package publicweb
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"net/http"
@@ -41,6 +43,18 @@ const (
 // FormKeepsPerIP caps the keeps one client address sends, across forms:
 // a person sends a few per page.
 var FormKeepsPerIP = formguard.Bucket{Rate: rate.Every(time.Hour / 120), Burst: 30}
+
+// FormKeepContactsPerIP caps the different contacts one client address
+// names in its keeps, across forms: a person names one or two (a typo
+// corrected), and a script naming strangers' numbers to have them texted
+// is refused after ten. Generous for an address many phones share
+// (carrier-grade NAT), as the other buckets are.
+var FormKeepContactsPerIP = formguard.Bucket{Rate: rate.Every(time.Hour / 10), Burst: 10}
+
+// FormKeepHoldPerIP: one address naming more than five different contacts
+// on one form within about an hour holds that form's follow-ups for its
+// owner to release (§6.5), as a run of keeps does.
+var FormKeepHoldPerIP = formguard.Bucket{Rate: rate.Every(time.Hour / 5), Burst: 5}
 
 // backPath is a follow-up's link: /back/<token>, and its Stop.
 var backPath = regexp.MustCompile(`^/back/([A-Za-z0-9_-]{32})(?:/(stop))?$`)
@@ -121,7 +135,27 @@ func (s *Server) serveKeep(w http.ResponseWriter, r *http.Request, site Site, fo
 	// The status hash the page's order has, or would have: the keep is
 	// refused once it is sent, and two contacts on the page make one.
 	page := storefront.StatusHash(s.statusKey(claims.IdempotencyKeyFor(form)))
-	k := forms.Keep{Contact: v.Get("contact"), Choice: keepChoice(v, act), At: s.now().UTC(), Page: page}
+	k := forms.Keep{Contact: v.Get("contact"), Choice: keepChoice(v, act, p.Items), At: s.now().UTC(), Page: page}
+	_, contact, err := k.ContactOf()
+	if err != nil {
+		w.WriteHeader(http.StatusNoContent) // a contact that does not read: nothing kept
+		return
+	}
+	// A contact this address has not named on this form lately counts
+	// against its contacts' bucket, and against the form's hold.
+	addr := hex.EncodeToString(ip[:])
+	m := hmac.New(sha256.New, s.ipHashKey())
+	m.Write([]byte(contact))
+	seen := addr + "|" + act.ID.String() + "|" + hex.EncodeToString(m.Sum(nil))
+	if _, named := s.keepSeen.Get(seen); !named {
+		k.Hold = !s.FormKeepHold.Allow(addr + "|" + act.ID.String())
+		if !s.FormKeepContacts.Allow(addr) {
+			w.Header().Set("Retry-After", "60")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		s.keepSeen.Put(seen, true)
+	}
 	if front != nil {
 		id := front.ID
 		k.Front = &id
@@ -148,7 +182,7 @@ func (s *Server) serveKeep(w http.ResponseWriter, r *http.Request, site Site, fo
 // keepChoice reads the product choice from a keep: only a package the
 // form sells, an area it delivers to, and lines of what it lists; nothing
 // else typed.
-func keepChoice(v url.Values, act storefront.PublicAction) forms.Choice {
+func keepChoice(v url.Values, act storefront.PublicAction, items []storefront.Item) forms.Choice {
 	var c forms.Choice
 	form := storefront.EffectiveForm(act.Form, act.Kind)
 	if pf, ok := storefront.FormPackages(form); ok {
@@ -158,8 +192,11 @@ func keepChoice(v url.Values, act storefront.PublicAction) forms.Choice {
 				c.Package = want
 			}
 		}
-		if sz := v.Get(sizeField); len(sz) <= 60 {
-			c.Size = sz
+		// A size of the product the form sells, as the page lists it.
+		if it, found := findItem(items, pf.Item); found {
+			if z, ok := findItem(storefront.SizeItems(it), v.Get(sizeField)); ok {
+				c.Size = z.ID
+			}
 		}
 	}
 	for _, z := range act.Zones {
@@ -168,14 +205,27 @@ func keepChoice(v url.Values, act storefront.PublicAction) forms.Choice {
 		}
 	}
 	if storefront.HasWidget(form, "basket") {
+		on := storefront.BasketItems(form)
 		for key, vals := range v {
 			id, ok := strings.CutPrefix(key, "q.")
 			if !ok || id == "" || len(id) > 120 || len(c.Lines) >= 50 {
 				continue
 			}
-			if n, err := strconv.Atoi(vals[0]); err == nil && n > 0 && n <= 100 {
-				c.Lines = append(c.Lines, forms.ChoiceLine{ID: id, Qty: n})
+			// Only a row the page lists and the form's basket offers (a line
+			// of it is <id>~k).
+			id, _, _ = strings.Cut(id, "~")
+			if it, found := findItem(items, id); !found || !storefront.OnForm(it, on) {
+				continue
 			}
+			n, err := strconv.Atoi(vals[0])
+			if err != nil || n <= 0 || n > 100 {
+				continue
+			}
+			if i := slices.IndexFunc(c.Lines, func(l forms.ChoiceLine) bool { return l.ID == id }); i >= 0 {
+				c.Lines[i].Qty = min(100, c.Lines[i].Qty+n)
+				continue
+			}
+			c.Lines = append(c.Lines, forms.ChoiceLine{ID: id, Qty: n})
 		}
 		slices.SortFunc(c.Lines, func(a, b forms.ChoiceLine) int { return strings.Compare(a.ID, b.ID) })
 	}
@@ -229,9 +279,13 @@ func (s *Server) serveBack(w http.ResponseWriter, r *http.Request, site Site, to
 			return
 		}
 	}
+	// The link's form gone from the page: said so, and the link is kept,
+	// should the form come back within its days.
+	gone := "The order form this link opens is no longer on " + business + "'s page. You can still order from " + business + "'s page."
+	used := "This link has been used already or is more than 7 days old. You can still order from " + business + "'s page."
 	switch {
 	case r.Method == http.MethodPost && what == "stop":
-		stopped, err := s.Keeps.Stop(ctx, hash)
+		stopped, err := s.Keeps.Stop(ctx, site.Tenant, hash)
 		if err != nil {
 			s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
 			return
@@ -243,7 +297,17 @@ func (s *Server) serveBack(w http.ResponseWriter, r *http.Request, site Site, to
 		}
 		s.renderPrivate(w, r, http.StatusOK, "back.html", d)
 	case r.Method == http.MethodPost && what == "":
-		got, ok, err := s.Keeps.Restore(ctx, hash)
+		form, ok, err := s.Keeps.RestoreOK(ctx, site.Tenant, hash)
+		if err != nil {
+			s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
+			return
+		}
+		if _, found := restoreURL(p, Restored{Action: &form}); ok && !found {
+			d.Message = gone
+			s.renderPrivate(w, r, http.StatusGone, "back.html", d)
+			return
+		}
+		got, ok, err := s.Keeps.Restore(ctx, site.Tenant, hash)
 		if err != nil {
 			s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
 			return
@@ -252,20 +316,25 @@ func (s *Server) serveBack(w http.ResponseWriter, r *http.Request, site Site, to
 			http.Redirect(w, r, loc, http.StatusSeeOther) //nolint:gosec // a path on this page, the form found in its published model; the query is the choice the server kept
 			return
 		}
-		d.Message = "This link has been used already or is more than 7 days old. You can still order from " + business + "'s page."
+		d.Message = used
 		s.renderPrivate(w, r, http.StatusGone, "back.html", d)
 	case what != "":
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 	default:
-		ok, err := s.Keeps.RestoreOK(ctx, hash)
+		form, ok, err := s.Keeps.RestoreOK(ctx, site.Tenant, hash)
 		if err != nil {
 			s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
 			return
 		}
-		d.Restore = ok
-		d.Message = "You started an order with " + business + ". Finish it where you left off: what you chose is kept, and you type your details again."
-		if !ok {
-			d.Message = "This link has been used already or is more than 7 days old. You can still order from " + business + "'s page."
+		_, found := restoreURL(p, Restored{Action: &form})
+		d.Restore = ok && found
+		switch {
+		case d.Restore:
+			d.Message = "You started an order with " + business + ". Finish it where you left off: what you chose is kept, and you type your details again."
+		case ok:
+			d.Message = gone
+		default:
+			d.Message = used
 		}
 		s.renderPrivate(w, r, http.StatusOK, "back.html", d)
 	}

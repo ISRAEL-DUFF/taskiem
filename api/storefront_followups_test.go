@@ -3,8 +3,8 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strings"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/formguard"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 var (
@@ -266,4 +267,199 @@ func TestFormLeftHalfFilledEndToEnd(t *testing.T) {
 	ada.must(404, "GET", "/v1/forms/"+uuid.NewString()+"/left", nil)
 }
 
-var _ = httptest.NewRecorder
+// followupsOn turns follow-ups on for an order form and starts the
+// public host afresh, its keep buckets the real ones.
+func (w *sellWorld) followupsOn(t *testing.T, id string) {
+	t.Helper()
+	w.ada.must(200, "PATCH", "/v1/storefront/actions/"+id, map[string]any{"followup_on": true})
+	w.newHost(t)
+}
+
+// keepPage draws an order form and answers its keep's address and token.
+func (w *sellWorld) keepPage(t *testing.T, path string) (string, string) {
+	t.Helper()
+	km := keepRe.FindStringSubmatch(w.at(t, sellStoreAt, path, nil).Body.String())
+	if km == nil {
+		t.Fatal("no keep on the form")
+	}
+	return km[1], km[2]
+}
+
+// pastWait moves the form's waiting records before their wait.
+func (w *sellWorld) pastWait(t *testing.T, id string) {
+	t.Helper()
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE form_left SET last_keep_at = now() - interval '31 minutes', claimed_until = NULL
+		WHERE action_id = $1 AND followed_up_at IS NULL`, id); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The review of L3 (findings 2 and 8), through the public host: a buyer
+// who mistypes their number and corrects it is texted at the corrected
+// number, with only what the form offers kept of the choice; one address
+// naming many strangers' numbers, each on a page of its own, holds the
+// form's follow-ups after five and is refused after ten, and no stranger
+// is texted.
+func TestFormLeftKeepsFromOneAddress(t *testing.T) {
+	w := newSellWorld(t)
+	ctx := context.Background()
+	id, slug := w.sellerForm(t)
+	w.followupsOn(t, id)
+	path, token := w.keepPage(t, "/a/"+slug)
+	time.Sleep(formguard.DefaultMinFill + 100*time.Millisecond)
+	keep := func(path string, v url.Values) int {
+		t.Helper()
+		return w.at(t, sellStoreAt, path, v).Code
+	}
+	// A package the form does not offer, a size the product has not, a
+	// line of a basket it does not have: none of it kept.
+	if c := keep(path, url.Values{"keep": {token}, "contact": {"0803 111 1111"}, "pkg": {"7"}, "pz": {"XXL"}, "q.ghost": {"3"}, "zone": {"Mars"}}); c != http.StatusNoContent {
+		t.Fatalf("the typo: %d", c)
+	}
+	if c := keep(path, url.Values{"keep": {token}, "contact": {"08031112222"}, "pkg": {"9"}}); c != http.StatusNoContent {
+		t.Fatalf("the fix: %d", c)
+	}
+	w.followUps(t)
+	var n int
+	var mask, choice string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*), max(contact_mask), max(choice::text) FROM form_left WHERE action_id = $1`, id).Scan(&n, &mask, &choice); err != nil ||
+		n != 1 || mask != "… 2222" || choice != "{}" {
+		t.Fatalf("the page's record: %d %q %s %v", n, mask, choice, err)
+	}
+	w.pastWait(t, id)
+	w.followUps(t)
+	if _, n := w.smsText(t); n != 1 {
+		t.Fatalf("the corrected number's text: %d", n)
+	}
+
+	// A script: a page each, a stranger's number each.
+	var tokens []string
+	for range 30 {
+		_, token := w.keepPage(t, "/a/"+slug)
+		tokens = append(tokens, token)
+	}
+	time.Sleep(formguard.DefaultMinFill + 100*time.Millisecond)
+	codes := map[int]int{}
+	for i, token := range tokens {
+		codes[keep(path, url.Values{"keep": {token}, "contact": {fmt.Sprintf("0803556%04d", i)}})]++
+	}
+	var kept int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_left_inbox`).Scan(&kept); err != nil || kept != 8 {
+		t.Fatalf("keeps taken: %d %v", kept, err)
+	}
+	// Two numbers named already: eight more, then refused.
+	if codes[http.StatusNoContent] != 8 || codes[http.StatusTooManyRequests] != 22 {
+		t.Fatalf("keeps of thirty strangers: %v", codes)
+	}
+	w.followUps(t)
+	var held *time.Time
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT followup_held_at FROM storefront_actions WHERE id = $1`, id).Scan(&held); err != nil || held == nil {
+		t.Fatalf("not held: %v", err)
+	}
+	w.pastWait(t, id)
+	w.followUps(t)
+	if _, n := w.smsText(t); n != 1 {
+		t.Fatalf("strangers texted: %d", n-1)
+	}
+}
+
+// The review of L3 (finding 4): a follow-up's link is its business's. On
+// another business's site it is unknown, Finish my order uses nothing up
+// and Stop stops nothing; a link whose form is gone from the page says so
+// and is kept. The owner's views and settings of an order form are its
+// business's, and need the storefront's manage permission.
+func TestFormLeftOfItsBusiness(t *testing.T) {
+	w := newSellWorld(t)
+	ada := w.ada
+	ctx := context.Background()
+	id, slug := w.sellerForm(t)
+	w.followupsOn(t, id)
+	path, token := w.keepPage(t, "/a/"+slug)
+	time.Sleep(formguard.DefaultMinFill + 100*time.Millisecond)
+	if c := w.at(t, sellStoreAt, path, url.Values{"keep": {token}, "contact": {"08035551234"}, "pkg": {"2"}}).Code; c != http.StatusNoContent {
+		t.Fatalf("keep: %d", c)
+	}
+	w.followUps(t)
+	w.pastWait(t, id)
+	w.followUps(t)
+	text, _ := w.smsText(t)
+	bm := backRe.FindStringSubmatch(text)
+	if bm == nil {
+		t.Fatalf("the text: %q", text)
+	}
+	back := bm[1]
+
+	// Bola's storefront, on its own address.
+	bola := w.tenant(t, "Bola Shop", "bola@bola.test")
+	var bolaID uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM tenants WHERE name = 'Bola Shop'`).Scan(&bolaID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{bolaID}, func(tx pgx.Tx) error {
+		if _, err := storefront.Save(ctx, tx, bolaID, "bola-shop", storefront.Card{Name: "Bola Shop", Address: "1 Allen Avenue, Ikeja"}, nil, storefront.Columns{}, "user:bola"); err != nil {
+			return err
+		}
+		_, err := storefront.Publish(ctx, tx, bolaID, "shops.test", "user:bola", false)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	const bolaAt = "bola-shop.shops.test"
+	if r := w.at(t, bolaAt, back, nil); r.Code != http.StatusOK || strings.Contains(r.Body.String(), "Finish my order") {
+		t.Fatalf("Ada's link on Bola's site: %d", r.Code)
+	}
+	if r := w.at(t, bolaAt, back, url.Values{}); r.Code != http.StatusGone {
+		t.Fatalf("Finish my order on Bola's site: %d", r.Code)
+	}
+	if b := w.at(t, bolaAt, back+"/stop", url.Values{}).Body.String(); !strings.Contains(b, "Nothing to stop") {
+		t.Fatalf("stop on Bola's site: %s", b)
+	}
+	var stops int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_followup_stops`).Scan(&stops); err != nil || stops != 0 {
+		t.Fatalf("stopped from Bola's site: %d %v", stops, err)
+	}
+
+	// The form taken off Ada's page: its link says so and is kept.
+	opts := map[string]any{"delivery": true, "pay_on_delivery": true, "zones": []map[string]any{{"name": "Lekki", "fee_kobo": 150000}}}
+	ada.must(200, "PUT", "/v1/storefront/actions/"+id, map[string]any{"enabled": false, "label": "Order the ear cleaner", "payment": "after_accept", "options": opts})
+	w.publishPage(t)
+	w.newHost(t)
+	if b := w.at(t, sellStoreAt, back, nil).Body.String(); !strings.Contains(b, "no longer on Ada Stores") || strings.Contains(b, "Finish my order") {
+		t.Fatalf("a gone form's link: %s", b)
+	}
+	if r := w.at(t, sellStoreAt, back, url.Values{}); r.Code != http.StatusGone || !strings.Contains(r.Body.String(), "no longer on Ada Stores") {
+		t.Fatalf("finish a gone form: %d", r.Code)
+	}
+	// Back on the page: the link still restores, once.
+	ada.must(200, "PUT", "/v1/storefront/actions/"+id, map[string]any{"enabled": true, "label": "Order the ear cleaner", "payment": "after_accept", "options": opts})
+	w.publishPage(t)
+	w.newHost(t)
+	if r := w.at(t, sellStoreAt, back, url.Values{}); r.Code != http.StatusSeeOther || r.Header().Get("Location") != "/a/"+slug+"?pkg=2" {
+		t.Fatalf("finish once back: %d %q", r.Code, r.Header().Get("Location"))
+	}
+
+	// The owner's views: a hosted form that sells, too.
+	wfID := publishFlow(t, ada, sellHostedForm)
+	ada.must(200, "POST", "/v1/workflows/"+wfID+"/versions/1/publish", nil)
+	var form string
+	for _, f := range ada.must(200, "GET", "/v1/forms", nil)["forms"].([]any) {
+		if m := f.(map[string]any); m["workflow_id"] == wfID && m["environment"] == "prod" {
+			form = m["id"].(string)
+		}
+	}
+	ada.must(201, "POST", "/v1/forms/"+form+"/sell", map[string]any{"sells": map[string]any{"item": "ear", "packages": threePacks}})
+	ada.must(200, "GET", "/v1/storefront/actions/"+id+"/left", nil)
+	ada.must(200, "GET", "/v1/forms/"+form+"/left", nil)
+	// Another business: as if none.
+	bola.must(404, "GET", "/v1/storefront/actions/"+id+"/left", nil)
+	bola.must(404, "GET", "/v1/forms/"+form+"/left", nil)
+	bola.must(404, "PATCH", "/v1/storefront/actions/"+id, map[string]any{"followup_on": false})
+	// A member who may not manage the storefront: refused.
+	viewer := addMember(t, w.world, ada, "vic", "viewer")
+	viewer.must(403, "GET", "/v1/storefront/actions/"+id+"/left", nil)
+	viewer.must(403, "GET", "/v1/forms/"+form+"/left", nil)
+	viewer.must(403, "PATCH", "/v1/storefront/actions/"+id, map[string]any{"followup_on": false})
+	if f := ada.must(200, "GET", "/v1/storefront/actions/"+id+"/left", nil)["followups"].(map[string]any); f["on"] != true {
+		t.Fatalf("changed by another: %v", f)
+	}
+}

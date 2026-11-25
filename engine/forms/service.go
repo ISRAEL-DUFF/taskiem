@@ -71,8 +71,10 @@ type Service struct {
 	ShopDomain    string
 	FollowupLimit func(ctx context.Context, tenant uuid.UUID) (int64, error)
 	FollowupChat  FollowupChat
-	Logger        *slog.Logger
-	Now           func() time.Time
+	// afterCaps, in tests, runs once a follow-up's caps are read.
+	afterCaps func()
+	Logger    *slog.Logger
+	Now       func() time.Time
 }
 
 // Errors a submission is refused with; the respondent was told before it

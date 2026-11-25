@@ -1793,6 +1793,7 @@ form_left.outcome
 form_left.channel
 form_left.claimed_until
 form_restores.left_id
+form_left.page_names
 form_left_stats.tenant_id
 form_left_stats.scope_id
 form_left_stats.day
