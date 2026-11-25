@@ -45698,6 +45698,12 @@ components:
           type: string
           format: date-time
           description: Set while the form's follow-ups are held after a run of keeps; release_hold sends them
+        whatsapp:
+          type: boolean
+          description: A follow-up may go on WhatsApp, by the deployment's approved template from the business's own number (forms that sell L4); absent when it goes by text or email only
+        whatsapp_opt_in:
+          type: boolean
+          description: The WhatsApp template is a marketing one, so only a buyer who ticks the box on the form is followed up on WhatsApp
     FormLeft:
       type: object
       required: [action_id, label, followups, week, left]

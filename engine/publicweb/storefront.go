@@ -37,6 +37,9 @@ type StorefrontPage struct {
 	// Followups are the order forms that follow up a form left
 	// half-filled, by action id (forms-that-sell §6).
 	Followups map[uuid.UUID]bool
+	// FollowupWhatsApp: the business has its own WhatsApp number, so a
+	// follow-up may go there when the deployment names its template (L4).
+	FollowupWhatsApp bool
 }
 
 // Storefronts reads a business's storefront's page; ok is false when it
@@ -91,6 +94,11 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 				p.Followups = map[uuid.UUID]bool{}
 			}
 			p.Followups[a] = true
+		}
+		if len(follow) > 0 {
+			if err := pool.QueryRow(ctx, `SELECT taskiem_public_form_followup_whatsapp($1)`, id).Scan(&p.FollowupWhatsApp); err != nil {
+				return StorefrontPage{}, false, err
+			}
 		}
 		// Each other front's list, its table read once.
 		for _, f := range p.Model.Fronts {

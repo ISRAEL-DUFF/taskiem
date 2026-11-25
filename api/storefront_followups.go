@@ -32,6 +32,25 @@ type followupSettings struct {
 	On          bool       `json:"on"`
 	WaitMinutes int        `json:"wait_minutes"`
 	HeldAt      *time.Time `json:"held_at,omitempty"`
+	// WhatsApp: a follow-up may go on WhatsApp, by the deployment's
+	// template from the business's own number (L4); WhatsAppOptIn: only to
+	// a buyer who asks for it on the form (a marketing template).
+	WhatsApp      bool `json:"whatsapp,omitempty"`
+	WhatsAppOptIn bool `json:"whatsapp_opt_in,omitempty"`
+}
+
+// followupChannels says whether the business's follow-ups may go on
+// WhatsApp: the deployment names the template and the business has its
+// own number.
+func (s *Server) followupChannels(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st *followupSettings) error {
+	if s.FollowupTemplate == nil || s.Forms == nil {
+		return nil
+	}
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM whatsapp_numbers WHERE tenant_id = $1 AND status = 'active')`, tenant).Scan(&st.WhatsApp); err != nil {
+		return err
+	}
+	st.WhatsAppOptIn = st.WhatsApp && s.FollowupTemplate.OptIn()
+	return nil
 }
 
 // leftView is GET …/left.
@@ -59,6 +78,9 @@ func (s *Server) leftOf(ctx context.Context, tx pgx.Tx, tenant, action uuid.UUID
 		return leftView{}, err
 	}
 	out := leftView{Action: action, Label: label, Followups: st}
+	if err := s.followupChannels(ctx, tx, tenant, &out.Followups); err != nil {
+		return leftView{}, err
+	}
 	week := time.Now().UTC().AddDate(0, 0, -6)
 	if out.Week, out.Left, err = forms.Left(ctx, tx, tenant, action, week); err != nil {
 		return leftView{}, err
@@ -175,6 +197,9 @@ func (s *Server) patchStorefrontAction(w http.ResponseWriter, r *http.Request) {
 		}
 		var err error
 		if _, _, out, err = orderAction(ctx, tx, id); err != nil {
+			return err
+		}
+		if err := s.followupChannels(ctx, tx, principalFrom(ctx).TenantID, &out); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "storefront.followups", id.String(), map[string]any{"on": out.On, "wait_minutes": out.WaitMinutes, "released": in.ReleaseHold})

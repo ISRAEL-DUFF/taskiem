@@ -97,7 +97,7 @@ func (p *Platform) TemplateUsable(ctx context.Context, t Template) error {
 	}
 	var status string
 	err := p.registry(ctx, func(q querier) error {
-		err := q.QueryRow(ctx, `SELECT status FROM whatsapp_templates WHERE waba_id = $1 AND name = $2 AND language = $3`, p.WABA, t.Name, p.Config.Language).Scan(&status)
+		err := q.QueryRow(ctx, `SELECT status FROM whatsapp_templates WHERE waba_id = $1 AND name = $2 AND language = $3`, p.WABA, t.Name, t.LanguageOr(p.Config.Language)).Scan(&status)
 		if errors.Is(err, pgx.ErrNoRows) {
 			status = TemplateNotSubmitted
 			return nil
@@ -173,27 +173,28 @@ var ErrNoWABA = errors.New("whatsapp: the number's WhatsApp Business Account id 
 // this number's account; every template is not_submitted when nothing is
 // recorded.
 func (p *Platform) TemplateStatuses(ctx context.Context) ([]TemplateStatus, error) {
-	out := make([]TemplateStatus, 0, len(AllTemplates))
-	for _, t := range AllTemplates {
-		out = append(out, TemplateStatus{Name: t.Name, Category: Category(t), Language: p.Config.Language, Status: TemplateNotSubmitted, Purpose: t.Purpose})
+	lib := p.Library()
+	out := make([]TemplateStatus, 0, len(lib))
+	for _, t := range lib {
+		out = append(out, TemplateStatus{Name: t.Name, Category: Category(t), Language: t.LanguageOr(p.Config.Language), Status: TemplateNotSubmitted, Purpose: t.Purpose})
 	}
 	if p.WABA == "" {
 		return out, nil
 	}
 	err := p.registry(ctx, func(q querier) error {
-		rows, err := q.Query(ctx, `SELECT name, status, reason, COALESCE(meta_id, ''), submitted_at, checked_at FROM whatsapp_templates WHERE waba_id = $1 AND language = $2`, p.WABA, p.Config.Language)
+		rows, err := q.Query(ctx, `SELECT name, language, status, reason, COALESCE(meta_id, ''), submitted_at, checked_at FROM whatsapp_templates WHERE waba_id = $1`, p.WABA)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
-			var name string
+			var name, language string
 			var st TemplateStatus
-			if err := rows.Scan(&name, &st.Status, &st.Reason, &st.MetaID, &st.SubmittedAt, &st.CheckedAt); err != nil {
+			if err := rows.Scan(&name, &language, &st.Status, &st.Reason, &st.MetaID, &st.SubmittedAt, &st.CheckedAt); err != nil {
 				return err
 			}
 			for i := range out {
-				if out[i].Name == name {
+				if out[i].Name == name && out[i].Language == language {
 					out[i].Status, out[i].Reason, out[i].MetaID, out[i].SubmittedAt, out[i].CheckedAt = st.Status, st.Reason, st.MetaID, st.SubmittedAt, st.CheckedAt
 				}
 			}
@@ -220,7 +221,7 @@ func NotApprovedNote(statuses []TemplateStatus) string {
 }
 
 // record writes a template's standing as Meta reported it.
-func (p *Platform) record(ctx context.Context, q querier, name, metaID, status, reason string, submitted bool) error {
+func (p *Platform) record(ctx context.Context, q querier, name, language, metaID, status, reason string, submitted bool) error {
 	var submittedAt *time.Time
 	if submitted {
 		now := p.now()
@@ -235,7 +236,7 @@ func (p *Platform) record(ctx context.Context, q querier, name, metaID, status, 
 		// not write them, so they are written through a definer that works
 		// only outside any tenant scope (migration 00353).
 		_, err := q.Exec(ctx, `SELECT taskiem_wa_platform_template_record($1, $2, $3, $4, $5, $6, $7)`,
-			p.WABA, name, p.Config.Language, mid, status, clip(reason, 1000), submittedAt)
+			p.WABA, name, language, mid, status, clip(reason, 1000), submittedAt)
 		return err
 	}
 	// An own number's row is its tenant's: the upsert never moves a row
@@ -245,7 +246,7 @@ func (p *Platform) record(ctx context.Context, q querier, name, metaID, status, 
 		ON CONFLICT (waba_id, name, language) DO UPDATE SET meta_id = COALESCE(EXCLUDED.meta_id, whatsapp_templates.meta_id),
 		  status = EXCLUDED.status, reason = EXCLUDED.reason, submitted_at = COALESCE(EXCLUDED.submitted_at, whatsapp_templates.submitted_at), checked_at = now(), updated_at = now()
 		WHERE whatsapp_templates.tenant_id = EXCLUDED.tenant_id`,
-		p.WABA, name, p.Config.Language, p.tenantRef(), mid, status, clip(reason, 1000), submittedAt)
+		p.WABA, name, language, p.tenantRef(), mid, status, clip(reason, 1000), submittedAt)
 	return err
 }
 
@@ -254,14 +255,14 @@ func (p *Platform) record(ctx context.Context, q querier, name, metaID, status, 
 // when it answers a status at once). A template Meta already holds under
 // that name is refused by Meta; CheckTemplates then records its status.
 func (p *Platform) SubmitTemplate(ctx context.Context, name string) (TemplateStatus, error) {
-	t, ok := TemplateNamed(name)
+	t, ok := p.TemplateNamed(name)
 	if !ok {
 		return TemplateStatus{}, fmt.Errorf("whatsapp: no template named %q", name)
 	}
 	if p.WABA == "" {
 		return TemplateStatus{}, ErrNoWABA
 	}
-	def, err := t.Submission(p.Config.Language, p.Client.Hosts)
+	def, err := t.Submission(t.LanguageOr(p.Config.Language), p.Client.Hosts)
 	if err != nil {
 		return TemplateStatus{}, err
 	}
@@ -273,7 +274,9 @@ func (p *Platform) SubmitTemplate(ctx context.Context, name string) (TemplateSta
 	if !ok {
 		st = TemplatePending
 	}
-	if err := p.registry(ctx, func(q querier) error { return p.record(ctx, q, t.Name, id, st, "", true) }); err != nil {
+	if err := p.registry(ctx, func(q querier) error {
+		return p.record(ctx, q, t.Name, t.LanguageOr(p.Config.Language), id, st, "", true)
+	}); err != nil {
 		return TemplateStatus{}, err
 	}
 	return p.templateStatus(ctx, t.Name)
@@ -306,15 +309,14 @@ func (p *Platform) CheckTemplates(ctx context.Context) ([]TemplateStatus, error)
 	}
 	byName := map[string]MetaTemplate{}
 	for _, m := range listed {
-		if m.Language == p.Config.Language {
-			byName[m.Name] = m
-		}
+		byName[m.Name+"\x00"+m.Language] = m
 	}
 	err = p.registry(ctx, func(q querier) error {
-		for _, t := range AllTemplates {
-			m, ok := byName[t.Name]
+		for _, t := range p.Library() {
+			language := t.LanguageOr(p.Config.Language)
+			m, ok := byName[t.Name+"\x00"+language]
 			if !ok {
-				if err := p.record(ctx, q, t.Name, "", TemplateNotSubmitted, "", false); err != nil {
+				if err := p.record(ctx, q, t.Name, language, "", TemplateNotSubmitted, "", false); err != nil {
 					return err
 				}
 				continue
@@ -323,7 +325,7 @@ func (p *Platform) CheckTemplates(ctx context.Context) ([]TemplateStatus, error)
 			if !known {
 				st = TemplatePending
 			}
-			if err := p.record(ctx, q, t.Name, m.ID, st, m.Reason(), false); err != nil {
+			if err := p.record(ctx, q, t.Name, language, m.ID, st, m.Reason(), false); err != nil {
 				return err
 			}
 		}
@@ -351,7 +353,8 @@ type TemplateStatusUpdate struct {
 // taskiem_wa_waba_tenant). Events for templates not in the library, in
 // another language, or for an unknown account are ignored.
 func (p *Platform) ApplyTemplateStatus(ctx context.Context, u TemplateStatusUpdate) error {
-	if _, ok := TemplateNamed(u.Name); !ok || u.WABA == "" || u.Language != p.Config.Language {
+	t, ok := p.TemplateNamed(u.Name)
+	if !ok || u.WABA == "" || u.Language != t.LanguageOr(p.Config.Language) {
 		return nil
 	}
 	st, ok := StatusFromMeta(u.Event)
@@ -379,7 +382,7 @@ func (p *Platform) ApplyTemplateStatus(ctx context.Context, u TemplateStatusUpda
 			return nil
 		}
 	}
-	return q.registry(ctx, func(qq querier) error { return q.record(ctx, qq, u.Name, u.MetaID, st, u.Reason, false) })
+	return q.registry(ctx, func(qq querier) error { return q.record(ctx, qq, u.Name, u.Language, u.MetaID, st, u.Reason, false) })
 }
 
 // PollTemplates checks every tracked account against Meta: the platform

@@ -48,8 +48,12 @@ func (s *Server) waTemplatesView(ctx context.Context, p *Principal) (waTemplates
 	v := waTemplatesView{Templates: []whatsapp.TemplateStatus{}}
 	wa, err := s.ownNumber(ctx, p)
 	if errors.Is(err, errConflict) || errors.Is(err, errWhatsAppOff) {
-		for _, t := range whatsapp.AllTemplates {
-			v.Templates = append(v.Templates, whatsapp.TemplateStatus{Name: t.Name, Category: whatsapp.Category(t), Language: "en", Status: whatsapp.TemplateNotSubmitted, Purpose: t.Purpose})
+		lib := whatsapp.AllTemplates
+		if s.WhatsApp != nil {
+			lib = s.WhatsApp.Library()
+		}
+		for _, t := range lib {
+			v.Templates = append(v.Templates, whatsapp.TemplateStatus{Name: t.Name, Category: whatsapp.Category(t), Language: t.LanguageOr("en"), Status: whatsapp.TemplateNotSubmitted, Purpose: t.Purpose})
 		}
 		return v, nil
 	}
@@ -80,7 +84,11 @@ func (s *Server) getWhatsAppTemplates(w http.ResponseWriter, r *http.Request) {
 func (s *Server) submitWhatsAppTemplate(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	name := chi.URLParam(r, "name")
-	if _, ok := whatsapp.TemplateNamed(name); !ok {
+	named := whatsapp.TemplateNamed
+	if s.WhatsApp != nil {
+		named = s.WhatsApp.TemplateNamed
+	}
+	if _, ok := named(name); !ok {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}

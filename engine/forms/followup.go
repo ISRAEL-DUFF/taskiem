@@ -53,14 +53,22 @@ type FollowupMessage struct {
 	Product, Detail, Link string
 	// Key makes the message one per record.
 	Key string
+	// Token is the restore link's token (the end of Link), for a chat
+	// template whose button opens the link under a fixed address.
+	Token string
 }
 
 // FollowupChat reaches a typed phone in a chat app: on WhatsApp, by an
-// approved template on the business's own number (L4). It answers false
-// when it cannot (no own number, no approved template), and the phone
-// gets a text.
+// approved template on the business's own number (L4, followup_chat.go).
+// It answers sent false when it cannot (no own number, the template not
+// approved there, held back past the business's allowance, refused by
+// WhatsApp), and the phone gets a text; ref is the message's id, so a
+// failure WhatsApp reports later sends the text then (FollowupFailed).
 type FollowupChat interface {
-	FollowUp(ctx context.Context, tx pgx.Tx, m FollowupMessage) (bool, error)
+	// OptIn: the template is a marketing one, so it reaches only a buyer
+	// who asked for WhatsApp on the form (Choice.WhatsApp).
+	OptIn() bool
+	FollowUp(ctx context.Context, tx pgx.Tx, m FollowupMessage) (ref string, sent bool, err error)
 }
 
 type dueRow struct {
@@ -202,20 +210,11 @@ func (s *Service) followUpTx(ctx context.Context, tx pgx.Tx, x dueRow) (string, 
 		channel = sender.Email
 	}
 	if channel == sender.SMS && s.FollowupChat != nil {
-		// L4's seam: WhatsApp by an approved template, where there is one.
-		token, ok, err := s.FollowedUp(ctx, tx, x.tenant, x.id, "whatsapp")
-		if err != nil || !ok {
-			return "", err
+		// L4: WhatsApp by an approved template, where there is one; else
+		// the text below (followup_chat.go).
+		if sent, err := s.followUpChat(ctx, tx, x, m); err != nil || sent {
+			return "followed", err
 		}
-		m.Link = s.backLink(ctx, tx, x.tenant, token)
-		sent, err := s.FollowupChat.FollowUp(ctx, tx, m)
-		if err != nil {
-			return "", err
-		}
-		if sent {
-			return "followed", nil
-		}
-		return "", errors.New("forms: the chat could not follow up; tried again as a text") // rolled back: the row is claimed again
 	}
 	token, ok, err := s.FollowedUp(ctx, tx, x.tenant, x.id, channel)
 	if err != nil || !ok {

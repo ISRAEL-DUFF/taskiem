@@ -174,6 +174,7 @@ its packages, the warning line, and a frame's messages to its website. */}}
 the contact, in the form's language, on an order form that follows up;
 and the keep, sent by a script once a contact is typed. */}}
 {{define "sfconsent"}}{{with .Consent}}<p class="hint sell-consent" id="f-consent">{{.}}</p>
+{{end}}{{with .WAOptIn}}<label class="check sell-consent" for="f-wa"><input id="f-wa" type="checkbox" name="wa" value="1"> {{.}}</label>
 {{end}}{{end}}
 
 {{define "sfkeep"}}{{with .Keep}}<script src="{{asset "keep.js"}}" defer></script>

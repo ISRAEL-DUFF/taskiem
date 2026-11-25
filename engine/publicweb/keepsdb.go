@@ -32,6 +32,9 @@ type Keeps interface {
 	// Stop stops the follow-ups to the link's contact from its business;
 	// false when the link is unknown or past its time.
 	Stop(ctx context.Context, tokenHash []byte) (bool, error)
+	// Where is the address (the slug) of the storefront a link not past
+	// its time belongs to, for the link opened on the form host.
+	Where(ctx context.Context, tokenHash []byte) (string, bool, error)
 }
 
 // Restored is what a restore link gives back: never the contact.
@@ -80,6 +83,15 @@ func (d dbKeeps) Stop(ctx context.Context, tokenHash []byte) (bool, error) {
 	var ok bool
 	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_stop($1)`, tokenHash).Scan(&ok)
 	return ok, err
+}
+
+func (d dbKeeps) Where(ctx context.Context, tokenHash []byte) (string, bool, error) {
+	var slug *string
+	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_back_where($1)`, tokenHash).Scan(&slug)
+	if err != nil || slug == nil || *slug == "" {
+		return "", false, err
+	}
+	return *slug, true, nil
 }
 
 // SealKeep seals a keep for the api role, bound to its form or action.

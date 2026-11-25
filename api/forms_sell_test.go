@@ -41,6 +41,8 @@ type sellWorld struct {
 	*dispatchWorld
 	ada  *client
 	host http.Handler
+	// waFollowups is the public host's WhatsApp follow-up category (L4).
+	waFollowups string
 }
 
 func newSellWorld(t *testing.T) *sellWorld {
@@ -92,7 +94,7 @@ func (w *sellWorld) newHost(t *testing.T) {
 		Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour), Submissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
 		FormSubmissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
 		// Forms left half-filled (L3): keeps and follow-ups' links.
-		Keeps: publicweb.DBKeeps(pp), FormKeeps: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}
+		Keeps: publicweb.DBKeeps(pp), FormKeeps: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour), WAFollowups: w.waFollowups}
 	w.host = host.Handler()
 }
 

@@ -31,6 +31,18 @@ type Template struct {
 	// one for the business's own people, filled from the step's one-line
 	// variables alone (TellTemplate).
 	Tell bool
+	// Language is the language the template is submitted and sent in when
+	// it is not the deployment's (TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE): a
+	// deployment's own template may name its own. "" is the deployment's.
+	Language string
+}
+
+// LanguageOr is the template's language, or def when it names none.
+func (t Template) LanguageOr(def string) string {
+	if t.Language != "" {
+		return t.Language
+	}
+	return def
 }
 
 // TemplateButton is a button defined on a template: a quick reply (its
@@ -492,6 +504,25 @@ func TellVars(t Template) []string {
 		}
 	}
 	return out
+}
+
+// Library is the templates this number knows: the library and the
+// deployment's own (Config.Templates).
+func (p *Platform) Library() []Template {
+	if len(p.Config.Templates) == 0 {
+		return AllTemplates
+	}
+	return append(slices.Clip(AllTemplates), p.Config.Templates...)
+}
+
+// TemplateNamed finds a template in this number's library.
+func (p *Platform) TemplateNamed(name string) (Template, bool) {
+	for _, t := range p.Config.Templates {
+		if t.Name == name {
+			return t, true
+		}
+	}
+	return TemplateNamed(name)
 }
 
 // TemplateNamed finds a template in the library.

@@ -202,7 +202,10 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		// Forms that sell (L3): a keep only for an order form that follows up and was not sent, which of a storefront's
 		// forms follow up, a restore link's page before it is used, and its Stop (nothing read back).
 		"taskiem_public_form_keep(uuid,bytea,bytea)": true, "taskiem_public_form_followups(uuid)": true,
-		"taskiem_public_form_restore_ok(bytea)": true, "taskiem_public_form_stop(bytea)": true}
+		"taskiem_public_form_restore_ok(bytea)": true, "taskiem_public_form_stop(bytea)": true,
+		// Forms that sell (L4): whether a storefront's business has its own WhatsApp number (a yes or no), and the
+		// storefront's address of a follow-up's link not past its time, for the template's button on the form host.
+		"taskiem_public_form_followup_whatsapp(uuid)": true, "taskiem_public_form_back_where(bytea)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)

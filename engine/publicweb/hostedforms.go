@@ -232,6 +232,12 @@ func (s *Server) routeForms(w http.ResponseWriter, r *http.Request) {
 	if !embed && head == "s" && s.serveFamily(w, r, key, sub) {
 		return
 	}
+	// A follow-up's link from the WhatsApp template's button (L4): to the
+	// same link on its storefront.
+	if !embed && head == "back" && sub == "" && backPath.MatchString("/back/"+key) {
+		s.serveBackOnFormHost(w, r, key)
+		return
+	}
 	if !s.formsReady() && head != "" {
 		s.renderPrivate(w, r, http.StatusServiceUnavailable, "formclosed.html", closedData{pageData: pageData{Title: "Not open yet", Lang: "en"},
 			Business: "Taskiem", Message: "Forms are not open yet. Please try again later."})

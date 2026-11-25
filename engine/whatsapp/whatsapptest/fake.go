@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -72,6 +73,20 @@ type Graph struct {
 	tplSeq    int
 	// SubmitStatus is the status a submission answers (PENDING unless set).
 	SubmitStatus string
+	// Extra are a deployment's own templates beside the library
+	// (whatsapp.Config.Templates), which the fake holds as it holds the
+	// library's.
+	Extra []whatsapp.Template
+}
+
+// named finds a template in the library or Extra.
+func (g *Graph) named(name string) (whatsapp.Template, bool) {
+	for _, t := range g.Extra {
+		if t.Name == name {
+			return t, true
+		}
+	}
+	return whatsapp.TemplateNamed(name)
 }
 
 // fakeTemplate is a template as the fake account holds it.
@@ -165,7 +180,7 @@ func (g *Graph) SetTemplateStatus(waba, name, status, reason string) {
 		t.ID = fmt.Sprintf("%d", 900000000000000+g.tplSeq)
 	}
 	t.Language, t.Status, t.Reason = "en", status, reason
-	if tpl, ok := whatsapp.TemplateNamed(name); ok {
+	if tpl, ok := g.named(name); ok {
 		t.Category = tpl.Category
 	}
 	acct[name] = t
@@ -227,7 +242,7 @@ func (g *Graph) serveTemplates(w http.ResponseWriter, r *http.Request, waba stri
 	switch r.Method {
 	case http.MethodGet:
 		if !g.strict[waba] {
-			for _, tpl := range whatsapp.AllTemplates {
+			for _, tpl := range append(slices.Clip(whatsapp.AllTemplates), g.Extra...) {
 				if _, ok := acct[tpl.Name]; !ok {
 					g.tplSeq++
 					acct[tpl.Name] = fakeTemplate{ID: fmt.Sprintf("%d", 900000000000000+g.tplSeq), Language: "en", Status: "APPROVED", Category: tpl.Category}
@@ -522,7 +537,7 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 		}
 	case "template":
 		s.Template = m.Template.Name
-		tpl, ok := whatsapp.TemplateNamed(m.Template.Name)
+		tpl, ok := g.named(m.Template.Name)
 		if !ok {
 			refuse(w, http.StatusBadRequest, 132001, "Template name does not exist in the translation")
 			return

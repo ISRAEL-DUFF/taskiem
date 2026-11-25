@@ -51,6 +51,9 @@ type Choice struct {
 	Size    string       `json:"size,omitempty"`
 	Lines   []ChoiceLine `json:"lines,omitempty"`
 	Zone    string       `json:"zone,omitempty"`
+	// WhatsApp: the buyer asked on the form for the follow-up on WhatsApp,
+	// where the follow-up's template is a marketing one (L4).
+	WhatsApp bool `json:"whatsapp,omitempty"`
 }
 
 // ChoiceLine is one basket line chosen: the row and how many.

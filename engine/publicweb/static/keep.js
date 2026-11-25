@@ -54,6 +54,8 @@
     for (var i = 0; i < qty.length; i++) {
       if (parseInt(qty[i].value, 10) > 0) body.set(qty[i].name, qty[i].value);
     }
+    var wa = form.querySelector("input[name=wa]");
+    if (wa && wa.checked) body.set("wa", "1");
     var s = site();
     if (s) body.set("site", s);
     var text = body.toString();
@@ -68,6 +70,9 @@
   form.addEventListener("focusout", function (e) {
     var n = e.target && e.target.name;
     if (n === "phone" || n === "email") keep();
+  });
+  form.addEventListener("change", function (e) {
+    if (e.target && e.target.name === "wa") keep();
   });
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "hidden") keep();

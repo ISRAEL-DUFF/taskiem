@@ -131,6 +131,9 @@ func (s *Server) serveKeep(w http.ResponseWriter, r *http.Request, site Site, fo
 			k.Site = o
 		}
 	}
+	if s.WAFollowups == "marketing" && v.Get("wa") == "1" {
+		k.Choice.WhatsApp = true // the buyer asked for WhatsApp (L4)
+	}
 	payload, err := SealKeep(s.FormKeys, *act.ID, k)
 	if err != nil {
 		w.WriteHeader(http.StatusNoContent) // a contact that does not read: nothing kept

@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // publicConfig is the public host's (docs/public-host.md): the server for
@@ -194,6 +195,11 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 		Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
 	if len(cfg.Public.Domains) > 0 {
 		srv.PreviewDomain = cfg.Public.Domains[0]
+	}
+	if cfg.WAFollowup != nil {
+		// The consent line names WhatsApp where a follow-up may go there,
+		// and a marketing template asks for it (forms-that-sell L4).
+		srv.WAFollowups = whatsapp.Category(*cfg.WAFollowup)
 	}
 	if k := cfg.Public.Key; k != nil {
 		if srv.FormKey, err = storefront.FormKey(k); err != nil {

@@ -20,7 +20,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/engine/formguard"
-	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -164,6 +163,9 @@ type formData struct {
 	// both only on an order form that follows up.
 	Consent string
 	Keep    *keepView
+	// WAOptIn is the box a buyer ticks to have the follow-up on WhatsApp,
+	// where its template is a marketing one (L4); "" offers none.
+	WAOptIn string
 }
 
 type keepView struct {
@@ -377,7 +379,7 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 	}
 	follows := act.ID != nil && p.Followups[*act.ID] && act.Kind == "order" && s.FormKeys != nil && s.Keeps != nil
 	if follows {
-		f.Consent = lang.Default().Text(lang.Tag(f.Lang), "form.followup.consent")
+		f.Consent, f.WAOptIn = s.followupWords(p, f.Lang)
 		s.keepFor(&f)
 	}
 	if r.Method != http.MethodPost {

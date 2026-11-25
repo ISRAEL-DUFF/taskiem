@@ -9809,6 +9809,21 @@
       "reviewed": false,
       "context": "Draft, not reviewed: Email to a buyer who typed their email into an order form and left (forms-that-sell §6.3); {what} is the product and package, {link} the restore link"
     },
+    "form.followup.consent_whatsapp": {
+      "text": "If you comot before you send dis one, we fit send you one message about dis order, for WhatsApp or by text or email, with link wey go help you finish am. For WhatsApp, reply STOP make these messages stop; if not, stop dem from dat link.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Public host, under the phone and email of an order form that follows up a form left half-filled, where the follow-up may go on WhatsApp from the business's own number (forms-that-sell §6.2, L4); Taskiem's words, the owner cannot change them; STOP stays in English"
+    },
+    "form.followup.whatsapp_optin": {
+      "text": "Send dat message for WhatsApp instead (reply STOP for there make e stop)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Public host, a tick box under the consent line of an order form whose WhatsApp follow-up is a marketing template: only a buyer who ticks it is followed up on WhatsApp (forms-that-sell L4); STOP stays in English"
+    },
+    "form.followup.stopped": {
+      "text": "You no go get message like dis from {business} again.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: WhatsApp, from the business's own number: answer to STOP, or the Stop button, from someone the business followed up after they left an order form (forms-that-sell §6.5, L4)"
+    },
     "wa.followups.on": {
       "text": "Follow-ups don on for *{form}*. Anybody wey type im phone or email comot without to order go get one message after {wait} minutes, with link to finish the order. The form don talk am under their details now. Talk *follow-ups off* to stop am.",
       "reviewed": false,

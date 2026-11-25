@@ -1,0 +1,56 @@
+package publicweb
+
+import (
+	"net/http"
+
+	"github.com/israel-duff/taskiem/engine/forms"
+	"github.com/israel-duff/taskiem/engine/lang"
+)
+
+// WhatsApp follow-ups on the public host (docs/spec/forms-that-sell.md
+// §6.2, §6.4, L4). The consent line names WhatsApp only where a follow-up
+// may go there: the deployment names the template and the business has
+// its own number. A marketing template reaches only a buyer who ticks the
+// box offered under the line, and the keep says so. The template's
+// Finish my order button opens <form host>/back/<token>, a fixed address
+// Meta approves, which leads to the link on the storefront's own
+// address: drawn there, it uses nothing up (GET claims nothing).
+
+// followupWords are an order form's consent line and, for a marketing
+// template, the box that asks for WhatsApp.
+func (s *Server) followupWords(p StorefrontPage, l string) (consent, optIn string) {
+	c, tag := lang.Default(), lang.Tag(l)
+	switch {
+	case s.WAFollowups == "" || !p.FollowupWhatsApp:
+		return c.Text(tag, "form.followup.consent"), ""
+	case s.WAFollowups == "marketing":
+		return c.Text(tag, "form.followup.consent"), c.Text(tag, "form.followup.whatsapp_optin")
+	}
+	return c.Text(tag, "form.followup.consent_whatsapp"), ""
+}
+
+// serveBackOnFormHost leads a follow-up's link opened on the form host
+// (the WhatsApp template's button) to the same link on its storefront.
+func (s *Server) serveBackOnFormHost(w http.ResponseWriter, r *http.Request, token string) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		s.page(w, r, http.StatusMethodNotAllowed, "notfound", pageData{Title: "Page not found"})
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Robots-Tag", "noindex")
+	if s.Keeps == nil || s.PreviewDomain == "" {
+		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
+		return
+	}
+	slug, ok, err := s.Keeps.Where(r.Context(), forms.TokenHash(token))
+	if err != nil {
+		s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
+		return
+	}
+	if !ok {
+		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "This link has expired"})
+		return
+	}
+	http.Redirect(w, r, "https://"+slug+"."+s.PreviewDomain+"/back/"+token, http.StatusFound) //nolint:gosec // the storefront's slug from the database and a token matched by backPath
+}

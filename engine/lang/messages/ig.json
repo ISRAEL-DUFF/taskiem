@@ -9540,6 +9540,21 @@
       "reviewed": false,
       "context": "Draft, not reviewed: Email to a buyer who typed their email into an order form and left (forms-that-sell §6.3); {what} is the product and package, {link} the restore link"
     },
+    "form.followup.consent_whatsapp": {
+      "text": "Ọ bụrụ na ị hapụ tupu i zipu nke a, anyị nwere ike iziga gị otu ozi gbasara order a, na WhatsApp ma ọ bụ site na ozi ekwentị ma ọ bụ email, ya na njikọ iji mezue ya. Na WhatsApp, zaa STOP ka ozi ndị a kwụsị; ma ọ bụghị ya, kwụsị ha site na njikọ ahụ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Public host, under the phone and email of an order form that follows up a form left half-filled, where the follow-up may go on WhatsApp from the business's own number (forms-that-sell §6.2, L4); Taskiem's words, the owner cannot change them; STOP stays in English"
+    },
+    "form.followup.whatsapp_optin": {
+      "text": "Ziga m ozi ahụ na WhatsApp kama (zaa STOP n'ebe ahụ ka ọ kwụsị)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Public host, a tick box under the consent line of an order form whose WhatsApp follow-up is a marketing template: only a buyer who ticks it is followed up on WhatsApp (forms-that-sell L4); STOP stays in English"
+    },
+    "form.followup.stopped": {
+      "text": "Ị gaghị enwetakwa ozi dị otu a site n'aka {business}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: WhatsApp, from the business's own number: answer to STOP, or the Stop button, from someone the business followed up after they left an order form (forms-that-sell §6.5, L4)"
+    },
     "wa.followups.on": {
       "text": "Agbanyere nsoro maka *{form}*. Onye dere nọmba ekwentị ma ọ bụ email ya wee pụọ n'ịtụghị ahịa ga-enweta otu ozi mgbe nkeji {wait} gachara, ya na njikọ iji mezue ịtụ ahịa ahụ. Fọm ahụ na-ekwu nke a ugbu a n'okpuru nkọwa ha. Kwuo *follow-ups off* iji kwụsị.",
       "reviewed": false,
