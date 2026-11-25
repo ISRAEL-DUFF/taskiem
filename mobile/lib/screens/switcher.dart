@@ -3,7 +3,8 @@
 // a locked one with what it needs. Choosing one moves this phone's session
 // there (POST /v1/me/switch), asking first for what the business's rules
 // want: a passkey, or a second proof on a new phone (a passkey, a link to
-// the person's email, or their chat PIN). Single sign-on is the web's.
+// the person's email, or their password; never the PIN, which pays and
+// approves only). Single sign-on is the web's.
 
 import 'package:flutter/widgets.dart';
 

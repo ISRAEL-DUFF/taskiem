@@ -27,7 +27,7 @@ import (
 // account, switching, starting something (stream B's /v1/me/start), their
 // phone, second proofs, invitations and signing out.
 var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/me/businesses|POST /v1/me/switch|POST /v1/me/start|` +
-	`POST /v1/me/phone/(start|verify)|POST /v1/auth/second-proof/(email/start|email/verify|pin|password|passkey/options|passkey)|` +
+	`POST /v1/me/phone/(start|verify)|POST /v1/auth/second-proof/(email/start|email/verify|password|passkey/options|passkey)|` +
 	`GET /v1/me/invitations|POST /v1/me/invitations/[^/]+/(accept|decline)|POST /v1/auth/logout|` +
 	// A person's chats with businesses (customer_door.go, stage 2).
 	`(GET|POST) /v1/me/chats|(GET|PUT) /v1/me/chats/[^/]+|GET /v1/me/chats/[^/]+/(messages|files/[^/]+|shop|services|services/[^/]+/times|orders|orders/[^/]+/pay)|` +
@@ -162,27 +162,31 @@ var errAccountOff = errors.New("this account is not active")
 // --- the business's rules, on switching ---
 
 // secondProofWays are the second proofs a person could give (§5.4): a
-// passkey, a link to their real email (confirmed or not), the chat PIN,
-// or their password (where it is usable: a business of theirs lets them
-// sign in with it, and their email is confirmed where email can be sent,
-// as proveFactor asks).
+// passkey, a link to their real email (confirmed or not), or their
+// password (where it is usable: a business of theirs lets them sign in
+// with it, and it is known to be theirs: they chose it, or their email is
+// confirmed, or email cannot be sent here, as proveFactor asks). The PIN
+// is for paying and approving only, never a second proof (founder, 25
+// November 2026).
 type secondProofWays struct {
 	Passkey  bool `json:"passkey"`
 	Email    bool `json:"email"`
-	Pin      bool `json:"pin"`
 	Password bool `json:"password"`
+	// due: the person is asked for a way as a step (users.sign_in_way_due),
+	// not only reminded. Not a way.
+	due bool
 }
 
-func (w secondProofWays) any() bool { return w.Passkey || w.Email || w.Pin || w.Password }
+func (w secondProofWays) any() bool { return w.Passkey || w.Email || w.Password }
 
 func (s *Server) secondProofsOf(ctx context.Context, user uuid.UUID) (secondProofWays, error) {
 	var out secondProofWays
-	var password, verified bool
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT passkey, email, pin, password, email_verified FROM taskiem_auth_second_proofs($1)`, user).
-		Scan(&out.Passkey, &out.Email, &out.Pin, &password, &verified); err != nil {
+	var password, verified, chosen bool
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT passkey, email, password, email_verified, password_chosen, way_due FROM taskiem_auth_second_proofs($1)`, user).
+		Scan(&out.Passkey, &out.Email, &password, &verified, &chosen, &out.due); err != nil {
 		return out, err
 	}
-	if password && (verified || !s.mailOn()) {
+	if password && (verified || chosen || !s.mailOn()) {
 		usable, err := s.passwordUsable(ctx, user)
 		if err != nil {
 			return out, err
@@ -192,6 +196,20 @@ func (s *Server) secondProofsOf(ctx context.Context, user uuid.UUID) (secondProo
 	return out, nil
 }
 
+// signInWayOut adds to /v1/me's user what it says of the person's ways to
+// prove a new device: needs_sign_in_way, for someone in a business with
+// none of them (they are let in from a new device, recorded, so the app
+// asks them to add one: an email, a password or a passkey); and
+// sign_in_way_step, for someone with none whose account is new to the
+// apps (made since, or never opened on a phone or browser before): the
+// app asks for one as a step, which cannot be skipped before a business
+// opens. Anyone else in a business with none is reminded on Today.
+func signInWayOut(user map[string]any, ways secondProofWays, inBusiness bool) {
+	none := !ways.any()
+	user["needs_sign_in_way"] = none && inBusiness
+	user["sign_in_way_step"] = none && ways.due
+}
+
 // codeSession is whether a session was made by a code to the person's
 // phone or chat: a code proves only that someone holds the number today.
 func codeSession(p *Principal) bool { return p.AuthMethod == "phone" || p.AuthMethod == "chat" }
@@ -199,8 +217,8 @@ func codeSession(p *Principal) bool { return p.AuthMethod == "phone" || p.AuthMe
 // proofState is whether the session's person must give a second proof
 // before entering a business: a session made by a code to their phone or
 // chat, on a device without one. unprovable is such a session of someone
-// with no way to give one (a chat-born owner with no email, passkey, PIN
-// or password): they are let in, and it is recorded, rather than locked
+// with no way to give one (a chat-born owner with no email, passkey or
+// password): they are let in, and it is recorded, rather than locked
 // out of their own business.
 type proofState struct {
 	needed, unprovable, deviceProved bool
@@ -228,7 +246,7 @@ func (s *Server) proofStateOf(r *http.Request, p *Principal) (proofState, error)
 
 // secondProofRequiredOut is the 401 that asks for a second proof first.
 func secondProofRequiredOut(w http.ResponseWriter, ways secondProofWays) {
-	writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "this is a new device: prove it is you another way first (a passkey, a link to your email, your chat PIN or your password)",
+	writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "this is a new device: prove it is you another way first (a passkey, a link to your email or your password)",
 		"second_proof_required": true, "ways": ways})
 }
 
@@ -342,6 +360,7 @@ func (s *Server) personalMe(w http.ResponseWriter, r *http.Request, p *Principal
 	}
 	out := map[string]any{"tenant_id": nil, "personal": true, "roles": []string{}, "permissions": []string{}, "auth_method": p.AuthMethod,
 		"user": user, "businesses": businesses, "second_proof": secondProofOut(proof, len(businesses) > 0)}
+	signInWayOut(user, proof.ways, len(businesses) > 0)
 	if len(businesses) == 0 {
 		var invited []uuid.UUID
 		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_invited_tenants($1)`, p.UserID).Scan(&invited); err == nil && len(invited) > 0 {

@@ -1432,7 +1432,9 @@ users.chat_signin
 users.email
 users.id
 users.passkey_only
+users.password_chosen_at
 users.password_hash
+users.sign_in_way_due
 users.status
 ussd_sessions.tenant_id
 voice_transcripts.expires_at

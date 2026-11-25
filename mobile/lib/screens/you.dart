@@ -57,6 +57,7 @@ import '../theme/theme.dart';
 import 'chat_link.dart';
 import 'home_tabs.dart';
 import 'second_proof.dart';
+import 'sign_in_way.dart';
 import 'start_something.dart';
 import 'you_links.dart';
 import 'you_fingerprint.dart' show FingerprintScreen;
@@ -592,6 +593,9 @@ class _YouHomeState extends State<YouHome> with Polling {
           ),
           if (_error != null) TkErrorBox(_error!),
           if ((_standing?.unseen ?? 0) > 0) StandingNotice(standing: _standing!, onOpen: _openStanding),
+          // In a business with no way to sign in on a new phone: added in
+          // the business (You cannot add one), so its button switches.
+          if (needsSignInWay(auth)) SignInWayCallout(auth: auth, onAdd: () => unawaited(showSwitcher(context, auth))),
           if (auth.me?.secondProof?.required == true)
             Semantics(
               liveRegion: true,
@@ -804,6 +808,7 @@ class YouSettingsScreen extends StatelessWidget {
                 lines: [?email],
               ),
             ),
+            if (needsSignInWay(auth)) SignInWayCallout(auth: auth, onAdd: () => unawaited(showSwitcher(context, auth))),
             TkSection(
               title: 'Your account',
               inset: 56,
@@ -1051,8 +1056,8 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
         _step = _Step.code;
       });
 
-  /// No: another proof (a passkey, the email's link, the password, the
-  /// chat PIN); then only the new number's code.
+  /// No: another proof (a passkey, the email's link, the password); then
+  /// only the new number's code.
   Future<void> _no() => showSecondProof(
         context,
         widget.auth,
@@ -1121,7 +1126,7 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
             inset: 56,
             children: [
               TkListRow(title: 'Yes, send it a code', sub: old == null ? '' : showPhone(old), icon: 'b-phone', square: look.lime, onTap: _busy ? null : _yes),
-              TkListRow(title: 'No, prove it\'s me another way', sub: 'A passkey, an email link or your PIN', icon: 'b-shield', square: look.blue, onTap: _busy ? null : _no),
+              TkListRow(title: 'No, prove it\'s me another way', sub: 'A passkey, an email link or your password', icon: 'b-shield', square: look.blue, onTap: _busy ? null : _no),
             ],
           ),
         ],

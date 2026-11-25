@@ -246,6 +246,10 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		if origin == nil || *origin != "email" {
 			return nil
 		}
+		// Chosen by the mailbox's reader: theirs (secondProofsOf).
+		if err := choosePassword(ctx, tx, *user); err != nil {
+			return err
+		}
 		return clearUnclaimedFactors(ctx, tx, *user, tenants, clientIP(r))
 	}, "auth.password.reset", clientIP(r))
 	switch {
@@ -297,6 +301,16 @@ func (s *Server) setPassword(ctx context.Context, user uuid.UUID, hash string, k
 		return nil
 	})
 	return email, err
+}
+
+// choosePassword records that the person chose their password themselves
+// (signed in, or by a reset link that reached their mailbox), so it proves
+// a new device is theirs even on an email not confirmed (secondProofsOf).
+// A password set by whoever added the person, or by a reset link sent in
+// chat (which only someone holding the number needs), is not marked.
+func choosePassword(ctx context.Context, tx pgx.Tx, user uuid.UUID) error {
+	_, err := tx.Exec(ctx, `UPDATE users SET password_chosen_at = now() WHERE id = $1`, user)
+	return err
 }
 
 // clearUnclaimedFactors runs when a reset link that was delivered to the
@@ -400,17 +414,29 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		if !s.proveFactor(w, r, factorProof{TOTP: req.TOTP, Passkey: req.Passkey}, "password.change") {
 			return
 		}
+	case codeSession(p):
+		// No factor yet, signed in by a code to their phone or chat (a
+		// chat-born or phone-born person): their first password is a way
+		// to prove a new device (§5.4), set as a passkey would be added,
+		// within minutes of signing in (proveFactor).
+		if !s.proveFactor(w, r, factorProof{}, "password.change") {
+			return
+		}
 	default:
 		writeErr(w, http.StatusForbidden, "you sign in with single sign-on: there is no Taskiem password to set")
 		return
 	}
+	first := s.firstWayDevice(r)
 	newHash := hashPassword(req.NewPassword)
-	email, err := s.setPassword(ctx, p.UserID, newHash, hashToken(sessionToken(r)), func(pgx.Tx, []uuid.UUID) error { return nil }, "auth.password.change", clientIP(r))
+	email, err := s.setPassword(ctx, p.UserID, newHash, hashToken(sessionToken(r)), func(tx pgx.Tx, _ []uuid.UUID) error {
+		return choosePassword(ctx, tx, p.UserID)
+	}, "auth.password.change", clientIP(r))
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	s.notifyPasswordChanged(ctx, email, clientIP(r))
+	s.proveFirstWay(ctx, r, p.UserID, first, "password")
 	w.WriteHeader(http.StatusNoContent)
 }
 

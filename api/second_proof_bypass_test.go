@@ -2,9 +2,6 @@ package api_test
 
 import (
 	"context"
-	"fmt"
-	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/israel-duff/taskiem/engine/webauthn"
@@ -14,13 +11,11 @@ import (
 // The review of stage 1 (docs/spec/taskiem-for-everyone.md, "Review fixes:
 // server") found three ways past a second proof (§5.4). Each is refused
 // here: the chat-code door, accepting an invitation, and Start something
-// then adding a passkey. The chat PIN cannot be guessed in parallel past
-// its lock.
+// then adding a passkey. (The chat PIN, once a way too, is no longer one:
+// it pays and approves only.)
 
 // The chat-code door on a new device gives a personal session to a person
-// in a business who could give a second proof (C4); the PIN's lock holds
-// against guesses sent side by side, and a right PIN while locked is
-// refused.
+// in a business who could give a second proof (C4).
 func TestChatSigninNeedsSecondProof(t *testing.T) {
 	ctx := context.Background()
 	w := newWAWorld(t)
@@ -33,9 +28,6 @@ func TestChatSigninNeedsSecondProof(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE users SET email = 'ada@foods.test', email_verified_at = now() WHERE id = $1`, adaID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := w.env.DB.Admin.Exec(ctx, `SELECT taskiem_wa_pin_set($1, $2)`, adaID, pinHash("4829")); err != nil {
 		t.Fatal(err)
 	}
 	anon := &client{t: t, base: w.base}
@@ -61,31 +53,6 @@ func TestChatSigninNeedsSecondProof(t *testing.T) {
 	}
 	if st, o := chat.do("POST", "/v1/me/switch", map[string]any{"tenant_id": foods}); st != 401 || o["second_proof_required"] != true {
 		t.Fatalf("the chat-code session switched in: %d %v", st, o)
-	}
-
-	// PIN guesses side by side: at most four are weighed before the lock
-	// (the fifth locks it), the rest are refused as locked.
-	var evaluated, locked int64
-	var wg sync.WaitGroup
-	for i := 0; i < 60; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			st, _ := ph.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": fmt.Sprintf("1%03d", i)})
-			switch st {
-			case 401:
-				atomic.AddInt64(&evaluated, 1)
-			case 429:
-				atomic.AddInt64(&locked, 1)
-			}
-		}(i)
-	}
-	wg.Wait()
-	if evaluated > 4 || evaluated+locked != 60 {
-		t.Fatalf("PIN: %d wrong guesses weighed (at most 4), %d refused as locked", evaluated, locked)
-	}
-	if st, o := ph.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "4829"}); st != 429 || o["locked"] != true {
-		t.Fatalf("the right PIN while locked: %d %v", st, o)
 	}
 }
 

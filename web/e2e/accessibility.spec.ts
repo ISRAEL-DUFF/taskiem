@@ -417,8 +417,40 @@ const PERSON = {
     { id: "0192e2e0-0000-7000-8000-00000000b001", name: "Ada Kitchen", kind: "business", locked: true, lock: "second_proof_required" },
     { id: "0192e2e0-0000-7000-8000-00000000b002", name: "Ada Obi's workflows", kind: "workflows", locked: false, lock: null },
   ],
-  second_proof: { required: true, device_proved: false, ways: { passkey: false, email: true, pin: true } },
+  second_proof: { required: true, device_proved: false, ways: { passkey: false, email: true, password: true } },
 };
+
+// The step before a business opens for someone new to the apps with no
+// way to sign in on a new phone (SignInWay.tsx, taskiem-for-everyone §5.4).
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`the sign-in way step passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+      const me = {
+        tenant_id: "0192e2e0-0000-7000-8000-00000000b001",
+        tenant_name: "Ada Kitchen",
+        tenant_kind: "business",
+        personal: false,
+        roles: ["owner"],
+        permissions: [],
+        auth_method: "chat",
+        factors: { passkey: false, totp: false, password: false },
+        user: { ...PERSON.user, needs_sign_in_way: true, sign_in_way_step: true },
+        businesses: [{ id: "0192e2e0-0000-7000-8000-00000000b001", name: "Ada Kitchen", kind: "business", current: true, locked: false, lock: null }],
+      };
+      await page.route("**/v1/me", (r) => r.fulfill(json(me)));
+      await page.route("**/v1/me/passkeys", (r) => r.fulfill(json({ passkeys: [] })));
+      await page.goto("/home");
+      const step = page.getByTestId("sign-in-way-step");
+      await expect(step.getByRole("heading", { name: "Add a way to sign in on a new phone" })).toBeVisible();
+      await expect(step.getByTestId("add-email")).toBeVisible();
+      await expect(step.getByRole("button", { name: "Set password" })).toBeVisible();
+      const vs = await axe(page);
+      expect(vs, describe(`the sign-in way step (${scheme})`, vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });
 
 for (const scheme of ["light", "dark"] as const)
   for (const width of [390, 360])
@@ -473,6 +505,8 @@ for (const scheme of ["light", "dark"] as const)
       );
       await page.getByRole("dialog").getByRole("button", { name: /Ada Kitchen/ }).click();
       await expect(page.getByTestId("second-proof")).toBeVisible();
+      // The PIN pays and approves only: never offered here.
+      await expect(page.getByTestId("second-proof").getByText(/PIN/)).toHaveCount(0);
       await check("a second proof");
       await page.getByRole("button", { name: "Not now" }).click();
       await page.goto("/you/settings");

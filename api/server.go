@@ -521,7 +521,6 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/me/phone/verify", s.phoneChangeVerify)
 			r.Post("/auth/second-proof/email/start", s.secondProofEmailStart) // second proofs (second_proof.go)
 			r.Post("/auth/second-proof/email/verify", s.secondProofEmailVerify)
-			r.Post("/auth/second-proof/pin", s.secondProofPin)
 			r.Post("/auth/second-proof/password", s.secondProofPassword)
 			r.Post("/auth/second-proof/passkey/options", s.secondProofPasskeyOptions)
 			r.Post("/auth/second-proof/passkey", s.secondProofPasskey)

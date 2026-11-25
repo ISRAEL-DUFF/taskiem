@@ -6,7 +6,9 @@
 
 **Payments** (owners turn it on): receive money with Taskiem when you have no payments account of your own: an account number for your business, your balance, and withdrawals to your bank ([more](receiving-money.md)).
 
-**Your PIN** (Settings › PIN in the app, Account › Your PIN on the website): 4 digits for approving on WhatsApp and paying small amounts when your passkey is not to hand. Type it twice, then the code Taskiem sends to your phone, or confirm with your passkey; it works at once. Removing it needs nothing ([more](paying-people.md)).
+**A way to sign in on a new phone.** When you sign in on a new phone or browser with a code to your number, Taskiem asks for one more thing before your business opens: your passkey, a link to your email, or your password. A code to your number isn't enough on its own if someone gets your SIM. If you have none of these, Taskiem asks you to add one (on Today, and in Account): **add an email** and open the link it sends, **set a password**, or **add a passkey**. If you started on Taskiem recently, you add one before your business first opens. Your PIN is not one of them: it only pays and approves. On a new phone with no way you can use there, sign in on your old phone and add one there.
+
+**Your PIN** (Settings › PIN in the app, Account › Your PIN on the website): 4 digits for approving on WhatsApp and paying small amounts when your passkey is not to hand. It is never asked for when you sign in. Type it twice, then the code Taskiem sends to your phone, or confirm with your passkey; it works at once. Removing it needs nothing ([more](paying-people.md)).
 
 **People you message**: your staff who don't use Taskiem, and your customers, can get your workflows' messages on WhatsApp or Telegram instead of by text. Share **Your link** once, for example in your staff WhatsApp group: each person taps it and chooses their app. Forms that send people updates offer the same on their thank-you page. The list shows who asked, with their numbers partly hidden; **Remove** sends them texts again. Nobody ever needs to give you a chat ID ([more](../updates.md)).
 

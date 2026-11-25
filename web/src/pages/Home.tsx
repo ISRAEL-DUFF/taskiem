@@ -19,6 +19,7 @@ import { MoneyCard } from "./MoneyParts";
 import { channelWords, invoiceAccess, naira, UNMATCHED_PATH, type UnmatchedMoney } from "../lib/invoices";
 import { SUMMARY_PATH, type MoneySummary } from "../lib/money";
 import { subjectWords } from "../lib/approvals";
+import { SignInWayCallout } from "./SignInWay";
 
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const none = <T,>(): Promise<T | null> => Promise.resolve(null);
@@ -86,6 +87,7 @@ export function Home() {
           {me?.tenant_name ? ` · ${me.tenant_name}` : ""}
         </p>
       </div>
+      <SignInWayCallout to="/account#sign-in-way" />
 
       <div className={day.data || money ? "home-top" : undefined}>
         {day.data ? (

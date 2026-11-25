@@ -24,6 +24,7 @@ import '../kit/mobile.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'settings_more.dart';
+import 'sign_in_way.dart' show SignInWayCallout, needsSignInWay;
 import 'switcher.dart' show lockWords, showSwitcher;
 import 'you_fingerprint.dart' show FingerprintScreen;
 import 'you_pin.dart' show PinScreen;
@@ -164,6 +165,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
       backLabel: 'Back to Chats',
       children: [
         YouCard(auth: widget.auth),
+        if (needsSignInWay(widget.auth)) SignInWayCallout(auth: widget.auth, backLabel: 'Back to Settings'),
         if (_error != null) TkErrorBox(_error!),
         // Every business and workflows workspace, a locked one with what it
         // needs; then You or any of them through the switcher.
