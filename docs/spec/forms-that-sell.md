@@ -1,6 +1,6 @@
 # Forms that sell: a business's products in its forms, and following up a form left half-filled
 
-Status: **plan; not built, and nothing here is decided.** Written 24 November 2026 from a screen recording the founder shared (§4) and read against the code the same day (§3, §15). §12 lists what the founder has to decide, each with a recommendation. Builds on [forms](../forms.md) ([decision 0037](../decisions/0037-forms.md)), [fronts](fronts.md) ([0059](../decisions/0059-fronts.md)), [storefronts](storefronts.md) ([0036](../decisions/0036-storefronts.md)), [embed sites](../embed-sites.md), [updates for people outside](../updates.md) ([0039](../decisions/0039-reaching-people-outside.md)), [dispatch](../dispatch.md) and [no technical steps](no-technical-steps.md).
+Status: **being built, from 25 November 2026**, phase by phase (§11), on the founder's word to build all of it; §12's recommendations are taken as the decisions until the founder changes one. Written 24 November 2026 from a screen recording the founder shared (§4) and read against the code the same day (§3, §15). §12 lists what the founder has to decide, each with a recommendation. Builds on [forms](../forms.md) ([decision 0037](../decisions/0037-forms.md)), [fronts](fronts.md) ([0059](../decisions/0059-fronts.md)), [storefronts](storefronts.md) ([0036](../decisions/0036-storefronts.md)), [embed sites](../embed-sites.md), [updates for people outside](../updates.md) ([0039](../decisions/0039-reaching-people-outside.md)), [dispatch](../dispatch.md) and [no technical steps](no-technical-steps.md).
 
 **What Taskiem is for** ([0068, amendment](../decisions/0068-taskiem-for-everyone.md#amendment-2026-11-19-what-taskiem-is-for)): this plan is weighed by what it saves a seller. A trader who sells one product by pay-on-delivery through a page on their own website today keeps the page, the form, the orders and the follow-ups in four places or in none. After this plan the form is Taskiem's, the orders are orders, and a buyer who typed their number and left is followed up without anyone noticing they left.
 
@@ -256,6 +256,8 @@ A left-half-filled record is kept for 7 days after its last keep, or, once follo
 L1 is the first thing worth showing, and it is what the founder named. L3 can be built beside L2.
 
 ## 12. For the founder to decide
+
+On 25 November 2026 the founder asked for all of it to be built. Each recommendation below is built as the decision; any can still be changed, and the build follows.
 
 | # | Question | Recommendation |
 | --- | --- | --- |
