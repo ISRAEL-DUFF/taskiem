@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { WAITS, MIN_WAIT, MAX_WAIT, CONSENT_LINE, CONSENT_LINE_WHATSAPP, choiceWords, consentWords, contactWords, followupWords, rowStatus, waitWords, weekLine, type LeftRow } from "./left";
 
@@ -53,8 +55,9 @@ describe("follow-ups on WhatsApp (L4)", () => {
     expect(consentWords({ ...base, whatsapp: true })).toBe(`“${CONSENT_LINE_WHATSAPP}”`);
     expect(consentWords({ ...base, whatsapp: true, whatsapp_opt_in: true })).toContain("Send that message on WhatsApp instead");
   });
-  it("keeps the words the server draws", async () => {
-    const en = (await import("../../../engine/lang/messages/en.json")).default as { messages?: Record<string, { text: string }> } & Record<string, unknown>;
+  it("keeps the words the server draws", () => {
+    // Read from disk, not imported: the image's web stage has no engine/.
+    const en = JSON.parse(readFileSync(resolve(__dirname, "../../../engine/lang/messages/en.json"), "utf8")) as { messages?: Record<string, { text: string }> } & Record<string, unknown>;
     const msgs = (en.messages ?? en) as Record<string, { text: string }>;
     expect(msgs["form.followup.consent"]?.text).toBe(CONSENT_LINE);
     expect(msgs["form.followup.consent_whatsapp"]?.text).toBe(CONSENT_LINE_WHATSAPP);
