@@ -9514,6 +9514,56 @@
       "text": "Ndị na-azụ ahịa na-akwụ ụgwọ n'ọnụ ụzọ, n'ego aka ma ọ bụ site na nnyefe. Iji nara ụgwọ n'ịntanetị kwa, jikọọ Paystack.",
       "reviewed": false,
       "context": "Draft, not reviewed: sell <product> on a page: made, with no online payments connected"
+    },
+    "form.followup.consent": {
+      "text": "Ọ bụrụ na ị hapụ tupu i zipu nke a, anyị nwere ike iziga gị otu ozi gbasara ịtụ ahịa a, site na ozi ekwentị ma ọ bụ email, ya na njikọ iji mezue ya. Ị nwere ike ịkwụsị ozi ndị a site na njikọ ahụ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Public host, under the phone and email of an order form that follows up a form left half-filled (forms-that-sell §6.2); Taskiem's words, the owner cannot change them"
+    },
+    "form.followup.sms": {
+      "text": "I bidoro ịtụ {what} ma ị mezughị ya. Mezue ya ebe a: {link} (ị nwere ike ịkwụsị ozi ndị a n'ebe ahụ)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: SMS to a buyer who typed their phone into an order form and left (forms-that-sell §6.3); starts with the business's name; {what} is the product and package, {link} the restore link; at most three SMS parts"
+    },
+    "form.followup.email_subject": {
+      "text": "Ịtụ ahịa gị na {business}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Subject of the email to a buyer who typed their email into an order form and left (forms-that-sell §6.3)"
+    },
+    "form.followup.email": {
+      "text": "I bidoro ịtụ {what} na {business} ma ị mezughị ya.\n\nMezue ya ebe a: {link}\n\nIhe ị họrọ ka dị; ị ga-ede nkọwa gị ọzọ. Ka ị ghara ịnata ozi dị otu a ọzọ, mepee njikọ ahụ wee họrọ Stop these messages.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Email to a buyer who typed their email into an order form and left (forms-that-sell §6.3); {what} is the product and package, {link} the restore link"
+    },
+    "wa.followups.on": {
+      "text": "Agbanyere nsoro maka *{form}*. Onye dere nọmba ekwentị ma ọ bụ email ya wee pụọ n'ịtụghị ahịa ga-enweta otu ozi mgbe nkeji {wait} gachara, ya na njikọ iji mezue ịtụ ahịa ahụ. Fọm ahụ na-ekwu nke a ugbu a n'okpuru nkọwa ha. Kwuo *follow-ups off* iji kwụsị.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups on, done"
+    },
+    "wa.followups.off": {
+      "text": "Agbanyụla nsoro maka *{form}*. Ọ naghị edebe ihe ọ bụla nke onye pụrụ n'ịtụghị ahịa ọzọ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups off, done"
+    },
+    "wa.followups.already_on": {
+      "text": "Nsoro agbanyelarị maka *{form}*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups on, on already"
+    },
+    "wa.followups.already_off": {
+      "text": "Nsoro agbanyụlarị maka *{form}*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups off, off already"
+    },
+    "wa.followups.which": {
+      "text": "Kedu fọm ịtụ ahịa: {names}? Kwuo *follow-ups {how} for* na aha ya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): more than one order form, which one"
+    },
+    "wa.followups.none": {
+      "text": "Peeji gị enwebeghị fọm ịtụ ahịa. Kwuo *turn on orders* mbụ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): no order form to follow up"
     }
   }
 }

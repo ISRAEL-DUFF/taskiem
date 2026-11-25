@@ -5,7 +5,7 @@
 <h1>{{if eq .Step "bag"}}{{.Brand.Words.Your}}{{else if eq .Step "details"}}Checkout{{else}}{{.Label}}{{end}}</h1>
 {{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
 {{if eq .Step "bag"}}{{template "bagstep" .}}{{else}}{{template "orderform" .}}{{end}}
-{{template "sfembed" .}}{{template "ffoot" .}}
+{{template "sfembed" .}}{{template "sfkeep" .}}{{template "ffoot" .}}
 
 {{/* The order form itself, drawn on its own page and under a One product
 front (forms that sell §5.4, oneproduct.html). */}}
@@ -44,7 +44,7 @@ front (forms that sell §5.4, oneproduct.html). */}}
 <input id="f-phone" type="tel" name="phone" value="{{.Phone}}" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="0803 123 4567" required></div>
 <div class="field"><label for="f-email">Email <span class="hint">(optional)</span></label>
 <input id="f-email" type="email" name="email" value="{{.Email}}" maxlength="254" autocomplete="email"></div>
-{{if eq .Kind "order"}}
+{{template "sfconsent" .}}{{if eq .Kind "order"}}
 {{if .Delivery}}{{with .Zones}}<div class="field"><label for="f-zone">Delivery area{{if $.Pickup}} <span class="hint">(for delivery)</span>{{end}}</label>
 <select id="f-zone" name="zone"{{if not $.Pickup}} required{{end}}><option value="">Choose your area</option>{{range .}}<option value="{{.Name}}" data-fee="{{.FeeKobo}}"{{if .Selected}} selected{{end}}>{{.Name}}, {{.Fee}}</option>{{end}}</select></div>
 {{end}}<div class="field"><label for="f-address">Delivery address{{if .Pickup}} <span class="hint">(for delivery)</span>{{end}}</label>

@@ -34,6 +34,9 @@ type StorefrontPage struct {
 	// Lists are the copies of the other fronts' lists, by table (fronts
 	// F3, §5.2).
 	Lists map[string][]storefront.Item
+	// Followups are the order forms that follow up a form left
+	// half-filled, by action id (forms-that-sell §6).
+	Followups map[uuid.UUID]bool
 }
 
 // Storefronts reads a business's storefront's page; ok is false when it
@@ -76,6 +79,18 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 		}
 		if err := productLeft(ctx, pool, tenant, p.Items); err != nil {
 			return StorefrontPage{}, false, err
+		}
+		// The order forms that follow up a form left half-filled (forms
+		// that sell §6.2): their consent line, and their keeps.
+		var follow []uuid.UUID
+		if err := pool.QueryRow(ctx, `SELECT taskiem_public_form_followups($1)`, id).Scan(&follow); err != nil {
+			return StorefrontPage{}, false, err
+		}
+		for _, a := range follow {
+			if p.Followups == nil {
+				p.Followups = map[uuid.UUID]bool{}
+			}
+			p.Followups[a] = true
 		}
 		// Each other front's list, its table read once.
 		for _, f := range p.Model.Fronts {

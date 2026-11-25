@@ -415,3 +415,36 @@ func TestDefaults(t *testing.T) {
 		t.Errorf("SubmissionsPerIP = %v per 10 minutes, burst %d", got, SubmissionsPerIP.Burst)
 	}
 }
+
+// A keep token is its submit token's twin (forms-that-sell §6.1): its
+// own form, the same nonce and time, so it names the submission its page
+// would make, and neither stands for the other.
+func TestTwin(t *testing.T) {
+	g := guard(t, key1)
+	at := time.Now().Add(-time.Minute)
+	submit := issue(t, g, form, at, 0)
+	keep, err := g.Twin(Token(submit), form+"#keep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kc, err := g.Verify(string(keep), form+"#keep", time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc, err := g.Verify(submit, form, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kc.IdempotencyKeyFor(form) != sc.IdempotencyKey() || kc.IdempotencyKey() == sc.IdempotencyKey() || !kc.IssuedAt.Equal(sc.IssuedAt) {
+		t.Fatal("the twin does not name its submission")
+	}
+	if _, err := g.Verify(string(keep), form, time.Time{}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("a keep token submitted: %v", err)
+	}
+	if _, err := g.Twin(Token(issue(t, guard(t, key2), form, at, 0)), form+"#keep"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("another guard's token twinned: %v", err)
+	}
+	if _, err := g.Twin("nonsense", form+"#keep"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("nonsense twinned: %v", err)
+	}
+}

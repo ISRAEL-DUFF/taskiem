@@ -1456,6 +1456,85 @@ paths:
                       type: string
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/actions/{id}:
+    patch:
+      operationId: patchStorefrontAction
+      tags:
+      - Storefront
+      summary: An order form's follow-ups
+      description: Whether an order form follows up a buyer who typed a phone or an email and left without ordering, and how long it waits first (10 minutes to 24 hours; forms-that-sell §6.3). With follow-ups on, the form says so under the contact and keeps the contact and the product choice of one who leaves; off, it keeps nothing. release_hold sends the follow-ups held after a run of keeps (§6.5). Audited as storefront.followups.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                followup_on:
+                  type: boolean
+                followup_wait:
+                  type: integer
+                  minimum: 10
+                  maximum: 1440
+                  description: Minutes after the buyer's last keep
+                release_hold:
+                  type: boolean
+      responses:
+        '200':
+          description: The follow-up settings now
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [followups]
+                properties:
+                  followups:
+                    $ref: '#/components/schemas/FollowupSettings'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/actions/{id}/left:
+    get:
+      operationId: getStorefrontActionLeft
+      tags:
+      - Storefront
+      summary: Who left an order form without ordering
+      description: An order form's follow-up settings, this week's counts (left without ordering, followed up, came back) and the records that left, newest first (forms-that-sell §6.6). Each row is the product, the package, when, the channel and the contact masked (a phone's last four digits, an email's domain); nothing more is kept or shown. Came back is counted after a record is gone.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The form's follow-ups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormLeft'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/fronts/{id}/sellable:
     get:
       operationId: listSellableItems
@@ -18305,6 +18384,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Form'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/forms/{id}/left:
+    get:
+      operationId: getFormLeft
+      tags:
+      - Forms
+      summary: Who left a form that sells without ordering
+      description: A hosted form that sells is an order form of the storefront (forms-that-sell §5.1); this is that order form's follow-up settings, this week's counts and its records that left, as GET /v1/storefront/actions/{id}/left. A form that sells nothing answers 409.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The form's follow-ups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormLeft'
         default:
           $ref: '#/components/responses/Error'
   /v1/forms/{id}/sell:
@@ -45579,6 +45686,76 @@ components:
           type: array
           items:
             type: string
+    FollowupSettings:
+      type: object
+      required: ['on', wait_minutes]
+      properties:
+        'on':
+          type: boolean
+        wait_minutes:
+          type: integer
+        held_at:
+          type: string
+          format: date-time
+          description: Set while the form's follow-ups are held after a run of keeps; release_hold sends them
+    FormLeft:
+      type: object
+      required: [action_id, label, followups, week, left]
+      properties:
+        action_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        followups:
+          $ref: '#/components/schemas/FollowupSettings'
+        week:
+          type: object
+          required: [left, followed, came_back]
+          properties:
+            left:
+              type: integer
+            followed:
+              type: integer
+            came_back:
+              type: integer
+        left:
+          type: array
+          items:
+            type: object
+            required: [id, contact_kind, contact, product, at]
+            properties:
+              id:
+                type: string
+                format: uuid
+              contact_kind:
+                type: string
+                enum: [phone, email]
+              contact:
+                type: string
+                description: Masked, "… 4567" or "…@example.com"
+              product:
+                type: string
+              package:
+                type: integer
+              zone:
+                type: string
+              at:
+                type: string
+                format: date-time
+              followed_up_at:
+                type: string
+                format: date-time
+              came_back_at:
+                type: string
+                format: date-time
+              channel:
+                type: string
+                enum: [sms, email, whatsapp]
+              outcome:
+                type: string
+                enum: [capped, stopped, limit, 'off', stale, failed]
+                description: Why it was not followed up; absent while waiting or held, and once followed up
     ChatAlert:
       type: object
       description: An alert as a chat card, with what its next step needs.
@@ -45589,7 +45766,7 @@ components:
           description: The alert's key, for Later (its kind and what it is about)
         kind:
           type: string
-          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, school_approval, deal, order_draft, customer_waiting, page]
+          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, school_approval, deal, order_draft, customer_waiting, page, left]
         at:
           type: string
           format: date-time
@@ -59479,6 +59656,9 @@ components:
         max_pages:
           type: integer
           description: Pages a business makes, drafts counted (10 by default; 0 no limit).
+        form_followups:
+          type: integer
+          description: Follow-ups of order forms left half-filled per UTC month (200 on the lowest plan; 0 no limit).
       additionalProperties: false
     Usage:
       type: object

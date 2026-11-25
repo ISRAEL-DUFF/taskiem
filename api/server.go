@@ -679,6 +679,9 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/form", s.putActionForm)
 			// Forms that sell (forms_sell.go): what an order form sells, and the code for one on a website.
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/sells", s.putActionSells)
+			// Forms left half-filled (storefront_followups.go): an order form's follow-ups, and who left it.
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/storefront/actions/{id}", s.patchStorefrontAction)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/actions/{id}/left", s.getActionLeft)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/embed", s.getStorefrontEmbed)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/fronts/{id}/sellable", s.sellableItems)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
@@ -781,6 +784,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Patch("/forms/{id}", s.patchForm)
 			r.With(s.need(PermFormLinks), s.tenantWide).Post("/forms/{id}/links", s.mintFormLinks)
 			r.With(s.need(PermWorkflowPublish), s.need(PermStorefrontManage), s.tenantWide).Post("/forms/{id}/sell", s.sellFormHandler) // forms_sell.go
+			r.With(s.need(PermStorefrontManage)).Get("/forms/{id}/left", s.getFormLeft)                                                 // storefront_followups.go
 			r.Get("/forms/{id}/view", s.memberForm)
 			r.With(s.tenantWide).Post("/forms/{id}/submissions", s.submitMemberForm)
 			r.With(s.need(PermRunRead)).Get("/form-submissions", s.listFormSubmissions)

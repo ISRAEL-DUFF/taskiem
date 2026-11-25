@@ -9783,6 +9783,56 @@
       "text": "Buyers go pay for door, with cash or transfer. To collect payment online too, connect Paystack.",
       "reviewed": false,
       "context": "Draft, not reviewed: sell <product> on a page: made, with no online payments connected"
+    },
+    "form.followup.consent": {
+      "text": "If you comot before you send this one, we fit send you one message about this order, by text or email, with link wey go help you finish am. You fit stop these messages from that link.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Public host, under the phone and email of an order form that follows up a form left half-filled (forms-that-sell §6.2); Taskiem's words, the owner cannot change them"
+    },
+    "form.followup.sms": {
+      "text": "You start order for {what} but you no finish am. Finish am here: {link} (you fit stop these messages there)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: SMS to a buyer who typed their phone into an order form and left (forms-that-sell §6.3); starts with the business's name; {what} is the product and package, {link} the restore link; at most three SMS parts"
+    },
+    "form.followup.email_subject": {
+      "text": "The order wey you start with {business}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Subject of the email to a buyer who typed their email into an order form and left (forms-that-sell §6.3)"
+    },
+    "form.followup.email": {
+      "text": "You start order for {what} with {business} but you no finish am.\n\nFinish am here: {link}\n\nWetin you choose still dey; you go type your details again. If you no want this kind message again, open the link come choose Stop these messages.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Email to a buyer who typed their email into an order form and left (forms-that-sell §6.3); {what} is the product and package, {link} the restore link"
+    },
+    "wa.followups.on": {
+      "text": "Follow-ups don on for *{form}*. Anybody wey type im phone or email comot without to order go get one message after {wait} minutes, with link to finish the order. The form don talk am under their details now. Talk *follow-ups off* to stop am.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups on, done"
+    },
+    "wa.followups.off": {
+      "text": "Follow-ups don off for *{form}*. E no dey keep anything again for person wey comot without to order.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups off, done"
+    },
+    "wa.followups.already_on": {
+      "text": "Follow-ups don dey on before for *{form}*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups on, on already"
+    },
+    "wa.followups.already_off": {
+      "text": "Follow-ups don dey off before for *{form}*.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups off, off already"
+    },
+    "wa.followups.which": {
+      "text": "Which order form: {names}? Talk *follow-ups {how} for* plus im name.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): more than one order form, which one"
+    },
+    "wa.followups.none": {
+      "text": "Your page never get order form. Talk *turn on orders* first.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/chat_followups.go): no order form to follow up"
     }
   }
 }

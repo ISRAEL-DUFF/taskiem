@@ -16,15 +16,16 @@ import (
 )
 
 // A form left half-filled (docs/spec/forms-that-sell.md §6, §10): the
-// public host sends a keep when a buyer has typed a contact into a form
-// that follows up and not sent it, carrying only the contact and the
+// public host sends a keep when a buyer has typed a contact into an order
+// form that follows up and not sent it, carrying only the contact and the
 // product choice, sealed with the public key for the api role. Here the
 // api role takes keeps from their inbox, seals the contact under the
 // person in the vault, keys it as message's per-person limits are, and
 // keeps one record per form and contact (form_left), through narrow
 // functions only. A submission from the same contact within the wait
 // forgets the record; one after the follow-up marks it came back. Records
-// last 7 days after their last keep, or after their follow-up.
+// last 7 days after their last keep, or after their follow-up. The
+// follow-up itself is followup.go's.
 
 // Keep is what the public host sends: the contact as typed (a Nigerian
 // phone or an email) and what was being bought, never another answer.
@@ -36,6 +37,11 @@ type Keep struct {
 	Front *uuid.UUID `json:"front,omitempty"`
 	Site  string     `json:"site,omitempty"`
 	At    time.Time  `json:"at"`
+	// Page is the page's own key: the status hash the order sent from it
+	// has (storefront.StatusHash of its status key). Two contacts typed on
+	// one page make one record, the phone's, and a keep from a page whose
+	// order is recorded already is dropped.
+	Page []byte `json:"page,omitempty"`
 }
 
 // Choice is what the buyer was buying: a package's quantity, or the
@@ -92,7 +98,8 @@ func (k Keep) ContactOf() (kind, value string, err error) {
 // Check refuses a keep whose choice is out of bounds.
 func (k Keep) Check() error {
 	ch := k.Choice
-	if ch.Package < 0 || ch.Package > 100 || len(ch.Lines) > maxChoiceLines || len(ch.Zone) > maxKeepField || len(ch.Size) > maxKeepField || len(k.Site) > maxSite {
+	if ch.Package < 0 || ch.Package > 100 || len(ch.Lines) > maxChoiceLines || len(ch.Zone) > maxKeepField || len(ch.Size) > maxKeepField || len(k.Site) > maxSite ||
+		(k.Page != nil && len(k.Page) != 32) {
 		return ErrBadKeep
 	}
 	for _, l := range ch.Lines {
@@ -104,6 +111,21 @@ func (k Keep) Check() error {
 		return err
 	}
 	return nil
+}
+
+// Mask is a contact as the owner's list shows it: a phone's last four
+// digits, an email's domain; never more.
+func Mask(kind, value string) string {
+	if kind == "email" {
+		if _, d, ok := strings.Cut(value, "@"); ok {
+			return "…@" + d
+		}
+		return "…"
+	}
+	if len(value) < 4 {
+		return "…"
+	}
+	return "… " + value[len(value)-4:]
 }
 
 // ContactHash is a contact keyed as message's cross-tenant per-person
@@ -127,6 +149,9 @@ type keepRow struct {
 // does not open or read is dropped; one that fails is tried again once
 // its claim lapses.
 func (s *Service) DrainKeeps(ctx context.Context) error {
+	if s.Messages == nil {
+		return nil // no keyed hashes without the message hash key
+	}
 	rows, err := s.Pool.Query(ctx, `SELECT id, tenant_id, endpoint_id, action_id, payload, created_at FROM taskiem_form_left_inbox_claim(50)`)
 	if err != nil {
 		return err
@@ -178,12 +203,22 @@ func (s *Service) recordKeep(ctx context.Context, x keepRow) error {
 		site = &k.Site
 	}
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
+		if k.Page != nil {
+			// The page's order is recorded already: it was sent, not left.
+			var sent bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM storefront_orders WHERE tenant_id = $1 AND status_hash = $2)`, x.tenant, k.Page).Scan(&sent); err != nil {
+				return err
+			}
+			if sent {
+				return nil
+			}
+		}
 		env, err := s.Vault.SealTx(ctx, tx, x.tenant, kind, value)
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `SELECT taskiem_form_left_put($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, x.tenant, x.endpoint, x.action, k.Front, site, env,
-			s.ContactHash(kind, value), kind, choice, at)
+		_, err = tx.Exec(ctx, `SELECT taskiem_form_left_put($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, x.tenant, x.endpoint, x.action, k.Front, site, env,
+			s.ContactHash(kind, value), kind, choice, at, k.Page, Mask(kind, value))
 		return err
 	})
 }
@@ -192,6 +227,9 @@ func (s *Service) recordKeep(ctx context.Context, x keepRow) error {
 // endpoint or action): within the wait the record is forgotten; after
 // the follow-up it came back. It answers "deleted", "came_back" or "".
 func (s *Service) Sent(ctx context.Context, tx pgx.Tx, tenant, scope uuid.UUID, contact string) (string, error) {
+	if s.Messages == nil {
+		return "", nil
+	}
 	kind, value, err := Keep{Contact: contact}.ContactOf()
 	if err != nil {
 		return "", nil //nolint:nilerr // a contact that keys nothing matches no record
@@ -201,20 +239,50 @@ func (s *Service) Sent(ctx context.Context, tx pgx.Tx, tenant, scope uuid.UUID, 
 	return out, err
 }
 
-// FollowedUp records a record's follow-up and makes its restore link's
-// row: the returned token (shown once, in the message) restores the
-// choice, once, for 7 days. ok is false when it was followed up already.
-func (s *Service) FollowedUp(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID) (token string, ok bool, err error) {
+// OrderSent is Sent for an order's buyer, by their phone and their email:
+// storefront.Orders' FormSent, in the transaction that records the order.
+func (s *Service) OrderSent(ctx context.Context, tx pgx.Tx, tenant, action uuid.UUID, phone, email string) error {
+	for _, c := range []string{phone, email} {
+		if strings.TrimSpace(c) == "" {
+			continue
+		}
+		if _, err := s.Sent(ctx, tx, tenant, action, c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// FollowedUp records a record's follow-up by channel and makes its
+// restore link's row: the returned token (shown once, in the message)
+// restores the choice, once, for 7 days. ok is false when it was followed
+// up already.
+func (s *Service) FollowedUp(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, channel string) (token string, ok bool, err error) {
 	token = NewLinkToken()
-	err = tx.QueryRow(ctx, `SELECT taskiem_form_left_followed($1, $2, $3, $4)`, tenant, id, TokenHash(token), s.now()).Scan(&ok)
+	err = tx.QueryRow(ctx, `SELECT taskiem_form_left_followed($1, $2, $3, $4, $5)`, tenant, id, TokenHash(token), s.now(), channel).Scan(&ok)
 	if err != nil || !ok {
 		return "", false, err
 	}
 	return token, true, nil
 }
 
-// PurgeLeft forgets records and restore links past their 7 days, and
-// keeps no api role took within a day.
+// StopContact stops every follow-up to a contact (a phone or an email)
+// from a business: an inbound STOP, where a channel brings one.
+func (s *Service) StopContact(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, contact string) error {
+	if s.Messages == nil {
+		return nil
+	}
+	kind, value, err := Keep{Contact: contact}.ContactOf()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `SELECT taskiem_form_followup_stop($1, $2)`, tenant, s.ContactHash(kind, value))
+	return err
+}
+
+// PurgeLeft forgets records and restore links past their 7 days, keeps
+// no api role took within a day, a contact's follow-ups after their week
+// and the counts after 90 days.
 func (s *Service) PurgeLeft(ctx context.Context) (int, error) {
 	var n int
 	if err := s.Pool.QueryRow(ctx, `SELECT taskiem_form_left_purge()`).Scan(&n); err != nil {

@@ -118,8 +118,12 @@ type Orders struct {
 	AfterPaid func(ctx context.Context, tenant uuid.UUID, ord Order) error
 	// PreviewDomain is where storefronts are served (<slug>.<domain>).
 	PreviewDomain string
-	Logger        *slog.Logger
-	Now           func() time.Time
+	// FormSent tells forms left half-filled that a buyer sent an order
+	// form, in the transaction that records the order
+	// (forms.Service.OrderSent); nil tells nothing.
+	FormSent func(ctx context.Context, tx pgx.Tx, tenant, action uuid.UUID, phone, email string) error
+	Logger   *slog.Logger
+	Now      func() time.Time
 }
 
 func (o *Orders) now() time.Time {
@@ -732,6 +736,13 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	}
 	if o.PhoneIndex != nil {
 		if err := o.PhoneIndex.WriteTx(ctx, tx, x.tenant, id, sub.Customer.Phone); err != nil {
+			return Order{}, err
+		}
+	}
+	if o.FormSent != nil && x.action != nil && x.kind == "order" {
+		// A form left half-filled by this buyer: forgotten, or came back
+		// after its follow-up (forms-that-sell §6.1).
+		if err := o.FormSent(ctx, tx, x.tenant, *x.action, sub.Customer.Phone, sub.Customer.Email); err != nil {
 			return Order{}, err
 		}
 	}

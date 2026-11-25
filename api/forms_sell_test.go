@@ -74,6 +74,8 @@ func newSellWorld(t *testing.T) *sellWorld {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	w.forms.ShopDomain = "shops.test"
+	w.orders.FormSent = w.forms.OrderSent
 	w.newHost(t)
 	return w
 }
@@ -88,7 +90,9 @@ func (w *sellWorld) newHost(t *testing.T) {
 		Submit: publicweb.DBSubmit(pp), OrderStatus: publicweb.DBOrderStatus(pp), Forms: publicweb.DBForms(pp), Reach: publicweb.DBReach(pp),
 		FormHost: reachFormHost, FormKeys: &keys, FormKey: formKey, InboxKey: w.key, PreviewDomain: "shops.test", Logger: slog.New(slog.DiscardHandler),
 		Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour), Submissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
-		FormSubmissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}
+		FormSubmissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
+		// Forms left half-filled (L3): keeps and follow-ups' links.
+		Keeps: publicweb.DBKeeps(pp), FormKeeps: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}
 	w.host = host.Handler()
 }
 

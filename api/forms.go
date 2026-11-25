@@ -1018,6 +1018,9 @@ func (s *Server) RunForms(ctx context.Context) error {
 				s.Logger.Error("forms: forms left half-filled", "err", err)
 			}
 		case <-tick.C:
+			if err := s.Forms.FollowUps(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("forms: following up forms left half-filled", "err", err)
+			}
 			if err := s.Forms.Tick(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("forms: links and codes", "err", err)
 			}

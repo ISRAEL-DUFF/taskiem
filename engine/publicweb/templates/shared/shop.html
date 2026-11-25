@@ -169,3 +169,19 @@ its packages, the warning line, and a frame's messages to its website. */}}
 
 {{define "sfembeddone"}}{{if .Embed}}<script src="{{asset "form-embed.js"}}" defer></script>
 <div hidden data-embed data-kind="storefront" data-origins="{{.Origins}}"{{with .Sent}} data-submitted="{{$.Reference}}" data-action="{{.}}"{{end}}></div>{{end}}{{end}}
+
+{{/* Forms left half-filled (forms-that-sell §6.2): the consent line under
+the contact, in the form's language, on an order form that follows up;
+and the keep, sent by a script once a contact is typed. */}}
+{{define "sfconsent"}}{{with .Consent}}<p class="hint sell-consent" id="f-consent">{{.}}</p>
+{{end}}{{end}}
+
+{{define "sfkeep"}}{{with .Keep}}<script src="{{asset "keep.js"}}" defer></script>
+<div hidden data-keep="{{.URL}}" data-keep-token="{{.Token}}"></div>{{end}}{{end}}
+
+{{/* A follow-up's link (§6.3): nothing is used up by opening it; Finish
+my order restores the choice once, Stop these messages stops them. */}}
+{{define "sfback"}}<p class="notice" role="status">{{.Message}}</p>
+{{if .Restore}}<form method="post" action="{{.Post}}" class="form back-form"><button class="btn btn-primary btn-block" type="submit">Finish my order</button></form>
+{{end}}{{if .CanStop}}<form method="post" action="{{.Stop}}" class="form back-form"><button class="btn btn-block" type="submit">Stop these messages</button></form>
+{{end}}{{with .Home}}<p class="hint"><a href="{{.}}">Go to {{$.Business}}</a></p>{{end}}{{end}}

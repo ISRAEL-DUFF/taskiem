@@ -198,7 +198,11 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		"taskiem_public_customer_link(bytea)": true, "taskiem_public_customer_link_request(bytea,text,bigint)": true,
 		"taskiem_public_customer_link_payment(bytea)": true, "taskiem_public_customer_link_own_account(bytea)": true,
 		// Forms that sell (L0): a keep sealed for the api role, and a restore link claimed once by its hash (the choice only).
-		"taskiem_public_form_keep(uuid,uuid,bytea)": true, "taskiem_public_form_restore(bytea)": true}
+		"taskiem_public_form_restore(bytea)": true,
+		// Forms that sell (L3): a keep only for an order form that follows up and was not sent, which of a storefront's
+		// forms follow up, a restore link's page before it is used, and its Stop (nothing read back).
+		"taskiem_public_form_keep(uuid,bytea,bytea)": true, "taskiem_public_form_followups(uuid)": true,
+		"taskiem_public_form_restore_ok(bytea)": true, "taskiem_public_form_stop(bytea)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)

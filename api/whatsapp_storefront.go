@@ -187,6 +187,10 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 			return false, nil
 		}
 		return true, s.shopAsk(ctx, c, &chatShop{Action: "orders_on"}, c.t("wa.shop.turn_on_orders"))
+	case followupsCmd.MatchString(text):
+		// An order form's follow-ups (forms-that-sell §7, chat_followups.go).
+		m := followupsCmd.FindStringSubmatch(text)
+		do = func() error { return s.waFollowups(ctx, c, strings.EqualFold(m[1], "on"), m[2]) }
 	case cmd == "open shop" || cmd == "open my shop" || cmd == "reopen shop" || cmd == "reopen":
 		do = func() error { return s.waShopOpen(ctx, c) }
 	case s.Orders != nil && (cmd == "orders" || cmd == "my orders" || cmd == "open orders"):

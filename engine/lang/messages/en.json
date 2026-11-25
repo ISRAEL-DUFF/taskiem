@@ -11098,6 +11098,56 @@
       "text": "Buyers pay at the door, in cash or by transfer. To take payments online too, connect Paystack.",
       "reviewed": true,
       "context": "sell <product> on a page: made, with no online payments connected"
+    },
+    "form.followup.consent": {
+      "text": "If you leave before you send this, we may send you one message about this order, by text or email, with a link to finish it. You can stop these messages from that link.",
+      "reviewed": true,
+      "context": "Public host, under the phone and email of an order form that follows up a form left half-filled (forms-that-sell §6.2); Taskiem's words, the owner cannot change them"
+    },
+    "form.followup.sms": {
+      "text": "You started an order for {what} and did not finish. Finish it here: {link} (you can stop these messages there)",
+      "reviewed": true,
+      "context": "SMS to a buyer who typed their phone into an order form and left (forms-that-sell §6.3); starts with the business's name; {what} is the product and package, {link} the restore link; at most three SMS parts"
+    },
+    "form.followup.email_subject": {
+      "text": "Your order with {business}",
+      "reviewed": true,
+      "context": "Subject of the email to a buyer who typed their email into an order form and left (forms-that-sell §6.3)"
+    },
+    "form.followup.email": {
+      "text": "You started an order for {what} with {business} and did not finish.\n\nFinish it here: {link}\n\nWhat you chose is kept; you type your details again. To get no more messages like this, open the link and choose Stop these messages.",
+      "reviewed": true,
+      "context": "Email to a buyer who typed their email into an order form and left (forms-that-sell §6.3); {what} is the product and package, {link} the restore link"
+    },
+    "wa.followups.on": {
+      "text": "Follow-ups are on for *{form}*. Someone who types their phone or email and leaves without ordering gets one message after {wait} minutes, with a link to finish the order. The form now says so under their details. Say *follow-ups off* to stop.",
+      "reviewed": true,
+      "context": "Chat words (api/chat_followups.go): follow-ups on, done"
+    },
+    "wa.followups.off": {
+      "text": "Follow-ups are off for *{form}*. It no longer keeps anything of someone who leaves without ordering.",
+      "reviewed": true,
+      "context": "Chat words (api/chat_followups.go): follow-ups off, done"
+    },
+    "wa.followups.already_on": {
+      "text": "Follow-ups are on already for *{form}*.",
+      "reviewed": true,
+      "context": "Chat words (api/chat_followups.go): follow-ups on, on already"
+    },
+    "wa.followups.already_off": {
+      "text": "Follow-ups are off already for *{form}*.",
+      "reviewed": true,
+      "context": "Chat words (api/chat_followups.go): follow-ups off, off already"
+    },
+    "wa.followups.which": {
+      "text": "Which order form: {names}? Say *follow-ups {how} for* and its name.",
+      "reviewed": true,
+      "context": "Chat words (api/chat_followups.go): more than one order form, which one"
+    },
+    "wa.followups.none": {
+      "text": "Your page has no order form yet. Say *turn on orders* first.",
+      "reviewed": true,
+      "context": "Chat words (api/chat_followups.go): no order form to follow up"
     }
   }
 }

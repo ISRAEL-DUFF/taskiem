@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/engine/formguard"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -158,6 +159,15 @@ type formData struct {
 	Embed   bool
 	Origins string
 	Ref     string
+	// Forms left half-filled (forms-that-sell §6): the consent line under
+	// the contact, and where and with what token the page sends a keep;
+	// both only on an order form that follows up.
+	Consent string
+	Keep    *keepView
+}
+
+type keepView struct {
+	URL, Token string
 }
 
 type zoneItem struct {
@@ -365,9 +375,20 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 			f.Embed, f.Origins = true, strings.Join(origins, " ")
 		}
 	}
+	follows := act.ID != nil && p.Followups[*act.ID] && act.Kind == "order" && s.FormKeys != nil && s.Keeps != nil
+	if follows {
+		f.Consent = lang.Default().Text(lang.Tag(f.Lang), "form.followup.consent")
+		s.keepFor(&f)
+	}
 	if r.Method != http.MethodPost {
 		f.stepFor(r.URL.Query())
 		f.Packages.choose(r.URL.Query())
+		if z := r.URL.Query().Get("zone"); z != "" {
+			for i := range f.Zones {
+				f.Zones[i].Selected = f.Zones[i].Name == z
+			}
+		}
+
 		if item := r.URL.Query().Get(oneItemQuery); item != "" && f.One == nil {
 			for i := range f.Items {
 				if f.Items[i].ID == item && f.Items[i].Orderable {
@@ -472,6 +493,15 @@ func (s *Server) showForm(w http.ResponseWriter, r *http.Request, status int, f 
 		token = string(t)
 	}
 	f.Token = token
+	if f.Keep != nil {
+		// The page's keep token is its submit token's twin (§6.1).
+		k, err := s.guard.Twin(formguard.Token(token), f.form+keepSuffix)
+		if err != nil {
+			f.Keep = nil
+		} else {
+			f.Keep.Token = string(k)
+		}
+	}
 	if r.Method == http.MethodPost {
 		f.detailsAgain()
 	}
