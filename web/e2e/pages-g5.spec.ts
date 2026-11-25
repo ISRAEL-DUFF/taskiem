@@ -143,7 +143,9 @@ test("a list of saved things, made in the editor, in the order their date comes"
     });
     expect(r.ok(), await r.text()).toBeTruthy();
     gen = ((await r.json()) as { kind: { id: string; name: string } }).kind;
-    const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+    // Days as the server counts them, in Lagos (UTC+1, no summer time): from
+    // 23:00 UTC the day there is already tomorrow.
+    const day = (n: number) => new Date(Date.now() + 3_600_000 + n * 86_400_000).toISOString().slice(0, 10);
     for (const [name, title, next] of [
       ["yard-gen", "Yard gen", day(3)],
       ["office-gen", "Office gen", day(-2)],

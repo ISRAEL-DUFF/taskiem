@@ -393,6 +393,8 @@ func (s *Server) waSendOutbox(ctx context.Context, tenant uuid.UUID, items []wha
 			sendErr = s.sendSupplierItem(ctx, it)
 		case outboxPayment, outboxPaymentBatch:
 			sendErr = s.sendPayResultItem(ctx, it)
+		case outboxPayroll:
+			sendErr = s.sendPayrollItem(ctx, it)
 		case outboxPayee:
 			sendErr = s.sendPayeeItem(ctx, it)
 		default:

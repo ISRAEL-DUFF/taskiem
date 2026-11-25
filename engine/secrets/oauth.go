@@ -38,6 +38,10 @@ type OAuthRequest struct {
 	Environment string
 	Name        string
 	Mode        string // live or test, as chosen before linking; "" for none
+	// Replaces is the connection the callback moves onto the new tokens
+	// (reconnecting: a pasted key, or a connection that ended), or nil
+	// for a new connection.
+	Replaces    *uuid.UUID
 	verifier    []byte
 	verifierKey []byte
 	kekVersion  int
@@ -74,6 +78,13 @@ func hashState(state, browser string) []byte {
 // verifier (the caller derives the challenge; the verifier is not kept in
 // the clear). The start is audited as connection.oauth_start.
 func (v *Vault) BeginOAuthRequestTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, connector, env, name, mode, by string) (state, browser, verifier string, err error) {
+	return v.BeginOAuthReconnectTx(ctx, tx, tenant, connector, env, name, mode, by, nil)
+}
+
+// BeginOAuthReconnectTx is BeginOAuthRequestTx for a request whose
+// callback moves an existing connection (replaces) onto the new tokens;
+// nil makes a new connection.
+func (v *Vault) BeginOAuthReconnectTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, connector, env, name, mode, by string, replaces *uuid.UUID) (state, browser, verifier string, err error) {
 	if state, err = randomToken(); err != nil {
 		return "", "", "", err
 	}
@@ -93,9 +104,9 @@ func (v *Vault) BeginOAuthRequestTx(ctx context.Context, tx pgx.Tx, tenant uuid.
 	if _, err := tx.Exec(ctx, `DELETE FROM oauth_connection_requests WHERE tenant_id = $1 AND expires_at < now() - interval '1 hour'`, tenant); err != nil {
 		return "", "", "", err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO oauth_connection_requests (id, tenant_id, state_hash, person, connector, environment, name, mode, verifier, verifier_key, kek_version, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10, $11, now() + $12)`,
-		id, tenant, hashState(state, browser), by, connector, env, name, mode, ct, wdek, ver, OAuthRequestTTL); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO oauth_connection_requests (id, tenant_id, state_hash, person, connector, environment, name, mode, verifier, verifier_key, kek_version, expires_at, replaces)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10, $11, now() + $12, $13)`,
+		id, tenant, hashState(state, browser), by, connector, env, name, mode, ct, wdek, ver, OAuthRequestTTL, replaces); err != nil {
 		return "", "", "", err
 	}
 	return state, browser, verifier, audit(ctx, tx, tenant, by, "connection.oauth_start", connector+"/"+name, map[string]any{"request_id": id, "environment": env})
@@ -111,8 +122,8 @@ func (v *Vault) TakeOAuthRequest(ctx context.Context, state, browser string) (*O
 	}
 	var q OAuthRequest
 	var mode *string
-	err := v.Pool.QueryRow(ctx, `SELECT id, tenant_id, person, connector, environment, name, mode, verifier, verifier_key, kek_version FROM taskiem_oauth_request_take($1)`, hashState(state, browser)).
-		Scan(&q.ID, &q.Tenant, &q.Person, &q.Connector, &q.Environment, &q.Name, &mode, &q.verifier, &q.verifierKey, &q.kekVersion)
+	err := v.Pool.QueryRow(ctx, `SELECT id, tenant_id, person, connector, environment, name, mode, replaces, verifier, verifier_key, kek_version FROM taskiem_oauth_request_take($1)`, hashState(state, browser)).
+		Scan(&q.ID, &q.Tenant, &q.Person, &q.Connector, &q.Environment, &q.Name, &mode, &q.Replaces, &q.verifier, &q.verifierKey, &q.kekVersion)
 	if mode != nil {
 		q.Mode = *mode
 	}

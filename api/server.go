@@ -160,6 +160,9 @@ type Server struct {
 	// oldColumnsChecked are the businesses whose workflows were checked
 	// for the catalogue's old stock columns since start (stock_oldcolumns.go).
 	oldColumnsChecked sync.Map
+	// payrollNames are each business's Payrolla employee names, kept a
+	// few minutes for the chat (payroll_names.go).
+	payrollNames payrollNameCache
 	// DocsURL is where the web app's help links point (TASKIEM_DOCS_URL);
 	// empty shows the in-product help only.
 	DocsURL string
@@ -453,6 +456,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/auth/sso/{id}/start", s.ssoStart)
 		r.Get("/auth/sso/oidc/callback", s.oidcCallback)
 		r.Get("/connections/oauth/callback", s.oauthConnectionCallback) // providers send the browser back here (oauthconnections.go)
+		r.Get("/payrolla/callback", s.oauthConnectionCallback)          // Payrolla's registered callback, the same handler (P4b-1)
 		// Connect links sent from chat: the token is the authority, for one
 		// connection (connect_links.go).
 		r.Get("/connect/{token}", s.getConnectLink)
@@ -936,10 +940,38 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/pay-account", s.putStaffAccount)
 			// Payroll is Payrolla's (payroll.go): its runs in Taskiem's screens,
 			// and staff linked to its employees.
-			r.With(s.need(PermPayrollRead)).Get("/payroll", s.getPayroll)
-			r.With(s.need(PermPayrollRead)).Get("/payroll/runs/{run}", s.getPayrollRun)
+			r.With(s.need(PermPayrollSee)).Get("/payroll", s.getPayroll)
+			r.With(s.need(PermPayrollSee)).Get("/payroll/runs/{run}", s.getPayrollRun)
+			// This month's run (payroll_runs.go; P4b-3): prepared and changed
+			// with payroll.prepare, decided with payroll.approve and
+			// Payrolla's code.
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs", s.preparePayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/adjustments", s.adjustPayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Delete("/payroll/runs/{run}/adjustments/{id}", s.unadjustPayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/exclusions", s.excludePayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Delete("/payroll/runs/{run}/exclusions/{id}", s.putBackPayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/compute", s.computePayrollRun)
+			r.With(s.need(PermPayrollPrepare), s.tenantWide).Post("/payroll/runs/{run}/cancel", s.cancelPayrollRun)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/confirmations", s.startPayrollRunCode)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/approve", s.decidePayrollRun("approve"))
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/lock", s.decidePayrollRun("lock"))
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/runs/{run}/reject", s.rejectPayrollRun)
 			r.With(s.need(PermPayrollRead)).Get("/payroll/staff", s.getPayrollStaff)
 			r.With(s.need(PermPayrollRead), s.tenantWide).Put("/staff/{user}/payrolla", s.putStaffPayrolla)
+			// Connecting Payrolla in one step, reconnecting, and linking
+			// approvers (payroll_connect.go; P4b-1).
+			r.With(s.need(PermPayrollPeople)).Get("/payroll/connection", s.getPayrollConnection)
+			r.With(s.tenantWide).Post("/payroll/connect", s.connectPayroll) // owners only, checked inside
+			r.With(s.need(PermPayrollPeople)).Get("/payroll/approvers", s.getPayrollApprovers)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/approvers/{user}/link", s.startPayrollLink)
+			r.With(s.need(PermPayrollApprove), s.tenantWide).Post("/payroll/approvers/{user}/link/confirm", s.confirmPayrollLink)
+			r.With(s.need(PermPayrollPeople), s.tenantWide).Delete("/payroll/approvers/{user}/link", s.unlinkPayroll)
+			// Staff and pay from Taskiem (payroll_team.go; P4b-2).
+			r.Group(s.payrollTeamRoutes)
+			// Settings and the tax and pension schedules (payroll_reports.go; P4b-5).
+			r.Group(s.payrollReportsRoutes)
+			// After locking: paying, and payslips (payroll_payment.go; P4b-4).
+			r.Group(s.payrollPaymentRoutes)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)

@@ -323,6 +323,9 @@ type chatData struct {
 	// asking for its values (chat_menus.go).
 	Menu  *chatMenuState `json:"menu,omitempty"`
 	Steps *chatSteps     `json:"steps,omitempty"`
+	// Payroll is a change to the team or this month's payroll said in
+	// words, waiting for yes or its reason (payroll_chat_words.go).
+	Payroll *chatPayroll `json:"payroll,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -861,6 +864,16 @@ func (s *Server) waCommand(ctx context.Context, c *chat) (err error) {
 		case lang.IntentNo:
 			cmd = "no"
 		}
+	}
+	// This month's payroll: its words, its card's buttons, and a code
+	// typed while one waits (payroll_runs_chat.go), before anything else
+	// reads the message.
+	if done, err := s.waPayroll(ctx, c, text, cmd); done || err != nil {
+		return err
+	}
+	// Its settings and schedules (payroll_reports_chat.go; P4b-5).
+	if done, err := s.waPayrollReports(ctx, c, text); done || err != nil {
+		return err
 	}
 	if cmd == "cancel" || cmd == "stop" {
 		if c.state == stateIdle {

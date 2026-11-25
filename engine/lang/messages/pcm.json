@@ -8803,6 +8803,916 @@
       "text": "Staff fit only pay the accounts wey business don save: tell owner make e save dis one first.",
       "reviewed": false,
       "context": "Draft, not reviewed: A staff member forwarded account details not saved: staff pay the business's saved accounts only"
+    },
+    "payroll.settings.chat": {
+      "text": "How dem set your payroll for Payrolla:\n{lines}\n\nChange any of am for Payrolla. See am here: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): the payroll's setup in words ({lines}: one line each) and a link"
+    },
+    "payroll.schedule.card": {
+      "text": "Your {kind} schedule for {period}: {amount} for {people}. {state}\nEach person line dey behind sign-in: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a tax or pension schedule's total, never each person's line, and a link behind sign-in ({kind}: PAYE, pension, NHF or NHIS)"
+    },
+    "payroll.schedule.none": {
+      "text": "No {kind} schedule for {period} yet. Schedules go ready once that month payroll don lock.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): no schedule of that kind for that month"
+    },
+    "payroll.schedule.none_any": {
+      "text": "No {kind} schedule yet. Schedules go ready once payroll don lock.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): no schedule of that kind at all"
+    },
+    "payroll.schedule.to_pay": {
+      "text": "E remain to pay.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule still to pay"
+    },
+    "payroll.schedule.due": {
+      "text": "Pay am before {when}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule still to pay, and its due date ({when}: 10 Dec)"
+    },
+    "payroll.schedule.paid": {
+      "text": "E don pay.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule that is paid"
+    },
+    "payroll.schedule.scope_owner": {
+      "text": "Payrolla never allow Taskiem to read your tax and pension schedules. Connect Payrolla again and allow Read statutory reports.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): Payrolla's SCOPE_REQUIRED for reports:read, to an owner (Read statutory reports is the scope in Payrolla's own words)"
+    },
+    "payroll.schedule.scope_other": {
+      "text": "Tell the owner make e allow Read statutory reports for Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): Payrolla's SCOPE_REQUIRED for reports:read, to others"
+    },
+    "payroll.people": {
+      "text": "{n} people",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): how many people a payroll pays",
+      "same": true
+    },
+    "payroll.people_one": {
+      "text": "1 person",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll that pays one person",
+      "same": true
+    },
+    "payroll.someone": {
+      "text": "Somebody",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a person Payrolla did not name"
+    },
+    "payroll.state.draft": {
+      "text": "never calculate",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence: \"it's now …\""
+    },
+    "payroll.state.computed": {
+      "text": "dey wait for approval",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.approved": {
+      "text": "don get approval",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.locked": {
+      "text": "don lock",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.disbursing": {
+      "text": "dey pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.completed": {
+      "text": "don pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.partially_completed": {
+      "text": "don pay some part",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.cancelled": {
+      "text": "don cancel",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.failed": {
+      "text": "don fail",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.other": {
+      "text": "dey another place for Payrolla",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state Taskiem has no words for"
+    },
+    "payroll.short": {
+      "text": "Your Payrolla wallet get {available}. This payroll need {needed}: e short {short}. Add money before {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): the funding line: the wallet against the payroll's total"
+    },
+    "payroll.pays_on": {
+      "text": "Payment go land {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a locked payroll's card"
+    },
+    "payroll.locked": {
+      "text": "E don lock. Payrolla go pay {people} {amount} on {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Lock and pay with the code"
+    },
+    "payroll.approved": {
+      "text": "E don approve. Make we lock am and pay?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Approve with the code"
+    },
+    "payroll.rejected": {
+      "text": "E don go back. Dem go tell the person wey prepare am, with your note.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Reject"
+    },
+    "payroll.code.totp": {
+      "text": "Open your authenticator app for Payrolla code.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla's code is: an authenticator app"
+    },
+    "payroll.code.sms": {
+      "text": "Payrolla don send code to your phone wey end with {hint}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: a phone"
+    },
+    "payroll.code.sms_any": {
+      "text": "Payrolla don send code to your phone.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: a phone with no hint"
+    },
+    "payroll.code.email": {
+      "text": "Payrolla don send code to your email {hint}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: an email"
+    },
+    "payroll.code.email_any": {
+      "text": "Payrolla don send code to your email.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: an email with no hint"
+    },
+    "payroll.code.any": {
+      "text": "Payrolla don send you code.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: unknown"
+    },
+    "payroll.code.type_approve": {
+      "text": "Type am here to approve payroll for {period}. E go work once, for 5 minutes.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): in the chat thread: type the code to approve"
+    },
+    "payroll.code.type_lock": {
+      "text": "Type am here to lock payroll for {period} and pay everybody on {date}. Payroll wey don lock no fit open again. E go work once, for 5 minutes.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): in the chat thread: type the code to lock"
+    },
+    "payroll.code.safer": {
+      "text": "Code from authenticator app safe pass: set one up for Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): under a code sent by text message"
+    },
+    "payroll.code.stopped": {
+      "text": "E don stop. Dem no go use that code.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"stop\" while a code waits"
+    },
+    "payroll.code.entered": {
+      "text": "Code don enter",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): what the conversation's history keeps instead of the code"
+    },
+    "payroll.code.again": {
+      "text": "Type the code again, or talk stop.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after a wrong code in the thread"
+    },
+    "payroll.card.title": {
+      "text": "*Payroll for {period}*",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card in the chat: its title"
+    },
+    "payroll.card.line": {
+      "text": "{people} · {amount} · pay day na {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: people, total and pay day"
+    },
+    "payroll.card.status": {
+      "text": "{status}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: its state, capitalised",
+      "same": true
+    },
+    "payroll.card.new": {
+      "text": "New people this month: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: who is new since last month"
+    },
+    "payroll.card.left": {
+      "text": "Dem no go pay dem this month: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: who was paid last month and is not now"
+    },
+    "payroll.card.changed": {
+      "text": "Pay don change: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: whose pay changed"
+    },
+    "payroll.card.open": {
+      "text": "Open am: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: the link to its page"
+    },
+    "payroll.card.waiting": {
+      "text": "E dey wait for approval",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.approved": {
+      "text": "E don approve: lock am and pay next",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.locked": {
+      "text": "E don lock. Payment go land {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.draft": {
+      "text": "Dem never calculate am",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.done": {
+      "text": "Now e {state}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: any other state"
+    },
+    "payroll.button.approve": {
+      "text": "Approve",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)",
+      "same": true
+    },
+    "payroll.button.reject": {
+      "text": "Reject",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)",
+      "same": true
+    },
+    "payroll.button.lock": {
+      "text": "Lock am, pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.new_code": {
+      "text": "Send new code",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button after an expired code (20 characters at most)"
+    },
+    "payroll.reject.how": {
+      "text": "To send am back, type: reject payroll, plus why. Like: reject payroll, Musa's bonus is wrong",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): how to reject in the chat"
+    },
+    "payroll.none": {
+      "text": "No payroll dey wait for that one now.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): approve or lock payroll with none at that step"
+    },
+    "payroll.no_run": {
+      "text": "No payroll dey Payrolla yet. Type: prepare {month} payroll",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"payroll\" with no run yet"
+    },
+    "payroll.prepared": {
+      "text": "Payroll for {period} don ready make you check am: {people}, {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after preparing a payroll in the chat"
+    },
+    "payroll.prepare.which": {
+      "text": "Talk which month, like: prepare december payroll",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"prepare payroll\" with no month"
+    },
+    "payroll.slack": {
+      "text": "Payroll dey get approval where you dey type Payrolla code, never for group chat. Open am: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): approving from Slack: a link to the web"
+    },
+    "payroll.not_allowed": {
+      "text": "You no fit do that to the payroll here. Ask the owner.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a person without the permission"
+    },
+    "payroll.told.rejected": {
+      "text": "{by} don send payroll for {period} back: {note}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): told to whoever prepared it"
+    },
+    "payroll.told.approved": {
+      "text": "{by} don approve payroll for {period} for Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.rejected_there": {
+      "text": "{by} don send payroll for {period} back for Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.locked": {
+      "text": "{by} don lock payroll for {period} for Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.scheduled": {
+      "text": "Payroll for {period} don lock. Payrolla go pay {people} {amount} on {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's payment scheduled"
+    },
+    "payroll.refused.sod": {
+      "text": "Na you prepare this payroll, so another person must approve am.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SOD_VIOLATION"
+    },
+    "payroll.refused.sod_who": {
+      "text": "Go ask {who}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): who can approve instead"
+    },
+    "payroll.refused.not_linked": {
+      "text": "Link your Payrolla account first. Na only one code e need: Payroll settings, Link my Payrolla account.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's APPROVER_NOT_LINKED"
+    },
+    "payroll.refused.not_an_approver": {
+      "text": "For Payrolla you no fit approve payroll. Tell the owner make e make you Approver for Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NOT_AN_APPROVER"
+    },
+    "payroll.refused.cannot_pay": {
+      "text": "For Payrolla you no fit send payments. Ask the owner.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CANNOT_PAY"
+    },
+    "payroll.refused.no_factor": {
+      "text": "Payrolla never get where e go send you code. Tell the owner make e add your phone for Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's PAYMENT_CONFIRMATION_NOT_SET_UP"
+    },
+    "payroll.refused.code_invalid": {
+      "text": "That code no correct. Check am and type am again.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_INVALID"
+    },
+    "payroll.refused.code_expired": {
+      "text": "That code don expire. Ask for new code.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_EXPIRED"
+    },
+    "payroll.refused.code_locked": {
+      "text": "Too many wrong try for that code. Ask for new code.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_LOCKED"
+    },
+    "payroll.refused.code_used": {
+      "text": "Dem don use that code before. Ask for new code.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_USED"
+    },
+    "payroll.refused.too_many_codes": {
+      "text": "Payrolla don send you too many codes. Try again after 10 minutes.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's TOO_MANY_CODES"
+    },
+    "payroll.refused.invalid_state": {
+      "text": "This payroll don move pass: now e {state}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's INVALID_STATE"
+    },
+    "payroll.refused.invalid_state_unknown": {
+      "text": "This payroll don move pass. Open am again to see where e reach.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's INVALID_STATE, the state unknown"
+    },
+    "payroll.refused.no_account": {
+      "text": "Some people no get account wey dem go pay dem enter: {who}. Add their account, or leave dem out this month.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NO_PAYOUT_DESTINATION"
+    },
+    "payroll.refused.no_account_some": {
+      "text": "Some people no get account wey dem go pay dem enter. Add their account, or leave dem out this month.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NO_PAYOUT_DESTINATION, no names"
+    },
+    "payroll.refused.duplicate": {
+      "text": "Payroll for {period} don dey already.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's DUPLICATE_RUN"
+    },
+    "payroll.refused.compute_error": {
+      "text": "Payrolla no fit calculate this payroll: {reason}. Fix am for Payrolla settings, then press Recalculate.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a run's compute_error"
+    },
+    "payroll.refused.not_worked_out": {
+      "text": "Payrolla never fit calculate this payroll. Fix am for Payrolla settings, then press Recalculate.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a run still not worked out"
+    },
+    "payroll.refused.scope_owner": {
+      "text": "Payrolla never allow Taskiem to do this. Connect Payrolla again and allow Prepare payroll and Approve and pay.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SCOPE_REQUIRED, to an owner"
+    },
+    "payroll.refused.scope_other": {
+      "text": "Tell the owner make e allow this for Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SCOPE_REQUIRED, to others"
+    },
+    "payroll.refused.reason": {
+      "text": "Talk why.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's REASON_REQUIRED"
+    },
+    "payroll.refused.note": {
+      "text": "Talk why you dey send am back, for short note.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a rejection with no note"
+    },
+    "payroll.button.open": {
+      "text": "Open",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a link button on the payroll's card on Telegram",
+      "same": true
+    },
+    "payroll.pay.awaiting": {
+      "text": "E dey wait for money: e short {short}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a locked payroll's payment, waiting for the wallet"
+    },
+    "payroll.pay.awaiting_any": {
+      "text": "E dey wait for money",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a locked payroll's payment, waiting for the wallet, by how much not known"
+    },
+    "payroll.pay.paying": {
+      "text": "E dey pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll's payment under way"
+    },
+    "payroll.pay.paid": {
+      "text": "E don pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll paid to everyone"
+    },
+    "payroll.pay.paid_some": {
+      "text": "E don pay, {n} never pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll paid to some, with how many were not"
+    },
+    "payroll.pay.failed": {
+      "text": "Dem no pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll's payment that failed"
+    },
+    "payroll.pay.none_now": {
+      "text": "No payroll wey don lock dey wait for im pay day.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"pay payroll now\" with nothing to pay now"
+    },
+    "payroll.paid_now": {
+      "text": "Payment dey go now. Payrolla dey pay {people} {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): after Pay now with the code"
+    },
+    "payroll.retried": {
+      "text": "E don send again. Payrolla go pay each of dem inside the account wey dem get now.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): after Pay the failed ones again with the code"
+    },
+    "payroll.refused.awaiting_funds": {
+      "text": "Your Payrolla wallet short {short}. Add money, and Payrolla go pay as e enter.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's AWAITING_FUNDS"
+    },
+    "payroll.refused.awaiting_funds_some": {
+      "text": "Your Payrolla wallet no reach. Add money, and Payrolla go pay as e enter.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's AWAITING_FUNDS, by how much not known"
+    },
+    "payroll.refused.already_paying": {
+      "text": "Payrolla don already dey pay this payroll.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's ALREADY_PAYING"
+    },
+    "payroll.refused.nothing_to_retry": {
+      "text": "No payment wey fail dey to send again.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's NOTHING_TO_RETRY"
+    },
+    "payroll.refused.payslip_not_final": {
+      "text": "This payslip go ready once the payroll don lock.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's PAYSLIP_NOT_FINAL"
+    },
+    "payroll.refused.payslip_links_off": {
+      "text": "Payslip links don off. On dem for Payrolla, Settings, Connected apps.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's PAYSLIP_LINKS_DISABLED"
+    },
+    "payroll.code.type_pay_now": {
+      "text": "Type am here to pay payroll for {period} now.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): in the chat thread: type the code to pay now"
+    },
+    "payroll.code.type_retry": {
+      "text": "Type am here to send the payments wey fail for {period} payroll again.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): in the chat thread: type the code to pay the failed ones again"
+    },
+    "payroll.button.retry": {
+      "text": "Pay dem again",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a button (at most 20 characters): pay the failed ones again"
+    },
+    "payroll.told.short": {
+      "text": "Payroll for {period} dey wait for money: e short {short}. Add money to your Payrolla wallet; Payrolla go pay as e enter.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told on the pay day when the wallet is short"
+    },
+    "payroll.told.warn3": {
+      "text": "Payroll for {period} go pay on {date}, in 3 days. Your Payrolla wallet get {available}; e need {needed}: e short {short}. Add money before that time.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the morning warning three days before the pay day"
+    },
+    "payroll.told.warn1": {
+      "text": "Payroll for {period} go pay tomorrow, {date}. Your Payrolla wallet get {available}; e need {needed}: e short {short}. Add money today.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the morning warning the day before the pay day"
+    },
+    "payroll.told.paid_all": {
+      "text": "Payroll for {period} don pay: all {people}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told when everyone was paid"
+    },
+    "payroll.told.paid_some": {
+      "text": "Payroll for {period}: dem pay {paid} out of {total} people. {n} never pay: {who}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told when some were not paid, with who and why"
+    },
+    "payroll.slip.paid": {
+      "text": "E don pay",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment"
+    },
+    "payroll.slip.sent": {
+      "text": "E dey road",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment sent, not yet arrived"
+    },
+    "payroll.slip.failed": {
+      "text": "Dem no pay am",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment that failed"
+    },
+    "payroll.slip.returned": {
+      "text": "Bank return am",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment the bank returned"
+    },
+    "payroll.slip.waiting": {
+      "text": "Dem never pay am",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment not sent yet"
+    },
+    "payroll.payslip.ready": {
+      "text": "Your payslip for {month} don ready",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the only words an employee is sent about their payslip"
+    },
+    "payroll.payslip.open": {
+      "text": "Open am for Taskiem. You go sign in first.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): under the payslip notice on a chat app, with its link"
+    },
+    "payroll.payslip.not_linked": {
+      "text": "Dem never link you to payroll here. Ask your oga.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslip\" from someone not linked to a Payrolla employee"
+    },
+    "payroll.payslip.none": {
+      "text": "You never get payslip. Dem go come once payroll don lock.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslip\" with none yet"
+    },
+    "payroll.payslip.links": {
+      "text": "Your payslips go open for Taskiem after you sign in:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslips\" on a chat app, before the links"
+    },
+    "payroll.payslip.link_line": {
+      "text": "{period}: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslips\" on a chat app: one payslip's link",
+      "same": true
+    },
+    "payroll.button.approve_who": {
+      "text": "Approve {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): a button under the account changes waiting: approve this person's ({name}: their first name; 20 characters at most with it)",
+      "same": true
+    },
+    "payroll.change.approved": {
+      "text": "E don approve. From now, Payrolla go pay {name} inside the new account.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): after the code typed in the thread"
+    },
+    "payroll.change.approved_own": {
+      "text": "The person wey ask for am don approve am. From now, Payrolla go pay {name} inside the new account.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the company's only approver approved a change they asked for themselves, with their code"
+    },
+    "payroll.change.asked_employee": {
+      "text": "Na the worker ask for am.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: the employee, with their own code"
+    },
+    "payroll.change.asked_payrolla": {
+      "text": "Dem ask for am inside Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Payrolla's own screens"
+    },
+    "payroll.change.asked_taskiem": {
+      "text": "Na {who} ask for am for Taskiem.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Taskiem ({who}: their name)"
+    },
+    "payroll.change.asked_taskiem_someone": {
+      "text": "Dem ask for am for Taskiem.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Taskiem whose name isn't known"
+    },
+    "payroll.change.decided": {
+      "text": "Dem don already decide this account change.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): Payrolla's INVALID_STATE: approved or rejected already"
+    },
+    "payroll.change.gone": {
+      "text": "Payrolla no get that account change. Maybe dem don decide am.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the change is not in Payrolla any more"
+    },
+    "payroll.change.how": {
+      "text": "To approve one, type: approve {name}'s account change.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): under the list, to those who may approve ({name}: a first name, in small letters)"
+    },
+    "payroll.change.line": {
+      "text": "{name}: {account}. {asked}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): one change waiting ({account}: the bank's name for the new account, the bank and its last four digits; {asked}: who asked)",
+      "same": true
+    },
+    "payroll.change.none": {
+      "text": "No account change dey wait.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): nothing waiting"
+    },
+    "payroll.change.none_for": {
+      "text": "No account change dey wait for {name}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): none waiting for the person named"
+    },
+    "payroll.change.open": {
+      "text": "See all of dem: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): a link to Account changes"
+    },
+    "payroll.change.open_page": {
+      "text": "Approve am where you dey type Payrolla code: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): on the web, in the app and on Slack, a link to Account changes, whose sheet takes the code"
+    },
+    "payroll.change.reject_how": {
+      "text": "To reject am, type: reject {whose} account change, plus why.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): \"reject … account change\" without a note ({whose}: musa's, or the)"
+    },
+    "payroll.change.rejected": {
+      "text": "E don reject. Dem still dey pay {name} inside the account wey e get now.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): after rejecting a change with a note"
+    },
+    "payroll.change.same_person": {
+      "text": "Na you ask for this account change, so another person must approve am.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): Payrolla's SAME_PERSON: whoever asked can't approve it, unless they are the only approver"
+    },
+    "payroll.change.title": {
+      "text": "Account changes wey dey wait:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the title of the list"
+    },
+    "payroll.change.type": {
+      "text": "Type am here to approve {name} new salary account: {account}. E go work once, for 5 minutes.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): in the WhatsApp or Telegram thread: type the code to approve a change ({account}: the bank's name for it, the bank and its last four digits)"
+    },
+    "payroll.change.which": {
+      "text": "Which one: {names}? Talk am with the name, like: approve musa's account change.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): more than one change, and no name or a name of two people"
+    },
+    "payroll.staff.add_form": {
+      "text": "Add {name} to payroll for this form, with im pay and bank account. The bank name for the account go show before you save: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add musa to payroll\" for a staff member not yet in Payrolla: the Add someone form, filled in from them"
+    },
+    "payroll.staff.add_new": {
+      "text": "{name} no dey among your staff for Taskiem. Add am to payroll for this form, with im pay and bank account: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add … to payroll\" for someone not on the staff: the empty Add someone form"
+    },
+    "payroll.staff.already": {
+      "text": "{name} don dey payroll already. See am for Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add … to payroll\" for someone already in Payrolla"
+    },
+    "payroll.staff.ask_end": {
+      "text": "End {name} work? E go start today. Payrolla no fit set last day.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before ending someone's employment"
+    },
+    "payroll.staff.ask_move": {
+      "text": "Move {name} go {department}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's department"
+    },
+    "payroll.staff.ask_pay": {
+      "text": "Change {name} monthly pay from {before} to {amount}, starting {date}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's pay (amounts before tax)"
+    },
+    "payroll.staff.ask_pay_new": {
+      "text": "Change {name} monthly pay to {amount}, starting {date}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's pay when their pay now isn't known"
+    },
+    "payroll.staff.bank_form": {
+      "text": "Na only for form dem dey type new salary account, so the bank fit check am. Open {name} for Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"change zainab's salary account\": the form, never the chat"
+    },
+    "payroll.staff.done_end": {
+      "text": "{name} work don end today.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes"
+    },
+    "payroll.staff.done_move": {
+      "text": "E don do. {name} dey {department} now.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes"
+    },
+    "payroll.staff.done_pay": {
+      "text": "E don do. {name} new pay go start {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes ({date}: 1 January 2027)"
+    },
+    "payroll.staff.from_bad": {
+      "text": "Talk when the new pay go start, like: from january, or from 1 january.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a start date that can't be read"
+    },
+    "payroll.staff.left": {
+      "text": "{name} don comot already.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): someone whose employment ended"
+    },
+    "payroll.staff.my_account": {
+      "text": "Change your salary account for My pay. Na there you go type the code wey Payrolla text you: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"change my salary account\" from a linked employee"
+    },
+    "payroll.staff.parts_kept": {
+      "text": "Their basic, housing and transport go remain as dem be.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after the question about a change of pay, when they have those parts"
+    },
+    "payroll.staff.pay_form": {
+      "text": "{name} basic, housing and transport pass {amount} when you add dem. Change im pay for the form for Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a lower pay than the parts add up to: the form, not a guess"
+    },
+    "payroll.staff.today": {
+      "text": "today",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a change of pay starting today, in \"starting {date}\"",
+      "same": true
+    },
+    "payroll.words.amount": {
+      "text": "That amount no look correct. Talk am like: 100k, or ₦100,000.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): an amount that can't be read"
+    },
+    "payroll.words.ask_bonus": {
+      "text": "Add {amount} bonus for {name} for {period} payroll, for {reason}? Dem dey tax bonus, so the money wey e dey carry home ({net} now) go increase small pass that one.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before adding a bonus ({net}: their take-home pay now, from Payrolla)"
+    },
+    "payroll.words.ask_deduction": {
+      "text": "Remove {amount} from {name} pay for {period} payroll, for {reason}? The money wey e dey carry home na {net} now.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before a deduction"
+    },
+    "payroll.words.ask_leave_out": {
+      "text": "Leave {name} out of {period} payroll, for {reason}? Dem no go pay am anything this month instead of {net}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before leaving someone out this month"
+    },
+    "payroll.words.ask_put_back": {
+      "text": "Put {name} back inside {period} payroll?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before putting someone left out back"
+    },
+    "payroll.words.done": {
+      "text": "E don do.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after yes, when the person's pay can't be read"
+    },
+    "payroll.words.done_adjust": {
+      "text": "E don do. {name} go carry {net} go house this month now (e bin be {before}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after a bonus or a deduction, with their take-home pay from Payrolla"
+    },
+    "payroll.words.done_leave_out": {
+      "text": "E don do. {name} no dey {period} payroll again. E go pay {people} {amount} now.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after leaving someone out"
+    },
+    "payroll.words.done_put_back": {
+      "text": "E don do. {name} don return inside {period} payroll and e go carry {net} go house.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after putting someone back"
+    },
+    "payroll.words.leave_reason": {
+      "text": "Why {name} no dey this month payroll? Talk am small, like: leave wey no get pay.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks the reason for leaving someone out"
+    },
+    "payroll.words.no_open": {
+      "text": "No payroll dey open for changes. Type: prepare {month} payroll.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): no payroll prepared and not yet approved ({month}: this month, in small letters)"
+    },
+    "payroll.words.not_found": {
+      "text": "Nobody wey dem dey call {name} dey Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): a name that matches no one on payroll"
+    },
+    "payroll.words.not_found_run": {
+      "text": "Nobody wey dem dey call {name} dey {period} payroll.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): a name that matches no one in the payroll"
+    },
+    "payroll.words.not_left_out": {
+      "text": "Dem no leave {name} out of {period} payroll.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): \"put … back\" for someone not left out"
+    },
+    "payroll.words.nothing": {
+      "text": "Nothing change.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): no to a change waiting for yes"
+    },
+    "payroll.words.reason": {
+      "text": "Na for wetin? Talk am small, like: Q4 target.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks the reason for a bonus or a deduction"
+    },
+    "payroll.words.reason_short": {
+      "text": "Talk why small (200 characters at most).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): an empty or too long reason"
+    },
+    "payroll.words.which": {
+      "text": "Which one: {names}? Talk am again with im full name.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): a name that matches more than one person"
     }
   }
 }

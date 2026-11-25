@@ -202,7 +202,11 @@ func cutRunes(s string, n int) string {
 // when nothing was kept). A failure is logged, never returned: the
 // message was said either way.
 func (s *Server) keepHistory(ctx context.Context, tenant, user uuid.UUID, channel string, inbound bool, kind, text string, buttons []string) uuid.UUID {
-	text = historyText(text)
+	// A payroll or payslip card is Taskiem's own (ids and a period), not words
+	// to clean: its id is mostly digits (payroll_runs_chat.go).
+	if kind != "payroll_run" && kind != "payslip" {
+		text = historyText(text)
+	}
 	if tenant == uuid.Nil || user == uuid.Nil || text == "" {
 		return uuid.Nil
 	}

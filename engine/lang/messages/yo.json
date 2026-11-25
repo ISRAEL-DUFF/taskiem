@@ -8543,6 +8543,909 @@
       "text": "Àwọn òṣìṣẹ́ máa ń sanwó sí àwọn àkáǹtì tí iṣẹ́ náà ti fi pamọ́ nìkan: ní kí olówó fi èyí pamọ́ ná.",
       "reviewed": false,
       "context": "Draft, not reviewed: A staff member forwarded account details not saved: staff pay the business's saved accounts only"
+    },
+    "payroll.settings.chat": {
+      "text": "Bí a ṣe ṣètò owó oṣù rẹ nínú Payrolla:\n{lines}\n\nYí èyíkéyìí padà nínú Payrolla. Wò ó níbí: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): the payroll's setup in words ({lines}: one line each) and a link"
+    },
+    "payroll.schedule.card": {
+      "text": "Àkọsílẹ̀ {kind} rẹ fún {period}: {amount} fún {people}. {state}\nÌlà ẹnìkọ̀ọ̀kan wà lẹ́yìn ìwọlé: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a tax or pension schedule's total, never each person's line, and a link behind sign-in ({kind}: PAYE, pension, NHF or NHIS)"
+    },
+    "payroll.schedule.none": {
+      "text": "Kò tíì sí àkọsílẹ̀ {kind} fún {period}. Àkọsílẹ̀ máa ṣe tán ní kété tí a bá ti owó oṣù oṣù náà pa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): no schedule of that kind for that month"
+    },
+    "payroll.schedule.none_any": {
+      "text": "Kò tíì sí àkọsílẹ̀ {kind}. Àkọsílẹ̀ máa ṣe tán ní kété tí a bá ti owó oṣù pa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): no schedule of that kind at all"
+    },
+    "payroll.schedule.to_pay": {
+      "text": "A ó san án.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule still to pay"
+    },
+    "payroll.schedule.due": {
+      "text": "Láti san kí ó tó di {when}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule still to pay, and its due date ({when}: 10 Dec)"
+    },
+    "payroll.schedule.paid": {
+      "text": "A ti san án.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule that is paid"
+    },
+    "payroll.schedule.scope_owner": {
+      "text": "Payrolla kò tíì fàyè gba Taskiem láti ka àkọsílẹ̀ owó orí àti owó ìfẹ̀yìntì rẹ. Tún so Payrolla pọ̀ kí o sì fàyè gba Read statutory reports.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): Payrolla's SCOPE_REQUIRED for reports:read, to an owner (Read statutory reports is the scope in Payrolla's own words)"
+    },
+    "payroll.schedule.scope_other": {
+      "text": "Sọ fún ẹni tó ni í kí ó fàyè gba Read statutory reports nínú Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): Payrolla's SCOPE_REQUIRED for reports:read, to others"
+    },
+    "payroll.people": {
+      "text": "Ènìyàn {n}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): how many people a payroll pays"
+    },
+    "payroll.people_one": {
+      "text": "Ènìyàn 1",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll that pays one person"
+    },
+    "payroll.someone": {
+      "text": "Ẹnìkan",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a person Payrolla did not name"
+    },
+    "payroll.state.draft": {
+      "text": "a kò tíì ṣírò rẹ̀",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence: \"it's now …\""
+    },
+    "payroll.state.computed": {
+      "text": "ó ń dúró de ìfọwọ́sí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.approved": {
+      "text": "a ti fọwọ́ sí i",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.locked": {
+      "text": "a ti tì í pa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.disbursing": {
+      "text": "a ń san án lọ́wọ́",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.completed": {
+      "text": "a ti san án tán",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.partially_completed": {
+      "text": "a ti san apá kan",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.cancelled": {
+      "text": "a ti fagilé e",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.failed": {
+      "text": "ó kùnà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.other": {
+      "text": "ó wà níbòmíràn nínú Payrolla",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state Taskiem has no words for"
+    },
+    "payroll.short": {
+      "text": "Àpò owó Payrolla rẹ ní {available}. Owó oṣù yìí nílò {needed}: ó kù {short}. Fi owó sí i kí ó tó di {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): the funding line: the wallet against the payroll's total"
+    },
+    "payroll.pays_on": {
+      "text": "Ìsanwó ní {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a locked payroll's card"
+    },
+    "payroll.locked": {
+      "text": "A ti tì í pa. Payrolla yóò san {amount} fún {people} ní {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Lock and pay with the code"
+    },
+    "payroll.approved": {
+      "text": "A ti fọwọ́ sí i. Ṣé kí a tì í pa kí a sì sanwó?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Approve with the code"
+    },
+    "payroll.rejected": {
+      "text": "A ti dá a padà. A ó sọ fún ẹni tó pèsè rẹ̀, pẹ̀lú ọ̀rọ̀ rẹ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Reject"
+    },
+    "payroll.code.totp": {
+      "text": "Ṣí áàpù authenticator rẹ fún kóòdù Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla's code is: an authenticator app"
+    },
+    "payroll.code.sms": {
+      "text": "Payrolla ti fi kóòdù ránṣẹ́ sí fóònù rẹ tó parí sí {hint}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: a phone"
+    },
+    "payroll.code.sms_any": {
+      "text": "Payrolla ti fi kóòdù ránṣẹ́ sí fóònù rẹ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: a phone with no hint"
+    },
+    "payroll.code.email": {
+      "text": "Payrolla ti fi kóòdù ránṣẹ́ sí ímeèlì rẹ {hint}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: an email"
+    },
+    "payroll.code.email_any": {
+      "text": "Payrolla ti fi kóòdù ránṣẹ́ sí ímeèlì rẹ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: an email with no hint"
+    },
+    "payroll.code.any": {
+      "text": "Payrolla ti fi kóòdù ránṣẹ́ sí ọ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: unknown"
+    },
+    "payroll.code.type_approve": {
+      "text": "Tẹ ẹ́ síbí láti fọwọ́ sí owó oṣù {period}. Ó ṣiṣẹ́ lẹ́ẹ̀kan, fún ìṣẹ́jú 5.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): in the chat thread: type the code to approve"
+    },
+    "payroll.code.type_lock": {
+      "text": "Tẹ ẹ́ síbí láti tì owó oṣù {period} pa kí a sì san fún gbogbo ènìyàn ní {date}. A kò lè ṣí owó oṣù tí a ti tì pa mọ́. Ó ṣiṣẹ́ lẹ́ẹ̀kan, fún ìṣẹ́jú 5.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): in the chat thread: type the code to lock"
+    },
+    "payroll.code.safer": {
+      "text": "Kóòdù láti inú áàpù authenticator dáàbò bò ọ́ jù: ṣètò ọ̀kan nínú Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): under a code sent by text message"
+    },
+    "payroll.code.stopped": {
+      "text": "A ti dá a dúró. A kò ní lo kóòdù yẹn.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"stop\" while a code waits"
+    },
+    "payroll.code.entered": {
+      "text": "A ti tẹ kóòdù",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): what the conversation's history keeps instead of the code"
+    },
+    "payroll.code.again": {
+      "text": "Tún tẹ kóòdù náà, tàbí kí o sọ stop.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after a wrong code in the thread"
+    },
+    "payroll.card.title": {
+      "text": "*Owó oṣù {period}*",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card in the chat: its title"
+    },
+    "payroll.card.line": {
+      "text": "{people} · {amount} · ọjọ́ ìsanwó {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: people, total and pay day"
+    },
+    "payroll.card.status": {
+      "text": "{status}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: its state, capitalised",
+      "same": true
+    },
+    "payroll.card.new": {
+      "text": "Àwọn tuntun lóṣù yìí: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: who is new since last month"
+    },
+    "payroll.card.left": {
+      "text": "A kò san fún wọn lóṣù yìí: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: who was paid last month and is not now"
+    },
+    "payroll.card.changed": {
+      "text": "Owó yí padà: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: whose pay changed"
+    },
+    "payroll.card.open": {
+      "text": "Ṣí i: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: the link to its page"
+    },
+    "payroll.card.waiting": {
+      "text": "Ó ń dúró de ìfọwọ́sí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.approved": {
+      "text": "A ti fọwọ́ sí i: tì í pa kí o sanwó ló kàn",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.locked": {
+      "text": "A ti tì í pa. Ìsanwó ní {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.draft": {
+      "text": "A kò tíì ṣírò rẹ̀",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.done": {
+      "text": "Báyìí: {state}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: any other state"
+    },
+    "payroll.button.approve": {
+      "text": "Fọwọ́ sí i",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.reject": {
+      "text": "Kọ̀ ọ́",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.lock": {
+      "text": "Tì í pa, sanwó",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.new_code": {
+      "text": "Kóòdù tuntun",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button after an expired code (20 characters at most)"
+    },
+    "payroll.reject.how": {
+      "text": "Láti dá a padà, kọ: reject payroll, pẹ̀lú ìdí rẹ̀. Fún àpẹẹrẹ: reject payroll, Musa's bonus is wrong",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): how to reject in the chat"
+    },
+    "payroll.none": {
+      "text": "Kò sí owó oṣù tó ń dúró de ìyẹn báyìí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): approve or lock payroll with none at that step"
+    },
+    "payroll.no_run": {
+      "text": "Kò tíì sí owó oṣù nínú Payrolla. Kọ: prepare {month} payroll",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"payroll\" with no run yet"
+    },
+    "payroll.prepared": {
+      "text": "Owó oṣù {period} ti ṣe tán fún àyẹ̀wò: {people}, {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after preparing a payroll in the chat"
+    },
+    "payroll.prepare.which": {
+      "text": "Sọ oṣù wo, fún àpẹẹrẹ: prepare december payroll",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"prepare payroll\" with no month"
+    },
+    "payroll.slack": {
+      "text": "Ibi tí o ti ń tẹ kóòdù Payrolla la ti ń fọwọ́ sí owó oṣù, kì í ṣe nínú ìjíròrò àpapọ̀. Ṣí i: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): approving from Slack: a link to the web"
+    },
+    "payroll.not_allowed": {
+      "text": "O kò lè ṣe ìyẹn sí owó oṣù níbí. Béèrè lọ́wọ́ ẹni tó ni í.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a person without the permission"
+    },
+    "payroll.told.rejected": {
+      "text": "{by} ti dá owó oṣù {period} padà: {note}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): told to whoever prepared it"
+    },
+    "payroll.told.approved": {
+      "text": "{by} ti fọwọ́ sí owó oṣù {period} nínú Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.rejected_there": {
+      "text": "{by} ti dá owó oṣù {period} padà nínú Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.locked": {
+      "text": "{by} ti tì owó oṣù {period} pa nínú Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.scheduled": {
+      "text": "A ti tì owó oṣù {period} pa. Payrolla yóò san {amount} fún {people} ní {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's payment scheduled"
+    },
+    "payroll.refused.sod": {
+      "text": "Ìwọ lo pèsè owó oṣù yìí, nítorí náà ẹlòmíràn gbọ́dọ̀ fọwọ́ sí i.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SOD_VIOLATION"
+    },
+    "payroll.refused.sod_who": {
+      "text": "Béèrè lọ́wọ́ {who}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): who can approve instead"
+    },
+    "payroll.refused.not_linked": {
+      "text": "Kọ́kọ́ so àkọọ́lẹ̀ Payrolla rẹ pọ̀. Kóòdù kan ló gbà: Payroll settings, Link my Payrolla account.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's APPROVER_NOT_LINKED"
+    },
+    "payroll.refused.not_an_approver": {
+      "text": "Nínú Payrolla o kò lè fọwọ́ sí owó oṣù. Sọ fún ẹni tó ni í kí ó sọ ọ́ di Approver nínú Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NOT_AN_APPROVER"
+    },
+    "payroll.refused.cannot_pay": {
+      "text": "Nínú Payrolla o kò lè fi owó ránṣẹ́. Béèrè lọ́wọ́ ẹni tó ni í.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CANNOT_PAY"
+    },
+    "payroll.refused.no_factor": {
+      "text": "Payrolla kò tíì ní ibi tí yóò fi kóòdù ránṣẹ́ sí ọ. Sọ fún ẹni tó ni í kí ó fi fóònù rẹ kún un nínú Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's PAYMENT_CONFIRMATION_NOT_SET_UP"
+    },
+    "payroll.refused.code_invalid": {
+      "text": "Kóòdù yẹn kò tọ́. Ṣàyẹ̀wò rẹ̀ kí o sì tún tẹ ẹ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_INVALID"
+    },
+    "payroll.refused.code_expired": {
+      "text": "Kóòdù yẹn ti parí. Béèrè kóòdù tuntun.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_EXPIRED"
+    },
+    "payroll.refused.code_locked": {
+      "text": "Ìgbìyànjú tí kò tọ́ ti pọ̀ jù fún kóòdù yẹn. Béèrè kóòdù tuntun.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_LOCKED"
+    },
+    "payroll.refused.code_used": {
+      "text": "A ti lo kóòdù yẹn tẹ́lẹ̀. Béèrè kóòdù tuntun.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_USED"
+    },
+    "payroll.refused.too_many_codes": {
+      "text": "Payrolla ti fi kóòdù tó pọ̀ jù ránṣẹ́ sí ọ. Tún gbìyànjú lẹ́yìn ìṣẹ́jú 10.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's TOO_MANY_CODES"
+    },
+    "payroll.refused.invalid_state": {
+      "text": "Owó oṣù yìí ti kọjá ìpele yẹn: báyìí {state}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's INVALID_STATE"
+    },
+    "payroll.refused.invalid_state_unknown": {
+      "text": "Owó oṣù yìí ti kọjá ìpele yẹn. Tún ṣí i láti rí ibi tó dé.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's INVALID_STATE, the state unknown"
+    },
+    "payroll.refused.no_account": {
+      "text": "Àwọn kan kò ní àkọọ́lẹ̀ tí a lè san owó sí: {who}. Fi àkọọ́lẹ̀ wọn kún un, tàbí fi wọ́n sílẹ̀ lóṣù yìí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NO_PAYOUT_DESTINATION"
+    },
+    "payroll.refused.no_account_some": {
+      "text": "Àwọn kan kò ní àkọọ́lẹ̀ tí a lè san owó sí. Fi àkọọ́lẹ̀ wọn kún un, tàbí fi wọ́n sílẹ̀ lóṣù yìí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NO_PAYOUT_DESTINATION, no names"
+    },
+    "payroll.refused.duplicate": {
+      "text": "Owó oṣù fún {period} ti wà tẹ́lẹ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's DUPLICATE_RUN"
+    },
+    "payroll.refused.compute_error": {
+      "text": "Payrolla kò lè ṣírò owó oṣù yìí: {reason}. Ṣàtúnṣe rẹ̀ nínú ètò Payrolla, lẹ́yìn náà tẹ Recalculate.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a run's compute_error"
+    },
+    "payroll.refused.not_worked_out": {
+      "text": "Payrolla kò tíì lè ṣírò owó oṣù yìí. Ṣàtúnṣe rẹ̀ nínú ètò Payrolla, lẹ́yìn náà tẹ Recalculate.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a run still not worked out"
+    },
+    "payroll.refused.scope_owner": {
+      "text": "Payrolla kò tíì fàyè gba Taskiem láti ṣe èyí. Tún so Payrolla pọ̀ kí o sì fàyè gba Prepare payroll àti Approve and pay.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SCOPE_REQUIRED, to an owner"
+    },
+    "payroll.refused.scope_other": {
+      "text": "Sọ fún ẹni tó ni í kí ó fàyè gba èyí nínú Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SCOPE_REQUIRED, to others"
+    },
+    "payroll.refused.reason": {
+      "text": "Sọ ìdí rẹ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's REASON_REQUIRED"
+    },
+    "payroll.refused.note": {
+      "text": "Sọ ìdí tí o fi ń dá a padà, ní ọ̀rọ̀ kúkúrú.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a rejection with no note"
+    },
+    "payroll.button.open": {
+      "text": "Ṣí i",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a link button on the payroll's card on Telegram"
+    },
+    "payroll.pay.awaiting": {
+      "text": "Ó ń dúró de owó: ó kù {short}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a locked payroll's payment, waiting for the wallet"
+    },
+    "payroll.pay.awaiting_any": {
+      "text": "Ó ń dúró de owó",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a locked payroll's payment, waiting for the wallet, by how much not known"
+    },
+    "payroll.pay.paying": {
+      "text": "A ń sanwó",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll's payment under way"
+    },
+    "payroll.pay.paid": {
+      "text": "A ti san án",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll paid to everyone"
+    },
+    "payroll.pay.paid_some": {
+      "text": "A ti san án, {n} kò rí owó gbà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll paid to some, with how many were not"
+    },
+    "payroll.pay.failed": {
+      "text": "A kò san án",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll's payment that failed"
+    },
+    "payroll.pay.none_now": {
+      "text": "Kò sí owó oṣù tí a ti tì pa tó ń dúró de ọjọ́ ìsanwó rẹ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"pay payroll now\" with nothing to pay now"
+    },
+    "payroll.paid_now": {
+      "text": "A ń sanwó báyìí. Payrolla ń san {amount} fún {people}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): after Pay now with the code"
+    },
+    "payroll.retried": {
+      "text": "A ti tún un fi ránṣẹ́. Payrolla yóò san fún ẹnìkọ̀ọ̀kan wọn sínú àkọọ́lẹ̀ wọn lọ́wọ́lọ́wọ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): after Pay the failed ones again with the code"
+    },
+    "payroll.refused.awaiting_funds": {
+      "text": "Àpò owó Payrolla rẹ kù {short}. Fi owó sí i, Payrolla yóò sì sanwó ní kété tí ó bá wọlé.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's AWAITING_FUNDS"
+    },
+    "payroll.refused.awaiting_funds_some": {
+      "text": "Owó inú àpò owó Payrolla rẹ kò tó. Fi owó sí i, Payrolla yóò sì sanwó ní kété tí ó bá wọlé.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's AWAITING_FUNDS, by how much not known"
+    },
+    "payroll.refused.already_paying": {
+      "text": "Payrolla ti ń san owó oṣù yìí tẹ́lẹ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's ALREADY_PAYING"
+    },
+    "payroll.refused.nothing_to_retry": {
+      "text": "Kò sí ìsanwó tí kò lọ láti tún fi ránṣẹ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's NOTHING_TO_RETRY"
+    },
+    "payroll.refused.payslip_not_final": {
+      "text": "Ìwé owó oṣù yìí yóò ṣe tán ní kété tí a bá ti owó oṣù náà pa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's PAYSLIP_NOT_FINAL"
+    },
+    "payroll.refused.payslip_links_off": {
+      "text": "A ti pa ọ̀nà ìwé owó oṣù. Tàn wọ́n nínú Payrolla, Settings, Connected apps.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's PAYSLIP_LINKS_DISABLED"
+    },
+    "payroll.code.type_pay_now": {
+      "text": "Tẹ ẹ́ síbí láti san owó oṣù {period} báyìí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): in the chat thread: type the code to pay now"
+    },
+    "payroll.code.type_retry": {
+      "text": "Tẹ ẹ́ síbí láti tún fi àwọn ìsanwó owó oṣù {period} tí kò lọ ránṣẹ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): in the chat thread: type the code to pay the failed ones again"
+    },
+    "payroll.button.retry": {
+      "text": "Tún san fún wọn",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a button (at most 20 characters): pay the failed ones again"
+    },
+    "payroll.told.short": {
+      "text": "Owó oṣù {period} ń dúró de owó: ó kù {short}. Fi owó sínú àpò owó Payrolla rẹ; Payrolla yóò sanwó ní kété tí ó bá wọlé.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told on the pay day when the wallet is short"
+    },
+    "payroll.told.warn3": {
+      "text": "Owó oṣù {period} yóò sanwó ní {date}, ní ọjọ́ 3 sí i. Àpò owó Payrolla rẹ ní {available}; ó nílò {needed}: ó kù {short}. Fi owó sí i ṣáájú ìgbà náà.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the morning warning three days before the pay day"
+    },
+    "payroll.told.warn1": {
+      "text": "Owó oṣù {period} yóò sanwó lọ́la, {date}. Àpò owó Payrolla rẹ ní {available}; ó nílò {needed}: ó kù {short}. Fi owó sí i lónìí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the morning warning the day before the pay day"
+    },
+    "payroll.told.paid_all": {
+      "text": "A ti san owó oṣù {period}: gbogbo {people}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told when everyone was paid"
+    },
+    "payroll.told.paid_some": {
+      "text": "Owó oṣù {period}: a ti san fún {paid} nínú ènìyàn {total}. A kò san fún {n}: {who}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told when some were not paid, with who and why"
+    },
+    "payroll.slip.paid": {
+      "text": "A ti san án",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment"
+    },
+    "payroll.slip.sent": {
+      "text": "Ó wà lójú ọ̀nà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment sent, not yet arrived"
+    },
+    "payroll.slip.failed": {
+      "text": "A kò san án",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment that failed"
+    },
+    "payroll.slip.returned": {
+      "text": "Báǹkì dá a padà",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment the bank returned"
+    },
+    "payroll.slip.waiting": {
+      "text": "A kò tíì san án",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment not sent yet"
+    },
+    "payroll.payslip.ready": {
+      "text": "Ìwé owó oṣù rẹ ti {month} ti ṣe tán",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the only words an employee is sent about their payslip"
+    },
+    "payroll.payslip.open": {
+      "text": "Ṣí i nínú Taskiem. O máa kọ́kọ́ wọlé.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): under the payslip notice on a chat app, with its link"
+    },
+    "payroll.payslip.not_linked": {
+      "text": "A kò tíì so ọ́ mọ́ owó oṣù níbí. Béèrè lọ́wọ́ agbanisíṣẹ́ rẹ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslip\" from someone not linked to a Payrolla employee"
+    },
+    "payroll.payslip.none": {
+      "text": "O kò tíì ní ìwé owó oṣù kankan. Wọ́n máa dé ní kété tí a bá ti owó oṣù pa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslip\" with none yet"
+    },
+    "payroll.payslip.links": {
+      "text": "Àwọn ìwé owó oṣù rẹ yóò ṣí nínú Taskiem lẹ́yìn tí o bá wọlé:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslips\" on a chat app, before the links"
+    },
+    "payroll.payslip.link_line": {
+      "text": "{period}: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslips\" on a chat app: one payslip's link",
+      "same": true
+    },
+    "payroll.button.approve_who": {
+      "text": "Fọwọ́ sí {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): a button under the account changes waiting: approve this person's ({name}: their first name; 20 characters at most with it)"
+    },
+    "payroll.change.approved": {
+      "text": "A ti fọwọ́ sí i. Láti ìsinsìnyí, Payrolla yóò máa san owó {name} sínú àkọọ́lẹ̀ tuntun náà.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): after the code typed in the thread"
+    },
+    "payroll.change.approved_own": {
+      "text": "Ẹni tó béèrè ló fọwọ́ sí i. Láti ìsinsìnyí, Payrolla yóò máa san owó {name} sínú àkọọ́lẹ̀ tuntun náà.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the company's only approver approved a change they asked for themselves, with their code"
+    },
+    "payroll.change.asked_employee": {
+      "text": "Òṣìṣẹ́ náà ló béèrè.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: the employee, with their own code"
+    },
+    "payroll.change.asked_payrolla": {
+      "text": "A béèrè rẹ̀ nínú Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Payrolla's own screens"
+    },
+    "payroll.change.asked_taskiem": {
+      "text": "{who} ló béèrè rẹ̀ nínú Taskiem.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Taskiem ({who}: their name)"
+    },
+    "payroll.change.asked_taskiem_someone": {
+      "text": "A béèrè rẹ̀ nínú Taskiem.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Taskiem whose name isn't known"
+    },
+    "payroll.change.decided": {
+      "text": "A ti pinnu nípa àyípadà àkọọ́lẹ̀ yìí tẹ́lẹ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): Payrolla's INVALID_STATE: approved or rejected already"
+    },
+    "payroll.change.gone": {
+      "text": "Payrolla kò ní àyípadà àkọọ́lẹ̀ bẹ́ẹ̀. Bóyá a ti pinnu nípa rẹ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the change is not in Payrolla any more"
+    },
+    "payroll.change.how": {
+      "text": "Láti fọwọ́ sí ọ̀kan, kọ: approve {name}'s account change.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): under the list, to those who may approve ({name}: a first name, in small letters)"
+    },
+    "payroll.change.line": {
+      "text": "{name}: {account}. {asked}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): one change waiting ({account}: the bank's name for the new account, the bank and its last four digits; {asked}: who asked)",
+      "same": true
+    },
+    "payroll.change.none": {
+      "text": "Kò sí àyípadà àkọọ́lẹ̀ tó ń dúró.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): nothing waiting"
+    },
+    "payroll.change.none_for": {
+      "text": "Kò sí àyípadà àkọọ́lẹ̀ tó ń dúró fún {name}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): none waiting for the person named"
+    },
+    "payroll.change.open": {
+      "text": "Wo gbogbo wọn: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): a link to Account changes"
+    },
+    "payroll.change.open_page": {
+      "text": "Fọwọ́ sí i níbi tí o ti ń tẹ kóòdù Payrolla: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): on the web, in the app and on Slack, a link to Account changes, whose sheet takes the code"
+    },
+    "payroll.change.reject_how": {
+      "text": "Láti kọ̀ ọ́, kọ: reject {whose} account change, pẹ̀lú ìdí rẹ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): \"reject … account change\" without a note ({whose}: musa's, or the)"
+    },
+    "payroll.change.rejected": {
+      "text": "A ti kọ̀ ọ́. A ṣì ń san owó {name} sínú àkọọ́lẹ̀ rẹ̀ lọ́wọ́lọ́wọ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): after rejecting a change with a note"
+    },
+    "payroll.change.same_person": {
+      "text": "Ìwọ lo béèrè àyípadà àkọọ́lẹ̀ yìí, nítorí náà ẹlòmíràn gbọ́dọ̀ fọwọ́ sí i.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): Payrolla's SAME_PERSON: whoever asked can't approve it, unless they are the only approver"
+    },
+    "payroll.change.title": {
+      "text": "Àwọn àyípadà àkọọ́lẹ̀ tó ń dúró:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the title of the list"
+    },
+    "payroll.change.type": {
+      "text": "Tẹ ẹ́ síbí láti fọwọ́ sí àkọọ́lẹ̀ owó oṣù tuntun {name}: {account}. Ó ṣiṣẹ́ lẹ́ẹ̀kan, fún ìṣẹ́jú 5.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): in the WhatsApp or Telegram thread: type the code to approve a change ({account}: the bank's name for it, the bank and its last four digits)"
+    },
+    "payroll.change.which": {
+      "text": "Èwo: {names}? Sọ ọ́ pẹ̀lú orúkọ rẹ̀, bíi: approve musa's account change.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): more than one change, and no name or a name of two people"
+    },
+    "payroll.staff.add_form": {
+      "text": "Fi {name} kún owó oṣù nínú fọ́ọ̀mù yìí, pẹ̀lú owó rẹ̀ àti àkọọ́lẹ̀ báǹkì rẹ̀. Orúkọ báǹkì fún àkọọ́lẹ̀ náà yóò hàn kí o tó fi pamọ́: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add musa to payroll\" for a staff member not yet in Payrolla: the Add someone form, filled in from them"
+    },
+    "payroll.staff.add_new": {
+      "text": "{name} kò sí lára àwọn òṣìṣẹ́ rẹ nínú Taskiem. Fi í kún owó oṣù nínú fọ́ọ̀mù yìí, pẹ̀lú owó rẹ̀ àti àkọọ́lẹ̀ báǹkì rẹ̀: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add … to payroll\" for someone not on the staff: the empty Add someone form"
+    },
+    "payroll.staff.already": {
+      "text": "{name} ti wà nínú owó oṣù tẹ́lẹ̀. Wò ó ní Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add … to payroll\" for someone already in Payrolla"
+    },
+    "payroll.staff.ask_end": {
+      "text": "Ṣé kí iṣẹ́ {name} parí? Èyí bẹ̀rẹ̀ lónìí. Payrolla kò lè ṣètò ọjọ́ ìkẹyìn.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before ending someone's employment"
+    },
+    "payroll.staff.ask_move": {
+      "text": "Ṣé kí a gbé {name} lọ sí {department}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's department"
+    },
+    "payroll.staff.ask_pay": {
+      "text": "Ṣé kí a yí owó oṣù {name} padà láti {before} sí {amount}, bẹ̀rẹ̀ láti {date}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's pay (amounts before tax)"
+    },
+    "payroll.staff.ask_pay_new": {
+      "text": "Ṣé kí a yí owó oṣù {name} padà sí {amount}, bẹ̀rẹ̀ láti {date}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's pay when their pay now isn't known"
+    },
+    "payroll.staff.bank_form": {
+      "text": "Inú fọ́ọ̀mù nìkan la ti ń tẹ àkọọ́lẹ̀ owó oṣù tuntun, kí báǹkì lè ṣàyẹ̀wò rẹ̀. Ṣí {name} ní Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"change zainab's salary account\": the form, never the chat"
+    },
+    "payroll.staff.done_end": {
+      "text": "Iṣẹ́ {name} parí lónìí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes"
+    },
+    "payroll.staff.done_move": {
+      "text": "Ó ti parí. {name} wà ní {department} báyìí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes"
+    },
+    "payroll.staff.done_pay": {
+      "text": "Ó ti parí. Owó tuntun {name} yóò bẹ̀rẹ̀ ní {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes ({date}: 1 January 2027)"
+    },
+    "payroll.staff.from_bad": {
+      "text": "Sọ ìgbà tí owó tuntun yóò bẹ̀rẹ̀, bíi: from january, tàbí from 1 january.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a start date that can't be read"
+    },
+    "payroll.staff.left": {
+      "text": "{name} ti kúrò lẹ́nu iṣẹ́ tẹ́lẹ̀.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): someone whose employment ended"
+    },
+    "payroll.staff.my_account": {
+      "text": "Yí àkọọ́lẹ̀ owó oṣù rẹ padà ní My pay. Níbẹ̀ ni o ti máa tẹ kóòdù tí Payrolla fi ránṣẹ́ sí ọ: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"change my salary account\" from a linked employee"
+    },
+    "payroll.staff.parts_kept": {
+      "text": "Owó ìpìlẹ̀ wọn, ti ilé àti ti ìrìnàjò yóò wà bí wọ́n ṣe wà.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after the question about a change of pay, when they have those parts"
+    },
+    "payroll.staff.pay_form": {
+      "text": "Owó ìpìlẹ̀, ti ilé àti ti ìrìnàjò {name} pọ̀ ju {amount} lọ. Yí owó rẹ̀ padà nínú fọ́ọ̀mù ní Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a lower pay than the parts add up to: the form, not a guess"
+    },
+    "payroll.staff.today": {
+      "text": "lónìí",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a change of pay starting today, in \"starting {date}\""
+    },
+    "payroll.words.amount": {
+      "text": "Iye owó yẹn kò dàbí ẹni pé ó tọ́. Sọ ọ́ bíi: 100k, tàbí ₦100,000.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): an amount that can't be read"
+    },
+    "payroll.words.ask_bonus": {
+      "text": "Ṣé kí a fi owó ẹ̀bùn {amount} kún owó {name} nínú owó oṣù {period}, fún {reason}? A máa ń gba owó orí lórí ẹ̀bùn, nítorí náà owó tí ó ń gbà délé ({net} báyìí) yóò lọ sókè díẹ̀ ju ìyẹn lọ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before adding a bonus ({net}: their take-home pay now, from Payrolla)"
+    },
+    "payroll.words.ask_deduction": {
+      "text": "Ṣé kí a yọ {amount} kúrò nínú owó {name} nínú owó oṣù {period}, fún {reason}? Owó tí ó ń gbà délé jẹ́ {net} báyìí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before a deduction"
+    },
+    "payroll.words.ask_leave_out": {
+      "text": "Ṣé kí a fi {name} sílẹ̀ nínú owó oṣù {period}, fún {reason}? A kò ní san nǹkan kan fún un lóṣù yìí dípò {net}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before leaving someone out this month"
+    },
+    "payroll.words.ask_put_back": {
+      "text": "Ṣé kí a dá {name} padà sínú owó oṣù {period}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before putting someone left out back"
+    },
+    "payroll.words.done": {
+      "text": "Ó ti parí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after yes, when the person's pay can't be read"
+    },
+    "payroll.words.done_adjust": {
+      "text": "Ó ti parí. {name} yóò gba {net} délé lóṣù yìí báyìí (ó jẹ́ {before} tẹ́lẹ̀).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after a bonus or a deduction, with their take-home pay from Payrolla"
+    },
+    "payroll.words.done_leave_out": {
+      "text": "Ó ti parí. A ti fi {name} sílẹ̀ nínú owó oṣù {period}. Báyìí ó ń san {amount} fún {people}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after leaving someone out"
+    },
+    "payroll.words.done_put_back": {
+      "text": "Ó ti parí. {name} ti padà sínú owó oṣù {period}, yóò sì gba {net} délé.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after putting someone back"
+    },
+    "payroll.words.leave_reason": {
+      "text": "Kí ló dé tí a fi {name} sílẹ̀ lóṣù yìí? Sọ ọ́ ní ọ̀rọ̀ díẹ̀, bíi: ìsinmi láìsí owó.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks the reason for leaving someone out"
+    },
+    "payroll.words.no_open": {
+      "text": "Kò sí owó oṣù tó ṣí sílẹ̀ fún àyípadà. Kọ: prepare {month} payroll.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): no payroll prepared and not yet approved ({month}: this month, in small letters)"
+    },
+    "payroll.words.not_found": {
+      "text": "Kò sí ẹnikẹ́ni tí orúkọ rẹ̀ ń jẹ́ {name} nínú Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): a name that matches no one on payroll"
+    },
+    "payroll.words.not_found_run": {
+      "text": "Kò sí ẹnikẹ́ni tí orúkọ rẹ̀ ń jẹ́ {name} nínú owó oṣù {period}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): a name that matches no one in the payroll"
+    },
+    "payroll.words.not_left_out": {
+      "text": "A kò fi {name} sílẹ̀ nínú owó oṣù {period}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): \"put … back\" for someone not left out"
+    },
+    "payroll.words.nothing": {
+      "text": "Kò sí ohun tó yí padà.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): no to a change waiting for yes"
+    },
+    "payroll.words.reason": {
+      "text": "Fún kí ni? Sọ ọ́ ní ọ̀rọ̀ díẹ̀, bíi: àfojúsùn Q4.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks the reason for a bonus or a deduction"
+    },
+    "payroll.words.reason_short": {
+      "text": "Sọ ìdí rẹ̀ ní ọ̀rọ̀ díẹ̀ (lẹ́tà 200 ní ọ̀pọ̀ jùlọ).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): an empty or too long reason"
+    },
+    "payroll.words.which": {
+      "text": "Èwo: {names}? Tún sọ ọ́ pẹ̀lú orúkọ rẹ̀ ní kíkún.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): a name that matches more than one person"
     }
   }
 }

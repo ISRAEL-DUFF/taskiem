@@ -526,6 +526,11 @@
               "client": {
                 "$ref": "#/$defs/name",
                 "description": "The platform app connections in this mode are linked with by OAuth (rule 20), where it is not auth.oauth2.client: Intuit's development keys reach only sandbox companies."
+              },
+              "authorize_url": {
+                "type": "string",
+                "pattern": "^https://",
+                "description": "The mode's consent page, where it is not auth.oauth2.authorize_url: a provider whose sign-in app is on another host per deployment (Payrolla). While any mode names one, a mode without one is not linked by OAuth until the deployment sets it."
               }
             }
           }
