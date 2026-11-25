@@ -3,6 +3,8 @@ import { del, get, post } from "../api";
 import { Badge, ErrorBox, Field, Skeleton, useAction, useLoad } from "../ui";
 import { pageEmbedSnippet, siteState, type EmbedSite } from "../lib/embedsites";
 import { recordSteps, registrarOf, REGISTRARS } from "../lib/registrars";
+import type { FrontsView } from "../lib/fronts";
+import { ActionEmbedCode } from "./SellForm";
 
 // "On your website" (no-technical-steps N9): the business's page shown on
 // a website it already has. The site is proven with a DNS record or a
@@ -45,6 +47,7 @@ export function StorefrontEmbedSites({ pageURL, business }: { pageURL: string; b
           }
         />
       ))}
+      {sites.some((s) => s.verified_at) && <OneOrderForm />}
       {!full && list.data && (
         <form
           onSubmit={(e) => {
@@ -74,6 +77,34 @@ export function StorefrontEmbedSites({ pageURL, business }: { pageURL: string; b
         </form>
       )}
     </section>
+  );
+}
+
+/** One order form on the website (forms that sell §5.5): the form that
+ * sells, alone, rather than the whole page. */
+function OneOrderForm() {
+  const fronts = useLoad(() => get<FrontsView>("/v1/storefront/fronts"), []);
+  const forms = (fronts.data?.fronts ?? []).flatMap((f) =>
+    f.actions.filter((a) => a.id && a.enabled && a.kind === "order").map((a) => ({ id: a.id ?? "", name: f.slug === "" ? a.label : `${f.name}: ${a.label}` })),
+  );
+  const [chosen, setChosen] = useState("");
+  const pick = chosen || forms[0]?.id || "";
+  if (forms.length === 0) return null;
+  return (
+    <div className="sf-domain" style={{ borderTop: "1px solid var(--border, #ddd)", paddingTop: 12, marginBottom: 12 }}>
+      <h3 style={{ marginTop: 0 }}>One order form</h3>
+      <p className="hint">Show just one order form on your website, such as one that sells a product in packages, instead of your whole page.</p>
+      <Field label="Which order form">
+        <select value={pick} onChange={(e) => setChosen(e.target.value)}>
+          {forms.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {pick && <ActionEmbedCode key={pick} actionId={pick} label={forms.find((f) => f.id === pick)?.name ?? "the order form"} />}
+    </div>
   );
 }
 

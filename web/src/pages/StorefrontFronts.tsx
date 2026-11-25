@@ -25,6 +25,7 @@ import { pageURL, type Storefront } from "../lib/storefront";
 import { StorefrontTabs } from "./Storefront";
 import { FormCard } from "./StorefrontForms";
 import { FrontItems, OrdersBanner } from "./FrontItems";
+import { SellSheet } from "./SellForm";
 
 /** The storefront's fronts (docs/spec/fronts.md F3): the home page and
  * any other pages of things to sell or ask about, each with its own list
@@ -213,6 +214,8 @@ export function StorefrontFront() {
   const act = useAction();
   const navigate = useNavigate();
   const [edit, setEdit] = useState<{ name: string; tagline: string; slug: string } | null>(null);
+  const [selling, setSelling] = useState(false);
+  const [sellNote, setSellNote] = useState<string[] | null>(null);
   const published = (sf.data?.published_version ?? 0) > 0;
   const base = sf.data ? pageURL(sf.data) : "";
   const home = f?.slug === "";
@@ -330,9 +333,39 @@ export function StorefrontFront() {
             </section>
           )}
           <section className="card sf-links" aria-labelledby="front-forms">
-            <h2 id="front-forms" style={{ marginTop: 0 }}>
-              Forms
-            </h2>
+            <div className="toolbar">
+              <h2 id="front-forms" className="grow" style={{ margin: 0 }}>
+                Forms
+              </h2>
+              {(home || f.table_id) && (
+                <button type="button" className="small" onClick={() => setSelling(true)}>
+                  Add an order form
+                </button>
+              )}
+            </div>
+            {sellNote && (
+              <div className="notice" role="status">
+                Added, off: set it up below, then show it on your page.
+                {sellNote.map((w) => (
+                  <p key={w} className="hint">
+                    {w}
+                  </p>
+                ))}
+              </div>
+            )}
+            {selling && (
+              <SellSheet
+                title="Add an order form"
+                frontId={f.id}
+                defaultLabel="Order now"
+                onClose={() => setSelling(false)}
+                onDone={(s) => {
+                  setSelling(false);
+                  setSellNote(s.warnings);
+                  view.reload();
+                }}
+              />
+            )}
             {f.actions.length === 0 ? (
               <EmptyState icon="forms">This front has no forms.</EmptyState>
             ) : (

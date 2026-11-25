@@ -157,6 +157,10 @@ func TestFormThatSellsEndToEnd(t *testing.T) {
 	// Fronts > Add an order form: the ear cleaner in three packages. A
 	// product not on the list, or seven packages, is refused.
 	home := w.homeFront(t)
+	if items := ada.must(200, "GET", "/v1/storefront/fronts/"+home+"/sellable", nil)["items"].([]any); len(items) != 1 ||
+		items[0].(map[string]any)["id"] != "ear" || items[0].(map[string]any)["price_kobo"] != float64(2500000) {
+		t.Fatalf("sellable: %v", items)
+	}
 	if e := ada.must(400, "POST", "/v1/storefront/fronts/"+home+"/actions", map[string]any{"kind": "order", "sells": map[string]any{"item": "nope", "packages": threePacks}}); !strings.Contains(e["error"].(string), "not on this front's list") {
 		t.Fatalf("not on the list: %v", e)
 	}

@@ -187,7 +187,7 @@ func packagesFieldView(form []byte, items []storefront.Item) (*packagesView, sto
 		c := packageChoice{Qty: p.Qty, Label: label, Price: storefront.FormatNaira(p.PriceKobo), PriceKobo: p.PriceKobo,
 			Short: v.SoldOut || (left >= 0 && int64(p.Qty) > left)}
 		if p.Qty > 1 {
-			c.Each = storefront.FormatNaira(p.UnitKobo()) + " each"
+			c.Each = storefront.FormatNaira((p.UnitKobo()+99)/100*100) + " each" // to the naira
 		}
 		v.Packages = append(v.Packages, c)
 		most = max(most, p.Qty)

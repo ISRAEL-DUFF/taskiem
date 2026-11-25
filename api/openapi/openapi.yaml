@@ -1440,6 +1440,54 @@ paths:
                       type: string
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}/sellable:
+    get:
+      operationId: listSellableItems
+      tags:
+      - Storefront
+      summary: The products a front's order form can sell
+      description: The front's items on sale at a price, as the page has them (its copy), for choosing one to sell in packages (forms-that-sell §5.1); stock is how many are left where it is kept, sizes how many sizes and colours a product has.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The products
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, price_kobo, stock, sizes]
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        price_kobo:
+                          type: [integer, 'null']
+                        photo:
+                          type: string
+                        stock:
+                          type: [integer, 'null']
+                        sizes:
+                          type: integer
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/embed:
     get:
       operationId: getStorefrontEmbed

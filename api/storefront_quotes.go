@@ -98,6 +98,45 @@ func (s *Server) addFrontAction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, a)
 }
 
+// sellableItems answers GET /v1/storefront/fronts/{id}/sellable: the
+// products an order form on the front can sell, as the page has them (its
+// copy): id, name, price, photo and stock left, for choosing one to sell
+// in packages (forms-that-sell §5.1).
+func (s *Server) sellableItems(w http.ResponseWriter, r *http.Request) {
+	front, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	type sellable struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		PriceKobo *int64 `json:"price_kobo"`
+		Photo     string `json:"photo,omitempty"`
+		Stock     *int64 `json:"stock"`
+		Sizes     int    `json:"sizes"`
+	}
+	out := []sellable{}
+	err = s.tx(r, func(tx pgx.Tx) error {
+		items, _, err := storefront.FrontItems(r.Context(), tx, principalFrom(r.Context()).TenantID, front)
+		if err != nil {
+			return storefrontErr(err)
+		}
+		for _, it := range storefront.PublicItems(items) {
+			if !it.Available || it.PriceKobo == nil {
+				continue
+			}
+			out = append(out, sellable{ID: it.ID, Name: it.Name, PriceKobo: it.PriceKobo, Photo: it.Photo["320"], Stock: it.Stock, Sizes: len(it.Sizes)})
+		}
+		return nil
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+}
+
 // putActionSells answers PUT /v1/storefront/actions/{id}/sells: what an
 // order form sells (its packages, or its basket's items) and its notice
 // (forms-that-sell §5.2), keeping its own questions. A published page is

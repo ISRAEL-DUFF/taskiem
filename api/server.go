@@ -680,6 +680,7 @@ func (s *Server) Handler() http.Handler {
 			// Forms that sell (forms_sell.go): what an order form sells, and the code for one on a website.
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/sells", s.putActionSells)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/embed", s.getStorefrontEmbed)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/fronts/{id}/sellable", s.sellableItems)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
 			s.invoiceRoutes(r)
 			s.linkRoutes(r)         // business links (links.go)
