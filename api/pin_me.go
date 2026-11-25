@@ -2,9 +2,9 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,50 +14,43 @@ import (
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
-// The person's PIN, set and reset in the app and on the web (chat-pay-
-// people, Settled row 3). It is the one PIN that approves on WhatsApp and
-// pays within its limit (payments_pin.go). Never typed in a message, and
-// never reset by text:
+// The person's PIN, set and changed in the app and on the web
+// (docs/spec/transaction-pin.md). It is the one four-digit PIN that
+// approves on WhatsApp and pays within its limits (payments_pin.go). Never
+// typed in a message, and never reset by text. Setting or changing it is
+// confirmed by one of:
 //
-//   - Behind a passkey or an authenticator (a fresh proof), it is set or
-//     changed and pays at once.
-//   - Without them: a first PIN (at sign-up, once the phone is verified by
-//     the code that signed in) or a forgotten one changed within minutes
-//     of signing in again; either pays only 24 hours on, so a session
-//     someone took cannot set a PIN and pay with it at once.
+//   - a one-time code sent to the person's verified phone
+//     (POST /v1/me/pin/code, purpose "pin": good for the PIN only);
+//   - a fresh passkey assertion (account.reauth / pin.set);
+//   - an authenticator code, in a business's session.
 //
-// A session made by a code on a new device, of someone who has a passkey
-// or an authenticator, changes nothing until its second proof
-// (refuseUnproved), as for every other factor.
-
-// pinHoldWithout is how long a PIN set without a passkey or an
-// authenticator waits before it pays.
-const pinHoldWithout = 24 * time.Hour
+// Whichever it is, the PIN pays at once: there is no 24-hour hold.
+// Removing it takes no proof. A session made by a code on a new device,
+// of someone who has a passkey or an authenticator, changes nothing until
+// its second proof (refuseUnproved), as for every other factor.
 
 // mePin is the person's PIN as their settings show it.
 type mePin struct {
 	Set         bool       `json:"set"`
 	SetAt       *time.Time `json:"set_at,omitempty"`
 	LockedUntil *time.Time `json:"locked_until,omitempty"`
-	// PaysFrom: when it may pay (later than now for a new one set without a
-	// passkey).
-	PaysFrom *time.Time `json:"pays_from,omitempty"`
-	// ChangeWithout: it may be set now without a passkey or an
-	// authenticator (none set yet, or signed in moments ago); it then pays
-	// 24 hours on.
-	ChangeWithout bool `json:"change_without"`
-	// ChangeWithoutUntil: when that ends, after a sign-in moments ago.
-	ChangeWithoutUntil *time.Time `json:"change_without_until,omitempty"`
-	// first: none set and none removed before.
-	first bool
+	// Digits: how long a PIN is.
+	Digits int `json:"digits"`
+	// Ways: what may confirm setting or changing it now: "code" (to
+	// CodeTo), "passkey", "totp".
+	Ways []string `json:"ways"`
+	// CodeTo: the phone a code goes to, masked.
+	CodeTo string `json:"code_to,omitempty"`
+	// Renew: the last PIN went when PINs became four digits; none since.
+	Renew bool `json:"renew,omitempty"`
 }
 
-// pinWasRemoved: the person removed a PIN before, so the next one is not
-// a first PIN.
-func (s *Server) pinWasRemoved(ctx context.Context, user uuid.UUID) (bool, error) {
-	var removed bool
-	err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_pin_was_removed($1)`, user).Scan(&removed)
-	return removed, err
+// pinPhone is the verified phone a PIN code goes to: the account's own
+// number, "" when it has none.
+func (s *Server) pinPhone(ctx context.Context, user uuid.UUID) string {
+	n, _ := s.phoneOf(ctx, user).(string)
+	return n
 }
 
 // pinFactors is whether p can prove themselves with a passkey or an
@@ -77,96 +70,134 @@ func (s *Server) pinFactors(ctx context.Context, p *Principal) (passkey, totp bo
 	return passkey, totp, err
 }
 
-// pinProof checks what proves a change to p's PIN (set, change, remove):
-// a fresh passkey or authenticator code the person really has (hold 0,
-// via "passkey" or "totp"); else, with neither, a first PIN or a change
-// moments after signing in again (a 24-hour hold; via "first" or
-// "signed_in_again"). A password, a junk code or a sign-in alone never
-// lifts the hold. False when it answered the request (refused).
-func (s *Server) pinProof(w http.ResponseWriter, r *http.Request, proof factorProof, action string) (time.Duration, string, bool) {
+// pinWays is what may confirm a change to p's PIN now, and the phone a
+// code goes to.
+func (s *Server) pinWays(ctx context.Context, p *Principal) ([]string, string, error) {
+	hasPasskey, hasTOTP, err := s.pinFactors(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	ways := []string{}
+	number := s.pinPhone(ctx, p.UserID)
+	if number != "" && (s.WhatsApp != nil || s.CodeSMS != nil) {
+		ways = append(ways, "code")
+	}
+	if hasPasskey {
+		ways = append(ways, "passkey")
+	}
+	if hasTOTP {
+		ways = append(ways, "totp")
+	}
+	return ways, number, nil
+}
+
+// pinProof checks what proves setting or changing p's PIN: a code to
+// their phone, a fresh passkey or an authenticator code they really have.
+// A password, a junk code or a sign-in alone proves nothing. It answers
+// how it was proved; false when it answered the request (refused).
+func (s *Server) pinProof(w http.ResponseWriter, r *http.Request, proof factorProof, code, action string) (string, bool) {
 	ctx := r.Context()
 	p := principalFrom(ctx)
 	if s.refuseUnproved(w, r) {
-		return 0, "", false
+		return "", false
 	}
-	hasPasskey, hasTOTP, err := s.pinFactors(ctx, p)
+	ways, number, err := s.pinWays(ctx, p)
 	if err != nil {
 		s.fail(w, r, err)
-		return 0, "", false
-	}
-	methods := []string{}
-	if hasPasskey {
-		methods = append(methods, "passkey")
-	}
-	if hasTOTP {
-		methods = append(methods, "totp")
+		return "", false
 	}
 	switch {
-	case proof.Passkey != nil && hasPasskey:
+	case code != "" && number != "":
+		if !s.checkPhoneCode(w, r, number, "pin", &p.UserID, code, nil) {
+			return "", false
+		}
+		return "code", true
+	case proof.Passkey != nil && slices.Contains(ways, "passkey"):
 		if _, err := s.verifyPasskey(ctx, *proof.Passkey, "step_up", &p.UserID, stepUpScope("account.reauth", action)); err != nil {
 			if passkeyRefused(err) {
-				writeJSON(w, http.StatusForbidden, map[string]any{"code": "proof_needed", "reauth": methods, "error": "that passkey response is not valid; try again"})
-				return 0, "", false
+				writeJSON(w, http.StatusForbidden, map[string]any{"code": "proof_needed", "reauth": ways, "error": "that passkey response is not valid; try again"})
+				return "", false
 			}
 			s.fail(w, r, err)
-			return 0, "", false
+			return "", false
 		}
-		return 0, "passkey", true
-	case proof.TOTP != "" && hasTOTP:
+		return "passkey", true
+	case proof.TOTP != "" && slices.Contains(ways, "totp"):
 		ok, err := s.verifyTOTP(ctx, p.TenantID, p.UserID, proof.TOTP)
 		if err != nil || !ok {
-			s.totpRefused(w, r, err, map[string]any{"code": "proof_needed", "error": "that authenticator code is not right, or was already used", "reauth": methods})
-			return 0, "", false
+			s.totpRefused(w, r, err, map[string]any{"code": "proof_needed", "error": "that authenticator code is not right, or was already used", "reauth": ways})
+			return "", false
 		}
-		return 0, "totp", true
+		return "totp", true
 	}
-	st, err := s.mePinOf(r, p)
-	if err != nil {
-		s.fail(w, r, err)
-		return 0, "", false
+	msg := "To set your PIN, type the code we send to your phone."
+	if len(ways) == 0 {
+		msg = "To set your PIN, add your phone number first: we send a code to it."
+	} else if !slices.Contains(ways, "code") {
+		msg = "To set your PIN, confirm with your passkey or your authenticator."
 	}
-	if !st.ChangeWithout {
-		writeJSON(w, http.StatusForbidden, map[string]any{"code": "proof_needed", "reauth": methods,
-			"error": "To change your PIN, confirm with your passkey; or sign out, sign in again and change it within 10 minutes (it can then pay from 24 hours on)."})
-		return 0, "", false
-	}
-	if !st.first {
-		return pinHoldWithout, "signed_in_again", true
-	}
-	return pinHoldWithout, "first", true
+	writeJSON(w, http.StatusForbidden, map[string]any{"code": "proof_needed", "reauth": ways, "error": msg})
+	return "", false
 }
 
 func (s *Server) mePinOf(r *http.Request, p *Principal) (mePin, error) {
-	info, err := s.waPinInfo(r.Context(), p.UserID)
+	ctx := r.Context()
+	info, err := s.waPinInfo(ctx, p.UserID)
 	if err != nil {
 		return mePin{}, err
 	}
-	out := mePin{Set: info.Set, SetAt: info.SetAt, LockedUntil: info.LockedUntil}
-	if info.Set {
-		var from time.Time
-		if err := s.Store.Pool.QueryRow(r.Context(), `SELECT taskiem_pin_pays_from($1)`, p.UserID).Scan(&from); err == nil {
-			out.PaysFrom = &from
-		} else if !errors.Is(err, pgx.ErrNoRows) {
+	out := mePin{Set: info.Set, SetAt: info.SetAt, LockedUntil: info.LockedUntil, Digits: whatsapp.PinLength}
+	ways, number, err := s.pinWays(ctx, p)
+	if err != nil {
+		return mePin{}, err
+	}
+	out.Ways = ways
+	if slices.Contains(ways, "code") {
+		out.CodeTo = whatsapp.MaskNumber(number)
+	}
+	if !info.Set {
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_pin_renew($1)`, p.UserID).Scan(&out.Renew); err != nil {
 			return mePin{}, err
 		}
-	}
-	// A PIN removed before is not a first PIN when set again.
-	first := !info.Set
-	if first {
-		removed, err := s.pinWasRemoved(r.Context(), p.UserID)
-		if err != nil {
-			return mePin{}, err
-		}
-		first = !removed
-	}
-	fresh := !p.SignedInAt.IsZero() && time.Since(p.SignedInAt) <= recentSignIn
-	out.first = first
-	out.ChangeWithout = first || fresh
-	if !first && fresh {
-		until := p.SignedInAt.Add(recentSignIn)
-		out.ChangeWithoutUntil = &until
 	}
 	return out, nil
+}
+
+// mePinCode is POST /v1/me/pin/code ({via?}): a one-time code to the
+// person's verified phone, good only for setting or changing their PIN
+// (PUT /v1/me/pin {code}). 409 {no_phone} for an account with no phone;
+// 429 as other codes are limited.
+func (s *Server) mePinCode(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	if p.UserID == uuid.Nil || p.EndUser != nil || p.KeyID != uuid.Nil {
+		writeErr(w, http.StatusForbidden, "a PIN belongs to a person, not an API key")
+		return
+	}
+	var req struct {
+		Via string `json:"via"`
+	}
+	if err := decodeOptional(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if req.Via != "" && req.Via != "whatsapp" && req.Via != "sms" {
+		writeErr(w, http.StatusBadRequest, "via is whatsapp or sms")
+		return
+	}
+	if s.refuseUnproved(w, r) {
+		return
+	}
+	number := s.pinPhone(r.Context(), p.UserID)
+	if number == "" {
+		writeJSON(w, http.StatusConflict, map[string]any{"no_phone": true,
+			"error": "Your account has no phone to send a code to. Add your phone number, or confirm with your passkey."})
+		return
+	}
+	sent := s.issuePhoneCode(w, r, number, "pin", &p.UserID, req.Via)
+	if sent == "" {
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"sent_via": sent, "expires_in": int(phoneCodeTTL.Seconds()), "code_to": whatsapp.MaskNumber(number)})
 }
 
 // getMePin is GET /v1/me/pin.
@@ -184,18 +215,19 @@ func (s *Server) getMePin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// putMePin is PUT /v1/me/pin {pin, passkey? | totp?}: the person's PIN set
-// or changed. With a passkey or an authenticator code it pays at once;
-// without (a first PIN, or one changed moments after signing in again) it
-// pays 24 hours on. Otherwise 403 proof_needed with the ways to prove.
+// putMePin is PUT /v1/me/pin {pin, code? | passkey? | totp?}: the
+// person's PIN set or changed, confirmed by a code from POST
+// /v1/me/pin/code, a passkey or an authenticator code; it pays at once.
+// Otherwise 403 proof_needed with the ways to prove (reauth).
 func (s *Server) putMePin(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
-	if p.UserID == uuid.Nil || p.EndUser != nil {
+	if p.UserID == uuid.Nil || p.EndUser != nil || p.KeyID != uuid.Nil {
 		writeErr(w, http.StatusForbidden, "a PIN belongs to a person, not an API key")
 		return
 	}
 	var req struct {
-		Pin string `json:"pin"`
+		Pin  string `json:"pin"`
+		Code string `json:"code"`
 		factorProof
 	}
 	if err := decodeBody(r, &req); err != nil {
@@ -207,18 +239,18 @@ func (s *Server) putMePin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if weakPin(req.Pin) {
-		s.fail(w, r, fmt.Errorf("%w: choose a PIN that is not one digit repeated or a run like 123456", errBadRequest))
+		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, pinWeakWords))
 		return
 	}
-	hold, via, ok := s.pinProof(w, r, req.factorProof, "pin.set")
+	via, ok := s.pinProof(w, r, req.factorProof, req.Code, "pin.set")
 	if !ok {
 		return
 	}
-	if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_pin_set_hold($1, $2, $3::interval)`, p.UserID, hashPassword(req.Pin), hold.String()); err != nil {
+	if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_pin_set_hold($1, $2, '0'::interval)`, p.UserID, hashPassword(req.Pin)); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.auditEverywhere(r.Context(), p.UserID, "pin.set", map[string]any{"via": via, "hold_hours": int(hold.Hours()), "ip": clientIP(r)}); err != nil {
+	if err := s.auditEverywhere(r.Context(), p.UserID, "pin.set", map[string]any{"via": via, "ip": clientIP(r)}); err != nil {
 		s.fail(w, r, err)
 		return
 	}

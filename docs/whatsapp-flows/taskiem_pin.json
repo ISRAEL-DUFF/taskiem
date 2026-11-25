@@ -35,11 +35,11 @@
             "type": "TextBody"
           },
           {
-            "helper-text": "The WhatsApp PIN you set in Taskiem",
+            "helper-text": "The 4-digit PIN you set in Taskiem",
             "input-type": "passcode",
-            "label": "Approval PIN",
-            "max-chars": "6",
-            "min-chars": "6",
+            "label": "Your PIN",
+            "max-chars": "4",
+            "min-chars": "4",
             "name": "pin",
             "required": true,
             "type": "TextInput"

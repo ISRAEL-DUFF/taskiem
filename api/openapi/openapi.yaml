@@ -8092,7 +8092,7 @@ paths:
       tags:
       - Payments
       summary: Send a prepared payment, with a passkey or the person's PIN
-      description: 'A passkey asked for `money.pay` on `payment:{id}` (an authenticator code does not pay: 403 `passkey`, the code not spent), or `pin`: the person''s one PIN (the one set for WhatsApp approvals), typed in the app''s own pad, as the passkey''s fallback. The PIN pays at most ₦100,000 a payment and ₦200,000 a day across the person''s PIN-confirmed payments (Lagos''s day), the role''s own limits too; never a payment to a changed account or one that would wait for the owner''s OK, and never a batch. PIN refusals (403, with `code`): `pin_limit` over its limits, `pin_passkey_only` a changed account or the owner''s OK, `pin_new` a PIN set or changed in the last 24 hours, `no_pin`, `pin_wrong` (tries left said; counted with the approvals'': five wrong in 15 minutes lock it for 15 minutes) and `pin_locked`. With no proof, 403 `step_up` lists `pin` in `methods`, with `pin_limit_kobo` (what the PIN may still pay in one payment now), when the person''s PIN can confirm this payment. Within the payer''s limit (an owner has none) it is sent at once (`sending`), the passkey being its approval; over the limit, or (for staff) to an account changed since it was last paid or never paid, it waits for the owner''s OK in Approvals (`waiting_ok`, `needs_ok` saying why). An owner''s own passkey is the OK for a changed account they pay (`changed_account` on the payment says it before they confirm). 403 `step_up` without the proof (`methods`: `passkey`, and `pin` when the PIN can confirm it); 409 `pay_again` for the same payment in the last day without `again`, `not_prepared` once sent; 409 `account_changed` when the payee''s account (the saved account''s number or bank, the account a staff member is linked to, a rider''s bank) is not the one it was prepared to, and `provider_changed` when the business''s payments account is not the one it was prepared on: either way the payment is cancelled, to be prepared again. 409 `not_approved` when the run started but the payer''s own OK did not reach it: nothing is paid, and the payer confirming it again (it is then `sending`) gives it.'
+      description: 'A passkey asked for `money.pay` on `payment:{id}` (an authenticator code does not pay: 403 `passkey`, the code not spent), or `pin`: the person''s one PIN (the one set for WhatsApp approvals), typed in the app''s own pad, as the passkey''s fallback. The PIN pays at most ₦100,000 a payment and ₦200,000 a day across the person''s PIN-confirmed payments (Lagos''s day), the role''s own limits too; never a payment to a changed account or one that would wait for the owner''s OK, and never a batch. PIN refusals (403, with `code`): `pin_limit` over its limits, `pin_passkey_only` a changed account or the owner''s OK, `no_pin`, `pin_wrong` (tries left said; counted with the approvals'': five wrong in 15 minutes lock it for 15 minutes) and `pin_locked`. With no proof, 403 `step_up` lists `pin` in `methods`, with `pin_limit_kobo` (what the PIN may still pay in one payment now), when the person''s PIN can confirm this payment. Within the payer''s limit (an owner has none) it is sent at once (`sending`), the passkey being its approval; over the limit, or (for staff) to an account changed since it was last paid or never paid, it waits for the owner''s OK in Approvals (`waiting_ok`, `needs_ok` saying why). An owner''s own passkey is the OK for a changed account they pay (`changed_account` on the payment says it before they confirm). 403 `step_up` without the proof (`methods`: `passkey`, and `pin` when the PIN can confirm it); 409 `pay_again` for the same payment in the last day without `again`, `not_prepared` once sent; 409 `account_changed` when the payee''s account (the saved account''s number or bank, the account a staff member is linked to, a rider''s bank) is not the one it was prepared to, and `provider_changed` when the business''s payments account is not the one it was prepared on: either way the payment is cancelled, to be prepared again. 409 `not_approved` when the run started but the payer''s own OK did not reach it: nothing is paid, and the payer confirming it again (it is then `sending`) gives it.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -33412,7 +33412,7 @@ paths:
       tags:
       - Account
       summary: Your PIN
-      description: 'The person''s one PIN (it approves on WhatsApp and pays within its limit). `pays_from`: when it may pay; `change_without`: it may be set now without a passkey (none set yet, or signed in moments ago), and then pays 24 hours on.'
+      description: 'The person''s one four-digit PIN (it approves on WhatsApp and pays within its limits). `ways`: what may confirm setting or changing it now (`code` to the phone `code_to`, `passkey`, `totp`); `renew`: the last PIN was removed when PINs became four digits, and none is set since.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -33431,7 +33431,7 @@ paths:
       tags:
       - Account
       summary: Set or change your PIN
-      description: 'Six digits, not one repeated nor a run. With a passkey (asked for `account.reauth` / `pin.set`) or an authenticator code it pays at once; without, it may be set only as a first PIN (at sign-up) or moments after signing in again, and pays 24 hours on. Otherwise 403 `proof_needed` with `reauth` (the ways to prove). A session made by a code on a new device of someone with a passkey proves itself first (401 second_proof_required). Audited.'
+      description: 'Four digits, not one repeated nor a run. Confirmed by a `code` from POST /v1/me/pin/code, a passkey (asked for `account.reauth` / `pin.set`) or an authenticator code; it pays at once. Otherwise 403 `proof_needed` with `reauth` (the ways to prove); a wrong or expired code 401 `code_wrong`, too many 429 `locked`. A session made by a code on a new device of someone with a passkey proves itself first (401 second_proof_required). Audited (`pin.set`, with `via`).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -33447,6 +33447,7 @@ paths:
               required: [pin]
               properties:
                 pin: {type: string}
+                code: {type: string}
                 passkey: {type: object}
                 totp: {type: string}
       responses:
@@ -33472,6 +33473,47 @@ paths:
       responses:
         '204':
           description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/pin/code:
+    post:
+      operationId: mePinCode
+      tags:
+      - Account
+      summary: Ask for a code to set your PIN
+      description: 'A six-digit code to the account''s phone (by WhatsApp, else SMS; `via: "sms"` asks for SMS), good only for setting or changing the PIN (PUT /v1/me/pin {code}), for 10 minutes. 409 `no_phone` for an account with no phone (it confirms with its passkey); 429 as other codes are limited. A personal session reaches it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                via:
+                  type: string
+                  enum: [whatsapp, sms]
+      responses:
+        '202':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sent_via, expires_in, code_to]
+                properties:
+                  sent_via:
+                    type: string
+                    enum: [whatsapp, sms]
+                  expires_in:
+                    type: integer
+                  code_to:
+                    type: string
+                    description: The phone the code went to, masked
         default:
           $ref: '#/components/responses/Error'
   /v1/me/whatsapp/pin:
@@ -33500,7 +33542,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WhatsAppPin'
         '400':
-          description: Not six digits, or too easy to guess.
+          description: Not four digits, or too easy to guess.
           content:
             application/json:
               schema:
@@ -52320,14 +52362,26 @@ components:
     MePin:
       type: object
       additionalProperties: false
-      required: [set, change_without]
+      required: [set, digits, ways]
       properties:
         set: {type: boolean}
         set_at: {type: string, format: date-time}
         locked_until: {type: string, format: date-time}
-        pays_from: {type: string, format: date-time}
-        change_without: {type: boolean}
-        change_without_until: {type: string, format: date-time}
+        digits:
+          type: integer
+          description: How many digits a PIN is (4)
+        ways:
+          type: array
+          description: What may confirm setting or changing the PIN now
+          items:
+            type: string
+            enum: [code, passkey, totp]
+        code_to:
+          type: string
+          description: The phone a code goes to, masked; only with `code` among the ways
+        renew:
+          type: boolean
+          description: The last PIN was removed when PINs became four digits, and none is set since
     StaffPayAccount:
       type: object
       description: The saved account payments to a staff member go to (outside payroll), masked

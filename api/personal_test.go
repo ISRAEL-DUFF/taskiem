@@ -191,11 +191,11 @@ func TestPhoneWayIn(t *testing.T) {
 	anon.must(202, "POST", "/v1/auth/phone/start", map[string]any{"phone": bola})
 	right := sms.code(t, bola)
 	for i := range 4 {
-		if st, _ := anon.do("POST", "/v1/auth/phone/verify", map[string]any{"phone": bola, "code": fmt.Sprintf("00000%d", i)}); st != 401 {
+		if st, _ := anon.do("POST", "/v1/auth/phone/verify", map[string]any{"phone": bola, "code": fmt.Sprintf("000%d", i)}); st != 401 {
 			t.Fatalf("wrong try %d: %d", i, st)
 		}
 	}
-	if st, out := anon.do("POST", "/v1/auth/phone/verify", map[string]any{"phone": bola, "code": "000009"}); st != 429 || out["locked"] != true {
+	if st, out := anon.do("POST", "/v1/auth/phone/verify", map[string]any{"phone": bola, "code": "0009"}); st != 429 || out["locked"] != true {
 		t.Fatalf("the fifth wrong: %d %v", st, out)
 	}
 	if st, _ := anon.do("POST", "/v1/auth/phone/verify", map[string]any{"phone": bola, "code": right}); st != 429 {
@@ -404,16 +404,16 @@ func TestSecondProofs(t *testing.T) {
 	inFoods.must(200, "GET", "/v1/workflows", nil)
 
 	// The chat PIN proves the third device.
-	if st, _ := three.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "482913"}); st != 409 {
+	if st, _ := three.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "4829"}); st != 409 {
 		t.Fatalf("no PIN set: %d", st)
 	}
-	if _, err := w.env.DB.Admin.Exec(ctx, `SELECT taskiem_wa_pin_set($1, $2)`, adaID, pinHash("482913")); err != nil {
+	if _, err := w.env.DB.Admin.Exec(ctx, `SELECT taskiem_wa_pin_set($1, $2)`, adaID, pinHash("4829")); err != nil {
 		t.Fatal(err)
 	}
-	if st, out := three.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "111111"}); st != 401 || out["tries_left"] != float64(4) {
+	if st, out := three.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "1111"}); st != 401 || out["tries_left"] != float64(4) {
 		t.Fatalf("a wrong PIN: %d %v", st, out)
 	}
-	three.must(200, "POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "482913"})
+	three.must(200, "POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "4829"})
 	sw = three.must(200, "POST", "/v1/me/switch", map[string]any{"tenant_id": foods})
 	inFoods = &client{t: t, base: w.base, token: sw["token"].(string)}
 

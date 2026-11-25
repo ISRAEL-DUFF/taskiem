@@ -35,7 +35,7 @@ func TestChatSigninNeedsSecondProof(t *testing.T) {
 	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE users SET email = 'ada@foods.test', email_verified_at = now() WHERE id = $1`, adaID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := w.env.DB.Admin.Exec(ctx, `SELECT taskiem_wa_pin_set($1, $2)`, adaID, pinHash("482913")); err != nil {
+	if _, err := w.env.DB.Admin.Exec(ctx, `SELECT taskiem_wa_pin_set($1, $2)`, adaID, pinHash("4829")); err != nil {
 		t.Fatal(err)
 	}
 	anon := &client{t: t, base: w.base}
@@ -71,7 +71,7 @@ func TestChatSigninNeedsSecondProof(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			st, _ := ph.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": fmt.Sprintf("1%05d", i)})
+			st, _ := ph.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": fmt.Sprintf("1%03d", i)})
 			switch st {
 			case 401:
 				atomic.AddInt64(&evaluated, 1)
@@ -84,7 +84,7 @@ func TestChatSigninNeedsSecondProof(t *testing.T) {
 	if evaluated > 4 || evaluated+locked != 60 {
 		t.Fatalf("PIN: %d wrong guesses weighed (at most 4), %d refused as locked", evaluated, locked)
 	}
-	if st, o := ph.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "482913"}); st != 429 || o["locked"] != true {
+	if st, o := ph.do("POST", "/v1/auth/second-proof/pin", map[string]any{"pin": "4829"}); st != 429 || o["locked"] != true {
 		t.Fatalf("the right PIN while locked: %d %v", st, o)
 	}
 }
