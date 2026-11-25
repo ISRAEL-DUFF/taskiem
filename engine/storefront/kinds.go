@@ -33,6 +33,12 @@ type FrontKind struct {
 	// for times (Spaces).
 	Calendar *Calendar    `json:"calendar,omitempty"`
 	Actions  []KindAction `json:"actions"`
+	// Settings are a new front's own settings (CheckFrontSettings): a One
+	// product front's promise, chips and stock line.
+	Settings json.RawMessage `json:"settings,omitempty"`
+	// Later is a kind whose page is not drawn yet: checked, never offered
+	// (One product until forms-that-sell L2).
+	Later bool `json:"later,omitempty"`
 }
 
 // KindAction is an action a kind adds.
@@ -50,7 +56,7 @@ var (
 )
 
 // kindOrder is the order owners are offered kinds in: Custom last.
-var kindOrder = []string{"shop", "food", "hire", "spaces", "tickets", "classes", "quotes", "questions", "callbacks", "custom"}
+var kindOrder = []string{"shop", "one-product", "food", "hire", "spaces", "tickets", "classes", "quotes", "questions", "callbacks", "custom"}
 
 func loadKinds() {
 	names, err := fs.Glob(kindFiles, "kinds/*.json")
@@ -81,6 +87,14 @@ func loadKinds() {
 				return
 			}
 		}
+		if k.Settings != nil {
+			clean, err := CheckFrontSettings(k.Name, k.Settings)
+			if err != nil {
+				kindsErr = fmt.Errorf("%s: %w", n, err)
+				return
+			}
+			k.Settings = clean
+		}
 		if k.Calendar != nil {
 			c, err := CleanCalendar(*k.Calendar)
 			if err != nil {
@@ -105,9 +119,21 @@ func indexOf(list []string, s string) int {
 	return len(list)
 }
 
-// FrontKinds are the presets, in the order owners are offered them. It
-// panics if the embedded files are broken, which the tests rule out.
+// FrontKinds are the presets owners are offered, in their order: every
+// kind but those drawn later. It panics if the embedded files are broken,
+// which the tests rule out.
 func FrontKinds() []FrontKind {
+	var out []FrontKind
+	for _, k := range AllFrontKinds() {
+		if !k.Later {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// AllFrontKinds are every preset, those not offered yet too.
+func AllFrontKinds() []FrontKind {
 	kindsOnce.Do(loadKinds)
 	if kindsErr != nil {
 		panic(kindsErr)

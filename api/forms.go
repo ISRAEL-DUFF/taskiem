@@ -1006,12 +1006,18 @@ func (s *Server) RunForms(ctx context.Context) error {
 			if err := s.Forms.Drain(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("forms: inbox", "err", err)
 			}
+			if err := s.Forms.DrainKeeps(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("forms: forms left half-filled", "err", err)
+			}
 		case <-tick.C:
 			if err := s.Forms.Tick(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("forms: links and codes", "err", err)
 			}
 			if err := s.Forms.DrainDeletions(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("forms: deleting stored files", "err", err)
+			}
+			if _, err := s.Forms.PurgeLeft(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("forms: purging forms left half-filled", "err", err)
 			}
 		}
 	}

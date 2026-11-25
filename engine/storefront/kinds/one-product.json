@@ -1,0 +1,12 @@
+{
+  "name": "one-product",
+  "title": "One product",
+  "line": "One product on a page of its own: a promise, photos, what it does, packages and an order form, pay on delivery.",
+  "table": "products",
+  "mapping": {"name": "name", "price": "price", "price_unit": "naira", "photo": "photo", "description": "description", "category": "category", "available": "available"},
+  "settings": {"promise": "Pay on delivery nationwide", "stock_line": false},
+  "later": true,
+  "actions": [
+    {"kind": "order", "label": "Order now", "template": "storefront-order", "options": {"delivery": true, "pay_on_delivery": true, "notice": "Do not order if you are not ready to receive it in 2 to 4 days."}}
+  ]
+}

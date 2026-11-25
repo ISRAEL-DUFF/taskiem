@@ -156,6 +156,10 @@ var (
 	sensitiveName = regexp.MustCompile(`(?i)(^|_)(bvn|nin|account_?number|acct_?no|nuban)($|_)`)
 )
 
+// sellingWidgets are the storefront's fields that draw on its lists: a
+// hosted form takes none of them.
+var sellingWidgets = []any{"basket", "packages", "time", "hire", "count"}
+
 // FormFieldProblems checks a form's fields: none a form never collects,
 // identifiers only when marked x-pii and the form is not anonymous, and
 // file fields well formed. anonymous is a public form with no code.
@@ -177,6 +181,12 @@ func FormFieldProblems(schema map[string]any, anonymous bool, path string) []Pro
 			case anonymous:
 				out = append(out, Problem{Path: at, Message: fmt.Sprintf("%q may be asked only on a link or members form, or a public form with verify on", name)})
 			}
+		}
+		if h, _ := p["x-form"].(map[string]any); h != nil && slices.Contains(sellingWidgets, h["widget"]) {
+			// A form that sells is an action of the storefront, so it is
+			// priced, stocked and ordered there (forms-that-sell §5.1).
+			out = append(out, Problem{Path: at + "/x-form/widget", Message: fmt.Sprintf("%q: a form that sells products is an order form of your storefront: use Sell something with this form", name)})
+			continue
 		}
 		if t, _ := p["type"].(string); t == "object" || (t == "array" && !isEnumArray(p)) {
 			out = append(out, Problem{Path: at, Message: fmt.Sprintf("%q: nested fields and lists are not in forms yet; use plain fields or a list of choices", name)})

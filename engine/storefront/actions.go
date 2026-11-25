@@ -83,6 +83,40 @@ type ActionOptions struct {
 	// QuoteDays is how long a quote stands for the customer to accept
 	// (fronts F7): 1 to 60, 7 by default.
 	QuoteDays int `json:"quote_days,omitempty"`
+	// Notice is the order form's warning line above its button ("Do not
+	// order if you are not ready to receive it in 2 to 4 days"), drawn in
+	// the storefront's warning tone (forms-that-sell §5.2): unset is
+	// DefaultNotice on a form that sells one product, "-" none.
+	Notice string `json:"notice,omitempty"`
+}
+
+// DefaultNotice is the warning line of an order form that sells one
+// product, until the owner changes or clears it.
+const DefaultNotice = "Please order only when you are ready to receive it."
+
+// MaxNotice is how long a notice may be.
+const MaxNotice = 160
+
+// CheckNotice refuses a notice that is not one line of words.
+func CheckNotice(n string) error {
+	if n != strings.TrimSpace(n) || len([]rune(n)) > MaxNotice || hasLink(n) || strings.ContainsAny(n, "\n\r") {
+		return fmt.Errorf("%w: the notice above the button is up to %d characters on one line, with no links", ErrInvalid, MaxNotice)
+	}
+	return nil
+}
+
+// NoticeFor is the notice an order form shows ("" for none): its own, or
+// the default on a form that sells one product.
+func NoticeFor(o ActionOptions, oneItem bool) string {
+	switch {
+	case o.Notice == "-":
+		return ""
+	case o.Notice != "":
+		return o.Notice
+	case oneItem:
+		return DefaultNotice
+	}
+	return ""
 }
 
 // Zone is an area a business delivers to and what delivery there costs.
@@ -352,6 +386,9 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		a.Options.Zones = zones
 		if !a.Options.Delivery || a.Payment == "none" {
 			a.Options.PayOnDelivery = false
+		}
+		if err := CheckNotice(a.Options.Notice); err != nil {
+			return Action{}, err
 		}
 	case "booking":
 		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
