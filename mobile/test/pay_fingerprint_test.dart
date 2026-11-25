@@ -242,7 +242,7 @@ void main() {
     var tries = 0;
     api.routes['POST /v1/me/fingerprint'] = (r) {
       final b = jsonDecode(r.body) as Map<String, dynamic>;
-      if (b['pin'] != '482913') {
+      if (b['pin'] != '4829') {
         tries++;
         return _err(403, 'proof_needed', 'That PIN is not right. 4 tries left.');
       }
@@ -265,12 +265,12 @@ void main() {
     expect(find.text('That PIN is not right. 4 tries left.'), findsOneWidget);
     // Refused: no key is left on the phone the server does not know.
     expect(fake.keys, isEmpty);
-    await t.enterText(pad, '482913');
+    await t.enterText(pad, '4829');
     await settle(t);
     await t.tap(find.text('Turn it on'));
     await settle(t);
     final on = api.sent('POST', '/v1/me/fingerprint').last;
-    expect(on['pin'], '482913');
+    expect(on['pin'], '4829');
     expect(on['public_key'], 'PUB-taskiem-pay-u1');
     expect((on['device'] as Map)['name'], 'Tecno Spark 10');
     expect(await api.keys.read('paykey:u1'), 'k9');

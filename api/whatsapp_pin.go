@@ -15,7 +15,9 @@ import (
 )
 
 // The WhatsApp approval PIN (spec 11.2). A person with a bound number and
-// a passkey or authenticator may set a six-digit PIN in the web app. In
+// a passkey or authenticator may set a four-digit PIN in the web app
+// (docs/spec/transaction-pin.md; PUT /v1/me/pin also takes a code to the
+// phone). In
 // WhatsApp, a decision under a policy whose step-up is "whatsapp_pin" then
 // asks for it in a WhatsApp Flow bound to that decision
 // (whatsapp_flows.go). It is hashed with Argon2id like passwords, and five
@@ -71,10 +73,13 @@ func (s *Server) waPinInfo(ctx context.Context, user uuid.UUID) (waPinInfo, erro
 	return out, err
 }
 
-// validPin: six digits.
+// validPin: four digits.
 func validPin(pin string) bool {
 	return len(pin) == whatsapp.PinLength && strings.Trim(pin, "0123456789") == ""
 }
+
+// pinWeakWords says why a weak PIN is refused.
+const pinWeakWords = "choose a PIN that is not one digit repeated or a run like 1234"
 
 // weakPin: one digit repeated, or a run up or down.
 func weakPin(pin string) bool {
@@ -115,7 +120,7 @@ func (s *Server) setWhatsAppPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if weakPin(req.Pin) {
-		s.fail(w, r, fmt.Errorf("%w: choose a PIN that is not one digit repeated or a run like 123456", errBadRequest))
+		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, pinWeakWords))
 		return
 	}
 	var number *string
@@ -139,7 +144,7 @@ func (s *Server) setWhatsAppPin(w http.ResponseWriter, r *http.Request) {
 	if !s.proveFactor(w, r, req.factorProof, "whatsapp.pin") {
 		return
 	}
-	// Behind a passkey or an authenticator: it pays at once (pin_me.go).
+	// It pays at once (pin_me.go).
 	if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_pin_set_hold($1, $2, '0'::interval)`, p.UserID, hashPassword(req.Pin)); err != nil {
 		s.fail(w, r, err)
 		return

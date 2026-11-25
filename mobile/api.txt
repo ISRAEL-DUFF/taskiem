@@ -379,6 +379,7 @@ putStaffPayAccount
 getMePin
 putMePin
 deleteMePin
+mePinCode
 getPayCollection
 addPayCollection
 clearPayCollection

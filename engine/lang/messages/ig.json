@@ -6177,8 +6177,9 @@
       "reviewed": false
     },
     "signup.pin_hint": {
-      "text": "Nkata a bụ akaụntụ gị. Zipu *pin* ịtọ PIN nwere ọnụọgụ isii ga-echekwa ya maka gị.",
-      "reviewed": false
+      "text": "Nkata a bụ akaụntụ gị. Zipu *pin* iji debe PIN nwere ọnụọgụ 4 nke na-eme ka ọ bụrụ nke gị.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After signing up on WhatsApp: the chat PIN"
     },
     "signup.tpl.daily-reminder": {
       "text": "Ncheta kwa ụbọchị",
@@ -6245,12 +6246,14 @@
       "reviewed": false
     },
     "chatpin.web": {
-      "text": "Tọọ PIN gị na ngwa weebụ, na {where}: ọ ga-ebu ụzọ jụọ passkey, authenticator ma ọ bụ okwuntughe gị.",
-      "reviewed": false
+      "text": "Debe PIN gị n’ime ngwa Taskiem ma ọ bụ ngwa weebụ, n’okpuru Settings › PIN, na {where}: anyị ga-ebu ụzọ zitere ekwentị gị koodu, ma ọ bụ i jiri passkey gị kwado ya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: pin: the person has a password, passkey or authenticator, so sets the PIN in the app or on the web, with a code to their phone or their passkey. {where} is the account page"
     },
     "chatpin.set_already": {
-      "text": "Ị nweelarị PIN mkparịta ụka. Iji gbanwee ya, banye na weebụ (zipu sign in maka njikọ), tinye passkey ma ọ bụ authenticator, wee gbanwee ya na peeji Account gị na {where}.",
-      "reviewed": false
+      "text": "I nweelarị PIN. Iji gbanwee ya, mepee Settings › PIN n’ime ngwa Taskiem ma ọ bụ ngwa weebụ, na {where}: anyị ga-ebu ụzọ zitere nọmba a koodu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: 'pin' in chat from someone who has a PIN already: changing it is done in the app or on the web, with a code to their phone. {where} is the web app's Account page"
     },
     "chatpin.not_here": {
       "text": "Enweghị ike ịtọ PIN nkata site ebe a ugbu a: tọọ ya site na WhatsApp, ebe Taskiem na-ezipu fọm echekwara.",
@@ -6261,8 +6264,9 @@
       "reviewed": false
     },
     "chatpin.form": {
-      "text": "Họrọ PIN nwere ọnụọgụ isii n'ime fọm ahụ. Debe ya n'onwe gị: ọ na-egosi na nkata a bụ nke gị, ma na-akwado ihe chọrọ ya.",
-      "reviewed": false
+      "text": "Họrọ PIN nwere ọnụọgụ 4 n’ime fọm ahụ. Debe ya nanị gị: ọ na-egosi na nkata a bụ nke gị, ọ na-akwado ihe chọrọ ya, ọ na-akwụkwa obere ego.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Message with the PIN form that sets the chat PIN"
     },
     "chatpin.summary": {
       "text": "Ọnụọgụ isii na-echekwa nkata a maka gị",

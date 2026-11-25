@@ -479,18 +479,18 @@ func TestBindingDormant(t *testing.T) {
 	if len(form) != 1 || form[0].Flow != whatsapp.FlowPin {
 		t.Fatalf("PIN form: %+v", form)
 	}
-	st, resp := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", form[0].FlowToken, map[string]any{"pin": "123456"})
+	st, resp := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", form[0].FlowToken, map[string]any{"pin": "1234"})
 	if st != 200 || !strings.Contains(fmt.Sprint(screenData(t, resp)["error"]), "not one digit repeated") {
 		t.Fatalf("weak: %d %v", st, resp)
 	}
-	if st, resp := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", form[0].FlowToken, map[string]any{"pin": "482915"}); st != 200 || flowToken(t, resp) != form[0].FlowToken {
+	if st, resp := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", form[0].FlowToken, map[string]any{"pin": "4825"}); st != 200 || flowToken(t, resp) != form[0].FlowToken {
 		t.Fatalf("set: %d %v", st, resp)
 	}
 	if got := w.send(t, ada, whatsapptest.FlowCompleted(form[0].FlowToken)); len(got) != 1 || !strings.Contains(got[0].Text, "chat PIN is set") {
 		t.Fatalf("completion: %+v", got)
 	}
 	// Set once from the chat: holding the chat does not replace it.
-	if got := w.say(t, ada, "change pin"); !strings.Contains(got, "You have a chat PIN already") {
+	if got := w.say(t, ada, "change pin"); !strings.Contains(got, "You have a PIN already") {
 		t.Fatalf("change pin: %q", got)
 	}
 
@@ -506,11 +506,11 @@ func TestBindingDormant(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM whatsapp_bindings WHERE user_id = $1 AND dormant_at IS NULL`, user).Scan(&sendable); err != nil || sendable != 0 {
 		t.Fatalf("not dormant: %d %v", sendable, err)
 	}
-	if st, resp := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", wake[0].FlowToken, map[string]any{"pin": "000000"}); st != 200 ||
+	if st, resp := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", wake[0].FlowToken, map[string]any{"pin": "0000"}); st != 200 ||
 		!strings.Contains(fmt.Sprint(screenData(t, resp)["error"]), "tries left") {
 		t.Fatalf("wrong: %d %v", st, resp)
 	}
-	if st, resp := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", wake[0].FlowToken, map[string]any{"pin": "482915"}); st != 200 || flowToken(t, resp) != wake[0].FlowToken {
+	if st, resp := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", wake[0].FlowToken, map[string]any{"pin": "4825"}); st != 200 || flowToken(t, resp) != wake[0].FlowToken {
 		t.Fatalf("right: %d %v", st, resp)
 	}
 	if got := w.send(t, ada, whatsapptest.FlowCompleted(wake[0].FlowToken)); len(got) != 1 || !strings.Contains(got[0].Text, "yours again") {

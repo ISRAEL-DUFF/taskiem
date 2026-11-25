@@ -32,9 +32,10 @@ import '../kit/sheet.dart' show TkKitField, TkLines, showTkSheet;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'sign_in.dart' show CodeBoxes;
+import 'you_pin.dart' show pinDigits;
 
-/// The PIN's length, as the server takes it (engine/whatsapp.PinLength).
-const payPinLength = 6;
+/// The PIN's length, as the PIN screen's (you_pin.dart).
+const payPinLength = pinDigits;
 
 /// What it is for, behind the page's (i).
 const fingerprintUses = 'Pay with this phone’s fingerprint or face, without your passkey or PIN: up to ₦500,000 a payment and ₦1,000,000 a day. '

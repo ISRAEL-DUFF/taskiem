@@ -1,8 +1,10 @@
-// The person's PIN (GET and PUT /v1/me/pin; screens/you_pin.dart): offered
+// The person's PIN (GET and PUT /v1/me/pin, POST /v1/me/pin/code;
+// screens/you_pin.dart; docs/spec/transaction-pin.md): four digits, offered
 // once a new account is made, with Not now; set twice as dots, a weak or
-// mismatched one refused on the phone; Settings › PIN with when it pays and
-// whether it is locked; Change PIN with the passkey, or without it only
-// moments after signing in.
+// mismatched one refused on the phone; confirmed by a code sent to the
+// phone (or the passkey on this phone), and paying at once; Settings › PIN
+// with when it was set and whether it is locked; with no phone and no
+// passkey, what to add.
 
 import 'dart:convert';
 
@@ -33,16 +35,21 @@ Map<String, dynamic> _me({bool passkey = false}) => {
   'factors': {'passkey': passkey, 'totp': false, 'password': false},
 };
 
-/// GET /v1/me/pin as the server answers it (set and change_without are
+const _codeTo = '+234••••••0000';
+
+/// GET /v1/me/pin as the server answers it (set, digits and ways are
 /// required).
-Map<String, dynamic> pin({bool set = true, bool changeWithout = false, DateTime? paysFrom, DateTime? lockedUntil, DateTime? until}) => {
+Map<String, dynamic> pin({bool set = true, List<String> ways = const ['code'], DateTime? lockedUntil, bool renew = false}) => {
   'set': set,
-  'change_without': changeWithout,
+  'digits': 4,
+  'ways': ways,
+  if (ways.contains('code')) 'code_to': _codeTo,
   if (set) 'set_at': at.subtract(const Duration(hours: 2)).toIso8601String(),
-  if (set) 'pays_from': (paysFrom ?? at.subtract(const Duration(hours: 1))).toIso8601String(),
   'locked_until': ?lockedUntil?.toIso8601String(),
-  'change_without_until': ?until?.toIso8601String(),
+  if (renew) 'renew': true,
 };
+
+Map<String, dynamic> _sentCode() => {'sent_via': 'whatsapp', 'expires_in': 600, 'code_to': _codeTo};
 
 Map<String, dynamic> _body(Api api, String method, String path) => jsonDecode(api.sent(method, path).last.body) as Map<String, dynamic>;
 
@@ -68,15 +75,17 @@ void main() {
   });
   tearDown(() => passkeys = was);
 
-  test('weak PINs and two entries that differ are refused on the phone', () {
-    for (final weak in ['111111', '123456', '654321', '890123', '098765']) {
+  test('four digits; weak PINs and two entries that differ are refused on the phone', () {
+    expect(pinDigits, 4);
+    for (final weak in ['1111', '1234', '6543', '8901', '0987']) {
       expect(weakPin(weak), isTrue, reason: weak);
     }
-    expect(weakPin('402719'), isFalse);
-    expect(pinProblem('12345', ''), 'Type the 6 digits of your new PIN.');
-    expect(pinProblem('123456', '123456'), 'Choose a PIN that is not one digit repeated or a run like 123456.');
-    expect(pinProblem('402719', '402718'), 'The two PINs are not the same. Type them again.');
-    expect(pinProblem('402719', '402719'), isNull);
+    expect(weakPin('4027'), isFalse);
+    expect(pinProblem('402', ''), 'Type the 4 digits of your new PIN.');
+    expect(pinProblem('402719', '402719'), 'Type the 4 digits of your new PIN.');
+    expect(pinProblem('1234', '1234'), 'Choose a PIN that is not one digit repeated or a run like 1234.');
+    expect(pinProblem('4027', '4028'), 'The two PINs are not the same. Type them again.');
+    expect(pinProblem('4027', '4027'), isNull);
     expect(pinWhen(at.add(const Duration(days: 1)), at), 'tomorrow at 10:30');
   });
 
@@ -85,14 +94,16 @@ void main() {
     final api = you();
     api.routes['POST /v1/auth/phone/create'] = (_) => answer({'status': 'created', 'token': 'tok-p', 'personal': true, 'tenant_id': null, 'user_id': 'u1'}, 201);
     api.routes['GET /v1/me'] = (_) => _me();
-    api.routes['GET /v1/me/pin'] = (_) => pin(set: false, changeWithout: true);
+    api.routes['GET /v1/me/pin'] = (_) => pin(set: false);
     final a = api.auth();
     await t.runAsync(() => a.createPersonal('tk-1', 'Tolu Ade'));
     expect(a.offerPin, isTrue);
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, auth: a, now: () => at));
     await settle(t);
     expect(find.text('Set your PIN'), findsWidgets);
-    expect(find.textContaining('It can pay from 24 hours after it is set.'), findsOneWidget);
+    expect(find.textContaining('It can pay as soon as it is set.'), findsOneWidget);
+    expect(find.textContaining('We send a code to $_codeTo'), findsOneWidget);
+    expect(find.text('Send me a code'), findsOneWidget);
     expect(find.text('Not now'), findsOneWidget);
     await snap(t, 'pin-step');
     await looks(t, 'pin-step');
@@ -115,43 +126,80 @@ void main() {
     await drain(t);
   });
 
-  testWidgets('the step: a mismatch refused here, a weak one in words, then {pin} sent', (t) async {
+  testWidgets('the step: a mismatch and a weak one refused here, then a code, then {pin, code}', (t) async {
     phone(t);
     final api = you();
-    api.routes['GET /v1/me/pin'] = (_) => pin(set: false, changeWithout: true);
-    api.routes['PUT /v1/me/pin'] = (_) => pin(changeWithout: true, paysFrom: at.add(const Duration(hours: 24)));
+    api.routes['GET /v1/me/pin'] = (_) => pin(set: false);
+    api.routes['POST /v1/me/pin/code'] = (_) => answer(_sentCode(), 202);
+    var tries = 0;
+    api.routes['PUT /v1/me/pin'] = (_) {
+      tries++;
+      if (tries == 1) return answer({'error': 'That code is not right, or it has expired. Ask for a new one.', 'code_wrong': true}, 401);
+      return pin();
+    };
     final a = api.auth()..offerPin = true;
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, auth: a, now: () => at));
     await settle(t);
-    await _pin(t, '402719', '402718');
-    await press(t, find.bySemanticsLabel('Set your PIN').last);
+    await _pin(t, '4027', '4028');
+    await press(t, find.bySemanticsLabel('Send me a code').last);
     expect(find.text('The two PINs are not the same. Type them again.'), findsOneWidget);
-    await _pin(t, '111111', '111111');
-    await press(t, find.bySemanticsLabel('Set your PIN').last);
-    expect(find.text('Choose a PIN that is not one digit repeated or a run like 123456.'), findsOneWidget);
-    expect(api.sent('PUT', '/v1/me/pin'), isEmpty);
-    // The digits are dots, never shown.
-    await _pin(t, '402719', '402719');
+    await _pin(t, '1111', '1111');
+    await press(t, find.bySemanticsLabel('Send me a code').last);
+    expect(find.text('Choose a PIN that is not one digit repeated or a run like 1234.'), findsOneWidget);
+    expect(api.sent('POST', '/v1/me/pin/code'), isEmpty);
+    // The digits are dots, never shown: four boxes each.
+    await _pin(t, '4027', '4027');
     expect(find.text('4'), findsNothing);
-    expect(find.text('•'), findsNWidgets(12));
+    expect(find.text('•'), findsNWidgets(8));
+    await press(t, find.bySemanticsLabel('Send me a code').last);
+    expect(api.sent('POST', '/v1/me/pin/code'), hasLength(1));
+    expect(find.textContaining('Sent to $_codeTo on WhatsApp'), findsOneWidget);
+    await snap(t, 'pin-step-code');
+    // A wrong code: said, typed again.
+    await typeIn(t, find.byKey(const ValueKey('pin-code')), '111111');
     await press(t, find.bySemanticsLabel('Set your PIN').last);
-    expect(_body(api, 'PUT', '/v1/me/pin'), {'pin': '402719'});
-    // The toast (from when it pays is read against the phone's clock).
-    expect(find.textContaining('Your PIN is set.'), findsOneWidget);
+    expect(find.text('That code is not right. Check it, or ask for a new one.'), findsOneWidget);
+    expect(find.byType(YouHome), findsNothing);
+    await typeIn(t, find.byKey(const ValueKey('pin-code')), '482913');
+    await press(t, find.bySemanticsLabel('Set your PIN').last);
+    expect(_body(api, 'PUT', '/v1/me/pin'), {'pin': '4027', 'code': '482913'});
+    expect(find.text('Your PIN is set. It can pay now.'), findsOneWidget);
     expect(find.byType(YouHome), findsOneWidget);
+    await drain(t);
+  });
+
+  testWidgets('no phone and no passkey: what to add, no form', (t) async {
+    phone(t);
+    final api = you();
+    api.routes['GET /v1/me/pin'] = (_) => pin(set: false, ways: const []);
+    await _page(t, api);
+    expect(find.text('Add your phone first'), findsOneWidget);
+    expect(find.byKey(const ValueKey('pin-new')), findsNothing);
+    await snap(t, 'pin-no-way');
+    await drain(t);
+  });
+
+  testWidgets('the old 6-digit PIN went: said, and a new one set', (t) async {
+    phone(t);
+    final api = you();
+    api.routes['GET /v1/me/pin'] = (_) => pin(set: false, renew: true);
+    await _page(t, api);
+    expect(find.text('PINs are now 4 digits'), findsOneWidget);
+    expect(find.byKey(const ValueKey('pin-new')), findsOneWidget);
+    await snap(t, 'pin-renew');
     await drain(t);
   });
 
   testWidgets('the server\'s refusal of a weak PIN is shown in its words', (t) async {
     phone(t);
     final api = you();
-    api.routes['GET /v1/me/pin'] = (_) => pin(set: false, changeWithout: true);
-    api.routes['PUT /v1/me/pin'] = (_) => answer({'error': 'choose a PIN that is not one digit repeated or a run like 123456'}, 400);
+    api.routes['GET /v1/me/pin'] = (_) => pin(set: false);
+    api.routes['POST /v1/me/pin/code'] = (_) => answer({'error': 'choose a PIN that is not one digit repeated or a run like 1234'}, 400);
     await _page(t, api);
     expect(find.text('Set your PIN'), findsWidgets);
-    await _pin(t, '402719', '402719');
-    await press(t, find.bySemanticsLabel('Set your PIN').last);
-    expect(find.text('choose a PIN that is not one digit repeated or a run like 123456'), findsOneWidget);
+    await _pin(t, '4027', '4027');
+    await press(t, find.bySemanticsLabel('Send me a code').last);
+    expect(find.text('choose a PIN that is not one digit repeated or a run like 1234'), findsOneWidget);
     await drain(t);
   });
 
@@ -163,28 +211,26 @@ void main() {
     await settle(t);
     await press(t, find.text('PIN'));
     expect(find.text('Change PIN'), findsOneWidget);
-    expect(find.text('••••••'), findsOneWidget);
+    expect(find.text('••••'), findsOneWidget);
     await drain(t);
   });
 
-  testWidgets('set: when, from when it pays, locked', (t) async {
+  testWidgets('set: when, what it pays, locked', (t) async {
     phone(t);
     final api = you();
-    api.routes['GET /v1/me/pin'] = (_) => pin(paysFrom: at.add(const Duration(hours: 20)), lockedUntil: at.add(const Duration(minutes: 15)));
+    api.routes['GET /v1/me/pin'] = (_) => pin(lockedUntil: at.add(const Duration(minutes: 15)));
     await _page(t, api);
     expect(find.text('today at 08:30'), findsOneWidget);
-    expect(find.text('Can pay from tomorrow at 06:30'), findsOneWidget);
-    expect(find.text('From tomorrow at 06:30'), findsOneWidget);
+    expect(find.text('Up to ₦100,000 a payment'), findsOneWidget);
     expect(find.text('Locked until today at 10:45'), findsOneWidget);
+    expect(find.textContaining('Can pay from'), findsNothing);
     await snap(t, 'pin-settings');
     await looks(t, 'pin-settings');
     await drain(t);
 
     api.routes['GET /v1/me/pin'] = (_) => pin();
     await _page(t, api);
-    expect(find.textContaining('Can pay from'), findsNothing);
     expect(find.textContaining('Locked until'), findsNothing);
-    expect(find.text('Now, up to ₦100,000'), findsOneWidget);
     await drain(t);
   });
 
@@ -192,7 +238,7 @@ void main() {
     phone(t);
     final api = you();
     var set = true;
-    api.routes['GET /v1/me/pin'] = (_) => set ? pin() : pin(set: false, changeWithout: true);
+    api.routes['GET /v1/me/pin'] = (_) => set ? pin() : pin(set: false);
     api.routes['DELETE /v1/me/pin'] = (_) {
       set = false;
       return null;
@@ -206,82 +252,56 @@ void main() {
     await drain(t);
   });
 
-  testWidgets('Change PIN with the passkey sends {pin, passkey}', (t) async {
+  testWidgets('Change PIN with the passkey sends {pin, passkey}; a code instead is offered', (t) async {
     phone(t);
     final api = you();
-    api.routes['GET /v1/me/pin'] = (_) => pin();
+    api.routes['GET /v1/me/pin'] = (_) => pin(ways: const ['code', 'passkey']);
     api.routes['POST /v1/me/step-up/options'] = (_) => {
       'publicKey': {'challenge': 'ch', 'rpId': 'taskiem.test'},
     };
-    api.routes['PUT /v1/me/pin'] = (_) => pin();
+    api.routes['PUT /v1/me/pin'] = (_) => pin(ways: const ['code', 'passkey']);
     await _page(t, api, passkey: true);
     await press(t, find.text('Change PIN'));
-    await _pin(t, '402719', '402719');
+    expect(find.text('Use a code to my phone instead'), findsOneWidget);
+    await _pin(t, '4027', '4027');
     await snap(t, 'pin-change');
     await press(t, find.bySemanticsLabel('Confirm with your passkey and save'));
     expect(_body(api, 'POST', '/v1/me/step-up/options'), {'operation': 'account.reauth', 'target': 'pin.set'});
     expect(keys.asked, hasLength(1));
     final put = _body(api, 'PUT', '/v1/me/pin');
-    expect(put['pin'], '402719');
+    expect(put['pin'], '4027');
     expect((put['passkey'] as Map)['id'], 'k1');
-    expect(find.text('Your new PIN is saved.'), findsOneWidget);
+    expect(find.text('Your new PIN is saved. It can pay now.'), findsOneWidget);
     await drain(t);
   });
 
-  testWidgets('Change PIN moments after signing in: no passkey asked, {pin} sent', (t) async {
+  testWidgets('Change PIN with no passkey on this phone: a code to the phone', (t) async {
     phone(t);
     final api = you();
-    api.routes['GET /v1/me/pin'] = (_) => pin(changeWithout: true, until: at.add(const Duration(minutes: 8)));
-    api.routes['PUT /v1/me/pin'] = (_) => pin(changeWithout: true, paysFrom: at.add(const Duration(hours: 24)));
-    await _page(t, api, passkey: true);
+    api.routes['GET /v1/me/pin'] = (_) => pin(ways: const ['code', 'passkey']);
+    api.routes['POST /v1/me/pin/code'] = (_) => answer(_sentCode(), 202);
+    api.routes['PUT /v1/me/pin'] = (_) => pin();
+    // The account has a passkey, but not on this phone.
+    await _page(t, api);
     await press(t, find.text('Change PIN'));
-    expect(find.textContaining('no passkey is needed until 10:38'), findsOneWidget);
-    await _pin(t, '402719', '402719');
+    expect(find.text('Use a code to my phone instead'), findsNothing);
+    await _pin(t, '4027', '4027');
+    await press(t, find.bySemanticsLabel('Send me a code'));
+    await typeIn(t, find.byKey(const ValueKey('pin-code')), '482913');
     await press(t, find.bySemanticsLabel('Save the new PIN'));
-    expect(_body(api, 'PUT', '/v1/me/pin'), {'pin': '402719'});
+    expect(_body(api, 'PUT', '/v1/me/pin'), {'pin': '4027', 'code': '482913'});
     expect(keys.asked, isEmpty);
-    expect(find.text('Your new PIN is saved. It can pay from tomorrow at 10:30.'), findsOneWidget);
-    await drain(t);
-  });
-
-  testWidgets('Change PIN with no passkey and no sign-in moments ago: sign in again', (t) async {
-    phone(t);
-    final api = you();
-    api.routes['GET /v1/me/pin'] = (_) => pin();
-    await _page(t, api);
-    await press(t, find.text('Change PIN'));
-    expect(find.text(pinSignInAgain), findsOneWidget);
-    expect(find.byKey(const ValueKey('pin-new')), findsNothing);
-    expect(api.sent('PUT', '/v1/me/pin'), isEmpty);
-    await snap(t, 'pin-no-passkey');
-    await drain(t);
-  });
-
-  testWidgets('403 proof_needed is shown in the server\'s words', (t) async {
-    phone(t);
-    final api = you();
-    // Read as changeable moments ago, but the ten minutes ran out.
-    api.routes['GET /v1/me/pin'] = (_) => pin(changeWithout: true);
-    api.routes['PUT /v1/me/pin'] = (_) => answer({
-      'code': 'proof_needed',
-      'reauth': ['passkey'],
-      'error': 'To change your PIN, confirm with your passkey; or sign out, sign in again and change it within 10 minutes (it can then pay from 24 hours on).',
-    }, 403);
-    await _page(t, api);
-    await press(t, find.text('Change PIN'));
-    await _pin(t, '402719', '402719');
-    await press(t, find.bySemanticsLabel('Save the new PIN'));
-    expect(find.textContaining('To change your PIN, confirm with your passkey'), findsOneWidget);
+    expect(find.text('Your new PIN is saved. It can pay now.'), findsOneWidget);
     await drain(t);
   });
 
   testWidgets('large text and what can be pressed: the step and the page', (t) async {
     final api = you();
-    api.routes['GET /v1/me/pin'] = (_) => pin(set: false, changeWithout: true);
+    api.routes['GET /v1/me/pin'] = (_) => pin(set: false);
     final a = api.auth()..offerPin = true;
     await expectLargeText(t, TaskiemApp(mode: TkMode.light, auth: a, now: () => at), drive: settle);
     await drain(t);
-    api.routes['GET /v1/me/pin'] = (_) => pin(paysFrom: at.add(const Duration(hours: 20)), lockedUntil: at.add(const Duration(minutes: 15)));
+    api.routes['GET /v1/me/pin'] = (_) => pin(lockedUntil: at.add(const Duration(minutes: 15)), ways: const ['code', 'passkey']);
     a.me = Me.fromJson(_me(passkey: true));
     await expectLargeText(t, TaskiemApp(mode: TkMode.dark, home: PinScreen(auth: a, now: () => at)), drive: (t) async {
       await settle(t);

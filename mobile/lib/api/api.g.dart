@@ -1781,6 +1781,12 @@ class TaskiemApi {
     await _t.send('DELETE', '/v1/me/pin');
   }
 
+  /// Ask for a code to set your PIN (`POST /v1/me/pin/code`)
+  Future<MePinCodeResponse> mePinCode({required MePinCodeRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/pin/code', body: body.toJson());
+    return MePinCodeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Your list of people to pay, collected from messages (`GET /v1/pay-collection`)
   Future<PayCollection> getPayCollection() async {
     final j = await _t.send('GET', '/v1/pay-collection');
@@ -15983,51 +15989,97 @@ class PutStaffPayAccountResponse {
 }
 
 class MePin {
-  const MePin({required this.changeWithout, this.changeWithoutUntil, this.lockedUntil, this.paysFrom, required this.set, this.setAt});
+  const MePin({this.codeTo, required this.digits, this.lockedUntil, this.renew, required this.set, this.setAt, required this.ways});
 
-  final bool changeWithout;
-  final DateTime? changeWithoutUntil;
+  /// The phone a code goes to, masked; only with `code` among the ways
+  final String? codeTo;
+  /// How many digits a PIN is (4)
+  final int digits;
   final DateTime? lockedUntil;
-  final DateTime? paysFrom;
+  /// The last PIN was removed when PINs became four digits, and none is set
+  /// since
+  final bool? renew;
   final bool set;
   final DateTime? setAt;
+  /// What may confirm setting or changing the PIN now
+  final List<String> ways;
 
   factory MePin.fromJson(Map<String, dynamic> j) => MePin(
-        changeWithout: j['change_without'] as bool,
-        changeWithoutUntil: j['change_without_until'] == null ? null : DateTime.parse(j['change_without_until'] as String),
+        codeTo: j['code_to'] == null ? null : j['code_to'] as String,
+        digits: (j['digits'] as num).toInt(),
         lockedUntil: j['locked_until'] == null ? null : DateTime.parse(j['locked_until'] as String),
-        paysFrom: j['pays_from'] == null ? null : DateTime.parse(j['pays_from'] as String),
+        renew: j['renew'] == null ? null : j['renew'] as bool,
         set: j['set'] as bool,
         setAt: j['set_at'] == null ? null : DateTime.parse(j['set_at'] as String),
+        ways: (j['ways'] as List).map((e) => e as String).toList(),
       );
 
   Map<String, dynamic> toJson() => {
-        'change_without': changeWithout,
-        'change_without_until': ?changeWithoutUntil?.toUtc().toIso8601String(),
+        'code_to': ?codeTo,
+        'digits': digits,
         'locked_until': ?lockedUntil?.toUtc().toIso8601String(),
-        'pays_from': ?paysFrom?.toUtc().toIso8601String(),
+        'renew': ?renew,
         'set': set,
         'set_at': ?setAt?.toUtc().toIso8601String(),
+        'ways': ways.map((e) => e).toList(),
       };
 }
 
 class PutMePinRequest {
-  const PutMePinRequest({this.passkey, required this.pin, this.totp});
+  const PutMePinRequest({this.code, this.passkey, required this.pin, this.totp});
 
+  final String? code;
   final Map<String, dynamic>? passkey;
   final String pin;
   final String? totp;
 
   factory PutMePinRequest.fromJson(Map<String, dynamic> j) => PutMePinRequest(
+        code: j['code'] == null ? null : j['code'] as String,
         passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
         pin: j['pin'] as String,
         totp: j['totp'] == null ? null : j['totp'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'code': ?code,
         'passkey': ?passkey,
         'pin': pin,
         'totp': ?totp,
+      };
+}
+
+class MePinCodeRequest {
+  const MePinCodeRequest({this.via});
+
+  final String? via;
+
+  factory MePinCodeRequest.fromJson(Map<String, dynamic> j) => MePinCodeRequest(
+        via: j['via'] == null ? null : j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'via': ?via,
+      };
+}
+
+class MePinCodeResponse {
+  const MePinCodeResponse({required this.codeTo, required this.expiresIn, required this.sentVia});
+
+  /// The phone the code went to, masked
+  final String codeTo;
+  final int expiresIn;
+  final String sentVia;
+
+  factory MePinCodeResponse.fromJson(Map<String, dynamic> j) => MePinCodeResponse(
+        codeTo: j['code_to'] as String,
+        expiresIn: (j['expires_in'] as num).toInt(),
+        sentVia: j['sent_via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code_to': codeTo,
+        'expires_in': expiresIn,
+        'sent_via': sentVia,
       };
 }
 

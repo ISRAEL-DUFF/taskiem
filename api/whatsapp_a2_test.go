@@ -237,24 +237,24 @@ func TestWhatsAppPin(t *testing.T) {
 	const an = "+2348010000001"
 
 	// Setting a PIN needs a bound number and a passkey or authenticator.
-	alice.must(409, "PUT", "/v1/me/whatsapp/pin", map[string]any{"pin": "482915", "password": testPassword})
+	alice.must(409, "PUT", "/v1/me/whatsapp/pin", map[string]any{"pin": "4825", "password": testPassword})
 	w.bind(t, alice, an)
 	w.say(t, an, "hi")
-	alice.must(409, "PUT", "/v1/me/whatsapp/pin", map[string]any{"pin": "482915", "password": testPassword})
+	alice.must(409, "PUT", "/v1/me/whatsapp/pin", map[string]any{"pin": "4825", "password": testPassword})
 	secret := enrol(t, alice)
-	if st, body := alice.do("PUT", "/v1/me/whatsapp/pin", map[string]any{"pin": "482915"}); st != 403 || body["reauth"] == nil {
+	if st, body := alice.do("PUT", "/v1/me/whatsapp/pin", map[string]any{"pin": "4825"}); st != 403 || body["reauth"] == nil {
 		t.Errorf("without proof: %d %v", st, body)
 	}
-	alice.must(400, "PUT", "/v1/me/whatsapp/pin", map[string]any{"pin": "123456", "totp": codeAfter(secret, 1)})
 	alice.must(400, "PUT", "/v1/me/whatsapp/pin", map[string]any{"pin": "1234", "totp": codeAfter(secret, 1)})
-	if got := alice.must(200, "PUT", "/v1/me/whatsapp/pin", map[string]any{"pin": "482915", "totp": codeAfter(secret, 1)}); got["set"] != true {
+	alice.must(400, "PUT", "/v1/me/whatsapp/pin", map[string]any{"pin": "1234", "totp": codeAfter(secret, 1)})
+	if got := alice.must(200, "PUT", "/v1/me/whatsapp/pin", map[string]any{"pin": "4825", "totp": codeAfter(secret, 1)}); got["set"] != true {
 		t.Fatalf("set: %v", got)
 	}
 	if p := alice.must(200, "GET", "/v1/me/whatsapp", nil)["pin"].(map[string]any); p["set"] != true {
 		t.Errorf("binding view: %v", p)
 	}
 	var hash string
-	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT pin_hash FROM whatsapp_pins`).Scan(&hash); err != nil || !strings.HasPrefix(hash, "$argon2id$") || strings.Contains(hash, "482915") {
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT pin_hash FROM whatsapp_pins`).Scan(&hash); err != nil || !strings.HasPrefix(hash, "$argon2id$") || strings.Contains(hash, "4825") {
 		t.Errorf("stored: %v %q", err, hash)
 	}
 
@@ -285,15 +285,15 @@ func TestWhatsAppPin(t *testing.T) {
 	if f.Flow != whatsapp.FlowPin || f.FlowScreen != "PIN" || f.FlowData["title"] != "Approve ok" {
 		t.Fatalf("PIN form: %+v", f)
 	}
-	st, resp := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", f.FlowToken, map[string]any{"pin": "000000"})
+	st, resp := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", f.FlowToken, map[string]any{"pin": "0000"})
 	if st != 200 || !strings.Contains(fmt.Sprint(screenData(t, resp)["error"]), "4 tries left") {
 		t.Fatalf("wrong PIN: %d %v", st, resp)
 	}
-	st, resp = w.flowCall(t, ep, waSecret, "data_exchange", "PIN", f.FlowToken, map[string]any{"pin": "482915"})
+	st, resp = w.flowCall(t, ep, waSecret, "data_exchange", "PIN", f.FlowToken, map[string]any{"pin": "4825"})
 	if st != 200 || flowToken(t, resp) != f.FlowToken {
 		t.Fatalf("right PIN: %d %v", st, resp)
 	}
-	if st, _ := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", f.FlowToken, map[string]any{"pin": "482915"}); st != 427 {
+	if st, _ := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", f.FlowToken, map[string]any{"pin": "4825"}); st != 427 {
 		t.Errorf("replayed: %d", st)
 	}
 	if got := w.send(t, an, whatsapptest.FlowCompleted(f.FlowToken)); len(got) != 1 || !strings.Contains(got[0].Text, "Recorded with your PIN: you approved ok") {
@@ -327,7 +327,7 @@ func TestWhatsAppPin(t *testing.T) {
 	start(pinWF)
 	f = tapApprove()
 	for i := range 5 {
-		st, resp = w.flowCall(t, ep, waSecret, "data_exchange", "PIN", f.FlowToken, map[string]any{"pin": fmt.Sprintf("00000%d", i)})
+		st, resp = w.flowCall(t, ep, waSecret, "data_exchange", "PIN", f.FlowToken, map[string]any{"pin": fmt.Sprintf("000%d", i)})
 		if st != 200 {
 			t.Fatalf("wrong %d: %d", i, st)
 		}
@@ -335,7 +335,7 @@ func TestWhatsAppPin(t *testing.T) {
 	if e := fmt.Sprint(screenData(t, resp)["error"]); !strings.Contains(e, "locked") {
 		t.Errorf("locked: %v", resp)
 	}
-	if st, _ := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", f.FlowToken, map[string]any{"pin": "482915"}); st != 427 {
+	if st, _ := w.flowCall(t, ep, waSecret, "data_exchange", "PIN", f.FlowToken, map[string]any{"pin": "4825"}); st != 427 {
 		t.Errorf("a locked form still works: %d", st)
 	}
 	if p := alice.must(200, "GET", "/v1/me/whatsapp", nil)["pin"].(map[string]any); p["locked_until"] == nil {
