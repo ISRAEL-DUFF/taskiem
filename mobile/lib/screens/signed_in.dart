@@ -13,6 +13,7 @@ import '../app/auth.dart';
 import '../app/lock.dart';
 import '../app/notify.dart';
 import '../app/passkey.dart';
+import '../app/phone.dart' show showPhone;
 import '../app/prefs.dart';
 import '../kit/forms.dart' show TkSwitchRow;
 import '../kit/page.dart' show TkPageScreen;
@@ -27,6 +28,7 @@ import 'settings_more.dart';
 import 'sign_in_way.dart' show SignInWayCallout, needsSignInWay;
 import 'switcher.dart' show lockWords, showSwitcher;
 import 'you_fingerprint.dart' show FingerprintScreen;
+import 'you.dart' show ChangeNumberScreen;
 import 'you_pin.dart' show PinScreen;
 
 class SignedInScreen extends StatefulWidget {
@@ -211,11 +213,23 @@ class _SignedInScreenState extends State<SignedInScreen> {
           ],
         ),
         if (prefs != null) _Appearance(prefs: prefs),
-        if (keys != null || phones != null)
+        // Always shown: the phone, the PIN and the fingerprint need no list loaded.
           TkSection(
             title: 'Signing in',
             inset: 56,
             children: [
+              // The account's phone (§5.5): codes to sign in, and to set the
+              // PIN or turn on the fingerprint; as You's Settings has it.
+              Builder(builder: (context) {
+                final phone = widget.auth.me?.user?.phone as String?;
+                return TkListRow(
+                  title: phone == null ? 'Add a phone' : 'Change number',
+                  sub: phone == null ? 'To sign in and set your PIN with a code' : showPhone(phone),
+                  icon: 'b-phone',
+                  square: look.teal,
+                  onTap: () => _open(ChangeNumberScreen(auth: widget.auth)),
+                );
+              }),
               if (keys != null)
                 TkListRow(
                   title: 'Passkeys',

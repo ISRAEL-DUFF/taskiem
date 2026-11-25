@@ -124,6 +124,22 @@ void main() {
     await t.pumpAndSettle();
   });
 
+  testWidgets('the account\'s phone: Add a phone with none, Change number with one', (t) async {
+    await open(t, user: {'id': 'u1', 'name': 'Ada Obi', 'email': 'ada@kitchen.ng'});
+    final add = find.text('Add a phone');
+    await t.ensureVisible(add);
+    expect(add, findsOneWidget);
+    expect(find.text('To sign in and set your PIN with a code'), findsOneWidget);
+  });
+
+  testWidgets('the account\'s phone, saved: shown with Change number', (t) async {
+    await open(t, user: {'id': 'u1', 'name': 'Ada Obi', 'email': 'ada@kitchen.ng', 'phone': '+2348031239001'});
+    final change = find.text('Change number');
+    await t.ensureVisible(change);
+    expect(change, findsOneWidget);
+    expect(find.text('Add a phone'), findsNothing);
+  });
+
   testWidgets('S1: the app lock is off until turned on, and every change is made with the phone\'s own unlock', (t) async {
     final o = await open(t, page: 'App lock');
     expect(o.prefs.lock, isFalse, reason: 'off, as WhatsApp\'s');
