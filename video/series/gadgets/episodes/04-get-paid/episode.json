@@ -1,0 +1,93 @@
+{
+  "number": 4,
+  "slug": "get-paid",
+  "title": "Get paid",
+  "headline": "Get *paid*",
+  "sub": "Send an invoice, and match the money when it arrives.",
+  "mood": "sparse",
+  "films": [
+    "gadgets-send-invoice",
+    "gadgets-match-payment"
+  ],
+  "recap": {
+    "en": "A company has ordered ten tablets. Now, getting paid.",
+    "pcm": "One company don order ten tablets. Now, how to collect money."
+  },
+  "bridge": {
+    "en": "Paid. Now Chiamaka's phone has to reach her today.",
+    "pcm": "E don pay. Now Chiamaka phone must reach her today."
+  },
+  "next": {
+    "number": 5,
+    "title": "Deliver",
+    "headline": "*Deliver*"
+  },
+  "flow": [
+    {
+      "id": "E4-C1",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "totalling the tablet order",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Totals ten tablet boxes on a notepad with a pen, then taps his phone and nods in satisfaction",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "medium close-up, eye-level"
+    },
+    {
+      "id": "E4-C2",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "bridge: packing Chiamaka's phone",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Slides a plain boxed phone and a charger into a small bag and seals it with a strip of tape",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "medium shot, slow push-in"
+    }
+  ],
+  "narration": {
+    "gadgets-send-invoice": {
+      "en": [
+        "Okoro and Sons bought ten tablets.",
+        "Ikenna opens the tools.",
+        "He taps Invoices.",
+        "Then New invoice.",
+        "Who it is for, and a phone number.",
+        "What it is for, and how much: one million, two hundred thousand.",
+        "Send it: they get a pay link by text.",
+        "The invoice shows as Sent."
+      ],
+      "pcm": [
+        "Okoro and Sons don buy tablets.",
+        "Ikenna open the tools.",
+        "He tap Invoices.",
+        "Then New invoice.",
+        "Who e be for, and phone number.",
+        "Wetin e be for, and how much: one million, two hundred thousand.",
+        "Send am: dem go get pay link for text.",
+        "The invoice show as Sent."
+      ]
+    },
+    "gadgets-match-payment": {
+      "en": [
+        "A transfer arrives.",
+        "Ikenna opens the tools, then Money.",
+        "He taps To match.",
+        "The payment: one million, two hundred thousand.",
+        "Match to an invoice.",
+        "He picks Okoro and Sons' invoice.",
+        "Match it, and it counts towards the invoice.",
+        "Back in Invoices, it shows as Paid."
+      ],
+      "pcm": [
+        "Transfer enter.",
+        "Ikenna open the tools, then Money.",
+        "He tap To match.",
+        "The payment: one million, two hundred thousand.",
+        "Match to an invoice.",
+        "He pick Okoro and Sons invoice.",
+        "Match am, and e go count for the invoice.",
+        "Back for Invoices, e show as Paid."
+      ]
+    }
+  }
+}

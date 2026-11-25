@@ -96,3 +96,26 @@ Ada, Bayo, Kola, Kemi, Chioma, Yaba and Tobi (TOH-bee, above) are already listed
 | Surulere | soo-roo-LEH-reh | Mama Tobi's area (also in the Fashion table) |
 | jollof | JOH-lof | The rice dish |
 | zobo | ZOH-boh | The hibiscus drink |
+
+## Phones and gadgets series: more names (to confirm with a native speaker)
+
+Nwachukwu, Ikenna, Maryam Sani, Gwarzo, Kehinde and Alabi are in the "Proposed names" table
+above; Eze and Emeka are listed elsewhere in this file.
+
+| Name | Say it | Notes |
+| --- | --- | --- |
+| Techline Gadgets | as in English | The business |
+| Maryam | MAR-yam | Maryam Sani (Hausa) |
+| Sani | SAH-nee | Maryam's surname |
+| Alhaji | ah-LAH-jee | Title for a man who has made the pilgrimage; Alhaji Ibrahim Gwarzo |
+| Ibrahim | ee-brah-HEEM | Alhaji Gwarzo's first name (Hausa) |
+| Gwarzo Distributors | GWAR-zoh dis-TRIB-yoo-ters | The distributor, Kano |
+| Chiamaka | chee-ah-MAH-kah | Chiamaka Eze (Igbo), the customer |
+| Ikeja | ee-KEH-jah | The Lagos area; Computer Village is in Ikeja |
+| Computer Village | as in English | The phone market in Ikeja |
+| Allen Avenue | as in English | Chiamaka's street, Ikeja |
+| Kano | KAH-noh | The northern city |
+| Ibadan | ee-BAH-dan | Kehinde's city (Yoruba) |
+| Okoro | oh-KOH-roh | Okoro & Sons Ltd (Igbo); say "Okoro and Sons" |
+| Nova X5 | NOH-vah ex FIVE | The invented phone |
+| gigabytes | as in English | Say "one twenty-eight gigabytes" for 128 GB |

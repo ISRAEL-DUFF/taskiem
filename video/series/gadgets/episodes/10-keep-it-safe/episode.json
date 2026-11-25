@@ -1,0 +1,94 @@
+{
+  "number": 10,
+  "slug": "keep-it-safe",
+  "title": "Keep it safe",
+  "headline": "Keep it *safe*",
+  "sub": "Approvals for money going out, and the app lock.",
+  "mood": "sparse",
+  "films": [
+    "gadgets-approve-a-payment",
+    "gadgets-app-lock"
+  ],
+  "recap": {
+    "en": "Phones are valuable, and so is the money. How does Ikenna keep it safe?",
+    "pcm": "Phones get value, money too. How Ikenna go keep am safe?"
+  },
+  "closing": {
+    "en": "That is Techline Gadgets. Start your free trial.",
+    "pcm": "Na so Techline Gadgets be. Start your free trial."
+  },
+  "flow": [
+    {
+      "id": "E10-C1",
+      "who": "Maryam Sani",
+      "purpose": "she asks to pay the supplier",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Looks at her phone, taps Send, then glances across the shop at Ikenna, who is at the counter",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "over-the-shoulder two-shot"
+    },
+    {
+      "id": "E10-C2",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "he approves",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Reads his phone, checks the amount, nods and taps once with a firm smile",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "close-up, eye-level"
+    },
+    {
+      "id": "E10-C3",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "closing: the shop at dusk",
+      "seconds": 5,
+      "goes": "closing, after the footage",
+      "action": "Stands in the shop doorway at dusk, looks back at the tidy glass counter and smiles with quiet pride",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter, evening lamp light",
+      "camera": "wide-to-medium slow pull-back"
+    }
+  ],
+  "narration": {
+    "gadgets-approve-a-payment": {
+      "en": [
+        "Maryam asks to pay Gwarzo.",
+        "He sees who asks, and how much.",
+        "He taps Approve.",
+        "First payment to this account: check the details.",
+        "He adds a comment. It is recorded.",
+        "Approve, and the card clears."
+      ],
+      "pcm": [
+        "Maryam ask to pay Gwarzo.",
+        "He see who ask, and how much.",
+        "He tap Approve.",
+        "Na first payment to this account: check the details.",
+        "He add comment. E go dey record.",
+        "Approve, and the card go clear."
+      ]
+    },
+    "gadgets-app-lock": {
+      "en": [
+        "Ikenna turns on the app lock.",
+        "In Settings, he taps App lock.",
+        "The phone checks his fingerprint.",
+        "App lock is on.",
+        "He can choose when it asks.",
+        "Later, he comes back.",
+        "Taskiem is locked until he proves it.",
+        "Fingerprint matched."
+      ],
+      "pcm": [
+        "Ikenna turn on the app lock.",
+        "For Settings, he tap App lock.",
+        "Phone dey check im fingerprint.",
+        "App lock don on.",
+        "He fit choose when e go ask.",
+        "Later, he come back.",
+        "Taskiem lock until he prove say na am.",
+        "Fingerprint match."
+      ]
+    }
+  }
+}

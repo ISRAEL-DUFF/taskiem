@@ -1,0 +1,93 @@
+{
+  "number": 1,
+  "slug": "open-your-shop",
+  "title": "Open your shop",
+  "headline": "Open your *shop*",
+  "sub": "Sign up, tell Taskiem about your business, and be found.",
+  "mood": "sparse",
+  "films": [
+    "gadgets-open-your-shop",
+    "gadgets-be-found"
+  ],
+  "bridge": {
+    "en": "The shop is open but the shelves are empty. What goes on them?",
+    "pcm": "Shop don open but shelf dey empty. Wetin go dey inside?"
+  },
+  "next": {
+    "number": 2,
+    "title": "Put your goods in",
+    "headline": "Put your *goods* in"
+  },
+  "flow": [
+    {
+      "id": "E1-C1",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "cold open: a busy counter",
+      "seconds": 4,
+      "goes": "before the title card",
+      "action": "Talks to a customer across the glass counter while two phones buzz in his hand; he glances at them, grins and shakes his head",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "slow push-in, medium shot, warm light"
+    },
+    {
+      "id": "E1-C2",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "bridge: the empty shelf",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Looks at an empty shelf, then at a stack of unopened plain boxes on the counter, and nods with his hands on his hips",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "medium shot, a gentle pan to the boxes"
+    }
+  ],
+  "narration": {
+    "gadgets-open-your-shop": {
+      "en": [
+        "Meet Ikenna, who runs Techline Gadgets in Ikeja. He signs up with WhatsApp, and Taskiem sends a code.",
+        "",
+        "He types the code.",
+        "Taskiem asks him to agree to the terms.",
+        "He chooses business, not workflows.",
+        "What is the business called? Techline Gadgets.",
+        "Then his own name, Ikenna Nwachukwu.",
+        "What does he sell? Phones and gadgets, number four.",
+        "How do customers pay? Cash and transfer.",
+        "Done. On Taskiem, free for fourteen days."
+      ],
+      "pcm": [
+        "Meet Ikenna, wey dey run Techline Gadgets for Ikeja. He sign up with WhatsApp, and Taskiem go send code.",
+        "",
+        "He dey type the code.",
+        "Taskiem go ask make he agree to the terms.",
+        "He choose business, no be workflows.",
+        "Wetin be the business name? Techline Gadgets.",
+        "Then his own name, Ikenna Nwachukwu.",
+        "Wetin he dey sell? Phones and gadgets, number four.",
+        "How customers dey pay? Cash and transfer.",
+        "E don do. Free for fourteen days."
+      ]
+    },
+    "gadgets-be-found": {
+      "en": [
+        "Ikenna wants resellers to find him.",
+        "He turns on Be found in Explore.",
+        "He types his area: Computer Village, Ikeja.",
+        "He picks Phones and gadgets.",
+        "Then Save.",
+        "His card shows his line and area.",
+        "Kehinde, a reseller, opens Find a business.",
+        "Techline is listed, as Phones and gadgets."
+      ],
+      "pcm": [
+        "Ikenna want make resellers find am.",
+        "He turn on Be found for Explore.",
+        "He type im area: Computer Village, Ikeja.",
+        "He pick Phones and gadgets.",
+        "Then Save.",
+        "Im card show im line and area.",
+        "Kehinde, reseller, open Find a business.",
+        "Techline dey list, as Phones and gadgets."
+      ]
+    }
+  }
+}

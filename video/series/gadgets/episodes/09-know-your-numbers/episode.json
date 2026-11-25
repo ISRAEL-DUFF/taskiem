@@ -1,0 +1,66 @@
+{
+  "number": 9,
+  "slug": "know-your-numbers",
+  "title": "Know your numbers",
+  "headline": "Know your *numbers*",
+  "sub": "Your business in one card, every morning.",
+  "mood": "sparse",
+  "films": [
+    "gadgets-know-your-numbers"
+  ],
+  "recap": {
+    "en": "It is eight in the morning. Ikenna opens Taskiem.",
+    "pcm": "Na eight for morning. Ikenna open Taskiem."
+  },
+  "bridge": {
+    "en": "Phones are valuable, and so are the payments. How does Ikenna keep it safe?",
+    "pcm": "Phones get value, payments too. How Ikenna go keep am safe?"
+  },
+  "next": {
+    "number": 10,
+    "title": "Keep it safe",
+    "headline": "Keep it *safe*"
+  },
+  "flow": [
+    {
+      "id": "E9-C1",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "the morning card",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Sips a cup of tea at the counter before he rolls up the shutter, reads his phone, and his brows lift as the numbers appear",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "medium close-up, warm morning light"
+    },
+    {
+      "id": "E9-C2",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "he is pleased",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Looks up from his phone with a quiet proud grin and nods once",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "close-up, eye-level"
+    }
+  ],
+  "narration": {
+    "gadgets-know-your-numbers": {
+      "en": [
+        "At eight, Ikenna opens Taskiem.",
+        "Yesterday's sales, up nine percent.",
+        "Owed, a count of low items, and deliveries.",
+        "He taps Got it.",
+        "Later, he types briefing, and the card comes back.",
+        "And Today shows the day so far."
+      ],
+      "pcm": [
+        "For eight, Ikenna open Taskiem.",
+        "Yesterday sales, up nine percent.",
+        "Wetin dem owe am, items wey low, deliveries.",
+        "He tap Got it.",
+        "Later, he type briefing, and the card come back.",
+        "And Today show the day so far."
+      ]
+    }
+  }
+}

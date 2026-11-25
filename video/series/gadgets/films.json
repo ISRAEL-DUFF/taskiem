@@ -1,0 +1,58 @@
+{
+  "_note": "Phone clock for each film when composing (default 13:00, light); end trims a film (seconds).",
+  "gadgets-open-your-shop": {
+    "time": "13:00"
+  },
+  "gadgets-be-found": {
+    "time": "13:00",
+    "end": 24.8
+  },
+  "gadgets-put-goods-in": {
+    "time": "13:00"
+  },
+  "gadgets-sell-at-counter": {
+    "time": "13:00"
+  },
+  "gadgets-customer-order": {
+    "time": "12:03"
+  },
+  "gadgets-send-invoice": {
+    "time": "13:00",
+    "end": 27.5
+  },
+  "gadgets-match-payment": {
+    "time": "13:00",
+    "end": 25.5
+  },
+  "gadgets-deliver": {
+    "time": "13:20"
+  },
+  "gadgets-add-staff": {
+    "time": "09:00"
+  },
+  "gadgets-tasks-and-handover": {
+    "time": "13:00"
+  },
+  "gadgets-find-a-supplier": {
+    "time": "13:00"
+  },
+  "gadgets-reorder": {
+    "time": "13:00"
+  },
+  "gadgets-price-list": {
+    "time": "13:00"
+  },
+  "gadgets-a-deal": {
+    "time": "13:00"
+  },
+  "gadgets-know-your-numbers": {
+    "time": "08:00"
+  },
+  "gadgets-approve-a-payment": {
+    "time": "13:00",
+    "end": 20.0
+  },
+  "gadgets-app-lock": {
+    "time": "13:00"
+  }
+}

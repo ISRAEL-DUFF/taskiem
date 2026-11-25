@@ -1,0 +1,91 @@
+{
+  "number": 3,
+  "slug": "take-orders",
+  "title": "Take orders",
+  "headline": "Take *orders*",
+  "sub": "Sell at the counter, and turn a WhatsApp message into an order.",
+  "mood": "sparse",
+  "films": [
+    "gadgets-sell-at-counter",
+    "gadgets-customer-order"
+  ],
+  "recap": {
+    "en": "The Nova X5 is on the shelf. Customers are asking for it.",
+    "pcm": "Nova X5 dey for shelf. Customers dey ask for am."
+  },
+  "bridge": {
+    "en": "A company wants ten tablets. How does Ikenna get paid?",
+    "pcm": "One company want ten tablets. How Ikenna go collect im money?"
+  },
+  "next": {
+    "number": 4,
+    "title": "Get paid",
+    "headline": "Get *paid*"
+  },
+  "flow": [
+    {
+      "id": "E3-C1",
+      "who": "Chiamaka Eze",
+      "purpose": "the customer orders in a hurry",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Types fast on her phone on her sofa with one hand, glances at her watch, then grins",
+      "setting": "a small living room in a flat on Allen Avenue, Ikeja: a sofa, a work bag by the door, a bright window",
+      "camera": "medium shot from the front, slight handheld feel"
+    },
+    {
+      "id": "E3-C2",
+      "who": "Maryam Sani",
+      "purpose": "serving at the counter",
+      "seconds": 4,
+      "goes": "between the two films",
+      "action": "Hands a small bag with a boxed phone across the glass counter to a customer with a calm smile and a small nod",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "medium shot, eye-level"
+    }
+  ],
+  "narration": {
+    "gadgets-sell-at-counter": {
+      "en": [
+        "Maryam serves a customer: a phone and a charger.",
+        "She opens Sell.",
+        "It has storage and colours.",
+        "She picks 128 gigabytes, and Blue.",
+        "It shows how many are left. Add one.",
+        "Then one charger, at six thousand, five hundred.",
+        "Total: one hundred and ninety-one thousand, five hundred.",
+        "She chooses Transfer, as the customer paid.",
+        "She records the sale."
+      ],
+      "pcm": [
+        "Maryam dey serve customer: phone and charger.",
+        "She open Sell.",
+        "E get storage and colours.",
+        "She pick 128 gigabytes, and Blue.",
+        "E show how many remain. Add one.",
+        "Then one charger, for six thousand, five hundred.",
+        "Total: one hundred and ninety-one thousand, five hundred.",
+        "She choose Transfer, as the customer pay.",
+        "She record the sale."
+      ]
+    },
+    "gadgets-customer-order": {
+      "en": [
+        "Chiamaka messages on WhatsApp. Taskiem reads it into an order card.",
+        "The card: one Nova X5, 128 gigabytes, Blue.",
+        "She wants it delivered, so he adds the fee.",
+        "He saves the address and fee.",
+        "He taps Confirm.",
+        "The order is confirmed."
+      ],
+      "pcm": [
+        "Chiamaka message for WhatsApp. Taskiem read am into order card.",
+        "The card: one Nova X5, 128 gigabytes, Blue.",
+        "She want delivery, so he add fee.",
+        "He save the address and fee.",
+        "He tap Confirm.",
+        "The order don confirm."
+      ]
+    }
+  }
+}

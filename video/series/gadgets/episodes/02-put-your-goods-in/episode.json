@@ -1,0 +1,76 @@
+{
+  "number": 2,
+  "slug": "put-your-goods-in",
+  "title": "Put your goods in",
+  "headline": "Put your *goods* in",
+  "sub": "A photo, a price, and every storage and colour in one product.",
+  "mood": "sparse",
+  "films": [
+    "gadgets-put-goods-in"
+  ],
+  "recap": {
+    "en": "Techline is open. Time to stock it.",
+    "pcm": "Shop don open. Make we stock am."
+  },
+  "bridge": {
+    "en": "A customer messages on WhatsApp for a Nova X5. How does Ikenna take the order?",
+    "pcm": "Customer message for WhatsApp for Nova X5. How Ikenna go take the order?"
+  },
+  "next": {
+    "number": 3,
+    "title": "Take orders",
+    "headline": "Take *orders*"
+  },
+  "flow": [
+    {
+      "id": "E2-C1",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "photographing the phone",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Sets a plain unbranded phone on a small white display stand on the glass counter and photographs it with his phone, then checks the picture and grins",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "medium close-up, warm light"
+    },
+    {
+      "id": "E2-C2",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "bridge: the first WhatsApp order",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Looks at his phone at the counter as a message arrives, reads it and looks up with raised brows",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "over-the-shoulder, medium shot"
+    }
+  ],
+  "narration": {
+    "gadgets-put-goods-in": {
+      "en": [
+        "Ikenna puts the Nova X5 on sale.",
+        "He opens Products, then Add product.",
+        "A photo of the phone.",
+        "He types the name, the category Phones, and the price.",
+        "Add product. The Nova X5 is in.",
+        "To sell it in sizes and colours, he opens it.",
+        "First choice: Storage, 64, 128 and 256 gigabytes.",
+        "A second choice: Colour. Black, Blue, Gold.",
+        "Nine boxes, each with its own count.",
+        "Then he changes 128 gigabytes, Blue, to twelve.",
+        "Save. Nine sizes and colours, on sale."
+      ],
+      "pcm": [
+        "Ikenna dey put the Nova X5 for sale.",
+        "He open Products, then Add product.",
+        "Photo of the phone.",
+        "He type the name, the category Phones, and the price.",
+        "Add product. The Nova X5 don enter.",
+        "To sell am for sizes and colours, he open am.",
+        "First choice: Storage, 64, 128 and 256 gigabytes.",
+        "Second choice: Colour. Black, Blue, Gold.",
+        "Nine boxes, each get im own count.",
+        "Then he change 128 gigabytes, Blue, to twelve.",
+        "Save. Nine sizes and colours, ready to sell."
+      ]
+    }
+  }
+}

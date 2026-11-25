@@ -1,0 +1,152 @@
+{
+  "number": 0,
+  "slug": "one-week-at-techline",
+  "title": "One week at Techline",
+  "headline": "One week at *Techline*",
+  "sub": "Orders, riders, stock, money and deals, all run alongside his chats.",
+  "mood": "build",
+  "reel": [
+    {
+      "film": "gadgets-open-your-shop",
+      "from": 19.8,
+      "to": 31.8,
+      "tag": "Episode 1 · Open your shop",
+      "caption": "Ikenna signs up and sets up Techline in minutes.",
+      "narration": {
+        "en": "Ikenna signs up and sets up his business in minutes.",
+        "pcm": "Ikenna sign up and set up im business for few minutes."
+      }
+    },
+    {
+      "film": "gadgets-put-goods-in",
+      "from": 41.4,
+      "to": 53.4,
+      "tag": "Episode 2 · Put your goods in",
+      "caption": "One phone, nine sizes and colours, each counted.",
+      "narration": {
+        "en": "One phone in every storage and colour, each with its own count.",
+        "pcm": "One phone for every storage and colour, each get im own count."
+      }
+    },
+    {
+      "film": "gadgets-customer-order",
+      "from": 0.0,
+      "to": 13.0,
+      "tag": "Episode 3 · Take orders",
+      "caption": "A WhatsApp order becomes an order card.",
+      "narration": {
+        "en": "When a customer orders on WhatsApp, Taskiem reads it into an order card.",
+        "pcm": "When customer order for WhatsApp, Taskiem go read am into order card."
+      }
+    },
+    {
+      "film": "gadgets-match-payment",
+      "from": 8.8,
+      "to": 21.1,
+      "tag": "Episode 4 · Get paid",
+      "caption": "Money arrives and finds its invoice.",
+      "narration": {
+        "en": "When the money arrives, he matches it to the invoice.",
+        "pcm": "When money enter, he go match am to the invoice."
+      }
+    },
+    {
+      "film": "gadgets-deliver",
+      "from": 8.2,
+      "to": 20.0,
+      "tag": "Episode 5 · Deliver",
+      "caption": "A rider takes it, and he follows it.",
+      "narration": {
+        "en": "A rider takes the order, and Ikenna follows it to the door.",
+        "pcm": "Rider go carry the order, and Ikenna go follow am reach door."
+      }
+    },
+    {
+      "film": "gadgets-tasks-and-handover",
+      "from": 34.2,
+      "to": 46.6,
+      "tag": "Episode 6 · Your team",
+      "caption": "Maryam hands the shift over, cash counted.",
+      "narration": {
+        "en": "Maryam hands the shift over, and the cash is counted.",
+        "pcm": "Maryam go hand the shift over, and dem go count the cash."
+      }
+    },
+    {
+      "film": "gadgets-reorder",
+      "from": 0.0,
+      "to": 13.2,
+      "tag": "Episode 7 · Your suppliers",
+      "caption": "Phones running low? Reorder in a few taps.",
+      "narration": {
+        "en": "When the Nova X5 runs low, he reorders from Gwarzo in a few taps.",
+        "pcm": "When Nova X5 dey finish, he go reorder from Gwarzo with few taps."
+      }
+    },
+    {
+      "film": "gadgets-a-deal",
+      "from": 16.0,
+      "to": 28.4,
+      "tag": "Episode 8 · Sell to dealers",
+      "caption": "A deal, within the limits he sets.",
+      "narration": {
+        "en": "Kehinde haggles. Maryam deals within his limits, and he approves the rest.",
+        "pcm": "Kehinde dey haggle. Maryam go deal inside im limits, and he go approve the rest."
+      }
+    },
+    {
+      "film": "gadgets-know-your-numbers",
+      "from": 0.0,
+      "to": 10.6,
+      "tag": "Episode 9 · Know your numbers",
+      "caption": "His morning, in one card.",
+      "narration": {
+        "en": "Every morning, his numbers are waiting in one card.",
+        "pcm": "Every morning, im numbers dey wait for one card."
+      }
+    },
+    {
+      "film": "gadgets-approve-a-payment",
+      "from": 8.4,
+      "to": 20.4,
+      "tag": "Episode 10 · Keep it safe",
+      "caption": "Nothing goes out without his OK.",
+      "narration": {
+        "en": "And nothing goes out without his OK.",
+        "pcm": "And nothing go out without im OK."
+      }
+    }
+  ],
+  "bridge": {
+    "en": "It starts with opening the shop.",
+    "pcm": "Everything start with how he go open the shop."
+  },
+  "next": {
+    "number": 1,
+    "title": "Open your shop",
+    "headline": "Open your *shop*"
+  },
+  "flow": [
+    {
+      "id": "E0-C1",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "cold open: a busy counter",
+      "seconds": 4,
+      "goes": "before the title card",
+      "action": "Serves three customers at once across the glass counter while two phones ring; he answers one with a grin and waves the next customer forward",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "slow push-in, medium shot, warm light"
+    },
+    {
+      "id": "E0-C2",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "closing: the shop at dusk",
+      "seconds": 5,
+      "goes": "closing, after the footage",
+      "action": "Wipes down the glass counter at the end of the week, checks his phone, smiles with quiet pride and pulls the shutter halfway down",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter, evening lamp light",
+      "camera": "slow pull-back, medium shot"
+    }
+  ],
+  "narration": {}
+}

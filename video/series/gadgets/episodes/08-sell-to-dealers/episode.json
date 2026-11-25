@@ -1,0 +1,95 @@
+{
+  "number": 8,
+  "slug": "sell-to-dealers",
+  "title": "Sell to dealers",
+  "headline": "Sell to *dealers*",
+  "sub": "A price list, an offer, and a deal within your limits.",
+  "mood": "sparse",
+  "films": [
+    "gadgets-price-list",
+    "gadgets-a-deal"
+  ],
+  "recap": {
+    "en": "Kehinde wants twenty phones.",
+    "pcm": "Kehinde want twenty phones."
+  },
+  "bridge": {
+    "en": "A big deal, orders, money, a team. How does Ikenna see it all first thing in the morning?",
+    "pcm": "Big deal, orders, money, team. How Ikenna go see everything for morning?"
+  },
+  "next": {
+    "number": 9,
+    "title": "Know your numbers",
+    "headline": "Know your *numbers*"
+  },
+  "flow": [
+    {
+      "id": "E8-C1",
+      "who": "Kehinde Alabi",
+      "purpose": "the reseller opens the haggle",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Taps a pen twice on a small notebook, looks up, tilts her head with one brow raised and a knowing half-smile",
+      "setting": "a bright market-street phone shop in Ibadan: phones on a back-lit shelf, a counter with a cash box, a rusted corrugated roof outside",
+      "camera": "medium close-up, locked-off, shallow depth of field"
+    },
+    {
+      "id": "E8-C2",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "he agrees",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Reads his phone, gives a firm nod, then breaks into a wide grin",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "close-up, eye-level"
+    }
+  ],
+  "narration": {
+    "gadgets-price-list": {
+      "en": [
+        "A price list for resellers, shared with Kehinde.",
+        "A lower price for more.",
+        "Under Nova X5.",
+        "From ten phones, one hundred and seventy-eight thousand each.",
+        "Save.",
+        "A lowest price: one hundred and seventy-two thousand, five hundred.",
+        "Staff can agree down to it."
+      ],
+      "pcm": [
+        "Resellers price list, shared with Kehinde.",
+        "Lower price for more.",
+        "Under Nova X5.",
+        "From ten phones, one hundred and seventy-eight thousand each.",
+        "Save.",
+        "Lowest price: one hundred and seventy-two thousand, five hundred.",
+        "Staff fit agree down to am."
+      ]
+    },
+    "gadgets-a-deal": {
+      "en": [
+        "Kehinde makes an offer for twenty phones.",
+        "Maryam taps Counter.",
+        "She counters: three million, six hundred thousand.",
+        "She sends it.",
+        "Kehinde counters, under Ikenna's lowest price.",
+        "Maryam taps Accept.",
+        "It waits for Ikenna's OK.",
+        "Ikenna sees it in Taskiem.",
+        "He taps Agree.",
+        "Deal agreed. The card goes."
+      ],
+      "pcm": [
+        "Kehinde make offer for twenty phones.",
+        "Maryam tap Counter.",
+        "She counter: three million, six hundred thousand.",
+        "She send am.",
+        "Kehinde counter, under Ikenna lowest price.",
+        "Maryam tap Accept.",
+        "E dey wait for Ikenna OK.",
+        "Ikenna see am for Taskiem.",
+        "He tap Agree.",
+        "Dem agree the deal. The card go."
+      ]
+    }
+  }
+}

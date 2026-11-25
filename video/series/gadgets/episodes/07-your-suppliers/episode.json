@@ -1,0 +1,81 @@
+{
+  "number": 7,
+  "slug": "your-suppliers",
+  "title": "Your suppliers",
+  "headline": "Your *suppliers*",
+  "sub": "Find a supplier, and reorder what is running low.",
+  "mood": "sparse",
+  "films": [
+    "gadgets-find-a-supplier",
+    "gadgets-reorder"
+  ],
+  "recap": {
+    "en": "The Nova X5 is nearly out at Techline.",
+    "pcm": "Nova X5 don almost finish for Techline."
+  },
+  "bridge": {
+    "en": "The phones are ordered. Now Kehinde in Ibadan wants twenty. What price?",
+    "pcm": "Phones don order. Now Kehinde for Ibadan want twenty. Wetin be the price?"
+  },
+  "next": {
+    "number": 8,
+    "title": "Sell to dealers",
+    "headline": "Sell to *dealers*"
+  },
+  "flow": [
+    {
+      "id": "E7-C1",
+      "who": "Alhaji Ibrahim Gwarzo",
+      "purpose": "the distributor in Kano",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Slides prayer beads through his fingers beside a stack of plain cartons, taps the old ledger once and gives a slow nod",
+      "setting": "Gwarzo Distributors in Kano: a wide warehouse office with stacked plain cartons, a wooden desk with an old ledger, a woven mat, a ceiling fan, a window onto a sandy yard",
+      "camera": "medium shot, locked-off"
+    },
+    {
+      "id": "E7-C2",
+      "who": "Alhaji Ibrahim Gwarzo",
+      "purpose": "he accepts the order",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Holds his phone at arm's length, reads it, lays a hand on his chest, then gives a slow warm smile",
+      "setting": "Gwarzo Distributors in Kano: a wide warehouse office with stacked plain cartons, a wooden desk with an old ledger, a woven mat, a ceiling fan, a window onto a sandy yard",
+      "camera": "medium close-up, locked-off"
+    }
+  ],
+  "narration": {
+    "gadgets-find-a-supplier": {
+      "en": [
+        "Ikenna needs phones. He opens Find a business.",
+        "He searches for phones.",
+        "Gwarzo Distributors is listed. He taps Connect.",
+        "The request goes to Alhaji Gwarzo, and the card says Requested."
+      ],
+      "pcm": [
+        "Ikenna need phones. He open Find a business.",
+        "He search for phones.",
+        "Gwarzo Distributors dey the list. He tap Connect.",
+        "The request go to Alhaji Gwarzo, and the card talk Requested."
+      ]
+    },
+    "gadgets-reorder": {
+      "en": [
+        "Nova X5, 128 gigabytes, Blue, is low. Taskiem says so.",
+        "Reorder twenty.",
+        "Gwarzo's price list opens, with the order filled in.",
+        "He taps Review order.",
+        "Twenty phones: two million, eight hundred thousand naira. Place order.",
+        "The order is sent."
+      ],
+      "pcm": [
+        "Nova X5, 128 gigabytes, Blue, don low. Taskiem talk am.",
+        "Reorder twenty.",
+        "Gwarzo price list open, with the order don fill.",
+        "He tap Review order.",
+        "Twenty phones: two million, eight hundred thousand naira. Place order.",
+        "The order don go."
+      ]
+    }
+  }
+}

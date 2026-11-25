@@ -1,0 +1,103 @@
+{
+  "number": 6,
+  "slug": "your-team",
+  "title": "Your team",
+  "headline": "Your *team*",
+  "sub": "Add staff, give tasks, and hand over the shift.",
+  "mood": "sparse",
+  "films": [
+    "gadgets-add-staff",
+    "gadgets-tasks-and-handover"
+  ],
+  "recap": {
+    "en": "Techline needs a second pair of hands.",
+    "pcm": "Techline need another hand."
+  },
+  "bridge": {
+    "en": "The team is working. But stock is running low. Where does Ikenna restock?",
+    "pcm": "Team dey work. But stock dey finish. Where Ikenna go restock?"
+  },
+  "next": {
+    "number": 7,
+    "title": "Your suppliers",
+    "headline": "Your *suppliers*"
+  },
+  "flow": [
+    {
+      "id": "E6-C1",
+      "who": "Ikenna Nwachukwu",
+      "purpose": "he shows Maryam the till",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Shows Maryam how to use the till on a phone at the counter; Maryam copies him carefully and Ikenna nods",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "two-shot, medium, eye-level"
+    },
+    {
+      "id": "E6-C2",
+      "who": "Maryam Sani",
+      "purpose": "she finishes a task",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Closes a box of chargers, taps her phone with a small proud smile and a nod",
+      "setting": "Techline Gadgets in Computer Village, Ikeja: a narrow shop with a glass display counter, shelves of plain unbranded phone boxes, a wall of chargers and cables on hooks, warm bulbs, a roll-up shutter",
+      "camera": "medium close-up, eye-level"
+    }
+  ],
+  "narration": {
+    "gadgets-add-staff": {
+      "en": [
+        "Ikenna adds Maryam to the team.",
+        "He taps Add staff.",
+        "He types her name and phone number.",
+        "She will be a shift manager.",
+        "He sends the invitation, and Taskiem messages her.",
+        "She waits until she says yes.",
+        "Then Maryam is on the Team page."
+      ],
+      "pcm": [
+        "Ikenna dey add Maryam to the team.",
+        "He tap Add staff.",
+        "He type her name and phone number.",
+        "She go be shift manager.",
+        "He send the invitation, Taskiem go message her.",
+        "She go wait till she yes.",
+        "Then Maryam dey the Team page."
+      ]
+    },
+    "gadgets-tasks-and-handover": {
+      "en": [
+        "Ikenna gives Maryam a task.",
+        "He taps Give a task.",
+        "He writes it: count the chargers by two.",
+        "He chooses Maryam.",
+        "Maryam hears it in her chat.",
+        "The task shows under Everyone's.",
+        "On Maryam's phone, a task waits.",
+        "She opens Your tasks.",
+        "She counts the chargers, and taps Done.",
+        "At closing, Maryam opens the tools.",
+        "She taps Handover.",
+        "Taskiem adds up the shift.",
+        "She counts the cash drawer.",
+        "Taskiem says it is five hundred naira short."
+      ],
+      "pcm": [
+        "Ikenna give Maryam task.",
+        "He tap Give a task.",
+        "He write am: count the chargers by two.",
+        "He choose Maryam.",
+        "Maryam go hear am for her chat.",
+        "The task show under Everyone's.",
+        "For Maryam phone, task dey wait.",
+        "She open Your tasks.",
+        "She count the chargers, and tap Done.",
+        "For closing, Maryam open the tools.",
+        "She tap Handover.",
+        "Taskiem go add up the shift.",
+        "She count the cash drawer.",
+        "Taskiem talk say e short by five hundred naira."
+      ]
+    }
+  }
+}

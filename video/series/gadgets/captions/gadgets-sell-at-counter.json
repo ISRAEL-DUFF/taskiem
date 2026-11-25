@@ -1,0 +1,39 @@
+[
+  {
+    "t": 0.0,
+    "text": "A customer buys a phone and a charger. Maryam takes it.",
+    "who": "Maryam · Techline Gadgets"
+  },
+  {
+    "t": 3.8,
+    "text": "Maryam opens Sell from the tools to ring up the order."
+  },
+  {
+    "t": 8.0,
+    "text": "The Nova X5 comes in storage and colours. Tap Choose."
+  },
+  {
+    "t": 10.4,
+    "text": "She picks the storage, 128 GB, and the colour, Blue."
+  },
+  {
+    "t": 13.7,
+    "text": "It shows 128 GB, Blue and how many are left. Add one."
+  },
+  {
+    "t": 17.7,
+    "text": "One charger at ₦6,500: tap One more once."
+  },
+  {
+    "t": 21.3,
+    "text": "The bar shows two things and ₦191,500. Tap Next."
+  },
+  {
+    "t": 24.9,
+    "text": "Maryam chooses how it was paid: Transfer, as the customer did."
+  },
+  {
+    "t": 28.3,
+    "text": "Tap Record the sale to save it."
+  }
+]

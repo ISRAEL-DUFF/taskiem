@@ -1,0 +1,70 @@
+{
+  "number": 5,
+  "slug": "deliver",
+  "title": "Deliver",
+  "headline": "*Deliver*",
+  "sub": "Send an order with a rider, and see where it is.",
+  "mood": "sparse",
+  "films": [
+    "gadgets-deliver"
+  ],
+  "recap": {
+    "en": "Chiamaka's Nova X5 is packed. It has to reach her today.",
+    "pcm": "Chiamaka Nova X5 don pack. E must reach her today."
+  },
+  "bridge": {
+    "en": "Delivered. Techline is getting busy, and Ikenna cannot stand at the counter all day.",
+    "pcm": "E don reach. Techline dey busy and Ikenna no fit stand for counter all day."
+  },
+  "next": {
+    "number": 6,
+    "title": "Your team",
+    "headline": "Your *team*"
+  },
+  "flow": [
+    {
+      "id": "E5-C1",
+      "who": "Emeka Nwosu",
+      "purpose": "the rider collects the parcel",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Rides up to the shop door on a small dark-pine motorcycle, takes the small bag from Ikenna's hands and straps it into his cool box with a two-finger salute",
+      "setting": "the doorway of Techline Gadgets in Computer Village, Ikeja, a busy lane behind, mid-day sun",
+      "camera": "tracking shot beside the bike, eye-level"
+    },
+    {
+      "id": "E5-C2",
+      "who": "Chiamaka Eze",
+      "purpose": "she receives her phone",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Opens her flat door, sees the small bag, and puts both hands to her cheeks with delight",
+      "setting": "a small living room in a flat on Allen Avenue, Ikeja: a sofa, a work bag by the door, a bright window",
+      "camera": "medium close-up, slight handheld feel"
+    }
+  ],
+  "narration": {
+    "gadgets-deliver": {
+      "en": [
+        "Chiamaka's order needs a rider.",
+        "Ikenna taps Assign rider.",
+        "Emeka is free, and covers Ikeja.",
+        "Later, the Orders tab lists the order.",
+        "Emeka is offered it.",
+        "Emeka accepts.",
+        "He picks it up. On the way.",
+        "Delivered, paid in cash at the door."
+      ],
+      "pcm": [
+        "Chiamaka order need rider.",
+        "Ikenna tap Assign rider.",
+        "Emeka free, and e dey cover Ikeja.",
+        "Later, the Orders tab go list the order.",
+        "Dem offer Emeka the delivery.",
+        "Emeka accept.",
+        "E pick am up. E dey road.",
+        "E don deliver, dem pay cash for door."
+      ]
+    }
+  }
+}
