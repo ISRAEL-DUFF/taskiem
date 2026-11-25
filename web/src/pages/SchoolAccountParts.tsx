@@ -48,7 +48,15 @@ export async function plainly<T>(p: Promise<T>): Promise<T> {
 
 /** Schools settings: the connection that issues students' account numbers, and siblings sharing family credit (owners). */
 export function IssuingSettings() {
+  const { can } = useAuth();
   const settings = useLoad(() => get<SchoolSettingsWithIssuing>("/v1/settings/schools"), []);
+  // Whether Taskiem's own wallet is offered on this Taskiem: when it is not,
+  // the way in is a payments account of the school's own (Connections).
+  const wallet = useLoad(
+    () => (can("invoice.read") ? get<{ available: boolean }>("/v1/settings/receive-money") : Promise.resolve({ available: false })),
+    [],
+  );
+  const walletOffered = wallet.data?.available === true;
   const [form, setForm] = useState<SchoolIssuing>();
   const act = useAction();
   const issuers = settings.data?.issuers ?? [];
@@ -67,9 +75,18 @@ export function IssuingSettings() {
       <ErrorBox error={settings.error} />
       {!settings.data && !settings.error && <Skeleton rows={2} label="Loading the settings…" />}
       {settings.data && issuers.length === 0 && (
-        <EmptyState icon="connections" action={<Link to="/settings/payments">Receive money with Taskiem</Link>}>
-          No connection here can issue account numbers yet. Receive money with Taskiem (no account to sign up for), or connect iswallet, Paystack, Flutterwave or Moniepoint in
-          prod in <Link to="/connections">Connections</Link>.
+        <EmptyState
+          icon="connections"
+          action={walletOffered ? <Link to="/settings/payments">Receive money with Taskiem</Link> : <Link to="/connections">Connect a payments account</Link>}
+        >
+          {walletOffered ? (
+            <>
+              No connection here can issue account numbers yet. Receive money with Taskiem (no account to sign up for), or connect iswallet, Paystack, Flutterwave or
+              Moniepoint in prod in <Link to="/connections">Connections</Link>.
+            </>
+          ) : (
+            <>No connection here can issue account numbers yet. Connect iswallet, Paystack, Flutterwave or Moniepoint in prod in Connections.</>
+          )}
         </EmptyState>
       )}
       {settings.data && issuers.length > 0 && (

@@ -10,6 +10,7 @@ import { EmptyState, ErrorBox, Field, Items, PageHeader, Row, Skeleton, useActio
 import { Icon } from "../icons";
 import { MoneyBars, MoneySources } from "./MoneyParts";
 import { SpendingCard } from "./MoneySpending";
+import { transactionsLink } from "../lib/transactions";
 import { UNMATCHED_PATH, channelWords, dateLabel, naira, newRequestKey, plainMessage, type UnmatchedMoney } from "../lib/invoices";
 import {
   CLOSE_CHOICES,
@@ -117,6 +118,7 @@ export function MoneyTabs() {
       <NavLink to="/money" end>
         Overview
       </NavLink>
+      <NavLink to="/money/transactions">Transactions</NavLink>
       <NavLink to="/money/leaks">Leaks</NavLink>
       <NavLink to="/money/statements">Upload statement</NavLink>
       <NavLink to="/money/entries">Cash and expenses</NavLink>
@@ -280,6 +282,16 @@ export function MoneyOverview() {
                 <span className="button">Match</span>
               </Link>
             )}
+            <Link className="list-row" to={transactionsLink(choice, p)} data-testid="money-transactions">
+              <span className="list-icon">
+                <Icon name="transactions" />
+              </span>
+              <span className="grow">
+                <span className="title">Transactions</span>
+                <span className="sub">Every payment in and out, {periodWords(p)}</span>
+              </span>
+              <Icon name="chevron" className="go" />
+            </Link>
             <Link className="list-row" to="/money/leaks">
               <span className={s.leaks_open > 0 ? "list-icon warn" : "list-icon"}>
                 <Icon name="alerts" />

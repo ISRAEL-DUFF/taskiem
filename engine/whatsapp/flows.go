@@ -340,8 +340,8 @@ func PinFlowJSON() []byte {
 	children := []any{
 		map[string]any{"type": "TextHeading", "text": dyn("title")},
 		map[string]any{"type": "TextBody", "text": dyn("summary")},
-		map[string]any{"type": "TextInput", "name": "pin", "label": "Approval PIN", "input-type": "passcode", "required": true,
-			"min-chars": strconv.Itoa(PinLength), "max-chars": strconv.Itoa(PinLength), "helper-text": "The WhatsApp PIN you set in Taskiem"},
+		map[string]any{"type": "TextInput", "name": "pin", "label": "Your PIN", "input-type": "passcode", "required": true,
+			"min-chars": strconv.Itoa(PinLength), "max-chars": strconv.Itoa(PinLength), "helper-text": "The 4-digit PIN you set in Taskiem"},
 		map[string]any{"type": "TextBody", "text": dyn("error"), "visible": dyn("has_error"), "font-weight": "bold"},
 		map[string]any{"type": "Footer", "label": "Confirm", "on-click-action": map[string]any{"name": "data_exchange", "payload": map[string]any{"pin": "${form.pin}"}}},
 	}
@@ -358,5 +358,5 @@ func flowJSON(screen, title string, data map[string]any, children []any) []byte 
 	return append(out, '\n')
 }
 
-// PinLength is the WhatsApp approval PIN's length.
-const PinLength = 6
+// PinLength is the PIN's length: four digits (docs/spec/transaction-pin.md).
+const PinLength = 4

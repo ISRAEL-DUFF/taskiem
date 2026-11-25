@@ -6346,8 +6346,9 @@
       "reviewed": false
     },
     "signup.pin_hint": {
-      "text": "This chat na your account. Send *pin* to set six-number PIN wey go keep am for you.",
-      "reviewed": false
+      "text": "This chat na your account. Send *pin* to set 4-digit PIN wey go keep am your own.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After signing up on WhatsApp: the chat PIN"
     },
     "signup.tpl.daily-reminder": {
       "text": "Daily reminder",
@@ -6421,12 +6422,14 @@
       "reviewed": false
     },
     "chatpin.web": {
-      "text": "Set your PIN for the web app, for {where}: e go first ask for your passkey, authenticator or password.",
-      "reviewed": false
+      "text": "Set your PIN for Taskiem app or the web app, for Settings › PIN, for {where}: we go first send code go your phone, or you fit confirm am with your passkey.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: pin: the person has a password, passkey or authenticator, so sets the PIN in the app or on the web, with a code to their phone or their passkey. {where} is the account page"
     },
     "chatpin.set_already": {
-      "text": "You don get chat PIN already. If you wan change am, sign in for web (send sign in make we give you link), add passkey or authenticator, then change am for your Account page for {where}.",
-      "reviewed": false
+      "text": "You don get PIN already. To change am, open Settings › PIN for Taskiem app or the web app, for {where}: we go first send code go this number.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: 'pin' in chat from someone who has a PIN already: changing it is done in the app or on the web, with a code to their phone. {where} is the web app's Account page"
     },
     "chatpin.not_here": {
       "text": "You no fit set chat PIN from here yet: set am from WhatsApp, where Taskiem dey send secure form.",
@@ -6438,8 +6441,9 @@
       "same": true
     },
     "chatpin.form": {
-      "text": "Choose six-number PIN for the form. Keep am for yourself: e dey show say this chat na your own, and e dey approve wetin ask for am.",
-      "reviewed": false
+      "text": "Choose 4-digit PIN for the form. Keep am for yourself: e dey show say this chat na your own, e dey approve wetin need am, and e dey pay small money.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Message with the PIN form that sets the chat PIN"
     },
     "chatpin.summary": {
       "text": "Six numbers wey keep this chat for you",

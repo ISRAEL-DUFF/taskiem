@@ -2314,6 +2314,143 @@ paths:
                     format: date-time
         default:
           $ref: '#/components/responses/Error'
+  /v1/money/entries/{id}:
+    get:
+      operationId: getMoneyEntry
+      tags:
+      - Invoices
+      summary: One movement of the money log
+      description: "The Transactions page's entry (docs/spec/transactions-page.md): any of a movement's entries finds it. Its amount, fee, channel, reference and latest status, every status it had, and the invoices, orders and sales it counts towards. Who paid, as the rail said, is masked (B•••, ••6789) unless someone with pii.reveal asks with reveal=true, which is audited."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: reveal
+        in: query
+        required: false
+        description: Who paid in full; needs pii.reveal, and is audited.
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The movement
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entry, revealed]
+                properties:
+                  revealed:
+                    type: boolean
+                  payer:
+                    type: string
+                    description: Who paid, as the rail said; masked unless revealed.
+                  payer_account:
+                    type: string
+                    description: The account they paid from; masked unless revealed.
+                  entry:
+                    type: object
+                    required: [id, movement, kind, direction, status, when, to_match, statuses, recorded_at, source, history, counts]
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        description: The entry that counts (its first settled money in); matching by hand takes it.
+                      movement:
+                        type: string
+                        format: uuid
+                      kind:
+                        type: string
+                        enum: [payment, account_credit, payout, refund, pos_sale, fee, statement, cash, expense, correction]
+                      direction:
+                        type: string
+                        enum: [in, out]
+                      amount_kobo:
+                        type: integer
+                      fee_kobo:
+                        type: integer
+                      status:
+                        type: string
+                        enum: [settled, pending, failed, reversed]
+                      channel:
+                        type: string
+                      reference:
+                        type: string
+                      when:
+                        type: string
+                        format: date-time
+                        description: When the money moved, as the rail or the person said; else when Taskiem heard.
+                      recorded_at:
+                        type: string
+                        format: date-time
+                        description: When Taskiem first heard of it.
+                      description:
+                        type: string
+                      vendor:
+                        type: string
+                      category:
+                        type: string
+                      note:
+                        type: string
+                      source:
+                        type: string
+                        description: How it came into the log (event, lookup, step, upload, entered).
+                      left_kobo:
+                        type: integer
+                      towards:
+                        type: string
+                      to_match:
+                        type: boolean
+                      currency:
+                        type: string
+                      statuses:
+                        type: integer
+                      history:
+                        type: array
+                        description: Every entry of the movement, oldest first.
+                        items:
+                          type: object
+                          required: [status, kind, at, source]
+                          properties:
+                            status:
+                              type: string
+                            kind:
+                              type: string
+                            amount_kobo:
+                              type: integer
+                            at:
+                              type: string
+                              format: date-time
+                            source:
+                              type: string
+                      counts:
+                        type: array
+                        description: The invoices, orders and sales it counts towards, and how much towards each.
+                        items:
+                          type: object
+                          required: [what, id, number, amount_kobo]
+                          properties:
+                            what:
+                              type: string
+                              enum: [invoice, order, sale]
+                            id:
+                              type: string
+                              format: uuid
+                            number:
+                              type: string
+                              description: The invoice's number, the order's or the sale's reference.
+                            amount_kobo:
+                              type: integer
+        default:
+          $ref: '#/components/responses/Error'
   /v1/money/entries/{id}/match:
     post:
       operationId: matchMoneyEntry
@@ -3024,10 +3161,63 @@ paths:
       - name: before
         in: query
         required: false
-        description: Only those recorded before this time (RFC 3339), for the next page.
+        description: Only those recorded before this time (RFC 3339), for the next page. Not with movements.
         schema:
           type: string
           format: date-time
+      - name: movements
+        in: query
+        required: false
+        description: "true: the Transactions page's list (docs/spec/transactions-page.md). One row per movement of money, with its latest status (a payout pending then settled is one row), newest first by when it happened, 50 a page unless limit says; the filters below apply, the next page comes from cursor, and the first page carries totals and channels. The other filters are refused without it."
+        schema:
+          type: boolean
+      - name: direction
+        in: query
+        required: false
+        description: With movements. Money in or money out only.
+        schema:
+          type: string
+          enum: [in, out]
+      - name: channel
+        in: query
+        required: false
+        description: With movements. One channel only, as channels lists them ("paystack/main", "cash").
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        description: With movements. The first day (Lagos), by when the money moved.
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        description: With movements. The last day (Lagos), included.
+        schema:
+          type: string
+          format: date
+      - name: matched
+        in: query
+        required: false
+        description: "With movements. yes: counted towards an invoice, order or sale; no: settled naira money in counted towards none yet."
+        schema:
+          type: string
+          enum: ["yes", "no"]
+      - name: q
+        in: query
+        required: false
+        description: With movements. Words found in the description, vendor, category, note, reference, channel or what it counts towards (an invoice's number, an order's reference), or an amount in naira ("4,500") matched exactly. Who paid, as the rail said, is sealed and not searched.
+        schema:
+          type: string
+          maxLength: 100
+      - name: cursor
+        in: query
+        required: false
+        description: With movements. The next page, as next gave it.
+        schema:
+          type: string
       responses:
         '200':
           description: The entries
@@ -3037,6 +3227,16 @@ paths:
                 type: object
                 required: [entries]
                 properties:
+                  next:
+                    type: string
+                    description: With movements, when there may be more. Pass it as cursor for the next page.
+                  totals:
+                    $ref: '#/components/schemas/MoneyTotals'
+                  channels:
+                    type: array
+                    description: With movements, on the first page. Every channel the money log has money on, for the channel filter.
+                    items:
+                      type: string
                   entries:
                     type: array
                     items:
@@ -3084,6 +3284,13 @@ paths:
                         currency:
                           type: string
                           description: The money's currency when it is not naira, such as "USD". Its amounts are then in that currency's smallest unit, nothing counts it towards an invoice or order, and it is in no naira total.
+                        movement:
+                          type: string
+                          format: uuid
+                          description: With movements. The movement's first entry; id is the entry that counts (its first settled money in), which matching by hand takes.
+                        statuses:
+                          type: integer
+                          description: With movements. How many entries the movement has (a payout pending, then settled, is two).
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -8092,7 +8299,7 @@ paths:
       tags:
       - Payments
       summary: Send a prepared payment, with a passkey or the person's PIN
-      description: 'A passkey asked for `money.pay` on `payment:{id}` (an authenticator code does not pay: 403 `passkey`, the code not spent), or `pin`: the person''s one PIN (the one set for WhatsApp approvals), typed in the app''s own pad, as the passkey''s fallback. The PIN pays at most ₦100,000 a payment and ₦200,000 a day across the person''s PIN-confirmed payments (Lagos''s day), the role''s own limits too; never a payment to a changed account or one that would wait for the owner''s OK, and never a batch. PIN refusals (403, with `code`): `pin_limit` over its limits, `pin_passkey_only` a changed account or the owner''s OK, `pin_new` a PIN set or changed in the last 24 hours, `no_pin`, `pin_wrong` (tries left said; counted with the approvals'': five wrong in 15 minutes lock it for 15 minutes) and `pin_locked`. With no proof, 403 `step_up` lists `pin` in `methods`, with `pin_limit_kobo` (what the PIN may still pay in one payment now), when the person''s PIN can confirm this payment. Within the payer''s limit (an owner has none) it is sent at once (`sending`), the passkey being its approval; over the limit, or (for staff) to an account changed since it was last paid or never paid, it waits for the owner''s OK in Approvals (`waiting_ok`, `needs_ok` saying why). An owner''s own passkey is the OK for a changed account they pay (`changed_account` on the payment says it before they confirm). 403 `step_up` without the proof (`methods`: `passkey`, and `pin` when the PIN can confirm it); 409 `pay_again` for the same payment in the last day without `again`, `not_prepared` once sent; 409 `account_changed` when the payee''s account (the saved account''s number or bank, the account a staff member is linked to, a rider''s bank) is not the one it was prepared to, and `provider_changed` when the business''s payments account is not the one it was prepared on: either way the payment is cancelled, to be prepared again. 409 `not_approved` when the run started but the payer''s own OK did not reach it: nothing is paid, and the payer confirming it again (it is then `sending`) gives it.'
+      description: 'A passkey asked for `money.pay` on `payment:{id}` (an authenticator code does not pay: 403 `passkey`, the code not spent), or `pin`: the person''s one PIN (the one set for WhatsApp approvals), typed in the app''s own pad, as the passkey''s fallback. The PIN pays at most ₦100,000 a payment and ₦200,000 a day across the person''s PIN-confirmed payments (Lagos''s day), the role''s own limits too; never a payment to a changed account or one that would wait for the owner''s OK, and never a batch. PIN refusals (403, with `code`): `pin_limit` over its limits, `pin_passkey_only` a changed account or the owner''s OK, `no_pin`, `pin_wrong` (tries left said; counted with the approvals'': five wrong in 15 minutes lock it for 15 minutes) and `pin_locked`. With no proof, 403 `step_up` lists `pin` in `methods`, with `pin_limit_kobo` (what the PIN may still pay in one payment now), when the person''s PIN can confirm this payment. Within the payer''s limit (an owner has none) it is sent at once (`sending`), the passkey being its approval; over the limit, or (for staff) to an account changed since it was last paid or never paid, it waits for the owner''s OK in Approvals (`waiting_ok`, `needs_ok` saying why). An owner''s own passkey is the OK for a changed account they pay (`changed_account` on the payment says it before they confirm). 403 `step_up` without the proof (`methods`: `passkey`, and `pin` when the PIN can confirm it); 409 `pay_again` for the same payment in the last day without `again`, `not_prepared` once sent; 409 `account_changed` when the payee''s account (the saved account''s number or bank, the account a staff member is linked to, a rider''s bank) is not the one it was prepared to, and `provider_changed` when the business''s payments account is not the one it was prepared on: either way the payment is cancelled, to be prepared again. 409 `not_approved` when the run started but the payer''s own OK did not reach it: nothing is paid, and the payer confirming it again (it is then `sending`) gives it.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -8166,6 +8373,109 @@ paths:
       responses:
         '200':
           description: Cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payment]
+                properties:
+                  payment:
+                    $ref: '#/components/schemas/Payment'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/fingerprint:
+    post:
+      operationId: fingerprintPayChallenge
+      tags:
+      - Payments
+      summary: The words for this phone's fingerprint key to sign, to send a payment
+      description: 'Paying with the fingerprint (docs/spec/fingerprint-key.md): when the fingerprint may confirm this payment, a challenge bound to it and to `key_id` (one of the person''s keys, GET /v1/me/fingerprint), good once for two minutes, with `limit_kobo` (what the fingerprint may still pay in one payment now). The fingerprint pays at most ₦500,000 a payment and ₦1,000,000 a day across the person''s fingerprint-confirmed payments in every business (Lagos''s day), the role''s own limits too; never a payment to a changed account, one that would wait for the owner''s OK, or a batch. Refusals (403, with `code`): `fingerprint_limit`, `fingerprint_passkey_only`, `no_fingerprint` (the key is not the person''s: removed, or replaced); otherwise as POST /v1/payments/{id}/confirm refuses it (409 `pay_again` without `again`, `not_prepared`).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key_id]
+              properties:
+                key_id: {type: string, format: uuid}
+                again: {type: boolean}
+      responses:
+        '200':
+          description: The words to sign
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challenge, expires_in, limit_kobo]
+                properties:
+                  challenge:
+                    type: string
+                    description: The words the phone signs, as they are (the payment, its amount and a one-use nonce)
+                  expires_in: {type: integer}
+                  limit_kobo: {type: integer, format: int64}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/fingerprint/confirm:
+    post:
+      operationId: fingerprintPayConfirm
+      tags:
+      - Payments
+      summary: Send a prepared payment with the phone's fingerprint
+      description: 'The challenge from POST /v1/payments/{id}/fingerprint, signed by the key on the phone after its fingerprint or face check (ECDSA P-256 over SHA-256, DER, base64). It sends the payment as POST /v1/payments/{id}/confirm does, the payer''s own OK with step-up `fingerprint`. Refusals (403, with `code`): `fingerprint_limit` and `fingerprint_passkey_only` (checked again), `fingerprint_expired` (the challenge is not this payment''s and this key''s, was used, or is old), `fingerprint_wrong` (the signature does not check; audited); otherwise as POST /v1/payments/{id}/confirm refuses it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key_id, challenge, signature]
+              properties:
+                key_id: {type: string, format: uuid}
+                challenge: {type: string}
+                signature:
+                  type: string
+                  description: Base64 DER ECDSA signature of the challenge
+                again: {type: boolean}
+                tell_payee:
+                  type: boolean
+                  description: The sheet's Tell them in the chat, as it is confirmed
+                send_receipt:
+                  type: boolean
+                  description: The sheet's Send them a receipt, as it is confirmed
+      responses:
+        '202':
+          description: Sent
           content:
             application/json:
               schema:
@@ -32718,6 +33028,129 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/fingerprint:
+    get:
+      operationId: getMeFingerprint
+      tags:
+      - Account
+      summary: Your phones that pay by fingerprint
+      description: 'The person''s phones with a fingerprint key (docs/spec/fingerprint-key.md), never the keys; the fingerprint''s limits and what it may still pay today; and `proofs`, the ways they can prove turning it on (`passkey`, `totp`, `pin`, `code` to their phone).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeFingerprint'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addMeFingerprint
+      tags:
+      - Account
+      summary: Pay by fingerprint on this phone
+      description: 'Keeps this phone''s public key (an ECDSA P-256 key made in its secure hardware, usable only after its fingerprint or face check; DER SubjectPublicKeyInfo, base64) for the person and this phone (`device.id`, the app''s install), replacing its earlier one. Proved as setting the PIN is: a passkey (asked for `account.reauth` / `fingerprint.add`), an authenticator code, the PIN (wrong tries counted with every use of it) or the code from POST /v1/me/fingerprint/code. Otherwise 403 `proof_needed` with `reauth` (the ways to prove); 401 `code_wrong` for a wrong code. A session made by a code on a new device of someone with a passkey proves itself first (401 second_proof_required). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [public_key, device]
+              properties:
+                public_key: {type: string}
+                device:
+                  type: object
+                  additionalProperties: false
+                  required: [id, name, platform]
+                  properties:
+                    id: {type: string, format: uuid}
+                    name: {type: string}
+                    platform: {type: string, enum: [android, ios]}
+                passkey: {type: object}
+                totp: {type: string}
+                pin: {type: string}
+                code: {type: string}
+      responses:
+        '201':
+          description: On for this phone
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device]
+                properties:
+                  device:
+                    $ref: '#/components/schemas/FingerprintDevice'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/fingerprint/code:
+    post:
+      operationId: fingerprintCode
+      tags:
+      - Account
+      summary: A code to your phone, to turn on paying by fingerprint
+      description: 'A one-time code to the person''s verified phone number (its own purpose), by WhatsApp or SMS. 409 when they have no phone number; 429 for too many codes.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                via: {type: string, enum: [whatsapp, sms]}
+      responses:
+        '202':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sent_via, expires_in]
+                properties:
+                  sent_via: {type: string}
+                  expires_in: {type: integer}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/fingerprint/{id}:
+    delete:
+      operationId: removeMeFingerprint
+      tags:
+      - Account
+      summary: Stop paying by fingerprint on a phone
+      description: No proof needed (it only takes a way to pay away). 404 when it is not one of the person's. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/terms:
     post:
       operationId: answerTerms
@@ -33412,7 +33845,7 @@ paths:
       tags:
       - Account
       summary: Your PIN
-      description: 'The person''s one PIN (it approves on WhatsApp and pays within its limit). `pays_from`: when it may pay; `change_without`: it may be set now without a passkey (none set yet, or signed in moments ago), and then pays 24 hours on.'
+      description: 'The person''s one four-digit PIN (it approves on WhatsApp and pays within its limits). `ways`: what may confirm setting or changing it now (`code` to the phone `code_to`, `passkey`, `totp`); `renew`: the last PIN was removed when PINs became four digits, and none is set since.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -33431,7 +33864,7 @@ paths:
       tags:
       - Account
       summary: Set or change your PIN
-      description: 'Six digits, not one repeated nor a run. With a passkey (asked for `account.reauth` / `pin.set`) or an authenticator code it pays at once; without, it may be set only as a first PIN (at sign-up) or moments after signing in again, and pays 24 hours on. Otherwise 403 `proof_needed` with `reauth` (the ways to prove). A session made by a code on a new device of someone with a passkey proves itself first (401 second_proof_required). Audited.'
+      description: 'Four digits, not one repeated nor a run. Confirmed by a `code` from POST /v1/me/pin/code, a passkey (asked for `account.reauth` / `pin.set`) or an authenticator code; it pays at once. Otherwise 403 `proof_needed` with `reauth` (the ways to prove); a wrong or expired code 401 `code_wrong`, too many 429 `locked`. A session made by a code on a new device of someone with a passkey proves itself first (401 second_proof_required). Audited (`pin.set`, with `via`).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -33447,6 +33880,7 @@ paths:
               required: [pin]
               properties:
                 pin: {type: string}
+                code: {type: string}
                 passkey: {type: object}
                 totp: {type: string}
       responses:
@@ -33472,6 +33906,48 @@ paths:
       responses:
         '204':
           description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/pin/code:
+    post:
+      operationId: mePinCode
+      tags:
+      - Account
+      summary: Ask for a code to set your PIN
+      description: 'A six-digit code to the account''s phone (by WhatsApp, else SMS; `via: "sms"` asks for SMS), good only for setting or changing the PIN (PUT /v1/me/pin {code}), for 10 minutes. 409 `no_phone` for an account with no phone (it confirms with its passkey); 429 as other codes are limited; 403 for an API key. A personal session reaches it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                via:
+                  type: string
+                  enum: [whatsapp, sms]
+      responses:
+        '202':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sent_via, expires_in, code_to]
+                properties:
+                  sent_via:
+                    type: string
+                    enum: [whatsapp, sms]
+                  expires_in:
+                    type: integer
+                  code_to:
+                    type: string
+                    description: The phone the code went to, masked
         default:
           $ref: '#/components/responses/Error'
   /v1/me/whatsapp/pin:
@@ -33500,7 +33976,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WhatsAppPin'
         '400':
-          description: Not six digits, or too easy to guess.
+          description: Not four digits, or too easy to guess.
           content:
             application/json:
               schema:
@@ -52320,14 +52796,26 @@ components:
     MePin:
       type: object
       additionalProperties: false
-      required: [set, change_without]
+      required: [set, digits, ways]
       properties:
         set: {type: boolean}
         set_at: {type: string, format: date-time}
         locked_until: {type: string, format: date-time}
-        pays_from: {type: string, format: date-time}
-        change_without: {type: boolean}
-        change_without_until: {type: string, format: date-time}
+        digits:
+          type: integer
+          description: How many digits a PIN is (4)
+        ways:
+          type: array
+          description: What may confirm setting or changing the PIN now
+          items:
+            type: string
+            enum: [code, passkey, totp]
+        code_to:
+          type: string
+          description: The phone a code goes to, masked; only with `code` among the ways
+        renew:
+          type: boolean
+          description: The last PIN was removed when PINs became four digits, and none is set since
     StaffPayAccount:
       type: object
       description: The saved account payments to a staff member go to (outside payroll), masked
@@ -52342,6 +52830,33 @@ components:
         linked_by: {type: string}
         linked_by_name: {type: string}
         linked_at: {type: string, format: date-time}
+    FingerprintDevice:
+      type: object
+      additionalProperties: false
+      description: A phone that pays by fingerprint
+      required: [id, device_id, name, platform, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        device_id: {type: string, format: uuid}
+        name: {type: string}
+        platform: {type: string, enum: [android, ios]}
+        created_at: {type: string, format: date-time}
+        last_used_at: {type: string, format: date-time}
+    MeFingerprint:
+      type: object
+      additionalProperties: false
+      required: [devices, one_kobo, day_kobo, left_today_kobo, proofs]
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/FingerprintDevice'
+        one_kobo: {type: integer, format: int64}
+        day_kobo: {type: integer, format: int64}
+        left_today_kobo: {type: integer, format: int64}
+        proofs:
+          type: array
+          items: {type: string, enum: [passkey, totp, pin, code]}
     PayLimit:
       type: object
       additionalProperties: false
@@ -56705,6 +57220,27 @@ components:
         credit_kobo:
           type: integer
           description: How much of the customer's credit this send counted towards the invoice
+    MoneyTotals:
+      type: object
+      description: "The Transactions page's totals: every movement the filter finds, not only the page. Naira only, as the Money page's summary counts them (each movement's latest status); money in another currency is counted in other_currencies and in no sum."
+      required: [count, in_settled_kobo, in_pending_kobo, out_settled_kobo, out_pending_kobo, fees_kobo, other_currencies]
+      properties:
+        count:
+          type: integer
+        in_settled_kobo:
+          type: integer
+        in_pending_kobo:
+          type: integer
+        out_settled_kobo:
+          type: integer
+        out_pending_kobo:
+          type: integer
+        fees_kobo:
+          type: integer
+          description: The fees of settled movements.
+        other_currencies:
+          type: integer
+          description: How many movements are in a currency other than naira.
     MoneyPart:
       type: object
       required: [amount_kobo]

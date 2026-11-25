@@ -7,6 +7,7 @@
 // the phone's files, its columns matched, the lines that wait; cash and
 // expenses; the fees agreed with each connection.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -18,7 +19,9 @@ import 'package:flutter/widgets.dart';
 
 import '../app/lock.dart' show stepOut;
 import '../api/transport.dart' show ApiError;
+import '../api/api.g.dart' show SavedProviderResponse;
 import '../app/auth.dart';
+import '../app/links.dart' show openInBrowser;
 import '../kit/forms.dart' show errorWords, nairaKobo;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading, TkPill;
@@ -39,11 +42,13 @@ import 'invoice_match.dart' show InvoiceMatchPage, channelWords, unmatchedPath;
 import 'labels_page.dart' show LabelsPage;
 import 'spending.dart' show SpendingCard;
 import 'things_page.dart' show ThingsPage, thingsOnly;
+import 'transactions_page.dart' show MoneyTransactionsPage, txPeriodFrom;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'money_sheets.dart' show dateLabel;
 import 'product_form.dart' show formKey;
 import 'stock_page.dart' show feeInput;
 import 'pages_page.dart' show PlacedPages;
+import 'saved_accounts.dart' show OpenWalletSheet;
 import 'words.dart' show CardTone, naira;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -271,6 +276,10 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
   String? _error;
   List<Map<String, dynamic>> _waiting = const [];
   Map<String, dynamic>? _receive;
+
+  /// For an owner of a business with no payments account: the way to get
+  /// paid (GET /v1/saved/provider, as Saved's step to connect).
+  SavedProviderResponse? _provider;
   int _asked = 0;
 
   DateTime get _now => (widget.now ?? DateTime.now)();
@@ -346,6 +355,12 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
       if (mounted) setState(() => _receive = r);
     } on Object {
       // No card.
+    }
+    try {
+      final p = await widget.auth.api.savedProvider();
+      if (mounted) setState(() => _provider = p);
+    } on Object {
+      // No offer.
     }
   }
 
@@ -530,10 +545,22 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
               }(),
           ],
         ),
+        if (_receive?['on'] != true && _provider != null && _provider!.connected == null && _provider!.owner)
+          _GetPaid(p: _provider!, onOpenWallet: _openWallet, onOpenWeb: _openWeb),
         TkSection(
           title: 'Go to',
           inset: 56,
           children: [
+            TkListRow(
+              title: 'Transactions',
+              sub: 'Every payment in and out',
+              icon: 'b-swap',
+              square: look.teal,
+              onTap: () {
+                final x = txPeriodFrom(_choice, p);
+                _push(context, MoneyTransactionsPage(auth: widget.auth, period: x.period, custom: x.custom, now: widget.now));
+              },
+            ),
             TkListRow(title: 'Invoices', sub: 'What customers owe you', icon: 'b-receipt', square: look.blue, onTap: () => _push(context, InvoicesPage(auth: widget.auth, backLabel: 'Back to Money'))),
             TkListRow(title: 'Bills', sub: 'What you owe linked suppliers', icon: 'b-receipt', square: look.orange, onTap: () => _push(context, BillsPage(auth: widget.auth, backLabel: 'Back to Money', now: widget.now))),
             TkListRow(title: 'Bank statement', sub: 'Upload one, see what waits', icon: 'b-bank', square: look.violet, onTap: () => _push(context, MoneyStatementsPage(auth: widget.auth))),
@@ -628,6 +655,20 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
         PlacedPages(auth: widget.auth, areas: const ['money'], backLabel: 'Back to Money'),
       ],
     );
+  }
+
+  Future<void> _openWallet() async {
+    final opened = await showTkSheet<bool>(context, (_) => OpenWalletSheet(auth: widget.auth));
+    if (opened == true && mounted) {
+      showTkToast(context, 'Your Taskiem wallet is open');
+      setState(() => _provider = null);
+      await _loadSide();
+    }
+  }
+
+  void _openWeb(String path) {
+    final u = Uri.parse('${widget.auth.transport.base}$path');
+    unawaited(openOrSay(context, () => openInBrowser(u), 'That page could not be opened.'));
   }
 
   /// The period's figure as the page's headline: what was kept, counting
@@ -2465,4 +2506,54 @@ class _Dashes extends CustomPainter {
 
   @override
   bool shouldRepaint(_Dashes old) => old.color != color;
+}
+
+
+/// Getting paid, for an owner of a business with no payments account: a
+/// Taskiem wallet where this Taskiem offers it (an account number of the
+/// business's own, the existing Open a Taskiem wallet sheet), and always an
+/// account the business already has, connected on the web. Where the wallet
+/// is not offered, connecting one is the only way, said so.
+class _GetPaid extends StatelessWidget {
+  const _GetPaid({required this.p, required this.onOpenWallet, required this.onOpenWeb});
+  final SavedProviderResponse p;
+  final VoidCallback onOpenWallet;
+  final void Function(String path) onOpenWeb;
+
+  @override
+  Widget build(BuildContext context) {
+    final look = TkLook.of(context);
+    final w = p.wallet;
+    final offered = w?.available ?? false;
+    final names = [for (final x in p.providers ?? const []) x.name].join(', ');
+    return TkSection(
+      title: 'Get paid',
+      inset: 56,
+      children: [
+        if (offered && (w?.plan ?? false))
+          TkListRow(
+            title: 'Receive money with Taskiem',
+            sub: 'An account number of your own for customers to pay into',
+            icon: 'b-bank',
+            square: look.lime,
+            onTap: onOpenWallet,
+          ),
+        if (offered && !(w?.plan ?? false))
+          TkListRow(
+            title: 'Receive money with Taskiem',
+            sub: w?.planNote ?? 'Your plan does not include it: see plans on the web',
+            icon: 'b-bank',
+            square: look.lime,
+            onTap: () => onOpenWeb('/settings/billing'),
+          ),
+        TkListRow(
+          title: offered ? 'I already have an account' : 'Connect a payments account',
+          sub: names.isEmpty ? 'On the web, in Connections' : '$names, on the web',
+          icon: 'b-tools',
+          square: look.teal,
+          onTap: () => onOpenWeb('/connections'),
+        ),
+      ],
+    );
+  }
 }

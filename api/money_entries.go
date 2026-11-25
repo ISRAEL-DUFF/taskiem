@@ -41,7 +41,19 @@ type moneyEntry struct {
 
 // listMoneyEntries serves GET /v1/money/entries: the newest entries, at
 // most limit (100 unless asked, 200 at most), before a time when paging.
+// With ?movements=true it is the Transactions page's list instead
+// (listMovements).
 func (s *Server) listMoneyEntries(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("movements") == "true" {
+		s.listMovements(w, r)
+		return
+	}
+	for _, k := range []string{"direction", "channel", "from", "to", "matched", "q", "cursor"} {
+		if r.URL.Query().Has(k) {
+			writeErr(w, http.StatusBadRequest, k+" is for movements=true")
+			return
+		}
+	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	if limit <= 0 || limit > 200 {
 		limit = 100

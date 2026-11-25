@@ -797,6 +797,18 @@ password_resets.secret_hash
 password_resets.selector
 password_resets.used_at
 password_resets.user_id
+pay_key_challenges.expires_at
+pay_key_challenges.hash
+pay_key_challenges.key_id
+pay_key_challenges.payment_id
+pay_keys.created_at
+pay_keys.device_id
+pay_keys.device_name
+pay_keys.id
+pay_keys.last_used_at
+pay_keys.platform
+pay_keys.public_key
+pay_keys.user_id
 payments.amount_kobo
 payments.confirmed_at
 payments.confirmed_by
@@ -804,6 +816,7 @@ payments.confirmed_with
 payments.status
 pin_removals.removed_at
 pin_removals.user_id
+pin_removals.why
 plan_worker_pools.assigned_at
 plan_worker_pools.assigned_by
 plan_worker_pools.plan_id

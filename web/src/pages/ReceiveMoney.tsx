@@ -135,6 +135,17 @@ function TurnOn({
           data-testid="receive-money-blocked"
         >
           {blocker} {!r.plan && <Link to="/settings/billing">See plans</Link>}
+          {!r.available && (
+            <>
+              {" "}
+              You can still be paid through a payments account you already
+              have (iswallet, Paystack, Flutterwave or Moniepoint):{" "}
+              <Link to="/connections" data-testid="receive-money-connect">
+                connect it in Connections
+              </Link>
+              .
+            </>
+          )}
         </div>
       ) : (
         <>
@@ -756,7 +767,36 @@ export function ReceiveMoneyOffer() {
       n.status === "active" &&
       rails.has(n.connector),
   );
-  if (r.on || hasRail || !r.available) return null;
+  if (r.on || hasRail) return null;
+  // Taskiem's own wallet is off on this Taskiem: the way in is a payments
+  // account the business already has.
+  if (!r.available)
+    return (
+      <section aria-labelledby="receive-offer-h" data-testid="receive-offer">
+        <h2 id="receive-offer-h">Get paid</h2>
+        <ul className="checklist">
+          <li>
+            <span className="list-icon">
+              <Icon name="money" />
+            </span>
+            <div className="grow">
+              <strong>Connect a payments account</strong>
+              <div className="hint">
+                iswallet, Paystack, Flutterwave or Moniepoint: customers pay
+                you by transfer or card, and each payment shows in Money.
+              </div>
+            </div>
+            <Link
+              className="button small"
+              to="/connections"
+              data-testid="receive-offer-connect"
+            >
+              Connect
+            </Link>
+          </li>
+        </ul>
+      </section>
+    );
   const blocker = turnOnBlocker(r, !!me?.roles.includes("owner"));
   return (
     <section aria-labelledby="receive-offer-h" data-testid="receive-offer">

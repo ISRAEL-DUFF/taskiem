@@ -1781,6 +1781,12 @@ class TaskiemApi {
     await _t.send('DELETE', '/v1/me/pin');
   }
 
+  /// Ask for a code to set your PIN (`POST /v1/me/pin/code`)
+  Future<MePinCodeResponse> mePinCode({required MePinCodeRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/pin/code', body: body.toJson());
+    return MePinCodeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Your list of people to pay, collected from messages (`GET /v1/pay-collection`)
   Future<PayCollection> getPayCollection() async {
     final j = await _t.send('GET', '/v1/pay-collection');
@@ -2167,6 +2173,18 @@ class TaskiemApi {
     return MoneySpending.fromJson(j as Map<String, dynamic>);
   }
 
+  /// The money log, newest first (`GET /v1/money/entries`)
+  Future<ListMoneyEntriesResponse> listMoneyEntries({String? limit, String? before, String? movements, String? direction, String? channel, String? from, String? to, String? matched, String? q, String? cursor}) async {
+    final j = await _t.send('GET', '/v1/money/entries', query: {'limit': ?limit, 'before': ?before, 'movements': ?movements, 'direction': ?direction, 'channel': ?channel, 'from': ?from, 'to': ?to, 'matched': ?matched, 'q': ?q, 'cursor': ?cursor});
+    return ListMoneyEntriesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One movement of the money log (`GET /v1/money/entries/{id}`)
+  Future<GetMoneyEntryResponse> getMoneyEntry({required String id, String? reveal}) async {
+    final j = await _t.send('GET', '/v1/money/entries/${Uri.encodeComponent(id)}', query: {'reveal': ?reveal});
+    return GetMoneyEntryResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Banks a salary account can be at (`GET /v1/payroll/banks`)
   Future<ListPayrollBanksResponse> listPayrollBanks() async {
     final j = await _t.send('GET', '/v1/payroll/banks');
@@ -2387,6 +2405,41 @@ class TaskiemApi {
   Future<GetMyPayslipResponse> getMyPayslip({required String payslip}) async {
     final j = await _t.send('GET', '/v1/payroll/me/payslips/${Uri.encodeComponent(payslip)}');
     return GetMyPayslipResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your phones that pay by fingerprint (`GET /v1/me/fingerprint`)
+  Future<MeFingerprint> getMeFingerprint() async {
+    final j = await _t.send('GET', '/v1/me/fingerprint');
+    return MeFingerprint.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay by fingerprint on this phone (`POST /v1/me/fingerprint`)
+  Future<AddMeFingerprintResponse> addMeFingerprint({required AddMeFingerprintRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/fingerprint', body: body.toJson());
+    return AddMeFingerprintResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A code to your phone, to turn on paying by fingerprint (`POST /v1/me/fingerprint/code`)
+  Future<FingerprintCodeResponse> fingerprintCode({required FingerprintCodeRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/fingerprint/code', body: body.toJson());
+    return FingerprintCodeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Stop paying by fingerprint on a phone (`DELETE /v1/me/fingerprint/{id}`)
+  Future<void> removeMeFingerprint({required String id}) async {
+    await _t.send('DELETE', '/v1/me/fingerprint/${Uri.encodeComponent(id)}');
+  }
+
+  /// The words for this phone's fingerprint key to sign, to send a payment (`POST /v1/payments/{id}/fingerprint`)
+  Future<FingerprintPayChallengeResponse> fingerprintPayChallenge({required FingerprintPayChallengeRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payments/${Uri.encodeComponent(id)}/fingerprint', body: body.toJson());
+    return FingerprintPayChallengeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Send a prepared payment with the phone's fingerprint (`POST /v1/payments/{id}/fingerprint/confirm`)
+  Future<FingerprintPayConfirmResponse> fingerprintPayConfirm({required FingerprintPayConfirmRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payments/${Uri.encodeComponent(id)}/fingerprint/confirm', body: body.toJson());
+    return FingerprintPayConfirmResponse.fromJson(j as Map<String, dynamic>);
   }
 }
 
@@ -15936,51 +15989,97 @@ class PutStaffPayAccountResponse {
 }
 
 class MePin {
-  const MePin({required this.changeWithout, this.changeWithoutUntil, this.lockedUntil, this.paysFrom, required this.set, this.setAt});
+  const MePin({this.codeTo, required this.digits, this.lockedUntil, this.renew, required this.set, this.setAt, required this.ways});
 
-  final bool changeWithout;
-  final DateTime? changeWithoutUntil;
+  /// The phone a code goes to, masked; only with `code` among the ways
+  final String? codeTo;
+  /// How many digits a PIN is (4)
+  final int digits;
   final DateTime? lockedUntil;
-  final DateTime? paysFrom;
+  /// The last PIN was removed when PINs became four digits, and none is set
+  /// since
+  final bool? renew;
   final bool set;
   final DateTime? setAt;
+  /// What may confirm setting or changing the PIN now
+  final List<String> ways;
 
   factory MePin.fromJson(Map<String, dynamic> j) => MePin(
-        changeWithout: j['change_without'] as bool,
-        changeWithoutUntil: j['change_without_until'] == null ? null : DateTime.parse(j['change_without_until'] as String),
+        codeTo: j['code_to'] == null ? null : j['code_to'] as String,
+        digits: (j['digits'] as num).toInt(),
         lockedUntil: j['locked_until'] == null ? null : DateTime.parse(j['locked_until'] as String),
-        paysFrom: j['pays_from'] == null ? null : DateTime.parse(j['pays_from'] as String),
+        renew: j['renew'] == null ? null : j['renew'] as bool,
         set: j['set'] as bool,
         setAt: j['set_at'] == null ? null : DateTime.parse(j['set_at'] as String),
+        ways: (j['ways'] as List).map((e) => e as String).toList(),
       );
 
   Map<String, dynamic> toJson() => {
-        'change_without': changeWithout,
-        'change_without_until': ?changeWithoutUntil?.toUtc().toIso8601String(),
+        'code_to': ?codeTo,
+        'digits': digits,
         'locked_until': ?lockedUntil?.toUtc().toIso8601String(),
-        'pays_from': ?paysFrom?.toUtc().toIso8601String(),
+        'renew': ?renew,
         'set': set,
         'set_at': ?setAt?.toUtc().toIso8601String(),
+        'ways': ways.map((e) => e).toList(),
       };
 }
 
 class PutMePinRequest {
-  const PutMePinRequest({this.passkey, required this.pin, this.totp});
+  const PutMePinRequest({this.code, this.passkey, required this.pin, this.totp});
 
+  final String? code;
   final Map<String, dynamic>? passkey;
   final String pin;
   final String? totp;
 
   factory PutMePinRequest.fromJson(Map<String, dynamic> j) => PutMePinRequest(
+        code: j['code'] == null ? null : j['code'] as String,
         passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
         pin: j['pin'] as String,
         totp: j['totp'] == null ? null : j['totp'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'code': ?code,
         'passkey': ?passkey,
         'pin': pin,
         'totp': ?totp,
+      };
+}
+
+class MePinCodeRequest {
+  const MePinCodeRequest({this.via});
+
+  final String? via;
+
+  factory MePinCodeRequest.fromJson(Map<String, dynamic> j) => MePinCodeRequest(
+        via: j['via'] == null ? null : j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'via': ?via,
+      };
+}
+
+class MePinCodeResponse {
+  const MePinCodeResponse({required this.codeTo, required this.expiresIn, required this.sentVia});
+
+  /// The phone the code went to, masked
+  final String codeTo;
+  final int expiresIn;
+  final String sentVia;
+
+  factory MePinCodeResponse.fromJson(Map<String, dynamic> j) => MePinCodeResponse(
+        codeTo: j['code_to'] as String,
+        expiresIn: (j['expires_in'] as num).toInt(),
+        sentVia: j['sent_via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code_to': codeTo,
+        'expires_in': expiresIn,
+        'sent_via': sentVia,
       };
 }
 
@@ -20779,6 +20878,310 @@ class MoneySpendingProfit {
       };
 }
 
+class ListMoneyEntriesResponse {
+  const ListMoneyEntriesResponse({this.channels, required this.entries, this.next, this.totals});
+
+  /// With movements, on the first page. Every channel the money log has money
+  /// on, for the channel filter.
+  final List<String>? channels;
+  final List<ListMoneyEntriesResponseEntriesItem> entries;
+  /// With movements, when there may be more. Pass it as cursor for the next
+  /// page.
+  final String? next;
+  final MoneyTotals? totals;
+
+  factory ListMoneyEntriesResponse.fromJson(Map<String, dynamic> j) => ListMoneyEntriesResponse(
+        channels: j['channels'] == null ? null : (j['channels'] as List).map((e) => e as String).toList(),
+        entries: (j['entries'] as List).map((e) => ListMoneyEntriesResponseEntriesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        next: j['next'] == null ? null : j['next'] as String,
+        totals: j['totals'] == null ? null : MoneyTotals.fromJson(j['totals'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'channels': ?channels?.map((e) => e).toList(),
+        'entries': entries.map((e) => e.toJson()).toList(),
+        'next': ?next,
+        'totals': ?totals?.toJson(),
+      };
+}
+
+class ListMoneyEntriesResponseEntriesItem {
+  const ListMoneyEntriesResponseEntriesItem({this.amountKobo, this.category, this.channel, this.currency, this.description, required this.direction, this.feeKobo, required this.id, required this.kind, this.leftKobo, this.movement, this.reference, required this.status, this.statuses, required this.toMatch, this.towards, this.vendor, required this.when});
+
+  final int? amountKobo;
+  final String? category;
+  final String? channel;
+  /// The money's currency when it is not naira, such as "USD". Its amounts are
+  /// then in that currency's smallest unit, nothing counts it towards an
+  /// invoice or order, and it is in no naira total.
+  final String? currency;
+  final String? description;
+  final String direction;
+  final int? feeKobo;
+  final String id;
+  final String kind;
+  /// Money in only, what is left of it to count towards an invoice or order.
+  final int? leftKobo;
+  /// With movements. The movement's first entry; id is the entry that counts
+  /// (its first settled money in), which matching by hand takes.
+  final String? movement;
+  final String? reference;
+  final String status;
+  /// With movements. How many entries the movement has (a payout pending, then
+  /// settled, is two).
+  final int? statuses;
+  /// Matching left it for a person (as /v1/money/unmatched).
+  final bool toMatch;
+  /// What it counts towards now, such as "invoice INV-0104".
+  final String? towards;
+  final String? vendor;
+  final DateTime when;
+
+  factory ListMoneyEntriesResponseEntriesItem.fromJson(Map<String, dynamic> j) => ListMoneyEntriesResponseEntriesItem(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        category: j['category'] == null ? null : j['category'] as String,
+        channel: j['channel'] == null ? null : j['channel'] as String,
+        currency: j['currency'] == null ? null : j['currency'] as String,
+        description: j['description'] == null ? null : j['description'] as String,
+        direction: j['direction'] as String,
+        feeKobo: j['fee_kobo'] == null ? null : (j['fee_kobo'] as num).toInt(),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        leftKobo: j['left_kobo'] == null ? null : (j['left_kobo'] as num).toInt(),
+        movement: j['movement'] == null ? null : j['movement'] as String,
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        status: j['status'] as String,
+        statuses: j['statuses'] == null ? null : (j['statuses'] as num).toInt(),
+        toMatch: j['to_match'] as bool,
+        towards: j['towards'] == null ? null : j['towards'] as String,
+        vendor: j['vendor'] == null ? null : j['vendor'] as String,
+        when: DateTime.parse(j['when'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'category': ?category,
+        'channel': ?channel,
+        'currency': ?currency,
+        'description': ?description,
+        'direction': direction,
+        'fee_kobo': ?feeKobo,
+        'id': id,
+        'kind': kind,
+        'left_kobo': ?leftKobo,
+        'movement': ?movement,
+        'reference': ?reference,
+        'status': status,
+        'statuses': ?statuses,
+        'to_match': toMatch,
+        'towards': ?towards,
+        'vendor': ?vendor,
+        'when': when.toUtc().toIso8601String(),
+      };
+}
+
+/// The Transactions page's totals: every movement the filter finds, not only
+/// the page. Naira only, as the Money page's summary counts them (each
+/// movement's latest status); money in another currency is counted in
+/// other_currencies and in no sum.
+class MoneyTotals {
+  const MoneyTotals({required this.count, required this.feesKobo, required this.inPendingKobo, required this.inSettledKobo, required this.otherCurrencies, required this.outPendingKobo, required this.outSettledKobo});
+
+  final int count;
+  /// The fees of settled movements.
+  final int feesKobo;
+  final int inPendingKobo;
+  final int inSettledKobo;
+  /// How many movements are in a currency other than naira.
+  final int otherCurrencies;
+  final int outPendingKobo;
+  final int outSettledKobo;
+
+  factory MoneyTotals.fromJson(Map<String, dynamic> j) => MoneyTotals(
+        count: (j['count'] as num).toInt(),
+        feesKobo: (j['fees_kobo'] as num).toInt(),
+        inPendingKobo: (j['in_pending_kobo'] as num).toInt(),
+        inSettledKobo: (j['in_settled_kobo'] as num).toInt(),
+        otherCurrencies: (j['other_currencies'] as num).toInt(),
+        outPendingKobo: (j['out_pending_kobo'] as num).toInt(),
+        outSettledKobo: (j['out_settled_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'fees_kobo': feesKobo,
+        'in_pending_kobo': inPendingKobo,
+        'in_settled_kobo': inSettledKobo,
+        'other_currencies': otherCurrencies,
+        'out_pending_kobo': outPendingKobo,
+        'out_settled_kobo': outSettledKobo,
+      };
+}
+
+class GetMoneyEntryResponse {
+  const GetMoneyEntryResponse({required this.entry, this.payer, this.payerAccount, required this.revealed});
+
+  final GetMoneyEntryResponseEntry entry;
+  /// Who paid, as the rail said; masked unless revealed.
+  final String? payer;
+  /// The account they paid from; masked unless revealed.
+  final String? payerAccount;
+  final bool revealed;
+
+  factory GetMoneyEntryResponse.fromJson(Map<String, dynamic> j) => GetMoneyEntryResponse(
+        entry: GetMoneyEntryResponseEntry.fromJson(j['entry'] as Map<String, dynamic>),
+        payer: j['payer'] == null ? null : j['payer'] as String,
+        payerAccount: j['payer_account'] == null ? null : j['payer_account'] as String,
+        revealed: j['revealed'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'entry': entry.toJson(),
+        'payer': ?payer,
+        'payer_account': ?payerAccount,
+        'revealed': revealed,
+      };
+}
+
+class GetMoneyEntryResponseEntry {
+  const GetMoneyEntryResponseEntry({this.amountKobo, this.category, this.channel, required this.counts, this.currency, this.description, required this.direction, this.feeKobo, required this.history, required this.id, required this.kind, this.leftKobo, required this.movement, this.note, required this.recordedAt, this.reference, required this.source, required this.status, required this.statuses, required this.toMatch, this.towards, this.vendor, required this.when});
+
+  final int? amountKobo;
+  final String? category;
+  final String? channel;
+  /// The invoices, orders and sales it counts towards, and how much towards
+  /// each.
+  final List<GetMoneyEntryResponseEntryCountsItem> counts;
+  final String? currency;
+  final String? description;
+  final String direction;
+  final int? feeKobo;
+  /// Every entry of the movement, oldest first.
+  final List<GetMoneyEntryResponseEntryHistoryItem> history;
+  /// The entry that counts (its first settled money in); matching by hand takes
+  /// it.
+  final String id;
+  final String kind;
+  final int? leftKobo;
+  final String movement;
+  final String? note;
+  /// When Taskiem first heard of it.
+  final DateTime recordedAt;
+  final String? reference;
+  /// How it came into the log (event, lookup, step, upload, entered).
+  final String source;
+  final String status;
+  final int statuses;
+  final bool toMatch;
+  final String? towards;
+  final String? vendor;
+  /// When the money moved, as the rail or the person said; else when Taskiem
+  /// heard.
+  final DateTime when;
+
+  factory GetMoneyEntryResponseEntry.fromJson(Map<String, dynamic> j) => GetMoneyEntryResponseEntry(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        category: j['category'] == null ? null : j['category'] as String,
+        channel: j['channel'] == null ? null : j['channel'] as String,
+        counts: (j['counts'] as List).map((e) => GetMoneyEntryResponseEntryCountsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        currency: j['currency'] == null ? null : j['currency'] as String,
+        description: j['description'] == null ? null : j['description'] as String,
+        direction: j['direction'] as String,
+        feeKobo: j['fee_kobo'] == null ? null : (j['fee_kobo'] as num).toInt(),
+        history: (j['history'] as List).map((e) => GetMoneyEntryResponseEntryHistoryItem.fromJson(e as Map<String, dynamic>)).toList(),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        leftKobo: j['left_kobo'] == null ? null : (j['left_kobo'] as num).toInt(),
+        movement: j['movement'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        recordedAt: DateTime.parse(j['recorded_at'] as String),
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        source: j['source'] as String,
+        status: j['status'] as String,
+        statuses: (j['statuses'] as num).toInt(),
+        toMatch: j['to_match'] as bool,
+        towards: j['towards'] == null ? null : j['towards'] as String,
+        vendor: j['vendor'] == null ? null : j['vendor'] as String,
+        when: DateTime.parse(j['when'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'category': ?category,
+        'channel': ?channel,
+        'counts': counts.map((e) => e.toJson()).toList(),
+        'currency': ?currency,
+        'description': ?description,
+        'direction': direction,
+        'fee_kobo': ?feeKobo,
+        'history': history.map((e) => e.toJson()).toList(),
+        'id': id,
+        'kind': kind,
+        'left_kobo': ?leftKobo,
+        'movement': movement,
+        'note': ?note,
+        'recorded_at': recordedAt.toUtc().toIso8601String(),
+        'reference': ?reference,
+        'source': source,
+        'status': status,
+        'statuses': statuses,
+        'to_match': toMatch,
+        'towards': ?towards,
+        'vendor': ?vendor,
+        'when': when.toUtc().toIso8601String(),
+      };
+}
+
+class GetMoneyEntryResponseEntryCountsItem {
+  const GetMoneyEntryResponseEntryCountsItem({required this.amountKobo, required this.id, required this.number, required this.what});
+
+  final int amountKobo;
+  final String id;
+  /// The invoice's number, the order's or the sale's reference.
+  final String number;
+  final String what;
+
+  factory GetMoneyEntryResponseEntryCountsItem.fromJson(Map<String, dynamic> j) => GetMoneyEntryResponseEntryCountsItem(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        id: j['id'] as String,
+        number: j['number'] as String,
+        what: j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'id': id,
+        'number': number,
+        'what': what,
+      };
+}
+
+class GetMoneyEntryResponseEntryHistoryItem {
+  const GetMoneyEntryResponseEntryHistoryItem({this.amountKobo, required this.at, required this.kind, required this.source, required this.status});
+
+  final int? amountKobo;
+  final DateTime at;
+  final String kind;
+  final String source;
+  final String status;
+
+  factory GetMoneyEntryResponseEntryHistoryItem.fromJson(Map<String, dynamic> j) => GetMoneyEntryResponseEntryHistoryItem(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        at: DateTime.parse(j['at'] as String),
+        kind: j['kind'] as String,
+        source: j['source'] as String,
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'at': at.toUtc().toIso8601String(),
+        'kind': kind,
+        'source': source,
+        'status': status,
+      };
+}
+
 class ListPayrollBanksResponse {
   const ListPayrollBanksResponse({required this.banks});
 
@@ -22681,5 +23084,240 @@ class GetMyPayslipResponse {
 
   Map<String, dynamic> toJson() => {
         'payslip': payslip.toJson(),
+      };
+}
+
+class MeFingerprint {
+  const MeFingerprint({required this.dayKobo, required this.devices, required this.leftTodayKobo, required this.oneKobo, required this.proofs});
+
+  final int dayKobo;
+  final List<FingerprintDevice> devices;
+  final int leftTodayKobo;
+  final int oneKobo;
+  final List<String> proofs;
+
+  factory MeFingerprint.fromJson(Map<String, dynamic> j) => MeFingerprint(
+        dayKobo: (j['day_kobo'] as num).toInt(),
+        devices: (j['devices'] as List).map((e) => FingerprintDevice.fromJson(e as Map<String, dynamic>)).toList(),
+        leftTodayKobo: (j['left_today_kobo'] as num).toInt(),
+        oneKobo: (j['one_kobo'] as num).toInt(),
+        proofs: (j['proofs'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'day_kobo': dayKobo,
+        'devices': devices.map((e) => e.toJson()).toList(),
+        'left_today_kobo': leftTodayKobo,
+        'one_kobo': oneKobo,
+        'proofs': proofs.map((e) => e).toList(),
+      };
+}
+
+/// A phone that pays by fingerprint
+class FingerprintDevice {
+  const FingerprintDevice({required this.createdAt, required this.deviceId, required this.id, this.lastUsedAt, required this.name, required this.platform});
+
+  final DateTime createdAt;
+  final String deviceId;
+  final String id;
+  final DateTime? lastUsedAt;
+  final String name;
+  final String platform;
+
+  factory FingerprintDevice.fromJson(Map<String, dynamic> j) => FingerprintDevice(
+        createdAt: DateTime.parse(j['created_at'] as String),
+        deviceId: j['device_id'] as String,
+        id: j['id'] as String,
+        lastUsedAt: j['last_used_at'] == null ? null : DateTime.parse(j['last_used_at'] as String),
+        name: j['name'] as String,
+        platform: j['platform'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'device_id': deviceId,
+        'id': id,
+        'last_used_at': ?lastUsedAt?.toUtc().toIso8601String(),
+        'name': name,
+        'platform': platform,
+      };
+}
+
+class AddMeFingerprintRequest {
+  const AddMeFingerprintRequest({this.code, required this.device, this.passkey, this.pin, required this.publicKey, this.totp});
+
+  final String? code;
+  final AddMeFingerprintRequestDevice device;
+  final Map<String, dynamic>? passkey;
+  final String? pin;
+  final String publicKey;
+  final String? totp;
+
+  factory AddMeFingerprintRequest.fromJson(Map<String, dynamic> j) => AddMeFingerprintRequest(
+        code: j['code'] == null ? null : j['code'] as String,
+        device: AddMeFingerprintRequestDevice.fromJson(j['device'] as Map<String, dynamic>),
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        pin: j['pin'] == null ? null : j['pin'] as String,
+        publicKey: j['public_key'] as String,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'device': device.toJson(),
+        'passkey': ?passkey,
+        'pin': ?pin,
+        'public_key': publicKey,
+        'totp': ?totp,
+      };
+}
+
+class AddMeFingerprintRequestDevice {
+  const AddMeFingerprintRequestDevice({required this.id, required this.name, required this.platform});
+
+  final String id;
+  final String name;
+  final String platform;
+
+  factory AddMeFingerprintRequestDevice.fromJson(Map<String, dynamic> j) => AddMeFingerprintRequestDevice(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        platform: j['platform'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'platform': platform,
+      };
+}
+
+class AddMeFingerprintResponse {
+  const AddMeFingerprintResponse({required this.device});
+
+  final FingerprintDevice device;
+
+  factory AddMeFingerprintResponse.fromJson(Map<String, dynamic> j) => AddMeFingerprintResponse(
+        device: FingerprintDevice.fromJson(j['device'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'device': device.toJson(),
+      };
+}
+
+class FingerprintCodeRequest {
+  const FingerprintCodeRequest({this.via});
+
+  final String? via;
+
+  factory FingerprintCodeRequest.fromJson(Map<String, dynamic> j) => FingerprintCodeRequest(
+        via: j['via'] == null ? null : j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'via': ?via,
+      };
+}
+
+class FingerprintCodeResponse {
+  const FingerprintCodeResponse({required this.expiresIn, required this.sentVia});
+
+  final int expiresIn;
+  final String sentVia;
+
+  factory FingerprintCodeResponse.fromJson(Map<String, dynamic> j) => FingerprintCodeResponse(
+        expiresIn: (j['expires_in'] as num).toInt(),
+        sentVia: j['sent_via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': expiresIn,
+        'sent_via': sentVia,
+      };
+}
+
+class FingerprintPayChallengeRequest {
+  const FingerprintPayChallengeRequest({this.again, required this.keyId});
+
+  final bool? again;
+  final String keyId;
+
+  factory FingerprintPayChallengeRequest.fromJson(Map<String, dynamic> j) => FingerprintPayChallengeRequest(
+        again: j['again'] == null ? null : j['again'] as bool,
+        keyId: j['key_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'again': ?again,
+        'key_id': keyId,
+      };
+}
+
+class FingerprintPayChallengeResponse {
+  const FingerprintPayChallengeResponse({required this.challenge, required this.expiresIn, required this.limitKobo});
+
+  /// The words the phone signs, as they are (the payment, its amount and a
+  /// one-use nonce)
+  final String challenge;
+  final int expiresIn;
+  final int limitKobo;
+
+  factory FingerprintPayChallengeResponse.fromJson(Map<String, dynamic> j) => FingerprintPayChallengeResponse(
+        challenge: j['challenge'] as String,
+        expiresIn: (j['expires_in'] as num).toInt(),
+        limitKobo: (j['limit_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge': challenge,
+        'expires_in': expiresIn,
+        'limit_kobo': limitKobo,
+      };
+}
+
+class FingerprintPayConfirmRequest {
+  const FingerprintPayConfirmRequest({this.again, required this.challenge, required this.keyId, this.sendReceipt, required this.signature, this.tellPayee});
+
+  final bool? again;
+  final String challenge;
+  final String keyId;
+  /// The sheet's Send them a receipt, as it is confirmed
+  final bool? sendReceipt;
+  /// Base64 DER ECDSA signature of the challenge
+  final String signature;
+  /// The sheet's Tell them in the chat, as it is confirmed
+  final bool? tellPayee;
+
+  factory FingerprintPayConfirmRequest.fromJson(Map<String, dynamic> j) => FingerprintPayConfirmRequest(
+        again: j['again'] == null ? null : j['again'] as bool,
+        challenge: j['challenge'] as String,
+        keyId: j['key_id'] as String,
+        sendReceipt: j['send_receipt'] == null ? null : j['send_receipt'] as bool,
+        signature: j['signature'] as String,
+        tellPayee: j['tell_payee'] == null ? null : j['tell_payee'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'again': ?again,
+        'challenge': challenge,
+        'key_id': keyId,
+        'send_receipt': ?sendReceipt,
+        'signature': signature,
+        'tell_payee': ?tellPayee,
+      };
+}
+
+class FingerprintPayConfirmResponse {
+  const FingerprintPayConfirmResponse({required this.payment});
+
+  final Payment payment;
+
+  factory FingerprintPayConfirmResponse.fromJson(Map<String, dynamic> j) => FingerprintPayConfirmResponse(
+        payment: Payment.fromJson(j['payment'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payment': payment.toJson(),
       };
 }

@@ -17,7 +17,7 @@ When an automation needs Paystack, Google Sheets or another service, Taskiem sen
 
 ## Keep your chat yours
 
-- Send **pin** to set a six-digit chat PIN. If your number goes quiet for a long time, Taskiem asks for it before doing anything, so a number given to someone else cannot reach your business.
+- Send **pin** to set a 4-digit PIN. If your number goes quiet for a long time, Taskiem asks for it before doing anything, so a number given to someone else cannot reach your business.
 - Send **email you@example.com** to add your email. Open the link Taskiem sends to it: your receipts and invoices then come by email, and you can sign in on the website with it.
 - Send **sign in** for a link that opens the website already signed in. It works once, for 10 minutes.
 - On the website's sign-in page, press **Sign in with WhatsApp or Telegram**, type your phone number, and type the code Taskiem sends to your chat.

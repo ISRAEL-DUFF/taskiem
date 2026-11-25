@@ -34,7 +34,8 @@ import (
 //     takes a passkey and nothing else);
 //   - wrong PINs are counted with the approvals' (taskiem_wa_pin_result:
 //     five in 15 minutes lock it for 15 minutes); there is no reset by
-//     text, and a PIN set or changed in the last 24 hours cannot pay yet.
+//     text. A PIN pays as soon as it is set (it is set behind a code to
+//     the phone, a passkey or an authenticator: pin_me.go).
 //
 // Then everything confirmPayment does: still as prepared, claimed under
 // the lock, the limits, sent, and the payer's own OK with step-up "pin".
@@ -47,17 +48,16 @@ const (
 
 // pinPayState is the person's PIN as paying sees it.
 type pinPayState struct {
-	hash     string
-	setAt    time.Time
-	locked   *time.Time
-	paysFrom time.Time
+	hash   string
+	setAt  time.Time
+	locked *time.Time
 }
 
-// pinForPay reads the person's PIN: no_pin, pin_locked or pin_new when it
-// cannot pay now.
+// pinForPay reads the person's PIN: no_pin or pin_locked when it cannot
+// pay now.
 func (s *Server) pinForPay(ctx context.Context, user uuid.UUID) (pinPayState, error) {
 	var st pinPayState
-	err := s.Store.Pool.QueryRow(ctx, `SELECT s.pin_hash, s.set_at, s.locked_until, taskiem_pin_pays_from($1) FROM taskiem_wa_pin_state($1) s`, user).Scan(&st.hash, &st.setAt, &st.locked, &st.paysFrom)
+	err := s.Store.Pool.QueryRow(ctx, `SELECT s.pin_hash, s.set_at, s.locked_until FROM taskiem_wa_pin_state($1) s`, user).Scan(&st.hash, &st.setAt, &st.locked)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return st, refusePay(http.StatusForbidden, "no_pin", "You have no PIN set: confirm with your passkey.")
@@ -66,11 +66,6 @@ func (s *Server) pinForPay(ctx context.Context, user uuid.UUID) (pinPayState, er
 	case st.locked != nil:
 		return st, refusePay(http.StatusForbidden, "pin_locked", "Your PIN is locked after too many wrong tries, until "+st.locked.In(lagosTZ).Format("15:04")+
 			". Use your passkey instead.")
-	case time.Now().Before(st.paysFrom):
-		// Set without a passkey (a first PIN, or reset by signing in
-		// again): it pays 24 hours on (pin_me.go).
-		return st, refusePay(http.StatusForbidden, "pin_new", "Your PIN was set without your passkey in the last 24 hours, so it can pay from "+
-			st.paysFrom.In(lagosTZ).Format("15:04 on 2 Jan")+". Use your passkey until then.")
 	}
 	return st, nil
 }
@@ -178,7 +173,7 @@ func (s *Server) confirmPaymentPin(w http.ResponseWriter, r *http.Request, id uu
 // payByPin confirms payment id for the person in r with their PIN: the
 // app's pad and WhatsApp's form both. A wrong PIN is refused pin_wrong
 // (tries left said) or pin_locked; a payment the PIN may not confirm,
-// pin_limit, pin_passkey_only, pin_new or no_pin, before the PIN is
+// pin_limit, pin_passkey_only or no_pin, before the PIN is
 // checked; anything else as confirmPayment refuses it.
 // ticks are the sheet's Tell them in the chat and Send them a receipt,
 // kept only once the PIN is right and the payment is claimed, as the

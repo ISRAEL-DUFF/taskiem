@@ -422,3 +422,28 @@ test("an owner makes a Car kind from its starter and saves the van as one", asyn
   await axeBoth(page, "/settings/saved (a made-up kind)");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+
+// When this Taskiem has no iswallet key of its own, receiving money with
+// Taskiem is not offered: every place that offers it points to a payments
+// account the business already has (Connections) instead of a dead end.
+// The server's answer is faked here; the e2e server always has a test key.
+test("without Taskiem's wallet, Get started and Payments point to Connections", async ({ page }) => {
+  await signUp(page);
+  await page.route("**/v1/settings/receive-money", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ json: { available: false, plan: true, on: false, default_owner_type: "client_end_business" } })
+      : route.continue(),
+  );
+
+  await page.goto("/start");
+  const offer = page.getByTestId("receive-offer");
+  await expect(offer).toContainText("Connect a payments account");
+  await expect(offer.getByRole("link", { name: "Turn it on" })).toHaveCount(0);
+  await expect(offer.getByTestId("receive-offer-connect")).toHaveAttribute("href", "/connections");
+
+  await page.goto("/settings/payments");
+  const blocked = page.getByTestId("receive-money-blocked");
+  await expect(blocked).toContainText("not available on this Taskiem yet");
+  await expect(blocked.getByTestId("receive-money-connect")).toHaveAttribute("href", "/connections");
+  await axeBoth(page, "/settings/payments (not available)");
+});

@@ -17,6 +17,8 @@ const tkLookIcons = <String, String>{
   'b-search': 'M17.5 11a6.5 6.5 0 1 1-13 0a6.5 6.5 0 1 1 13 0zM20 20l-4-4',
   'b-bell': 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5h4',
   'b-refund': 'M9 14l-5-5 5-5M4 9h11a5 5 0 0 1 0 10h-3',
+  // Transactions: money going both ways (the web's "transactions").
+  'b-swap': 'M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4',
   'b-check': 'M5 12.5l4.5 4.5L19 7',
   'b-cart': 'M3 5h3l2 11h10l2-8H7M11 20a1 1 0 1 1-2 0a1 1 0 1 1 2 0zM18 20a1 1 0 1 1-2 0a1 1 0 1 1 2 0z',
   'b-card': 'M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 10h18',

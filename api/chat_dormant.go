@@ -72,9 +72,9 @@ func (s *Server) waChatPin(ctx context.Context, c *chat) error {
 	if f.Passkey || f.TOTP || f.Password {
 		return c.say(ctx, s, c.t("chatpin.web", "where", s.accountWhere()))
 	}
-	// A PIN is set once from the chat: holding the chat is not enough to
-	// replace it (nor to undo its lock); changing it takes the web, behind
-	// a passkey or an authenticator.
+	// A PIN is set from the chat only when none is set: holding the chat
+	// is not enough to replace it (nor to undo its lock); changing it
+	// takes the app or the web, behind a code to the phone or a passkey.
 	if pin, err := s.waPinInfo(ctx, c.p.UserID); err != nil {
 		return err
 	} else if pin.Set {
@@ -153,28 +153,27 @@ func (s *Server) waFlowChatPin(ctx context.Context, row flowRow, req whatsapp.Fl
 		case !validPin(pin):
 			return screen(fmt.Sprintf("The PIN is %d digits.", whatsapp.PinLength))
 		case weakPin(pin):
-			return screen("Choose a PIN that is not one digit repeated or a run like 123456.")
+			return screen("Choose a PIN that is not one digit repeated or a run like 1234.")
 		}
 		// Still a person with no other credential.
 		if f, _, err := s.factorsOf(ctx, row.tenant, user); err != nil {
 			s.Logger.Error("whatsapp: a chat PIN", "err", err)
 			return screen(wrong)
 		} else if f.Passkey || f.TOTP || f.Password {
-			const m = "Set your PIN in the web app, on your Account page."
+			const m = "Set your PIN in the Taskiem app or the web app, under Settings › PIN."
 			return finish("refused", m)
 		}
-		// Only a first PIN: one set meanwhile is not replaced from here.
+		// Only when none is set: one set meanwhile is not replaced from
+		// here. The form reached the chat's own number, as a code to the
+		// phone would: the PIN pays at once (docs/spec/transaction-pin.md).
 		if pinNow, err := s.waPinInfo(ctx, user); err != nil {
 			s.Logger.Error("whatsapp: a chat PIN", "err", err)
 			return screen(wrong)
-		} else if removed, err := s.pinWasRemoved(ctx, user); err != nil {
-			s.Logger.Error("whatsapp: a chat PIN", "err", err)
-			return screen(wrong)
-		} else if pinNow.Set || removed {
-			const m = "You have a chat PIN already. To change it, sign in on the web (send sign in for a link), add a passkey or an authenticator, then change it on your Account page."
+		} else if pinNow.Set {
+			const m = "You have a PIN already. To change it, open Settings › PIN in the Taskiem app or the web app: we send a code to this number first."
 			return finish("refused", m)
 		}
-		if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_wa_pin_set($1, $2)`, user, hashPassword(pin)); err != nil {
+		if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_pin_set_hold($1, $2, '0'::interval)`, user, hashPassword(pin)); err != nil {
 			s.Logger.Error("whatsapp: setting a chat PIN", "err", err)
 			return screen(wrong)
 		}

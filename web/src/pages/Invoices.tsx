@@ -860,7 +860,10 @@ function GiveAccount({
           {list.length === 0 && (
             <p className="hint">
               None of your connections can issue account numbers; enter one your
-              payments provider gave you for this customer.
+              payments provider gave you for this customer. To have them issued
+              for you, turn on receiving money in{" "}
+              <Link to="/settings/payments">Settings › Payments</Link>, or connect
+              a payments account in <Link to="/connections">Connections</Link>.
             </p>
           )}
           {list.length > 0 && (
