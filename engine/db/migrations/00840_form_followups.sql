@@ -19,8 +19,7 @@ ALTER TABLE storefront_actions
   ADD COLUMN followup_wait int NOT NULL DEFAULT 30 CHECK (followup_wait BETWEEN 10 AND 1440),
   ADD COLUMN followup_held_at timestamptz,
   ADD COLUMN followup_released_at timestamptz;
-GRANT SELECT (tenant_id, followup_on, followup_wait, followup_held_at) ON storefront_actions TO taskiem_dispatch;
-GRANT SELECT (tenant_id) ON storefront_fronts TO taskiem_dispatch;
+GRANT SELECT (followup_on, followup_wait, followup_held_at) ON storefront_actions TO taskiem_dispatch;
 
 ALTER TABLE tenant_limits ADD COLUMN form_followups bigint CHECK (form_followups >= 0);
 
@@ -130,8 +129,8 @@ BEGIN
   IF p_action IS NULL OR p_sent IS NULL OR length(p_sent) <> 32 THEN
     RETURN false;
   END IF;
-  SELECT a.tenant_id INTO tenant FROM storefront_actions a JOIN storefronts s ON s.id = a.storefront_id AND s.status = 'published'
-    JOIN tenants t ON t.id = a.tenant_id AND t.status = 'active'
+  SELECT s.tenant_id INTO tenant FROM storefront_actions a JOIN storefronts s ON s.id = a.storefront_id AND s.status = 'published'
+    JOIN tenants t ON t.id = s.tenant_id AND t.status = 'active'
    WHERE a.id = p_action AND a.enabled AND a.kind = 'order' AND a.followup_on;
   IF tenant IS NULL THEN
     RETURN false;
@@ -193,8 +192,10 @@ $$;
 -- The record, with the page it came from and the contact masked. A phone
 -- typed on a page takes the place of an email typed on the same page, and
 -- an email after a phone on it is not kept, so one message is sent. A
--- later keep on a record not yet followed up makes it wait again.
-DROP FUNCTION taskiem_form_left_put(uuid, uuid, uuid, uuid, text, jsonb, bytea, text, jsonb, timestamptz);
+-- later keep on a record not yet followed up makes it wait again. Beside
+-- L0's ten-argument one (00860 corrects that one: the action's business
+-- read through its storefront, the front the action's own), with the same
+-- checks.
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_form_left_put(p_tenant uuid, p_endpoint uuid, p_action uuid, p_front uuid, p_site text, p_contact jsonb,
   p_hash bytea, p_kind text, p_choice jsonb, p_at timestamptz, p_page bytea, p_mask text)
@@ -209,8 +210,10 @@ BEGIN
     RAISE EXCEPTION 'tenant not in scope' USING ERRCODE = '42501';
   END IF;
   IF p_endpoint IS NOT NULL AND NOT EXISTS (SELECT 1 FROM form_endpoints WHERE id = p_endpoint AND tenant_id = p_tenant)
-     OR p_action IS NOT NULL AND NOT EXISTS (SELECT 1 FROM storefront_actions WHERE id = p_action AND tenant_id = p_tenant)
-     OR p_front IS NOT NULL AND NOT EXISTS (SELECT 1 FROM storefront_fronts WHERE id = p_front AND tenant_id = p_tenant) THEN
+     OR p_action IS NOT NULL AND NOT EXISTS (SELECT 1 FROM storefront_actions a JOIN storefronts s ON s.id = a.storefront_id
+                                              WHERE a.id = p_action AND s.tenant_id = p_tenant)
+     OR p_front IS NOT NULL AND NOT EXISTS (SELECT 1 FROM storefront_actions a JOIN storefronts s ON s.id = a.storefront_id
+                                             WHERE a.id = p_action AND s.tenant_id = p_tenant AND a.front_id = p_front) THEN
     RAISE EXCEPTION 'not this business''s form' USING ERRCODE = '42501';
   END IF;
   IF p_page IS NOT NULL THEN
@@ -603,34 +606,6 @@ END
 $$;
 -- +goose StatementEnd
 DROP FUNCTION taskiem_form_left_put(uuid, uuid, uuid, uuid, text, jsonb, bytea, text, jsonb, timestamptz, bytea, text);
--- +goose StatementBegin
-CREATE FUNCTION taskiem_form_left_put(p_tenant uuid, p_endpoint uuid, p_action uuid, p_front uuid, p_site text, p_contact jsonb,
-  p_hash bytea, p_kind text, p_choice jsonb, p_at timestamptz)
-RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE
-  got uuid;
-BEGIN
-  IF NOT p_tenant = ANY (taskiem_tenant_scope()) THEN
-    RAISE EXCEPTION 'tenant not in scope' USING ERRCODE = '42501';
-  END IF;
-  IF p_endpoint IS NOT NULL AND NOT EXISTS (SELECT 1 FROM form_endpoints WHERE id = p_endpoint AND tenant_id = p_tenant)
-     OR p_action IS NOT NULL AND NOT EXISTS (SELECT 1 FROM storefront_actions WHERE id = p_action AND tenant_id = p_tenant)
-     OR p_front IS NOT NULL AND NOT EXISTS (SELECT 1 FROM storefront_fronts WHERE id = p_front AND tenant_id = p_tenant) THEN
-    RAISE EXCEPTION 'not this business''s form' USING ERRCODE = '42501';
-  END IF;
-  INSERT INTO form_left (id, tenant_id, endpoint_id, action_id, front_id, site, contact, contact_hash, contact_kind, choice, last_keep_at, expires_at)
-  VALUES (gen_random_uuid(), p_tenant, p_endpoint, p_action, p_front, p_site, p_contact, p_hash, p_kind, COALESCE(p_choice, '{}'), p_at, p_at + interval '7 days')
-  ON CONFLICT (tenant_id, (COALESCE(endpoint_id, action_id)), contact_hash) DO UPDATE
-    SET front_id = EXCLUDED.front_id, site = COALESCE(EXCLUDED.site, form_left.site), contact = EXCLUDED.contact, contact_kind = EXCLUDED.contact_kind,
-        choice = EXCLUDED.choice, last_keep_at = GREATEST(form_left.last_keep_at, EXCLUDED.last_keep_at),
-        expires_at = CASE WHEN form_left.followed_up_at IS NULL THEN GREATEST(form_left.last_keep_at, EXCLUDED.last_keep_at) + interval '7 days'
-                          ELSE form_left.expires_at END
-  RETURNING id INTO got;
-  RETURN got;
-END
-$$;
--- +goose StatementEnd
 DROP FUNCTION taskiem_public_form_keep(uuid, bytea, bytea);
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_public_form_keep(p_endpoint uuid, p_action uuid, p_payload bytea)
@@ -662,13 +637,11 @@ END
 $$;
 -- +goose StatementEnd
 ALTER FUNCTION taskiem_public_form_keep(uuid, uuid, bytea) OWNER TO taskiem_dispatch;
-ALTER FUNCTION taskiem_form_left_put(uuid, uuid, uuid, uuid, text, jsonb, bytea, text, jsonb, timestamptz) OWNER TO taskiem_dispatch;
 ALTER FUNCTION taskiem_form_left_followed(uuid, uuid, bytea, timestamptz) OWNER TO taskiem_dispatch;
-REVOKE EXECUTE ON FUNCTION taskiem_public_form_keep(uuid, uuid, bytea), taskiem_form_left_put(uuid, uuid, uuid, uuid, text, jsonb, bytea, text, jsonb, timestamptz),
+REVOKE EXECUTE ON FUNCTION taskiem_public_form_keep(uuid, uuid, bytea),
   taskiem_form_left_followed(uuid, uuid, bytea, timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION taskiem_public_form_keep(uuid, uuid, bytea) TO taskiem_public;
-GRANT EXECUTE ON FUNCTION taskiem_form_left_put(uuid, uuid, uuid, uuid, text, jsonb, bytea, text, jsonb, timestamptz),
-  taskiem_form_left_followed(uuid, uuid, bytea, timestamptz) TO taskiem_app;
+GRANT EXECUTE ON FUNCTION taskiem_form_left_followed(uuid, uuid, bytea, timestamptz) TO taskiem_app;
 DROP TRIGGER storefront_actions_followup_default ON storefront_actions;
 DROP FUNCTION taskiem_storefront_action_followup_default();
 DROP FUNCTION taskiem_form_left_count(uuid, uuid, int, int, int, int);
@@ -679,6 +652,5 @@ ALTER TABLE form_restores DROP COLUMN left_id;
 DROP INDEX form_left_due;
 ALTER TABLE form_left DROP COLUMN page_hash, DROP COLUMN contact_mask, DROP COLUMN left_at, DROP COLUMN outcome, DROP COLUMN channel, DROP COLUMN claimed_until;
 ALTER TABLE tenant_limits DROP COLUMN form_followups;
-REVOKE SELECT (tenant_id) ON storefront_fronts FROM taskiem_dispatch;
-REVOKE SELECT (tenant_id, followup_on, followup_wait, followup_held_at) ON storefront_actions FROM taskiem_dispatch;
+REVOKE SELECT (followup_on, followup_wait, followup_held_at) ON storefront_actions FROM taskiem_dispatch;
 ALTER TABLE storefront_actions DROP COLUMN followup_on, DROP COLUMN followup_wait, DROP COLUMN followup_held_at, DROP COLUMN followup_released_at;

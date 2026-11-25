@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -198,6 +199,17 @@ func (s *Server) serveOneProduct(w http.ResponseWriter, r *http.Request, site Si
 		return true
 	}
 	d.Token, d.Ordering = string(t), true
+	if act.ID != nil && p.Followups[*act.ID] && s.FormKeys != nil && s.Keeps != nil {
+		// A form that follows up a buyer who leaves (forms that sell §6):
+		// the consent line, and the keep token, the submit token's twin.
+		d.Consent = lang.Default().Text(lang.Tag(d.Lang), "form.followup.consent")
+		s.keepFor(&d.formData)
+		if k, err := s.guard.Twin(t, d.form+keepSuffix); err == nil {
+			d.Keep.Token = string(k)
+		} else {
+			d.Keep = nil
+		}
+	}
 	s.renderPrivate(w, r, http.StatusOK, "oneproduct.html", d)
 	return true
 }

@@ -1783,11 +1783,9 @@ product_stock.uses
 stock_items.id
 stock_items.count
 money_entries.label_id
-storefront_actions.tenant_id
 storefront_actions.followup_on
 storefront_actions.followup_wait
 storefront_actions.followup_held_at
-storefront_fronts.tenant_id
 form_left.page_hash
 form_left.contact_mask
 form_left.left_at

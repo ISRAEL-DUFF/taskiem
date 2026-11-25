@@ -30,4 +30,4 @@ posting to its own address. */}}<!doctype html>
 {{end}}</section>
 </div>
 {{if and .Ordering .Price}}<div class="op-bar"><p class="op-bar-price"><strong>{{.Price}}</strong>{{with .PriceNote}}<span>{{.}}</span>{{end}}</p><a class="btn btn-primary btn-brand" href="#order">{{.Label}}</a></div>
-{{end}}{{template "ffoot" .}}
+{{end}}{{if .Ordering}}{{template "sfkeep" .}}{{end}}{{template "ffoot" .}}

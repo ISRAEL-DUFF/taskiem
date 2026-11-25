@@ -102,7 +102,9 @@ func TestOneProductEndToEnd(t *testing.T) {
 	body := page.Body.String()
 	for _, want := range []string{`<p class="op-promise">Pay on delivery nationwide</p>`, `<h1 class="op-h">Smart Ear Cleaner</h1>`,
 		`class="op-chips"`, "Pay when it arrives", "Pay on delivery", `class="packages"`, "<strong>2 items</strong>", "Lekki, ₦1,500 delivery",
-		"ready to receive it in 2 to 4 days", `class="op-bar"`, "From ₦25,000", `action="/smart-ear-cleaner/a/order-now"`} {
+		"ready to receive it in 2 to 4 days", `class="op-bar"`, "From ₦25,000", `action="/smart-ear-cleaner/a/order-now"`,
+		// Forms that sell L3: a One product page follows up from the start.
+		"If you leave before you send this, we may send you one message", `data-keep="/smart-ear-cleaner/a/order-now/keep"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the page: no %q", want)
 		}
