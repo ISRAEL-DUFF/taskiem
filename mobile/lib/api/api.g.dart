@@ -2167,6 +2167,18 @@ class TaskiemApi {
     return MoneySpending.fromJson(j as Map<String, dynamic>);
   }
 
+  /// The money log, newest first (`GET /v1/money/entries`)
+  Future<ListMoneyEntriesResponse> listMoneyEntries({String? limit, String? before, String? movements, String? direction, String? channel, String? from, String? to, String? matched, String? q, String? cursor}) async {
+    final j = await _t.send('GET', '/v1/money/entries', query: {'limit': ?limit, 'before': ?before, 'movements': ?movements, 'direction': ?direction, 'channel': ?channel, 'from': ?from, 'to': ?to, 'matched': ?matched, 'q': ?q, 'cursor': ?cursor});
+    return ListMoneyEntriesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One movement of the money log (`GET /v1/money/entries/{id}`)
+  Future<GetMoneyEntryResponse> getMoneyEntry({required String id, String? reveal}) async {
+    final j = await _t.send('GET', '/v1/money/entries/${Uri.encodeComponent(id)}', query: {'reveal': ?reveal});
+    return GetMoneyEntryResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Banks a salary account can be at (`GET /v1/payroll/banks`)
   Future<ListPayrollBanksResponse> listPayrollBanks() async {
     final j = await _t.send('GET', '/v1/payroll/banks');
@@ -20776,6 +20788,310 @@ class MoneySpendingProfit {
         'fees_kobo': feesKobo,
         'in_kobo': inKobo,
         'profit_kobo': profitKobo,
+      };
+}
+
+class ListMoneyEntriesResponse {
+  const ListMoneyEntriesResponse({this.channels, required this.entries, this.next, this.totals});
+
+  /// With movements, on the first page. Every channel the money log has money
+  /// on, for the channel filter.
+  final List<String>? channels;
+  final List<ListMoneyEntriesResponseEntriesItem> entries;
+  /// With movements, when there may be more. Pass it as cursor for the next
+  /// page.
+  final String? next;
+  final MoneyTotals? totals;
+
+  factory ListMoneyEntriesResponse.fromJson(Map<String, dynamic> j) => ListMoneyEntriesResponse(
+        channels: j['channels'] == null ? null : (j['channels'] as List).map((e) => e as String).toList(),
+        entries: (j['entries'] as List).map((e) => ListMoneyEntriesResponseEntriesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        next: j['next'] == null ? null : j['next'] as String,
+        totals: j['totals'] == null ? null : MoneyTotals.fromJson(j['totals'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'channels': ?channels?.map((e) => e).toList(),
+        'entries': entries.map((e) => e.toJson()).toList(),
+        'next': ?next,
+        'totals': ?totals?.toJson(),
+      };
+}
+
+class ListMoneyEntriesResponseEntriesItem {
+  const ListMoneyEntriesResponseEntriesItem({this.amountKobo, this.category, this.channel, this.currency, this.description, required this.direction, this.feeKobo, required this.id, required this.kind, this.leftKobo, this.movement, this.reference, required this.status, this.statuses, required this.toMatch, this.towards, this.vendor, required this.when});
+
+  final int? amountKobo;
+  final String? category;
+  final String? channel;
+  /// The money's currency when it is not naira, such as "USD". Its amounts are
+  /// then in that currency's smallest unit, nothing counts it towards an
+  /// invoice or order, and it is in no naira total.
+  final String? currency;
+  final String? description;
+  final String direction;
+  final int? feeKobo;
+  final String id;
+  final String kind;
+  /// Money in only, what is left of it to count towards an invoice or order.
+  final int? leftKobo;
+  /// With movements. The movement's first entry; id is the entry that counts
+  /// (its first settled money in), which matching by hand takes.
+  final String? movement;
+  final String? reference;
+  final String status;
+  /// With movements. How many entries the movement has (a payout pending, then
+  /// settled, is two).
+  final int? statuses;
+  /// Matching left it for a person (as /v1/money/unmatched).
+  final bool toMatch;
+  /// What it counts towards now, such as "invoice INV-0104".
+  final String? towards;
+  final String? vendor;
+  final DateTime when;
+
+  factory ListMoneyEntriesResponseEntriesItem.fromJson(Map<String, dynamic> j) => ListMoneyEntriesResponseEntriesItem(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        category: j['category'] == null ? null : j['category'] as String,
+        channel: j['channel'] == null ? null : j['channel'] as String,
+        currency: j['currency'] == null ? null : j['currency'] as String,
+        description: j['description'] == null ? null : j['description'] as String,
+        direction: j['direction'] as String,
+        feeKobo: j['fee_kobo'] == null ? null : (j['fee_kobo'] as num).toInt(),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        leftKobo: j['left_kobo'] == null ? null : (j['left_kobo'] as num).toInt(),
+        movement: j['movement'] == null ? null : j['movement'] as String,
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        status: j['status'] as String,
+        statuses: j['statuses'] == null ? null : (j['statuses'] as num).toInt(),
+        toMatch: j['to_match'] as bool,
+        towards: j['towards'] == null ? null : j['towards'] as String,
+        vendor: j['vendor'] == null ? null : j['vendor'] as String,
+        when: DateTime.parse(j['when'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'category': ?category,
+        'channel': ?channel,
+        'currency': ?currency,
+        'description': ?description,
+        'direction': direction,
+        'fee_kobo': ?feeKobo,
+        'id': id,
+        'kind': kind,
+        'left_kobo': ?leftKobo,
+        'movement': ?movement,
+        'reference': ?reference,
+        'status': status,
+        'statuses': ?statuses,
+        'to_match': toMatch,
+        'towards': ?towards,
+        'vendor': ?vendor,
+        'when': when.toUtc().toIso8601String(),
+      };
+}
+
+/// The Transactions page's totals: every movement the filter finds, not only
+/// the page. Naira only, as the Money page's summary counts them (each
+/// movement's latest status); money in another currency is counted in
+/// other_currencies and in no sum.
+class MoneyTotals {
+  const MoneyTotals({required this.count, required this.feesKobo, required this.inPendingKobo, required this.inSettledKobo, required this.otherCurrencies, required this.outPendingKobo, required this.outSettledKobo});
+
+  final int count;
+  /// The fees of settled movements.
+  final int feesKobo;
+  final int inPendingKobo;
+  final int inSettledKobo;
+  /// How many movements are in a currency other than naira.
+  final int otherCurrencies;
+  final int outPendingKobo;
+  final int outSettledKobo;
+
+  factory MoneyTotals.fromJson(Map<String, dynamic> j) => MoneyTotals(
+        count: (j['count'] as num).toInt(),
+        feesKobo: (j['fees_kobo'] as num).toInt(),
+        inPendingKobo: (j['in_pending_kobo'] as num).toInt(),
+        inSettledKobo: (j['in_settled_kobo'] as num).toInt(),
+        otherCurrencies: (j['other_currencies'] as num).toInt(),
+        outPendingKobo: (j['out_pending_kobo'] as num).toInt(),
+        outSettledKobo: (j['out_settled_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'fees_kobo': feesKobo,
+        'in_pending_kobo': inPendingKobo,
+        'in_settled_kobo': inSettledKobo,
+        'other_currencies': otherCurrencies,
+        'out_pending_kobo': outPendingKobo,
+        'out_settled_kobo': outSettledKobo,
+      };
+}
+
+class GetMoneyEntryResponse {
+  const GetMoneyEntryResponse({required this.entry, this.payer, this.payerAccount, required this.revealed});
+
+  final GetMoneyEntryResponseEntry entry;
+  /// Who paid, as the rail said; masked unless revealed.
+  final String? payer;
+  /// The account they paid from; masked unless revealed.
+  final String? payerAccount;
+  final bool revealed;
+
+  factory GetMoneyEntryResponse.fromJson(Map<String, dynamic> j) => GetMoneyEntryResponse(
+        entry: GetMoneyEntryResponseEntry.fromJson(j['entry'] as Map<String, dynamic>),
+        payer: j['payer'] == null ? null : j['payer'] as String,
+        payerAccount: j['payer_account'] == null ? null : j['payer_account'] as String,
+        revealed: j['revealed'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'entry': entry.toJson(),
+        'payer': ?payer,
+        'payer_account': ?payerAccount,
+        'revealed': revealed,
+      };
+}
+
+class GetMoneyEntryResponseEntry {
+  const GetMoneyEntryResponseEntry({this.amountKobo, this.category, this.channel, required this.counts, this.currency, this.description, required this.direction, this.feeKobo, required this.history, required this.id, required this.kind, this.leftKobo, required this.movement, this.note, required this.recordedAt, this.reference, required this.source, required this.status, required this.statuses, required this.toMatch, this.towards, this.vendor, required this.when});
+
+  final int? amountKobo;
+  final String? category;
+  final String? channel;
+  /// The invoices, orders and sales it counts towards, and how much towards
+  /// each.
+  final List<GetMoneyEntryResponseEntryCountsItem> counts;
+  final String? currency;
+  final String? description;
+  final String direction;
+  final int? feeKobo;
+  /// Every entry of the movement, oldest first.
+  final List<GetMoneyEntryResponseEntryHistoryItem> history;
+  /// The entry that counts (its first settled money in); matching by hand takes
+  /// it.
+  final String id;
+  final String kind;
+  final int? leftKobo;
+  final String movement;
+  final String? note;
+  /// When Taskiem first heard of it.
+  final DateTime recordedAt;
+  final String? reference;
+  /// How it came into the log (event, lookup, step, upload, entered).
+  final String source;
+  final String status;
+  final int statuses;
+  final bool toMatch;
+  final String? towards;
+  final String? vendor;
+  /// When the money moved, as the rail or the person said; else when Taskiem
+  /// heard.
+  final DateTime when;
+
+  factory GetMoneyEntryResponseEntry.fromJson(Map<String, dynamic> j) => GetMoneyEntryResponseEntry(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        category: j['category'] == null ? null : j['category'] as String,
+        channel: j['channel'] == null ? null : j['channel'] as String,
+        counts: (j['counts'] as List).map((e) => GetMoneyEntryResponseEntryCountsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        currency: j['currency'] == null ? null : j['currency'] as String,
+        description: j['description'] == null ? null : j['description'] as String,
+        direction: j['direction'] as String,
+        feeKobo: j['fee_kobo'] == null ? null : (j['fee_kobo'] as num).toInt(),
+        history: (j['history'] as List).map((e) => GetMoneyEntryResponseEntryHistoryItem.fromJson(e as Map<String, dynamic>)).toList(),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        leftKobo: j['left_kobo'] == null ? null : (j['left_kobo'] as num).toInt(),
+        movement: j['movement'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        recordedAt: DateTime.parse(j['recorded_at'] as String),
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        source: j['source'] as String,
+        status: j['status'] as String,
+        statuses: (j['statuses'] as num).toInt(),
+        toMatch: j['to_match'] as bool,
+        towards: j['towards'] == null ? null : j['towards'] as String,
+        vendor: j['vendor'] == null ? null : j['vendor'] as String,
+        when: DateTime.parse(j['when'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'category': ?category,
+        'channel': ?channel,
+        'counts': counts.map((e) => e.toJson()).toList(),
+        'currency': ?currency,
+        'description': ?description,
+        'direction': direction,
+        'fee_kobo': ?feeKobo,
+        'history': history.map((e) => e.toJson()).toList(),
+        'id': id,
+        'kind': kind,
+        'left_kobo': ?leftKobo,
+        'movement': movement,
+        'note': ?note,
+        'recorded_at': recordedAt.toUtc().toIso8601String(),
+        'reference': ?reference,
+        'source': source,
+        'status': status,
+        'statuses': statuses,
+        'to_match': toMatch,
+        'towards': ?towards,
+        'vendor': ?vendor,
+        'when': when.toUtc().toIso8601String(),
+      };
+}
+
+class GetMoneyEntryResponseEntryCountsItem {
+  const GetMoneyEntryResponseEntryCountsItem({required this.amountKobo, required this.id, required this.number, required this.what});
+
+  final int amountKobo;
+  final String id;
+  /// The invoice's number, the order's or the sale's reference.
+  final String number;
+  final String what;
+
+  factory GetMoneyEntryResponseEntryCountsItem.fromJson(Map<String, dynamic> j) => GetMoneyEntryResponseEntryCountsItem(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        id: j['id'] as String,
+        number: j['number'] as String,
+        what: j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'id': id,
+        'number': number,
+        'what': what,
+      };
+}
+
+class GetMoneyEntryResponseEntryHistoryItem {
+  const GetMoneyEntryResponseEntryHistoryItem({this.amountKobo, required this.at, required this.kind, required this.source, required this.status});
+
+  final int? amountKobo;
+  final DateTime at;
+  final String kind;
+  final String source;
+  final String status;
+
+  factory GetMoneyEntryResponseEntryHistoryItem.fromJson(Map<String, dynamic> j) => GetMoneyEntryResponseEntryHistoryItem(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        at: DateTime.parse(j['at'] as String),
+        kind: j['kind'] as String,
+        source: j['source'] as String,
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'at': at.toUtc().toIso8601String(),
+        'kind': kind,
+        'source': source,
+        'status': status,
       };
 }
 
