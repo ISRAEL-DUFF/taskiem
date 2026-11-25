@@ -24,6 +24,12 @@ Press **Turn it on**. Your account number appears straight away, with the bank's
 - **Your storefront.** Choose your wallet with Taskiem as the order form's payments connection (Storefront > Forms): each order gets a number of its own for that payment on its page, and is paid the moment the money arrives. If you decline or cancel an order paid this way, send the money back from your bank, then press **Mark refunded** on the order.
 - **The fee.** The partner bank's fee is paid by whoever sends the money, as for any transfer. A school's receipt message, and an invoice's receipt (from the **Send a receipt when an invoice is paid** workflow and its email versions), say what the payer sent and what reached you, when the transfer was for that receipt alone.
 
+## Every payment, one by one
+
+**Money > Transactions** (in the menu under Money; in the app, **Money > Go to > Transactions**) lists every payment in and out, newest first, by day: Paystack, your Taskiem wallet, cash and expenses you entered, bank statement lines. Choose a period, money in or out, one account, or matched or not, and search by who (what was typed, such as *Cash from Bisi*, or the vendor), a reference, an invoice's number or an amount (*4,500*). The card at the top adds up what is shown: money in, money out, the fees and how many. Open a payment for its fee, account, reference, who paid (the first letter until someone allowed to see customers' details presses **Show who paid**), the invoice or order it paid for, and each status it had (a transfer pending, then settled). **Download** gives the period's money log as a spreadsheet.
+
+A payment that changed (pending, then settled, or reversed later) is one row with its latest status, as the totals on Money count it. Names the bank sent with a payment are kept sealed, so the search does not look in them.
+
 ## Your balance
 
 **Settings > Payments** and the **Money** page show your number; the Payments page shows what your wallet holds now. The daily summary says it too, and on WhatsApp you can send *balance*.

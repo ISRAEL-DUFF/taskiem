@@ -242,7 +242,7 @@ void main() {
           linked = true;
           return _json({'number': '+2348031239001'});
         },
-        'GET /v1/me/pin': (_) => _json({'set': pinSet, 'change_without': true}),
+        'GET /v1/me/pin': (_) => _json({'set': pinSet, 'digits': 4, 'ways': ['code'], 'code_to': '+234••••••9001'}),
       },      page: 'WhatsApp',
     );
     await field(t, 'Your WhatsApp number', '+2348031239001');

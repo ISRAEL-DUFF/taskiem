@@ -113,6 +113,7 @@ import {
   MoneyStatements,
 } from "./pages/Money";
 import { MoneyLabels } from "./pages/MoneyLabels";
+import { MoneyTransaction, MoneyTransactions } from "./pages/Transactions";
 import { ThingPage, ThingsPage } from "./pages/Things";
 import {
   SchoolClasses,
@@ -522,6 +523,13 @@ function SignedIn() {
       "money",
       invoiceAccess(can).see && areaOn(me.areas, "money"),
     ],
+    // Under Money: every payment in and out (pages/Transactions.tsx).
+    [
+      "/money/transactions",
+      "Transactions",
+      "transactions",
+      invoiceAccess(can).see && areaOn(me.areas, "money"),
+    ],
     // Things we have, for those who may see stock but not the money
     // (what a business buys §5.3): Money shows them only this.
     [
@@ -622,6 +630,12 @@ function SignedIn() {
       key={to}
       to={to}
       end={to === "/settings" || to === "/forms" || to === "/storefront" || to === "/pages"}
+      // Transactions has its own row under Money: Money is not lit there too.
+      className={
+        to === "/money"
+          ? ({ isActive }) => (isActive && !pathname.startsWith("/money/transactions") ? "active" : "")
+          : undefined
+      }
     >
       <Icon name={icon} />
       {label}
@@ -966,6 +980,8 @@ function SignedIn() {
                     element={<MoneyStatements />}
                   />
                   <Route path="/money/entries" element={<MoneyEntries />} />
+                  <Route path="/money/transactions" element={<MoneyTransactions />} />
+                  <Route path="/money/transactions/:id" element={<MoneyTransaction />} />
                   <Route path="/money/fees" element={<MoneyFees />} />
                   <Route path="/payments" element={<PaymentsPage />} />
                   <Route path="/payments/several" element={<PayListPage />} />

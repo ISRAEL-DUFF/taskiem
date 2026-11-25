@@ -5,9 +5,11 @@
 // down, split; an invoice's customer with their credit, account numbers
 // and payers remembered; the alerts' Match it.
 
+import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../app/auth.dart';
+import '../app/links.dart' show openInBrowser;
 import '../kit/forms.dart' show CloseSoon, errorWords, nairaKobo, nairaText;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading, TkPill, TkRow, TkSearchBox;
@@ -1238,9 +1240,23 @@ class _GiveAccountState extends State<_GiveAccount> {
               if (list.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(
-                    'None of your connections can issue account numbers; enter one your payments provider gave you for this customer.',
-                    style: tkHint(t),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'None of your connections can issue account numbers; enter one your payments provider gave you for this customer. '
+                        'To have them issued for you, turn on receiving money with Taskiem, or connect a payments account, on the web.',
+                        style: tkHint(t),
+                      ),
+                      const SizedBox(height: 6),
+                      TkLink(
+                        label: 'Open Settings › Payments',
+                        bold: true,
+                        onTap: () => unawaited(
+                          openOrSay(context, () => openInBrowser(Uri.parse('${widget.auth.transport.base}/settings/payments')), 'That page could not be opened.'),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               if (list.isNotEmpty) ...[

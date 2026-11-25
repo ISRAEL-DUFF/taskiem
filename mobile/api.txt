@@ -379,6 +379,7 @@ putStaffPayAccount
 getMePin
 putMePin
 deleteMePin
+mePinCode
 getPayCollection
 addPayCollection
 clearPayCollection
@@ -467,6 +468,11 @@ addThing
 patchThing
 getMoneySpending
 
+# Money › Transactions: the money log one movement to a row, and one
+# movement on its own (docs/spec/transactions-page.md)
+listMoneyEntries
+getMoneyEntry
+
 # Staff and pay from Taskiem (P4b-2): Team, adding someone, changing pay and
 # details, ending employment, held account changes, My pay
 listPayrollBanks
@@ -519,3 +525,11 @@ getMyPayslip
 # Forms left half-filled: who left an order form, its follow-ups (forms-that-sell §6.6, L3)
 getStorefrontActionLeft
 patchStorefrontAction
+
+# Paying by fingerprint: a key on this phone (docs/spec/fingerprint-key.md)
+getMeFingerprint
+addMeFingerprint
+fingerprintCode
+removeMeFingerprint
+fingerprintPayChallenge
+fingerprintPayConfirm

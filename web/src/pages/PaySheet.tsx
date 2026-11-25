@@ -3,7 +3,9 @@
 // and shown with the bank's name for the account large and what to know
 // (a changed account, a first payment, the same payment again); then
 // confirmed with a passkey for that payment alone (operation money.pay,
-// target payment:<id>). Nothing is paid by the form's words: the chat's
+// target payment:<id>), or, when the server offers it (within the PIN's
+// limits, docs/spec/transaction-pin.md), the person's 4-digit PIN typed
+// here. Nothing is paid by the form's words: the chat's
 // pay.person and pay.account open this sheet instead of sending their
 // command, and the payment's own page (/payments/<id>, the link the chat
 // sends) confirms with the same parts.
@@ -15,6 +17,7 @@ import { useAuth } from "../auth";
 import { KitField, Sheet } from "../kit";
 import { passkeysSupported, stepUpAssert } from "../passkeys";
 import { ErrorBox } from "../ui";
+import { PIN_DIGITS } from "../lib/pin";
 import { naira } from "../lib/invoices";
 import { BANK_SEARCH_FROM, filterBanks, type BankList } from "../lib/saved";
 import {
@@ -120,13 +123,17 @@ export function PayCheck({ x }: { x: Payment }) {
 interface Ask {
   methods: string[];
   message: string;
+  /** What the PIN may still pay in one payment now, when it is offered. */
+  pinLimit?: number;
 }
 
 /**
  * Confirming a prepared payment: POST /v1/payments/{id}/confirm, first
  * without a proof so the server can say "pay again?" (409 pay_again) or
  * which proof it wants (403 step_up), then with a passkey asked for this
- * payment alone, or an authenticator code typed here. Shown inside a
+ * payment alone, an authenticator code typed here, or the person's PIN
+ * when the server offers it ("pin" among the methods: the passkey first
+ * where this browser has one, the PIN when it is put away). Shown inside a
  * sheet or on a page, so it opens no dialog of its own.
  */
 export function usePayConfirm(
@@ -140,6 +147,7 @@ export function usePayConfirm(
   const [again, setAgain] = useState<string>();
   const [ask, setAsk] = useState<Ask>();
   const [code, setCode] = useState("");
+  const [pin, setPin] = useState("");
   const yes = useRef(false);
   // A yes to paying again is for that payment only.
   useEffect(() => {
@@ -184,13 +192,24 @@ export function usePayConfirm(
           typeof e.body.operation === "string" ? e.body.operation : "money.pay";
         const target =
           typeof e.body.target === "string" ? e.body.target : `payment:${x.id}`;
+        const pinLimit =
+          typeof e.body.pin_limit_kobo === "number"
+            ? e.body.pin_limit_kobo
+            : undefined;
         if (methods.includes("passkey") && passkeysSupported()) {
-          onConfirmed(
-            (await send({ passkey: await stepUpAssert(op, target) })).payment,
-          );
+          let passkey: unknown;
+          try {
+            passkey = await stepUpAssert(op, target);
+          } catch (pe) {
+            // Put away: the PIN, when it may pay this one.
+            if (!methods.includes("pin")) throw pe;
+            setAsk({ methods, message: e.message, pinLimit });
+            return;
+          }
+          onConfirmed((await send({ passkey })).payment);
           return;
         }
-        setAsk({ methods, message: e.message });
+        setAsk({ methods, message: e.message, pinLimit });
       }
     });
 
@@ -199,6 +218,23 @@ export function usePayConfirm(
       onConfirmed((await send({ totp: code })).payment);
       setAsk(undefined);
       setCode("");
+    });
+
+  const withPin = () =>
+    run(async () => {
+      try {
+        onConfirmed((await send({ pin })).payment);
+        setAsk(undefined);
+      } catch (e) {
+        // A wrong PIN: typed again. Anything else the PIN cannot pay
+        // (locked, over its limit, a changed account): said, and the pad
+        // goes; paying again asks for the passkey.
+        if (!(e instanceof ApiError) || e.body.code !== "pin_wrong")
+          setAsk(undefined);
+        throw e;
+      } finally {
+        setPin("");
+      }
     });
 
   /** What confirming needs said on the screen: "pay again?", a code to
@@ -210,7 +246,43 @@ export function usePayConfirm(
           {again}
         </div>
       )}
-      {ask && ask.methods.includes("totp") && (
+      {ask && ask.methods.includes("pin") && (
+        <form
+          className="pay-code"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void withPin();
+          }}
+        >
+          <KitField
+            label="Your PIN"
+            hint={
+              (ask.pinLimit !== undefined
+                ? `Pays up to ${naira(ask.pinLimit)} now. `
+                : "") + "Taskiem never asks for your PIN in a message."
+            }
+          >
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={PIN_DIGITS}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+              data-testid="pay-pin"
+            />
+          </KitField>
+          <button
+            type="submit"
+            className="tk-btn primary"
+            disabled={busy || pin.length !== PIN_DIGITS}
+            data-testid="pay-pin-confirm"
+          >
+            Pay with my PIN
+          </button>
+        </form>
+      )}
+      {ask && !ask.methods.includes("pin") && ask.methods.includes("totp") && (
         <form
           className="pay-code"
           onSubmit={(e) => {
@@ -240,7 +312,7 @@ export function usePayConfirm(
           </button>
         </form>
       )}
-      {ask && !ask.methods.includes("totp") && (
+      {ask && !ask.methods.includes("totp") && !ask.methods.includes("pin") && (
         <div
           className="pay-warn warn"
           role="alert"
@@ -1132,7 +1204,8 @@ export function PaySheet({
             </button>
           </div>
           <p className="pay-foot-hint">
-            You confirm with your passkey. Nothing is paid before.
+            You confirm with your passkey, or your PIN for small amounts.
+            Nothing is paid before.
           </p>
         </div>
       </Sheet>

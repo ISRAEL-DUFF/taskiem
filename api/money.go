@@ -34,6 +34,7 @@ func (s *Server) moneyRoutes(r chi.Router) {
 	r.With(read).Get("/money/statement-waiting", s.listStatementWaiting)
 	r.With(manage, s.tenantWide).Post("/money/statement-waiting/{id}", s.decideStatementLine)
 	r.With(read).Get("/money/entries", s.listMoneyEntries)
+	r.With(read).Get("/money/entries/{id}", s.getMoneyEntry)
 	r.With(manage, s.tenantWide).Post("/money/entries", s.enterMoney)
 }
 

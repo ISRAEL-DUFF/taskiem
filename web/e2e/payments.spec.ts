@@ -60,7 +60,7 @@ const payment = (over: Record<string, unknown> = {}) => ({
 const json = (r: Route, status: number, body: unknown) => r.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
 /** Stands in for the payments API; returns what was asked of it. */
-async function payApi(page: Page, list: unknown[] = []) {
+async function payApi(page: Page, list: unknown[] = [], opts: { pin?: boolean } = {}) {
   const calls: { method: string; path: string; body: Record<string, unknown> }[] = [];
   let confirms = 0;
   await page.route(
@@ -77,6 +77,13 @@ async function payApi(page: Page, list: unknown[] = []) {
       if (path.endsWith("/cancel")) return json(r, 200, { payment: payment({ status: "cancelled" }) });
       if (path.endsWith("/confirm")) {
         confirms++;
+        if (opts.pin) {
+          // The PIN offered (transaction-pin.md): no passkey in this browser.
+          if (!body.pin)
+            return json(r, 403, { error: "confirm with your PIN", step_up: "required", methods: ["pin"], operation: "money.pay", target: `payment:${ID}`, pin_limit_kobo: 10_000_000 });
+          if (body.pin !== "4829") return json(r, 403, { error: "That PIN is not right. 4 tries left.", code: "pin_wrong" });
+          return json(r, 202, { payment: payment({ status: "sending", confirmed_at: new Date().toISOString() }) });
+        }
         if (!body.again) return json(r, 409, { error: "You paid Bayo Rice Mills ₦45,000 in the last day. Pay again?", code: "pay_again" });
         if (!body.totp && !body.passkey)
           return json(r, 403, { error: "confirm with your passkey or authenticator code", step_up: "required", methods: ["totp"], operation: "money.pay", target: `payment:${ID}` });
@@ -169,6 +176,44 @@ for (const width of [390, 360])
     await sheet.getByRole("button", { name: "Done" }).click();
     await expect(sheet).toBeHidden();
   });
+
+test("the Pay sheet takes the 4-digit PIN when it is offered", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await signUp(page);
+  const api = await payApi(page, [], { pin: true });
+  await page.goto("/payments");
+  await page.getByTestId("pay-someone").click();
+  const sheet = page.getByTestId("pay-sheet");
+  await sheet.getByRole("group", { name: "Who are you paying?" }).getByRole("button", { name: "@bayo" }).click();
+  await sheet.getByLabel("How much? in naira").fill("45k");
+  await sheet.getByRole("group", { name: "What is it for?" }).getByRole("button", { name: "a delivery" }).click();
+  await sheet.getByTestId("pay-prepare").click();
+  await expect(sheet.getByTestId("pay-name")).toHaveText("BAYO ADEWALE");
+  await sheet.getByTestId("pay-confirm").click();
+
+  // The PIN pad: four digits, what it may pay said.
+  const pin = sheet.getByTestId("pay-pin");
+  await expect(pin).toBeVisible();
+  await expect(sheet.getByText("Pays up to ₦100,000 now.")).toBeVisible();
+  await expect(pin).toHaveAttribute("maxlength", "4");
+  await noAxe(page, "the PIN on the Pay sheet");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  const go = sheet.getByTestId("pay-pin-confirm");
+  await pin.fill("482");
+  await expect(go).toBeDisabled();
+
+  // A wrong PIN: said, typed again.
+  await pin.fill("0000");
+  await go.click();
+  await expect(sheet.getByText("That PIN is not right. 4 tries left.")).toBeVisible();
+  await expect(pin).toHaveValue("");
+  await pin.fill("4829");
+  await go.click();
+  await expect(sheet.getByTestId("pay-sent")).toBeVisible();
+  const confirms = api.calls.filter((c) => c.path.endsWith("/confirm")).map((c) => c.body);
+  expect(confirms).toEqual([{ again: false }, { again: false, pin: "0000" }, { again: false, pin: "4829" }]);
+});
 
 test("one payment's page: checked, then confirmed or cancelled", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

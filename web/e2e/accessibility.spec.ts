@@ -74,6 +74,8 @@ const PAGES = [
   "/money/leaks",
   "/money/statements",
   "/money/entries",
+  "/money/transactions",
+  "/money/transactions?period=all&direction=out",
   "/money/fees",
   "/payments",
   "/payments/several",

@@ -367,7 +367,7 @@ void main() {
             'pin_limit_kobo': 10000000,
           });
         }
-        if (b['pin'] != '482913') {
+        if (b['pin'] != '4829') {
           wrong++;
           return _err(403, 'pin_wrong', 'That PIN is not right. 4 tries left.');
         }
@@ -389,23 +389,23 @@ void main() {
       expect(find.textContaining('Paying takes a passkey'), findsNothing);
       expect(find.text('Use my passkey instead'), findsNothing);
       final pad = find.descendant(of: find.byKey(const ValueKey('pay-pin')), matching: find.byType(EditableText));
-      await t.enterText(pad, '111111');
+      await t.enterText(pad, '1111');
       await settle(t);
-      // Dots, never the digits.
+      // Dots, never the digits: four of them.
       expect(find.text('1'), findsNothing);
-      expect(find.text('•'), findsNWidgets(6));
+      expect(find.text('•'), findsNWidgets(4));
       await t.tap(find.text('Pay ₦45,000'));
       await settle(t);
       expect(wrong, 1);
       expect(find.text('That PIN is not right. 4 tries left.'), findsOneWidget);
       expect(find.text('•'), findsNothing);
       await snap(t, 'pay-pin-${mode.name}');
-      await t.enterText(pad, '482913');
+      await t.enterText(pad, '4829');
       await settle(t);
       await t.tap(find.text('Pay ₦45,000'));
       await settle(t);
       final sent = api.sent('POST', '/v1/payments/p4/confirm');
-      expect(sent.last, {'pin': '482913'});
+      expect(sent.last, {'pin': '4829'});
       expect(sent.any((b) => b.containsKey('passkey')), isFalse);
       expect(find.text('Sent to the bank'), findsWidgets);
       await t.pump(const Duration(seconds: 2));
@@ -448,7 +448,7 @@ void main() {
     await t.tap(find.text('Use my PIN instead'));
     await settle(t);
     expect(find.text('Use my passkey instead'), findsOneWidget);
-    await t.enterText(find.descendant(of: find.byKey(const ValueKey('pay-pin')), matching: find.byType(EditableText)), '482913');
+    await t.enterText(find.descendant(of: find.byKey(const ValueKey('pay-pin')), matching: find.byType(EditableText)), '4829');
     await settle(t);
     await t.tap(find.text('Pay ₦45,000'));
     await settle(t);

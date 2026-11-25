@@ -554,10 +554,16 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/me/whatsapp/verify", s.verifyWhatsAppBinding)
 			r.Delete("/me/whatsapp", s.unbindWhatsApp)
 			r.Put("/me/whatsapp/pin", s.setWhatsAppPin)
-			// The person's PIN, set at sign-up and reset with a passkey (pin_me.go).
+			// The person's PIN, set or changed behind a code to the phone or a passkey (pin_me.go).
 			r.Get("/me/pin", s.getMePin)
 			r.Put("/me/pin", s.putMePin)
+			r.Post("/me/pin/code", s.mePinCode)
 			r.Delete("/me/pin", s.removeWhatsAppPin)
+			// Paying by fingerprint: the person's phones with a key (fingerprint_me.go).
+			r.Get("/me/fingerprint", s.getMeFingerprint)
+			r.Post("/me/fingerprint", s.putMeFingerprint)
+			r.Post("/me/fingerprint/code", s.fingerprintCode)
+			r.Delete("/me/fingerprint/{id}", s.removeMeFingerprint)
 			r.Delete("/me/whatsapp/pin", s.removeWhatsAppPin)
 			r.Get("/me/telegram", s.getTelegram)
 			r.Post("/me/telegram", s.startTelegramLink)
@@ -685,6 +691,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/embed", s.getStorefrontEmbed)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/fronts/{id}/sellable", s.sellableItems)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
+			// Paying by fingerprint (payments_fingerprint.go).
+			s.fingerprintPayRoutes(r)
 			s.invoiceRoutes(r)
 			s.linkRoutes(r)         // business links (links.go)
 			s.profileRoutes(r)      // a business's profile and gallery (business_profile.go)

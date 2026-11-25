@@ -20,7 +20,7 @@ It needs Go (it runs `go run ./tools/docsite -data` for the facts) and Node 22. 
 
 ## Pages
 
-Home, Schools, Pricing, Security, Your records (`/tables`), Your page (`/storefront`), For fintechs (`/partners`), About, Contact and 404. The previous site's How it works, Templates and Works with are gone; their addresses redirect to the home page's matching section.
+Home, Schools, Pricing, Inventory, Security, Your records (`/tables`), Your page (`/storefront`), For fintechs (`/partners`), About, Contact and 404. The previous site's How it works, Templates and Works with are gone; their addresses redirect to the home page's matching section.
 
 ## What the build fills in
 
