@@ -189,6 +189,11 @@ test("follow-ups on WhatsApp from the business's own number", async ({ page }) =
   const { slug, tenant, action, ref } = await seller(page);
   const pn = `${Date.now()}`.slice(-12);
   sql(`INSERT INTO whatsapp_numbers (phone_number_id, tenant_id, waba_id, display_number, own_app, created_by) VALUES ('9${pn}', '${tenant}', '3${pn}', '+2348000000001', false, 'e2e')`);
+  // Its account holds the template approved, as utility, in our words (as
+  // the hourly check with Meta records it).
+  sql(
+    `INSERT INTO whatsapp_templates (waba_id, name, language, tenant_id, status, meta_category, meta_matches, checked_at) VALUES ('3${pn}', 'taskiem_finish_order', 'en', '${tenant}', 'approved', 'utility', true, now())`,
+  );
   await ok(page.request.patch(`/v1/storefront/actions/${action}`, { headers: H, data: { followup_on: true } }));
 
   await page.goto(`/storefront/left/${action}`);
