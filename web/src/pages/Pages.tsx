@@ -8,6 +8,8 @@ import { EmptyState, ErrorBox, Field, Items, Item, Modal, PageHeader, Skeleton, 
 import { Decide } from "./Approvals";
 import { useConfirm } from "./ConfirmSheet";
 import { MadeToolSheet } from "./MadeToolSheet";
+import { DescribePageModal, StartersModal } from "./PageStarters";
+import { Board, Chart, type Move } from "./PageG4";
 import {
   stillWorking,
   workedWords,
@@ -24,8 +26,17 @@ import {
   liveQueue,
   type PageChanged,
   rowsWord,
+  EMPTY,
+  isRecords,
+  newPageDoc,
+  recordTables,
+  withUses,
+  type RecordView,
+  linkFilters,
+  runStatusLine,
   toneClass,
   viewWithFilters,
+  type Tone,
   whoWords,
   type DrawnFilter,
   type DrawnPage,
@@ -49,6 +60,8 @@ export const pageIcon = (icon: string) => ICONS[icon] ?? (icon || "tables");
 export function Pages() {
   const list = useLoad(() => get<PageList>("/v1/pages"), []);
   const [making, setMaking] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [describing, setDescribing] = useState(false);
   const data = list.data;
   return (
     <>
@@ -61,6 +74,14 @@ export function Pages() {
               <button className="primary" onClick={() => setMaking(true)}>
                 <Icon name="plus" />
                 New page
+              </button>
+              <button onClick={() => setStarting(true)}>
+                <Icon name="dashboard" />
+                From a starter
+              </button>
+              <button onClick={() => setDescribing(true)}>
+                <Icon name="sparkle" />
+                Describe it
               </button>
               <FromFile />
             </>
@@ -100,6 +121,8 @@ export function Pages() {
         </Items>
       )}
       {making && <NewPage onClose={() => setMaking(false)} />}
+      {starting && <StartersModal onClose={() => setStarting(false)} />}
+      {describing && <DescribePageModal onClose={() => setDescribing(false)} />}
     </>
   );
 }
@@ -148,39 +171,60 @@ function FromFile() {
   );
 }
 
-/** Picks the table a new page shows, and makes it (Show as a page). */
+/** Picks what a new page shows and makes it: one of the business's tables
+ * (Show as a page), Taskiem's own records, or nothing yet, to add every
+ * part in the editor (H5: a page made from the editor alone). */
 function NewPage({ onClose }: { onClose: () => void }) {
   const tables = useLoad(() => get<{ tables: Table[] }>("/v1/tables?counts=no"), []);
+  const records = useLoad(() => get<{ records: RecordView[] }>("/v1/page-records").catch(() => ({ records: [] as RecordView[] })), []);
+  const pages = useLoad(() => get<PageList>("/v1/pages"), []);
   const [table, setTable] = useState("");
+  const [title, setTitle] = useState("");
   const act = useAction();
   const navigate = useNavigate();
   const list = (tables.data?.tables ?? []).filter((t) => !t.kept_by);
+  const views = recordTables(records.data?.records ?? []);
+  const picked = table || list[0]?.id || views[0]?.id || EMPTY;
+  const own = picked === EMPTY || isRecords(picked);
   return (
     <Modal title="New page" onClose={onClose}>
       {!!tables.error && <ErrorBox error={tables.error} />}
-      {tables.data && list.length === 0 ? (
-        <p>
-          A page shows one of your tables. <Link to="/tables">Make a table</Link> first.
-        </p>
-      ) : (
+      {
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => {
-              const pg = await post<PageDetail>("/v1/pages", { from_table: table || list[0]?.id });
+              if (!own) {
+                const pg = await post<PageDetail>("/v1/pages", { from_table: picked });
+                navigate(`/pages/${pg.name}/edit`);
+                return;
+              }
+              const doc = newPageDoc(title, (pages.data?.pages ?? []).map((p) => p.name), views.find((v) => v.id === picked));
+              const pg = await post<PageDetail>("/v1/pages", { document: withUses(doc, views) });
               navigate(`/pages/${pg.name}/edit`);
             }, false);
           }}
         >
-          <Field label="What should it show?" hint="Taskiem starts it with how many there are and the rows as a list. You change it after.">
-            <select value={table || list[0]?.id || ""} onChange={(e) => setTable(e.target.value)}>
+          <Field label="What should it show?" hint="Taskiem starts it with how many there are and the rows as a list, or with nothing. You change it after.">
+            <select value={picked} onChange={(e) => setTable(e.target.value)}>
               {list.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.title || t.name}
                 </option>
               ))}
+              {views.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+              <option value={EMPTY}>Nothing yet: I will add each part</option>
             </select>
           </Field>
+          {own && (
+            <Field label="Its name">
+              <input value={title} maxLength={60} required onChange={(e) => setTitle(e.target.value)} />
+            </Field>
+          )}
           <ErrorBox error={act.error} />
           <div className="toolbar">
             <button className="primary" disabled={act.busy || !tables.data}>
@@ -191,7 +235,7 @@ function NewPage({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </form>
-      )}
+      }
     </Modal>
   );
 }
@@ -232,8 +276,9 @@ export function PageScreen() {
   const { name = "" } = useParams();
   const [search] = useSearchParams();
   const draft = search.get("draft") === "1";
-  // The page remembers a viewer's last filters on this device (pages §6).
-  const [values, setValues] = useState<Record<string, string>>(() => lastFilters(name));
+  // The page remembers a viewer's last filters on this device (pages §6);
+  // a link's filters (a Tell me message's page button) come first.
+  const [values, setValues] = useState<Record<string, string>>(() => linkFilters(search.get("filters")) ?? lastFilters(name));
   const keep = (next: Record<string, string>) => {
     setValues(next);
     try {
@@ -443,6 +488,7 @@ export function DrawnPageView({
             onOpen={(r) => setOpen({ ...r, part: p.id })}
             tick={ticks[p.id] ?? 0}
             onPress={preview ? undefined : press.press}
+            onMove={preview ? undefined : press.move}
             onChanged={onRefresh}
           />
         ),
@@ -456,6 +502,15 @@ export function DrawnPageView({
                 <dd>{l.value || "—"}</dd>
               </div>
             ))}
+            {open.run_status && (
+              <div data-testid="page-detail-run">
+                <dt>Where it is</dt>
+                <dd>
+                  {runStatusLine(open.run_status)}
+                  {open.run_status.started_at && <span className="hint"> · started {fmtTime(open.run_status.started_at)}</span>}
+                </dd>
+              </div>
+            )}
           </dl>
           <div className="toolbar">
             {!preview && (open.actions ?? []).map((a) => (
@@ -480,8 +535,11 @@ function usePagePress(name: string, draft: boolean, values: Record<string, strin
   const [approval, setApproval] = useState<Approval | null>(null);
   const q = [filtersParam(values), draft ? "draft=1" : ""].filter(Boolean).join("&");
   const path = `/v1/pages/${name}/act${q ? `?${q}` : ""}`;
-  const press = async (block: string, row: string | undefined, a: DrawnAction) => {
-    const body = { block, action: a.index, ...(row !== undefined && { row }) };
+  const press = (block: string, row: string | undefined, a: DrawnAction) => pressBody(a, { block, action: a.index, ...(row !== undefined && { row }) });
+  // A board's card moved to another column (G4): the board's move tool,
+  // given filled in by the server as a row's button is.
+  const move = (block: string, row: string, to: string) => pressBody({ index: 0, label: "Move", kind: "tool" }, { block, action: 0, row, to });
+  const pressBody = async (a: DrawnAction, body: Record<string, unknown>) => {
     try {
       const r = await post<ActResult>(path, body);
       if (r.kind === "tool" && r.tool) {
@@ -513,7 +571,7 @@ function usePagePress(name: string, draft: boolean, values: Record<string, strin
       {approval && <Decide a={approval} decision="approved" showSubject onClose={() => setApproval(null)} onDone={() => (setApproval(null), reload())} />}
     </>
   );
-  return { press, node };
+  return { press, move, node };
 }
 
 /** A page's or a row's button: greyed, with why, when it is not this person's. */
@@ -627,6 +685,7 @@ function Part({
   onOpen,
   tick,
   onPress,
+  onMove,
   onChanged,
 }: {
   part: DrawnPart;
@@ -636,6 +695,7 @@ function Part({
   onOpen: (r: DrawnRow) => void;
   tick: number;
   onPress?: Press;
+  onMove?: Move;
   onChanged: () => void;
 }) {
   if (part.broken) {
@@ -719,6 +779,10 @@ function Part({
           )}
         </section>
       );
+    case "board":
+      return <Board part={part} name={name} draft={draft} values={values} onOpen={onOpen} onPress={onPress} onMove={onMove} />;
+    case "chart":
+      return <Chart part={part} />;
   }
   return <Rows part={part} name={name} draft={draft} values={values} onOpen={onOpen} tick={tick} onPress={onPress} onChanged={onChanged} />;
 }
@@ -872,6 +936,7 @@ function Rows({
                     ) : (
                       cell || "—"
                     )}
+                    {i === 0 && <RowRun r={r} />}
                   </td>
                 ))}
                 {shown.has_detail ? (
@@ -916,6 +981,18 @@ function RowWords({ r }: { r: DrawnRow }) {
         {r.state && <span className={`badge sf-status ${toneClass(r.state.tone)}`}>{r.state.text}</span>}
       </span>
       {r.sub && <span className="sub">{r.sub}</span>}
+      <RowRun r={r} />
+    </span>
+  );
+}
+
+/** A row's own status (pages §4): where its run is, in words. */
+function RowRun({ r }: { r: DrawnRow }) {
+  const s = r.run_status;
+  if (!s) return null;
+  return (
+    <span className="sub pg-row-run" data-testid="page-row-run">
+      <span className={`badge sf-status ${toneClass(s.tone as Tone)}`}>{runStatusLine(s)}</span>
     </span>
   );
 }

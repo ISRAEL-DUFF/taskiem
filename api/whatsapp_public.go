@@ -20,11 +20,12 @@ import (
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
-// Public self-service menus (spec 11.2), now customers' tools (made tools
-// T5, tools_customers.go). A tenant with its own number may offer a short
-// menu to anyone who writes to it without a bound account: its customers'
-// tools (those it deploys in prod for customers, and the entries of its
-// public menu carried over); inputs in a WhatsApp form (never field by
+// The customer menu on a business's own number (spec 11.2; made tools T5,
+// tools_customers.go). A tenant with its own number offers anyone who
+// writes "menu" to it without a bound account its customers' tools (those
+// it deploys in prod for customers: publishing one is what offers it, and
+// there is no other list or switch, since the separate public menu was
+// retired by migration 00640); inputs in a WhatsApp form (never field by
 // field), checked against the schema; an explicit yes, whatever the tool's
 // care; then a run started by the actor "whatsapp_public:<number>", and,
 // for a tool with an answer, the answer from its public outputs when the
@@ -55,17 +56,13 @@ type pubSession struct {
 }
 
 // waPublic answers an unbound number on a tenant's own number; false when
-// the tenant offers no menu.
+// the tenant offers its customers no tools there.
 func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound) (bool, error) {
 	tenant := wa.Tenant
 	var on bool
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `SELECT public_menu FROM whatsapp_numbers WHERE tenant_id = $1 AND phone_number_id = $2 AND status = 'active'`,
+		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM whatsapp_numbers WHERE tenant_id = $1 AND phone_number_id = $2 AND status = 'active')`,
 			tenant, wa.Config.PhoneNumberID).Scan(&on)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
-		return err
 	})
 	if err != nil || !on {
 		return false, err
@@ -162,11 +159,11 @@ func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number str
 	return true, say(tr(l, "wa.public.menu", "list", strings.Join(lines, "\n")))
 }
 
-// stateMenu is a public menu shown, its choice not yet made.
+// stateMenu is a customer menu shown, its choice not yet made.
 const stateMenu = "menu"
 
 // waPublicAsked reports whether a customer's message on the business's
-// own number is for its public menu: the word menu, a choice from a menu
+// own number is for its customer menu: the word menu, a choice from a menu
 // shown (a number, or cancel), or a step of a workflow under way. All
 // else is the customer's conversation with the business.
 func (s *Server) waPublicAsked(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound) bool {
@@ -357,7 +354,7 @@ func pubAsk(d pubData) string {
 	return d.Nonce[:12]
 }
 
-// pubConfirmButtons are Yes and Cancel under a public menu's summary.
+// pubConfirmButtons are Yes and Cancel under a customer menu's summary.
 func pubConfirmButtons(l lang.Tag, d pubData) []whatsapp.Button {
 	bs := confirmButtonsIn(l)
 	if ask := pubAsk(d); ask != "" {

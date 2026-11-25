@@ -167,7 +167,7 @@ func (s *Server) confirmPaymentPin(w http.ResponseWriter, r *http.Request, id uu
 		writeErr(w, http.StatusBadRequest, "confirm with a passkey or a PIN, not both")
 		return
 	}
-	x, err := s.payByPin(r, id, in.Pin, in.Again)
+	x, err := s.payByPin(r, id, in.Pin, in.Again, in)
 	if err != nil {
 		s.payFail(w, r, err)
 		return
@@ -180,7 +180,10 @@ func (s *Server) confirmPaymentPin(w http.ResponseWriter, r *http.Request, id uu
 // (tries left said) or pin_locked; a payment the PIN may not confirm,
 // pin_limit, pin_passkey_only, pin_new or no_pin, before the PIN is
 // checked; anything else as confirmPayment refuses it.
-func (s *Server) payByPin(r *http.Request, id uuid.UUID, pin string, again bool) (payment, error) {
+// ticks are the sheet's Tell them in the chat and Send them a receipt,
+// kept only once the PIN is right and the payment is claimed, as the
+// passkey's confirm keeps them.
+func (s *Server) payByPin(r *http.Request, id uuid.UUID, pin string, again bool, ticks confirmIn) (payment, error) {
 	ctx := r.Context()
 	p := principalFrom(ctx)
 	if p == nil || p.UserID == uuid.Nil || p.KeyID != uuid.Nil || p.EndUser != nil || p.Agent != nil || p.Run != uuid.Nil {
@@ -220,6 +223,9 @@ func (s *Server) payByPin(r *http.Request, id uuid.UUID, pin string, again bool)
 		}
 		if _, err := s.stillAsPrepared(ctx, p.TenantID, x); err != nil {
 			return x, s.dropChanged(r, x.ID, err)
+		}
+		if err := s.balanceCovers(ctx, p.TenantID, x); err != nil {
+			return x, err
 		}
 	}
 	// The PIN, counted with the approvals' tries, under its row lock.
@@ -276,8 +282,10 @@ func (s *Server) payByPin(r *http.Request, id uuid.UUID, pin string, again bool)
 			if _, err := pinFits(x, needs, today); err != nil {
 				return err // the claim is rolled back
 			}
-			_, err = tx.Exec(ctx, `UPDATE payments SET confirmed_with = 'pin' WHERE id = $1`, id)
-			return err
+			if _, err = tx.Exec(ctx, `UPDATE payments SET confirmed_with = 'pin' WHERE id = $1`, id); err != nil {
+				return err
+			}
+			return setTellTx(ctx, tx, id, ticks)
 		}); err != nil {
 			return x, err
 		}
@@ -297,6 +305,9 @@ func (s *Server) payByPin(r *http.Request, id uuid.UUID, pin string, again bool)
 		return auditTx(r, tx, "payment.confirm", id.String(), map[string]any{"amount_kobo": x.AmountKobo, "needs_ok": x.NeedsOK, "run": run,
 			"changed_account": x.ChangedAccount, "again": revote, "step_up": payStepUpPIN, "via": p.AuthMethod})
 	})
+	if err == nil {
+		s.paymentSent(ctx, p, x)
+	}
 	return x, err
 }
 
@@ -381,7 +392,7 @@ func (s *Server) waFlowPayPin(ctx context.Context, row flowRow, req whatsapp.Flo
 		return screen("Something went wrong; try again.")
 	}
 	pin, _ := req.Data["pin"].(string)
-	x, err := s.payByPin(r, id, pin, false)
+	x, err := s.payByPin(r, id, pin, false, confirmIn{})
 	var pr payRefused
 	switch {
 	case errors.As(err, &pr) && pr.code == "pin_wrong":

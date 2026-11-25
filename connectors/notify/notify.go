@@ -35,6 +35,8 @@ type Message struct {
 	Members []string
 	Title   string
 	Text    string
+	// File is a saved file sent with it (FileRefPrefix…), or "".
+	File string
 	// Key makes it idempotent: a retry reaches nobody twice.
 	Key string
 }
@@ -63,6 +65,8 @@ type Outside struct {
 	Title       string
 	Text        string
 	About       string
+	// File is a saved file sent with it (FileRefPrefix…), or "".
+	File string
 	// PayrollaEmployee: the Payrolla employee it is about; a staff member
 	// linked to them hears it on their own chat instead.
 	PayrollaEmployee string
@@ -93,16 +97,32 @@ type Teller interface {
 // exactly its variables; their values may be expressions.
 func CheckTell(input map[string]any) []string {
 	out := checkButtons(input)
+	// Outside WhatsApp's window a template of its own has no place for a
+	// file's link: one or the other.
+	if _, t := input["template"]; t && input["file"] != nil {
+		out = append(out, "a message with a template of its own cannot send a saved file: leave out the template, or the file")
+	}
 	if t := checkTellTemplate(input); len(t) > 0 {
 		out = append(out, t...)
 	}
 	return out
 }
 
-var buttonTool = regexp.MustCompile(`^[a-z][a-z0-9-]{1,23}$`)
+var (
+	buttonTool = regexp.MustCompile(`^[a-z][a-z0-9-]{1,23}$`)
+	// buttonPage is a page's short name (page/v1's name).
+	buttonPage = regexp.MustCompile(`^[a-z][a-z0-9-]{1,23}$`)
+	// filterID is a page's filter's id (page/v1).
+	filterID = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,23}$`)
+)
+
+// MaxPageFilters is how many filters a page has, so a page button sets.
+const MaxPageFilters = 4
 
 // checkButtons holds a Tell me message's buttons: three at most, each a
-// label of twenty characters and a tool's command written out.
+// label of twenty characters and either a tool's command written out (its
+// form filled in) or a page's name written out with its filters set
+// (pages §9: "Disk alerts" filtered to db-2).
 func checkButtons(input map[string]any) []string {
 	raw, has := input["buttons"]
 	if !has {
@@ -110,7 +130,7 @@ func checkButtons(input map[string]any) []string {
 	}
 	bs, ok := raw.([]any)
 	if !ok {
-		return []string{"buttons is a list of {label, tool, inputs, once}"}
+		return []string{"buttons is a list of {label, tool, inputs, once} or {label, page, filters}"}
 	}
 	var out []string
 	if len(bs) > 3 {
@@ -119,12 +139,46 @@ func checkButtons(input map[string]any) []string {
 	for i, x := range bs {
 		b, _ := x.(map[string]any)
 		label, _ := b["label"].(string)
-		tool, _ := b["tool"].(string)
+		tool, isTool := b["tool"].(string)
+		page, isPage := b["page"].(string)
 		if n := len([]rune(label)); n == 0 || n > 20 {
 			out = append(out, fmt.Sprintf("buttons[%d]: a label of 1 to 20 characters", i))
 		}
-		if !buttonTool.MatchString(tool) {
-			out = append(out, fmt.Sprintf("buttons[%d]: tool is a tool's command, written out (clean-disk)", i))
+		switch {
+		case isTool && isPage:
+			out = append(out, fmt.Sprintf("buttons[%d]: a button opens a tool or a page, not both", i))
+		case isPage:
+			if !buttonPage.MatchString(page) {
+				out = append(out, fmt.Sprintf("buttons[%d]: page is a page's short name, written out (disk-alerts)", i))
+			}
+			if _, has := b["inputs"]; has {
+				out = append(out, fmt.Sprintf("buttons[%d]: a page's button sets its filters, not inputs", i))
+			}
+			if _, has := b["once"]; has {
+				out = append(out, fmt.Sprintf("buttons[%d]: a page's button opens the page each time: no once", i))
+			}
+			if f, has := b["filters"]; has {
+				m, ok := f.(map[string]any)
+				switch {
+				case !ok:
+					out = append(out, fmt.Sprintf("buttons[%d]: filters are the page's filters by id, each a value", i))
+				case len(m) > MaxPageFilters:
+					out = append(out, fmt.Sprintf("buttons[%d]: a page has at most %d filters", i, MaxPageFilters))
+				default:
+					for k := range m {
+						if !filterID.MatchString(k) {
+							out = append(out, fmt.Sprintf("buttons[%d]: filters.%s is not a filter's id", i, k))
+						}
+					}
+				}
+			}
+		default:
+			if !buttonTool.MatchString(tool) {
+				out = append(out, fmt.Sprintf("buttons[%d]: tool is a tool's command, written out (clean-disk)", i))
+			}
+			if _, has := b["filters"]; has {
+				out = append(out, fmt.Sprintf("buttons[%d]: a tool's button fills its inputs, not filters", i))
+			}
 		}
 	}
 	return out
@@ -180,10 +234,14 @@ func tellTemplateNames() []string {
 
 // checkInput is the connector's publish-time check (connector.CheckInput).
 func checkInput(action string, input map[string]any) []string {
-	if action != "tell" {
-		return nil
+	var out []string
+	if action == "tell" {
+		out = CheckTell(input)
 	}
-	return CheckTell(input)
+	if action == "tell" || action == "message" {
+		out = append(out, checkFile(input)...)
+	}
+	return out
 }
 
 // New returns the connector; t nil makes it fail plainly.
@@ -226,6 +284,13 @@ func New(t Teller) *connector.Connector {
 			if msgs := CheckTell(req.Input); len(msgs) > 0 {
 				return connector.Response{}, fmt.Errorf("%s: %w", strings.Join(msgs, "; "), effects.ErrFatal)
 			}
+			// A saved file: its name and a link made when it is sent (by
+			// email here; the chat outbox makes its own from this input).
+			file, err := FileRef(req.Input)
+			if err != nil {
+				return connector.Response{}, err
+			}
+			msg.File = file
 			res, err := t.Tell(ctx, msg)
 			if err != nil {
 				return connector.Response{}, err
@@ -253,6 +318,12 @@ func New(t Teller) *connector.Connector {
 				return connector.Response{}, fmt.Errorf("a message is required: %w", effects.ErrFatal)
 			case m.Phone == "" && m.Email == "" && m.PayrollaEmployee == "":
 				return connector.Response{}, fmt.Errorf("their phone number or email is required: %w", effects.ErrFatal)
+			}
+			// A saved file: its name and a link made when it is sent (by
+			// SMS or email here; the chat outbox makes its own).
+			var err error
+			if m.File, err = FileRef(req.Input); err != nil {
+				return connector.Response{}, err
 			}
 			d, err := t.Message(ctx, m)
 			if err != nil {

@@ -66,7 +66,7 @@ describe("saved things as a step's values", () => {
     expect(labels("place")).toEqual(["Address", "Street and number", "Area", "Landmark", "Phone", "Note"]);
     expect(labels("person")).toEqual(["Phone", "Email", "Address", "Birthday", "Note"]);
     expect(labels("provider_account")).toEqual(["Provider", "Number with them", "Name on the account", "What it is", "Note"]);
-    expect(labels("file")).toEqual(["File name", "File type", "Note"]);
+    expect(labels("file")).toEqual(["File name", "File type", "The file, for a message to send", "Note"]);
   });
 
   it("gives a made-up kind's fields, but for sensitive ones, files, bank accounts and those never shared", () => {
@@ -109,5 +109,12 @@ describe("saved things as a step's values", () => {
     const noKinds = <T>(path: string): Promise<T> => (path === "/v1/saved" ? get<T>(path) : Promise.reject(new Error("no")));
     expect(await loadSavedSources(noKinds)).toHaveLength(2);
     expect(await loadSavedSources(() => Promise.reject(new Error("offline")))).toEqual([]);
+  });
+});
+
+describe("a made-up kind's field named file", () => {
+  it("is read as field_file: only a saved file is a message's file", () => {
+    expect(customFieldKey("file")).toBe("field_file");
+    expect(customFieldKey("colour")).toBe("colour");
   });
 });

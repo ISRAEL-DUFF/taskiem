@@ -3,11 +3,13 @@ package api
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/saved"
@@ -19,8 +21,12 @@ import (
 // read now, so a change is used from the next run. Personal values (a
 // phone, an email, an address, an account number) and a made-up kind's
 // sensitive ones are sealed in the run's history; fields never to be shared
-// and files are left out. A person's own saved things are never read: the
-// run is the business's.
+// are left out. A saved file is a reference to it (file:
+// "saved-file:<id>"), never a link: a message step sending it gets a link
+// made when it sends (saved_file_links.go; build plan H6). A person's own
+// saved things are never read: the run is the business's. Each thing read
+// is recorded against the run, with the steps that read it (saved_uses,
+// 00641), the latest savedUsesKept for each thing.
 
 // SavedResolver is the engine's reader of saved things for the runs of
 // store: set on it wherever runs start (the API, schedules, the workers).
@@ -28,9 +34,13 @@ func SavedResolver(store *runtime.Store) runtime.SavedResolver {
 	return (&Server{Store: store}).savedForRuns
 }
 
+// savedUsesKept is how many of the latest runs that read a saved thing
+// are kept for its page (a run's purge takes its rows too, 00643).
+const savedUsesKept = 200
+
 // savedForRuns is the engine's runtime.SavedResolver: tx is in the
 // business's scope.
-func (s *Server) savedForRuns(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, names []string) (map[string]any, []pii.Path, error) {
+func (s *Server) savedForRuns(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, read runtime.SavedRead, names []string) (map[string]any, []pii.Path, error) {
 	// Each name as written, by the name it is saved under ("price_list" is
 	// @price-list).
 	byName := map[string][]string{}
@@ -69,6 +79,29 @@ func (s *Server) savedForRuns(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 			for k, cat := range sealed {
 				paths = append(paths, pii.Path{Segments: []string{"saved", as, k}, Category: cat})
 			}
+		}
+		if read.Run == uuid.Nil {
+			continue
+		}
+		var steps []string
+		for _, as := range byName[x.Name] {
+			for _, st := range read.Readers[as] {
+				if !slices.Contains(steps, st) {
+					steps = append(steps, st)
+				}
+			}
+		}
+		if steps == nil {
+			steps = []string{}
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO saved_uses (tenant_id, object_id, run_id, workflow_id, version, name, steps) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (object_id, run_id) DO NOTHING`, tenant, x.ID, read.Run, read.Workflow, read.Version, x.Name, steps[:min(len(steps), 200)]); err != nil {
+			return nil, nil, err
+		}
+		// Only the latest are kept for the thing's page.
+		if _, err := tx.Exec(ctx, `DELETE FROM saved_uses WHERE object_id = $1 AND read_at < (
+			SELECT read_at FROM saved_uses WHERE object_id = $1 ORDER BY read_at DESC OFFSET $2 LIMIT 1)`, x.ID, savedUsesKept-1); err != nil {
+			return nil, nil, err
 		}
 	}
 	return out, paths, nil
@@ -129,9 +162,11 @@ func (s *Server) savedRunFields(ctx context.Context, tx pgx.Tx, o savedOwner, x 
 		put("number", str("number"), "other")
 		put("name_on_it", str("name_on_it"), "name")
 	case saved.KindFile:
-		// The file itself is not a run's: what it is only.
+		// What it is, and a link to it a step can send (the file itself
+		// never goes into the run).
 		put("file_name", str("file_name"), "")
 		put("file_type", str("file_type"), "")
+		put("file", notify.FileRefPrefix+x.ID.String(), "")
 	case saved.KindCustom:
 		values, err := s.customValuesTx(ctx, tx, o, x)
 		if errors.Is(err, pii.ErrErased) {
@@ -163,5 +198,7 @@ func (s *Server) savedRunFields(ctx context.Context, tx pgx.Tx, o savedOwner, x 
 	return f, sealed, nil
 }
 
-// savedRunOwnField are the fields every saved thing has in a run.
-var savedRunOwnField = map[string]bool{"name": true, "title": true, "kind": true, "note": true}
+// savedRunOwnField are the fields every saved thing has in a run, and
+// file, a saved file's own (a made-up kind's field so named is read as
+// field_file, so only a saved file is ever a message's file).
+var savedRunOwnField = map[string]bool{"name": true, "title": true, "kind": true, "note": true, "file": true}

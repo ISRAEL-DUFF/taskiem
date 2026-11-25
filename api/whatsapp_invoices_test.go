@@ -92,7 +92,8 @@ func TestWhatsAppInvoice(t *testing.T) {
 }
 
 // "invoice @acme 250k for …" (saved objects S2): the saved person's name
-// and email (else phone) fill the invoice; the business's own is taken
+// and email (else phone) fill the invoice, and their address (build plan
+// H6), printed on its PDF and masked unless revealed; the business's own is taken
 // over one's own of the name; a thing of another kind is not invoiced; a
 // name nothing has is said; a person with neither is asked for one.
 func TestWhatsAppInvoiceSaved(t *testing.T) {
@@ -102,7 +103,7 @@ func TestWhatsAppInvoiceSaved(t *testing.T) {
 	owner := w.tenant(t, "Ada Foods", "ada@adafoods.test")
 	const on = "+2348010000029"
 	w.bind(t, owner, on)
-	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "acme", "title": "Acme Ltd", "kind": "person", "details": map[string]any{"email": "pay@acme.ng", "phone": "0803 123 4567"}})
+	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "acme", "title": "Acme Ltd", "kind": "person", "details": map[string]any{"email": "pay@acme.ng", "phone": "0803 123 4567", "address": "12 Marina Road, Lagos Island"}})
 	owner.must(201, "POST", "/v1/me/saved", map[string]any{"name": "acme", "title": "My Acme contact", "kind": "person", "details": map[string]any{"phone": "0803 999 0000"}})
 	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "warehouse", "title": "Warehouse", "kind": "place", "details": map[string]any{"line": "12 Herbert Macaulay Way"}})
 	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "tolu", "title": "Tolu Bello", "kind": "person", "details": map[string]any{"address": "4 Allen Avenue"}})
@@ -132,9 +133,20 @@ func TestWhatsAppInvoiceSaved(t *testing.T) {
 		t.Fatalf("sent: %q", r)
 	}
 	x := owner.must(200, "GET", "/v1/invoices/INV-0001?reveal=true", nil)["invoice"].(map[string]any)
-	if c := x["customer"].(map[string]any); c["name"] != "Acme Ltd" || c["email"] != "pay@acme.ng" {
+	if c := x["customer"].(map[string]any); c["name"] != "Acme Ltd" || c["email"] != "pay@acme.ng" || c["address"] != "12 Marina Road, Lagos Island" {
 		t.Errorf("customer: %v", c)
 	}
+	if c := owner.must(200, "GET", "/v1/invoices/INV-0001", nil)["invoice"].(map[string]any)["customer"].(map[string]any); c["address"] != "••• Lagos Island" {
+		t.Errorf("masked: %v", c)
+	}
+	// Its PDF prints the address (engine/invoicing's TestInvoicePDF reads
+	// what is drawn): revealed only when asked, and audited.
+	for _, q := range []string{"", "?reveal=true"} {
+		if st, hdr, body := owner.rawGet(t, "/v1/invoices/INV-0001/pdf"+q); st != 200 || hdr.Get("Content-Type") != "application/pdf" || !strings.HasPrefix(body, "%PDF-") {
+			t.Fatalf("pdf%s: %d %s", q, st, hdr.Get("Content-Type"))
+		}
+	}
+	owner.must(404, "GET", "/v1/invoices/INV-0099/pdf", nil)
 	if r := w.say(t, on, "invoice @warehouse 10k"); !strings.Contains(r, "@warehouse is a place") {
 		t.Errorf("a place: %q", r)
 	}
@@ -146,6 +158,10 @@ func TestWhatsAppInvoiceSaved(t *testing.T) {
 	}
 	if r := w.say(t, on, "tolu@bello.ng"); !strings.Contains(r, "Send Tolu Bello (") {
 		t.Errorf("then confirmed: %q", r)
+	}
+	w.say(t, on, "yes")
+	if c := owner.must(200, "GET", "/v1/invoices/INV-0002?reveal=true", nil)["invoice"].(map[string]any)["customer"].(map[string]any); c["address"] != "4 Allen Avenue" {
+		t.Errorf("Tolu's address, kept while the email was asked: %v", c)
 	}
 }
 

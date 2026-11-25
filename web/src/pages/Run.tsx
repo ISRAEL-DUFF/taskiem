@@ -11,6 +11,7 @@ import { respondentText } from "./Forms";
 import { Icon } from "../icons";
 import { runLook, stepCounts } from "../lib/lists";
 import { Badge, ErrorBox, Field, Json, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { stepsWords, type RunSavedRead } from "../lib/savedUses";
 
 interface RunDoc {
   run: RunSummary;
@@ -20,6 +21,8 @@ interface RunDoc {
   forks?: { parent_run_id: string | null; resumed_step: string | null; parent_step?: string | null; resumed_by: string[]; subflows?: string[] };
   /** Each failed step's error in plain words (no-technical-steps N5). */
   plain_errors?: Record<string, string>;
+  /** The business's saved things it read at its start (build plan H6). */
+  saved?: RunSavedRead[];
 }
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
@@ -145,6 +148,18 @@ export function RunPage() {
           <dd>
             <code>{r.id}</code>
           </dd>
+          {(data.saved?.length ?? 0) > 0 && (
+            <>
+              <dt>Saved things it read</dt>
+              <dd data-testid="run-saved">
+                {data.saved?.map((x) => (
+                  <span key={x.id} className="run-saved">
+                    <Link to="/settings/saved">@{x.name}</Link> <span className="hint">{stepsWords(x.steps)}</span>
+                  </span>
+                ))}
+              </dd>
+            </>
+          )}
           {data.forks?.parent_run_id && data.forks.parent_step && (
             <>
               <dt>Started by</dt>

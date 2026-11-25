@@ -1,0 +1,13 @@
+{
+  "schema": "wd-test/v1",
+  "template": "tool-tell-the-team",
+  "params": {},
+  "cases": [
+    {
+      "name": "tells the role and says how many heard",
+      "trigger": {"body": {"message": "Shop opens at 10 tomorrow"}},
+      "mocks": {"tell": {"output": {"people": 4, "chat": 3, "email": 1}}},
+      "expect": {"status": "completed", "answer": {"text": "Sent to 4 people."}}
+    }
+  ]
+}

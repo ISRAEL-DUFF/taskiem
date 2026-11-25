@@ -4,7 +4,8 @@
 // member is in Payrolla. Nothing here pays anyone or approves a payroll.
 
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { ThisMonthPanel } from "./PayrollRun";
+import { Link } from "react-router-dom";
 import { ApiError, get, put } from "../api";
 import { useAuth } from "../auth";
 import {
@@ -23,19 +24,15 @@ import {
 import { dateLabel, naira } from "../lib/invoices";
 import {
   choosable,
-  countsWords,
   employeeSub,
   frequencyWords,
-  lineState,
   payrollaLinkBody,
   peopleCount,
   periodLabel,
   runStatus,
-  sortLines,
   suggestionWords,
   type PayrollList,
   type PayrollRun,
-  type PayrollRunView,
   type PayrollStaffMember,
   type PayrollStaffView,
   type PayrollTone,
@@ -58,8 +55,24 @@ function Pill({
   );
 }
 
-/** Not connected: payroll is worked out and paid in Payrolla. */
-function NotConnected() {
+/** Not connected: payroll is worked out and paid in Payrolla. One that
+ * ended says so, with Reconnect Payrolla for the owner. */
+function NotConnected({ ended, owner }: { ended?: boolean; owner?: boolean }) {
+  if (ended)
+    return (
+      <div className="warning" role="note" data-testid="payroll-ended">
+        {owner ? (
+          <>
+            <p style={{ marginTop: 0 }}>Payrolla is no longer connected.</p>
+            <Link className="button" to="/payroll/settings" data-testid="payroll-reconnect-link">
+              Reconnect Payrolla
+            </Link>
+          </>
+        ) : (
+          <p style={{ margin: 0 }}>Payroll isn't connected right now. The owner has been told.</p>
+        )}
+      </div>
+    );
   return (
     <div className="warning" role="note" data-testid="payroll-not-connected">
       <p style={{ marginTop: 0 }}>
@@ -67,7 +80,7 @@ function NotConnected() {
         business's Payrolla here to see each payroll, who was paid and who was
         not, without leaving Taskiem.
       </p>
-      <Link className="button" to="/connections?connect=payrolla" data-testid="payroll-connect">
+      <Link className="button" to="/payroll/settings" data-testid="payroll-connect">
         Connect Payrolla
       </Link>
     </div>
@@ -147,9 +160,17 @@ export function PayrollPage() {
       />
       <ErrorBox error={list.error} />
       {!d && !list.error && <Skeleton rows={4} label="Loading the payroll…" />}
-      {d && !d.connected && <NotConnected />}
+      {d && !d.connected && <NotConnected ended={d.ended} owner={d.is_owner} />}
       {d && d.connected && (
         <>
+          {d.auth === "key" && d.is_owner && (
+            <div className="notice" data-testid="payroll-key-reconnect">
+              <p style={{ marginTop: 0 }}>Connect again in one step so you can run payroll here.</p>
+              <Link className="button" to="/payroll/settings">
+                Reconnect Payrolla
+              </Link>
+            </div>
+          )}
           <p className="payroll-company" data-testid="payroll-company">
             <strong>{d.company?.name || "Your company"}</strong>
             {freq && <span className="sub"> · {freq}</span>}
@@ -160,6 +181,7 @@ export function PayrollPage() {
               </>
             )}
           </p>
+          {d.this_month && <ThisMonthPanel month={d.this_month} mayPrepare={!!d.may_prepare} />}
           {latest && (
             <RunHero
               run={latest}
@@ -225,6 +247,9 @@ export function PayrollPage() {
             </section>
           )}
           <Items label="Staff in Payrolla">
+            <Item to="/payroll/team" icon="members" title="Team" sub="Everyone in Payrolla, their pay and their account" testid="payroll-team-link" />
+            <Item to="/payroll/account-changes" icon="billing" title="Account changes" sub="New salary accounts waiting for an approver" testid="payroll-changes-link" />
+            <Item to="/payroll/me" icon="billing" title="My pay" sub="Your own salary account" testid="payroll-me-link" />
             <Item
               to="/payroll/staff"
               icon="members"
@@ -232,135 +257,21 @@ export function PayrollPage() {
               sub="Who each of your staff is in Payrolla"
               testid="payroll-staff-link"
             />
+            <Item
+              to="/payroll/schedules"
+              icon="reports"
+              title="Tax and pension"
+              sub="PAYE, pension, NHF and NHIS to pay for each payroll"
+              testid="payroll-schedules-link"
+            />
+            <Item
+              to="/payroll/settings"
+              icon="settings"
+              title="Payroll settings"
+              sub="How your payroll is set up, and who can approve"
+              testid="payroll-settings-link"
+            />
           </Items>
-        </>
-      )}
-    </>
-  );
-}
-
-/** /payroll/runs/:run: one payroll, each person's pay and whether it arrived. */
-export function PayrollRunPage() {
-  const { run = "" } = useParams();
-  const view = useLoad(
-    () => get<PayrollRunView>(`/v1/payroll/runs/${encodeURIComponent(run)}`),
-    [run],
-  );
-  const d = view.data;
-  const s = d?.run.summary;
-  const notConnected =
-    view.error instanceof ApiError && view.error.body.code === "not_connected";
-  return (
-    <>
-      <p className="crumbs">
-        <Link to="/payroll" aria-label="Back to Payroll">
-          Payroll
-        </Link>
-      </p>
-      <PageHeader title={s ? `Payroll for ${periodLabel(s)}` : "Payroll"} />
-      {notConnected ? <NotConnected /> : <ErrorBox error={view.error} />}
-      {!d && !view.error && <Skeleton rows={4} label="Loading the payroll…" />}
-      {d && s && (
-        <>
-          <RunHero run={s} label="Net pay" testid="payroll-run-hero" />
-          {d.approval_url && (
-            <section
-              className="card"
-              aria-labelledby="payroll-approve-h"
-              data-testid="payroll-approve"
-            >
-              <h2 id="payroll-approve-h">Waiting for approval</h2>
-              <p className="hint">
-                Approving happens in Payrolla for now. Check the figures there,
-                approve, and Payrolla pays everyone on pay day.
-              </p>
-              <div className="toolbar">
-                <a
-                  className="button primary"
-                  href={d.approval_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-testid="payroll-approve-open"
-                >
-                  Review and approve in Payrolla
-                  <span className="sr-only"> (opens in a new tab)</span>
-                </a>
-              </div>
-            </section>
-          )}
-          <section
-            className="stats"
-            aria-label="Who was paid"
-            data-testid="payroll-counts"
-          >
-            {(
-              [
-                ["Paid", d.counts.paid],
-                ["Waiting", d.counts.waiting],
-                ["Not paid", d.counts.failed],
-                ["Returned", d.counts.returned],
-              ] as const
-            ).map(([label, n]) => (
-              <div className="stat" key={label}>
-                <span className="stat-label">{label}</span>
-                <span className="stat-value">{n}</span>
-              </div>
-            ))}
-          </section>
-          <section className="card" aria-labelledby="payroll-lines-h">
-            <h2 id="payroll-lines-h">Each person</h2>
-            {countsWords(d.counts) && (
-              <p className="hint">{countsWords(d.counts)}</p>
-            )}
-            {d.lines.length === 0 && (
-              <EmptyState icon="members">
-                No one in this payroll yet.
-              </EmptyState>
-            )}
-            {d.lines.length > 0 && (
-              <Items label="Each person's pay">
-                {sortLines(d.lines).map((l) => {
-                  const st = lineState(l.state);
-                  return (
-                    <Row
-                      key={l.payslip_id || l.employee_id}
-                      letter={l.name || "?"}
-                      tone={st.tone === "ok" ? undefined : st.tone}
-                      title={l.name || "Someone"}
-                      side={
-                        <span className="item-figure">{naira(l.net_kobo)}</span>
-                      }
-                      testid="payroll-line"
-                      attrs={{ "data-state": l.state }}
-                      sub={
-                        <span className="sub">
-                          <Pill label={st.label} tone={st.tone} />
-                          {(l.state === "failed" || l.state === "returned") &&
-                            l.reason && (
-                              <span
-                                className="block"
-                                data-testid="payroll-line-reason"
-                              >
-                                {l.reason}
-                              </span>
-                            )}
-                          {l.staff && (
-                            <span className="block">
-                              <Link
-                                to={`/staff/${encodeURIComponent(l.staff.user_id)}`}
-                              >
-                                Staff: {l.staff.name}
-                              </Link>
-                            </span>
-                          )}
-                        </span>
-                      }
-                    />
-                  );
-                })}
-              </Items>
-            )}
-          </section>
         </>
       )}
     </>

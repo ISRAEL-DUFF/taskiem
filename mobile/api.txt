@@ -332,6 +332,7 @@ addSaved
 changeSaved
 removeSaved
 revealSaved
+listSavedRuns
 savedStepUpOptions
 checkAllSaved
 savedProvider
@@ -365,6 +366,12 @@ createPayment
 getPayment
 confirmPayment
 cancelPayment
+# Paying one person, finished (H7): the balance and Add money, the
+# receipt, Try again
+getPayBalance
+getPaymentReceipt
+sharePaymentReceipt
+payAgain
 getPayLimits
 putPayLimit
 # Where a staff member is paid, outside payroll (Pay on their page)
@@ -382,6 +389,12 @@ getPayroll
 getPayrollRun
 getPayrollStaff
 putStaffPayrolla
+# Payroll settings: the connection, who can approve, linking (P4b-1)
+getPayrollConnection
+getPayrollApprovers
+startPayrollLink
+confirmPayrollLink
+unlinkPayroll
 
 # Pay several people (P3, docs/spec/chat-pay-people.md)
 listPaymentBatches
@@ -403,8 +416,12 @@ listTools
 readTool
 startTool
 confirmTool
+holdToolFile
 getRunAnswer
 setToolSettings
+# Recipes: templates that make a tool, installed from the app (build plan M6)
+listTemplates
+instantiateTemplate
 # A code scanned from the home screen (device fields D2)
 scanOffers
 
@@ -423,6 +440,11 @@ viewPage
 getPageBlock
 actOnPage
 refreshPage
+# Starters (pages G5): a page with its tables and tools, made from the app
+listPageStarters
+installPageStarter
+# A yes/no cell ticked in place on a page's table part (pages H5, g-pages-tick)
+updateTableRow
 # What a business buys U2a: the question on each line and its memory,
 # labels in Money settings (docs/spec/what-a-business-buys.md §6)
 setPurchaseLine
@@ -444,3 +466,52 @@ getThing
 addThing
 patchThing
 getMoneySpending
+
+# Staff and pay from Taskiem (P4b-2): Team, adding someone, changing pay and
+# details, ending employment, held account changes, My pay
+listPayrollBanks
+getPayrollTeam
+getPayrollEmployee
+addPayrollEmployee
+changePayrollEmployee
+askPayrollBankChange
+endPayrollEmployee
+payrollNameCheck
+getPayrollBankChanges
+startBankChangeCode
+approveBankChange
+rejectBankChange
+getMyPay
+startMyBankChange
+confirmMyBankChange
+# This month's payroll (P4b-3): prepare it, a bonus or a deduction, leave
+# someone out and put them back, recalculate, cancel; approve, reject and
+# lock and pay with Payrolla's code (docs/spec/chat-pay-people.md)
+preparePayrollRun
+adjustPayrollRun
+unadjustPayrollRun
+excludePayrollRun
+putBackPayrollRun
+computePayrollRun
+cancelPayrollRun
+startPayrollRunCode
+approvePayrollRun
+lockPayrollRun
+rejectPayrollRun
+# Payroll settings and the tax and pension schedules (P4b-5): the setup
+# read-only, each payroll's schedules with a line per person, pension PINs
+# shown with a passkey, a spreadsheet when asked (docs/spec/chat-pay-people.md)
+getPayrollSettings
+listPayrollSchedules
+getPayrollSchedule
+revealPayrollSchedule
+downloadPayrollSchedule
+# After locking (P4b-4): Pay now and Pay the failed ones again with
+# Payrolla's code; payslips as Taskiem's own cards, anyone's for
+# payroll.read and one's own on My pay (docs/spec/chat-pay-people.md)
+payPayrollRunNow
+retryPayrollRunFailed
+getPayrollPayslip
+sendPayrollPayslipLink
+getMyPayslips
+getMyPayslip

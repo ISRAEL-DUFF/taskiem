@@ -22,6 +22,7 @@ import 'attachments.dart' show fileSize;
 import 'composer.dart' show Pickers;
 import 'saved_accounts.dart' show SavedApi, cleanSavedName, savedNameProblem;
 import 'saved_files.dart';
+import 'saved_runs.dart' show SavedRunsSection;
 
 /// The types a field may have, as the form names them.
 const savedFieldTypes = <(String, String)>[
@@ -462,6 +463,7 @@ class _SavedCustomSheetState extends State<SavedCustomSheet> {
             TkKitField(label: 'Note', hint: 'Optional, for your own reference', child: TkTextBox(controller: _note, max: 200)),
           ],
         ),
+        if (_x != null && !widget.api.mine) SavedRunsSection(auth: widget.api.auth, id: _x.id),
         if (_error != null) TkCallout(leading: TkSquare('b-warn', color: look.red), title: _error!, color: look.red),
       ],
     );

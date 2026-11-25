@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart' show Me, Thing;
 import 'package:taskiem/app/auth.dart';
+import 'package:taskiem/chat/money_page.dart' show MoneyPage;
 import 'package:taskiem/chat/spending.dart';
 import 'package:taskiem/chat/things_page.dart';
 import 'package:taskiem/kit/kit.dart' show TkRadio;
@@ -54,7 +55,14 @@ void main() {
           final was = [...things, ..._more].firstWhere((t) => t['id'] == req.url.path.split('/').last);
           final b = jsonDecode(req.body) as Map<String, dynamic>;
           return ok({
-            'thing': {...was, if (b['status'] != null) 'status': b['status'], 'status_at': '2026-11-22T10:00:00Z', if (b['sale_price_kobo'] != null) 'sale_entry_id': 'me-new'},
+            'thing': {
+              ...was,
+              if (b['status'] != null) 'status': b['status'],
+              'status_at': '2026-11-22T10:00:00Z',
+              if (b['sale_price_kobo'] != null) 'sale_entry_id': 'me-new',
+              if (b['supplier_id'] != null) ...{'supplier_id': b['supplier_id'], 'supplier': b['supplier_id'] == 'sup-elepaq' ? 'Elepaq Stores' : 'Singer Ltd'},
+              if (b['clear_supplier'] == true) ...{'supplier_id': null, 'supplier': null},
+            },
           });
         }
         if (req.method == 'POST' && req.url.path == '/v1/things') {
@@ -265,6 +273,91 @@ void main() {
     expect(find.text('Diesel'), findsOneWidget);
     expect(find.text('Not labelled'), findsNothing, reason: 'the three spent on most');
     await snap(t, 'spending-card');
+  });
+
+  // H2 g-thing-extra: search on the list.
+  testWidgets('searched by name, supplier or serial; nothing found said', (t) async {
+    await open(t, (a) => ThingsPage(auth: a));
+    final box = find.descendant(of: find.bySemanticsLabel(RegExp('^Search Things we have')), matching: find.byType(EditableText));
+    await t.enterText(box, 'singer');
+    await t.pump();
+    expect(find.text('Sewing machine'), findsOneWidget);
+    expect(find.text('Generator'), findsNothing);
+    await t.enterText(box, 'SN-88213');
+    await t.pump();
+    expect(find.text('Sewing machine'), findsOneWidget);
+    expect(find.text('Shop shelves'), findsNothing);
+    await snap(t, 'things-search');
+    await t.enterText(box, 'piano');
+    await t.pump();
+    expect(find.text('Nothing matches “piano”'), findsOneWidget);
+    // The top card stays what is had.
+    expect(find.text('3 things'), findsOneWidget);
+  });
+
+  // H2 g-thing-extra: a row's supplier changed, then taken off.
+  testWidgets('a row’s supplier changed, then taken off', (t) async {
+    final sent = await open(t, (a) => ThingPage(auth: a, thing: _of('th-1')));
+    await t.ensureVisible(find.text('From'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel(RegExp('^From: Singer Ltd')));
+    await settle(t);
+    await t.tap(find.text('Elepaq Stores').last);
+    await settle(t);
+    expect(sent.where((s) => s.startsWith('PATCH')).single, 'PATCH /v1/things/th-1 {"supplier_id":"sup-elepaq"}');
+    expect(find.bySemanticsLabel(RegExp('^From: Elepaq Stores')), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+    await t.ensureVisible(find.text('From'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel(RegExp('^From: Elepaq Stores')));
+    await settle(t);
+    await t.tap(find.text('Not said').last);
+    await settle(t);
+    expect(sent.where((s) => s.startsWith('PATCH')).last, 'PATCH /v1/things/th-1 {"clear_supplier":true}');
+    expect(find.bySemanticsLabel(RegExp('^From: Not said')), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  // H2 g-thing-suggest: the label suggested by the name, pre-selected,
+  // and sent; one picked is never replaced.
+  testWidgets('added by hand: the label suggested by its name, pre-selected', (t) async {
+    final sent = await open(t, (a) => ThingsPage(auth: a));
+    await t.tap(find.bySemanticsLabel('Add something we have'));
+    await settle(t);
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Name')), matching: find.byType(EditableText)), 'Packing table');
+    await t.pump(const Duration(milliseconds: 700));
+    await settle(t);
+    expect(find.text('Packaging'), findsOneWidget);
+    expect(find.text('Suggested from its name'), findsOneWidget);
+    expect(sent, contains('GET /v1/money/labels?item=Packing+table'));
+    await snap(t, 'thing-add-suggested');
+    await t.tap(find.bySemanticsLabel('Add it'));
+    await settle(t);
+    expect(sent.where((s) => s.startsWith('POST')).single, 'POST /v1/things {"label_id":"lb-pack","name":"Packing table"}');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  // H2 g-things-menu: someone who may see stock, not the money: Money is
+  // Things we have only, and nothing of the money is asked.
+  testWidgets('Money for table.read without invoices: Things we have only', (t) async {
+    final sent = await open(t, (a) => MoneyPage(auth: a, tab: true), perms: const ['table.read']);
+    expect(sent.where((s) => s.contains('/v1/money/summary')), isEmpty);
+    expect(find.text('Things we have'), findsOneWidget);
+    expect(find.text('Invoices'), findsNothing);
+    await snap(t, 'money-things-only');
+    await t.tap(find.text('Things we have'));
+    await settle(t);
+    expect(find.text('Sewing machine'), findsOneWidget);
+    expect(sent, contains('GET /v1/things?group=label'));
+  });
+
+  test('searchThings and thingsOnly', () {
+    final list = [for (final x in things) Thing.fromJson(jsonDecode(jsonEncode(x)) as Map<String, dynamic>)];
+    expect(searchThings(list, '').length, 4);
+    expect(searchThings(list, 'machines singer').map((x) => x.name), ['Sewing machine']);
+    expect(searchThings(list, 'po-0012').map((x) => x.name), ['Sewing machine']);
+    expect(searchThings(list, 'before taskiem').map((x) => x.name), ['Shop shelves']);
+    expect(searchThings(list, 'piano'), isEmpty);
   });
 
   testWidgets('at 340 px and large text: nothing cut off, all pressable', (t) async {

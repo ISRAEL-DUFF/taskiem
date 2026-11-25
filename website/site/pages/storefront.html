@@ -1,0 +1,250 @@
+<!--page {"title": "Your page · Taskiem", "description": "A page for your business with your products or services, your opening hours and a Pay button. Orders and bookings come to you in chat to accept, and your riders deliver them.", "path": "/storefront"}-->
+<style>
+/* the page on a phone, with a basket that fills */
+.sp{position:relative;width:300px;max-width:100%;height:600px;border-radius:44px;background:#0b0d0c;padding:10px;box-shadow:0 50px 90px -40px rgba(0,0,0,.7),inset 0 0 0 2px #2b302d}
+.sp .island{position:absolute;top:20px;left:50%;width:88px;height:24px;margin-left:-44px;border-radius:20px;background:#0b0d0c;z-index:3}
+.sps{position:relative;height:100%;border-radius:35px;overflow:hidden;background:#fbfaf7;color:#13261f;font-family:-apple-system,'Segoe UI',Roboto,var(--f-display);font-size:13px}
+.sp-cover{height:108px;background:linear-gradient(135deg,#0d3b2e,#1f5c49);position:relative}
+.sp-cover::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 80% 30%,rgba(200,241,105,.35),transparent 45%)}
+.sp-card{position:relative;margin:-34px 12px 0;padding:12px;border-radius:18px;background:#fff;box-shadow:0 10px 24px -14px rgba(0,0,0,.4)}
+.sp-card .row{display:flex;align-items:center;gap:10px}
+.sp-card .lg2{width:40px;height:40px;border-radius:12px;background:#c8f169;color:#0d3b2e;display:grid;place-items:center;font-weight:800}
+.sp-card b{font-size:15px}
+.sp-card small{display:block;font-size:11.5px;color:#5b6b64}
+.sp-card .open{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:11.5px;font-weight:700;color:#0d6b45}
+.sp-card .open::before{content:"";width:7px;height:7px;border-radius:50%;background:#1f9d63;box-shadow:0 0 0 3px rgba(31,157,99,.2)}
+.sp-card .acts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+.sp-card .acts span{text-align:center;padding:7px;border-radius:10px;border:1px solid #d9e2d9;font-weight:700;font-size:12px}
+.sp-list{padding:12px;display:grid;gap:8px}
+.sp-item{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:8px;border-radius:14px;background:#fff;border:1px solid #eef1ec}
+.sp-item i{width:44px;height:44px;border-radius:10px;background:var(--c);display:block}
+.sp-item b{font-size:13px;display:block}
+.sp-item small{font-size:12px;color:#5b6b64}
+.sp-item em{font-style:normal;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#0d3b2e;color:#c8f169;font-weight:800;transition:transform .2s}
+.sp-item em.tap{transform:scale(.8);background:#c8f169;color:#0d3b2e}
+.sp-bag{position:absolute;left:12px;right:12px;bottom:14px;display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:16px;background:#0d3b2e;color:#fff;font-weight:700;transform:translateY(140%);transition:transform .5s var(--spring)}
+.sp-bag.show{transform:none}
+.sp-bag b{color:#c8f169}
+/* orders and bookings */
+.ocard{display:grid;gap:8px;font-size:14.5px}
+.ocard .k{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ocard .rw{display:flex;justify-content:space-between}
+.ocard .rw b{font-variant-numeric:tabular-nums;color:var(--head)}
+.steps4{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:4px}
+.steps4 i{font-style:normal;display:flex;flex-direction:column;gap:5px;font-size:11.5px;font-weight:700;color:var(--muted)}
+.steps4 i::before{content:"";height:5px;border-radius:5px;background:var(--line);animation:st4 8s infinite;animation-delay:calc(var(--k) * 1.4s)}
+@keyframes st4{0%,4%{background:var(--line)}8%,90%{background:var(--acc)}100%{background:var(--line)}}
+.obtns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.obtns span{text-align:center;padding:10px;border-radius:12px;border:1px solid var(--line);font-weight:800;font-size:14px;color:var(--ink)}
+.obtns span.y{background:var(--btn);color:var(--btn-ink);border-color:var(--btn);animation:press 8s infinite}
+.paychips{display:flex;flex-wrap:wrap;gap:8px}
+.paychips span{padding:9px 14px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);font-weight:700;font-size:14px;color:#fff;animation:pc 6s infinite;animation-delay:calc(var(--k) * 2s)}
+@keyframes pc{0%,4%{background:rgba(255,255,255,.08);color:#fff}8%,30%{background:var(--lime);color:var(--pine)}36%,100%{background:rgba(255,255,255,.08);color:#fff}}
+.matchline{margin-top:16px;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:rgba(200,241,105,.12);color:var(--lime);font-weight:700;font-size:14px}
+/* calendar */
+.cal{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.cal .d{font-family:var(--f-mono);font-size:11px;color:var(--muted);text-align:center;padding-bottom:2px}
+.cal .s{padding:10px 0;text-align:center;border-radius:10px;background:var(--ground);border:1px solid var(--line);font-size:13px;font-weight:700;color:var(--ink)}
+.cal .s.x{opacity:.35;text-decoration:line-through}
+.cal .s.h{animation:hold 7s infinite}
+@keyframes hold{0%,20%{background:var(--ground);color:var(--ink)}26%,46%{background:var(--amber);color:var(--pine)}52%,92%{background:var(--pine);color:var(--lime)}100%{background:var(--ground)}}
+.calnote{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+.calnote span{font-size:12.5px;font-weight:700;padding:6px 10px;border-radius:999px;background:var(--mint-tint);color:var(--head)}
+/* the kinds of page */
+.fronts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.fr{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);animation:fr 10s infinite;animation-delay:calc(var(--k) * 1s)}
+.fr b{color:#fff;font-size:14.5px}
+.fr span{font-size:12.5px;color:rgba(255,255,255,.7)}
+@keyframes fr{0%,2%{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.06)}5%,12%{border-color:var(--lime);background:rgba(200,241,105,.14)}16%,100%{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.06)}}
+/* delivery */
+.route{position:relative;height:150px;border-radius:18px;background:var(--ground);border:1px solid var(--line);overflow:hidden}
+.route svg{position:absolute;inset:0;width:100%;height:100%}
+.route path{fill:none;stroke:var(--line);stroke-width:4;stroke-dasharray:2 8;stroke-linecap:round}
+.route .bike{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:var(--pine);color:var(--lime);display:grid;place-items:center;font-size:16px;offset-path:path("M30 120 C 120 120, 120 30, 220 40 S 330 110, 400 60");animation:ride 6s ease-in-out infinite}
+@keyframes ride{0%,8%{offset-distance:0%}80%,100%{offset-distance:100%}}
+.route .pin{position:absolute;font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;background:var(--card);border:1px solid var(--line);color:var(--head)}
+.dsteps{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.dsteps span{font-size:12.5px;font-weight:700;padding:6px 10px;border-radius:999px;background:var(--ground);border:1px solid var(--line);color:var(--muted);animation:ds 6s infinite;animation-delay:calc(var(--k) * 1.3s)}
+@keyframes ds{0%,3%{background:var(--ground);color:var(--muted)}8%,90%{background:var(--pine);color:var(--lime)}100%{background:var(--ground)}}
+@media (prefers-reduced-motion: reduce){.route .bike{offset-distance:60%}}
+</style>
+{{HEADER}}
+<main>
+  <section class="hero phero">
+    <div class="hero-bleed" id="hero">
+      <div class="wrap">
+        <div class="hero-panel">
+          <div class="hero-copy">
+            <p class="label">Your page</p>
+            <h1 style="margin-top:16px">A page for your business, <em>made in the chat.</em></h1>
+            <p class="lede">Say <b>make my page</b> on WhatsApp and answer a few questions. You get a page with your products or services, your opening hours and a Pay button. Orders and bookings come to you in chat to accept.</p>
+            <div class="cta-row">
+              <a class="btn btn-lime btn-big mag" href="/contact" data-go="chat">Make my page <span class="arr">→</span></a>
+              <a class="btn btn-ghost btn-big mag" href="#orders">See an order arrive</a>
+            </div>
+          </div>
+          <div class="pvis" aria-hidden="true">
+            <div class="sp">
+              <span class="island"></span>
+              <div class="sps">
+                <div class="sp-cover"></div>
+                <div class="sp-card">
+                  <div class="row"><span class="lg2">AK</span><div><b>Ada's Kitchen</b><small>Jollof, small chops and party packs · Lekki</small></div></div>
+                  <span class="open">Open now · closes 9pm</span>
+                  <div class="acts"><span>Call</span><span>Chat on WhatsApp</span></div>
+                </div>
+                <div class="sp-list" id="splist">
+                  <div class="sp-item"><i style="--c:#ffd9a8"></i><div><b>Jollof party pack</b><small>Serves 10 · ₦45,000</small></div><em>+</em></div>
+                  <div class="sp-item"><i style="--c:#ffe3c2"></i><div><b>Small chops tray</b><small>50 pieces · ₦25,000</small></div><em>+</em></div>
+                  <div class="sp-item"><i style="--c:#d6efd9"></i><div><b>Fried rice, plate</b><small>₦4,500</small></div><em>+</em></div>
+                </div>
+                <div class="sp-bag" id="spbag"><span id="spn">1 item</span><b id="spt">₦45,000 · Pay</b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section class="frow" id="orders" data-reveal>
+      <div class="fcopy">
+        <p class="label">Orders</p>
+        <h2 class="h2">Orders come to you in chat.</h2>
+        <p>Each order reaches you on WhatsApp, Telegram or the app with Accept and Decline. Your customer hears from you by text, and you follow the order from placed to delivered.</p>
+        <ul><li>A refund only happens when you say so.</li><li>Run the page from the chat: add a product, change your hours, close for the day.</li></ul>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="ocard">
+            <div class="k"><span>Order · ADA-1234</span><span>from your page</span></div>
+            <div class="rw"><span>2 × Jollof party pack</span><b>₦90,000</b></div>
+            <div class="rw"><span>Delivery, Lekki</span><b>₦3,500</b></div>
+            <div class="steps4"><i style="--k:0">Placed</i><i style="--k:1">Accepted</i><i style="--k:2">On the way</i><i style="--k:3">Delivered</i></div>
+            <div class="obtns"><span>Decline</span><span class="y">Accept</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow flip" data-reveal>
+      <div class="fcopy">
+        <p class="label">Payment</p>
+        <h2 class="h2">Paid when they order, or after you accept.</h2>
+        <p>Choose when customers pay: as they order, once you accept, or not online at all. Card and transfer through Paystack, or a one-time account number on your own bank, and each payment is matched to its order once.</p>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard dark">
+          <div class="paychips"><span style="--k:0">Pay when ordering</span><span style="--k:1">Pay after I accept</span><span style="--k:2">Pay at the door</span></div>
+          <div class="matchline">✓ ₦93,500 from Amaka matched to ADA-1234</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow" data-reveal>
+      <div class="fcopy">
+        <p class="label">Bookings</p>
+        <h2 class="h2">Bookings without the double-booking.</h2>
+        <p>Offer services by the hour. A slot is held while a customer books it, so two people can't take the same time, and they get a reminder a day before and two hours before.</p>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="cal">
+            <span class="d">Thu</span><span class="d">Fri</span><span class="d">Sat</span><span class="d">Sun</span>
+            <span class="s">10:00</span><span class="s x">10:00</span><span class="s">10:00</span><span class="s x">10:00</span>
+            <span class="s x">12:30</span><span class="s">12:30</span><span class="s h">12:30</span><span class="s">12:30</span>
+            <span class="s">15:00</span><span class="s">15:00</span><span class="s x">15:00</span><span class="s">15:00</span>
+          </div>
+          <div class="calnote"><span>Held while they book</span><span>Reminded a day before</span><span>And two hours before</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow flip" data-reveal>
+      <div class="fcopy">
+        <p class="label">Every kind of business</p>
+        <h2 class="h2">A page that fits what you sell.</h2>
+        <p>A shop, a restaurant menu with options, equipment for hire, halls to book, tickets with a code for every seat, classes paid in parts. Pick what fits, and the page asks the right questions.</p>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard dark">
+          <div class="fronts">
+            <div class="fr" style="--k:0"><b>Shop</b><span>Products and a basket</span></div>
+            <div class="fr" style="--k:1"><b>Food</b><span>A menu with options</span></div>
+            <div class="fr" style="--k:2"><b>Hire</b><span>Equipment by the day</span></div>
+            <div class="fr" style="--k:3"><b>Spaces</b><span>Halls and rooms</span></div>
+            <div class="fr" style="--k:4"><b>Tickets</b><span>A code for every seat</span></div>
+            <div class="fr" style="--k:5"><b>Classes</b><span>Pay in parts, a waiting list</span></div>
+            <div class="fr" style="--k:6"><b>Quotes</b><span>Ask for a price</span></div>
+            <div class="fr" style="--k:7"><b>Call-backs</b><span>We'll call you</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow" data-reveal>
+      <div class="fcopy">
+        <p class="label">Delivery</p>
+        <h2 class="h2">Your riders, in the same chat.</h2>
+        <p>Set your delivery areas and fees. An order is offered to your riders by chat; they tap Picked up, Arrived and Delivered, and can take payment at the door. You pay them weekly or per delivery, after you approve.</p>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="route">
+            <svg viewBox="0 0 430 150" preserveAspectRatio="none"><path d="M30 120 C 120 120, 120 30, 220 40 S 330 110, 400 60"/></svg>
+            <span class="pin" style="left:12px;top:126px">Ada's Kitchen</span>
+            <span class="pin" style="right:10px;top:22px">Lekki Phase 1</span>
+            <span class="bike">➜</span>
+          </div>
+          <div class="dsteps"><span style="--k:0">Offered to Musa</span><span style="--k:1">Picked up</span><span style="--k:2">Arrived</span><span style="--k:3">Delivered · 5★</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><p class="label">The details</p><h2 class="h2">Quick to open. Easy to keep up to date.</h2></div>
+      <ul class="facts" data-reveal>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2"/></svg></span><b>A QR card</b><span>Print a card with your page's code for the counter or the door.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3L4 14h7l-1 7 9-11h-7z"/></svg></span><b>Fast on any phone</b><span>Pages load quickly, work without apps, and set no cookies.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14v10H10l-5 4z"/></svg></span><b>Run it from the chat</b><span><code>add product</code>, <code>hours mon-sat 8-6</code>, <code>close shop</code>, <code>qr</code>.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></span><b>Open or closed, by itself</b><span>Your hours show "Open now" or "Closed" in Lagos time.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg></span><b>Your catalogue, your table</b><span>Products live in one of your records, so stock and the page agree.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg></span><b>Three looks</b><span>Choose the look that suits your business. Your name leads; Taskiem stays small.</span></li>
+      </ul>
+    </section>
+
+    <section class="pclose">
+      <div class="in">
+        <h2>Your page, ready this afternoon.</h2>
+        <div class="cta-row"><a class="btn btn-lime btn-big mag" href="/contact" data-go="chat">Make my page <span class="arr">→</span></a><a class="btn btn-ghost btn-big mag" href="/pricing">See pricing</a></div>
+      </div>
+    </section>
+  </div>
+</main>
+{{FOOTER}}
+<script>
+(() => {
+  // products are added to the basket, one tap at a time
+  const items = [...document.querySelectorAll('#splist em')], bag = document.getElementById('spbag'), n = document.getElementById('spn'), t = document.getElementById('spt');
+  if (!bag) return;
+  const prices = [45000, 25000, 4500];
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { bag.classList.add('show'); return; }
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  (async function loop() {
+    for (;;) {
+      bag.classList.remove('show');
+      await wait(1200);
+      let total = 0, count = 0;
+      for (const k of [0, 0, 1]) {
+        items[k].classList.add('tap'); await wait(220); items[k].classList.remove('tap');
+        total += prices[k]; count++;
+        n.textContent = count + (count === 1 ? ' item' : ' items'); t.textContent = '₦' + total.toLocaleString('en-NG') + ' · Pay';
+        bag.classList.add('show');
+        await wait(1100);
+      }
+      await wait(2600);
+    }
+  })();
+})();
+</script>

@@ -133,8 +133,27 @@ type Block struct {
 	Actions []Action `json:"actions,omitempty"`
 	// Workflow: a status part's declared workflow, whose run it shows.
 	Workflow string `json:"workflow,omitempty"`
+	// RowStatus: a list's or a table's rows each show where a run of a
+	// workflow is (§4, a row's own status).
+	RowStatus *RowStatus `json:"status,omitempty"`
+	// Board: a board's columns by a choice, and the tool a card moved
+	// runs (G4, g4.go).
+	Board *Board `json:"board,omitempty"`
+	// Chart: what a chart shows (G4, g4.go).
+	Chart *Chart `json:"chart,omitempty"`
 	// Every part but a heading, buttons and a status.
 	Source *Source `json:"source,omitempty"`
+}
+
+// RowStatus names, for each row of a list or a table, the run of Workflow
+// whose state it shows (§4, Status): by the run's number a column holds
+// (Run, "=row.run"), by what the run waits for or last waited for (To, its
+// correlation, "=row.id": a delivery has no run of its own), or, with
+// neither, the run the page's address names (?run=).
+type RowStatus struct {
+	Workflow string `json:"workflow"`
+	Run      string `json:"run,omitempty"`
+	To       string `json:"to,omitempty"`
 }
 
 // Change makes a figure this period's, beside the period before.
@@ -152,12 +171,19 @@ type Source struct {
 	// Tool is a made tool's command, Inputs its values (words, or an
 	// expression over filters), Output the output a figure shows or a
 	// list lists.
-	Tool    string         `json:"tool,omitempty"`
-	Inputs  map[string]any `json:"inputs,omitempty"`
-	Output  string         `json:"output,omitempty"`
-	Filters []Condition    `json:"filters,omitempty"`
-	Order   []Order        `json:"order,omitempty"`
-	Uses    []string       `json:"uses,omitempty"`
+	Tool   string         `json:"tool,omitempty"`
+	Inputs map[string]any `json:"inputs,omitempty"`
+	Output string         `json:"output,omitempty"`
+	// Saved is a kind the business made, by name: its saved things are
+	// the rows (G5, saved.go). Coming names one of their dates, which
+	// orders them, soonest first; Within keeps those coming within so
+	// many days.
+	Saved   string      `json:"saved,omitempty"`
+	Coming  string      `json:"coming,omitempty"`
+	Within  int         `json:"within,omitempty"`
+	Filters []Condition `json:"filters,omitempty"`
+	Order   []Order     `json:"order,omitempty"`
+	Uses    []string    `json:"uses,omitempty"`
 }
 
 // Condition is one condition every row shown meets.
@@ -274,7 +300,7 @@ func (b Block) partName(i int) string {
 	case b.Label != "":
 		return fmt.Sprintf("%q", b.Label)
 	}
-	kind := map[string]string{"heading": "heading", "figure": "figure", "list": "list", "table": "table", "buttons": "buttons", "status": "status"}[b.Type]
+	kind := map[string]string{"heading": "heading", "figure": "figure", "list": "list", "table": "table", "buttons": "buttons", "status": "status", "board": "board", "chart": "chart"}[b.Type]
 	if kind == "" {
 		kind = "part"
 	}
@@ -536,17 +562,42 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 		if fromTool {
 			ps.add(at+"/source/tool", "%s shows a table's rows: a tool's answer is shown as a list or a figure.", name)
 		}
+	case "board":
+		b.checkBoard(name, at, rowEngine, fromTool, ps)
+	case "chart":
+		b.checkChart(name, at, fromTool, ps)
 	default:
 		needsSource = false
-		ps.add(at+"/type", "Taskiem does not draw a part of the kind %q: a page has headings, figures, lists, tables, buttons and a status.", b.Type)
+		ps.add(at+"/type", "Taskiem does not draw a part of the kind %q: a page has headings, figures, lists, tables, buttons, a status, boards and charts.", b.Type)
 	}
-	if b.Type == "list" || b.Type == "table" {
+	if b.Type != "board" && b.Board != nil {
+		ps.add(at+"/board", "Only a board has columns of cards.")
+	}
+	if b.Type != "chart" && b.Chart != nil {
+		ps.add(at+"/chart", "Only a chart shows bars or a line.")
+	}
+	if b.Type == "list" || b.Type == "table" || b.Type == "board" {
 		if len(b.Actions) > MaxRowActions {
 			ps.add(at+"/actions", "Each row of %s has at most %d buttons.", name, MaxRowActions)
 		}
 		for j, a := range b.Actions {
 			a.check(fmt.Sprintf("%s/actions/%d", at, j), rowEngine, ps)
 		}
+		if rs := b.RowStatus; rs != nil {
+			if strings.TrimSpace(rs.Workflow) == "" {
+				ps.add(at+"/status/workflow", "%s shows where each row's run is: say which workflow.", name)
+			}
+			if rs.Run != "" && rs.To != "" {
+				ps.add(at+"/status", "%s finds each row's run by its number (run) or by what it waits for (to), not both.", name)
+			}
+			for _, v := range []struct{ path, v string }{{"/status/run", rs.Run}, {"/status/to", rs.To}} {
+				if v.v != "" {
+					checkValueIn(rowEngine, at+v.path, v.v, ps)
+				}
+			}
+		}
+	} else if b.RowStatus != nil {
+		ps.add(at+"/status", "Only a list's or a table's rows show where their run is.")
 	}
 	if b.Detail != nil {
 		checkValueIn(rowEngine, at+"/detail/title", b.Detail.Title, ps)
@@ -564,18 +615,36 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 		return
 	}
 	s := b.Source
-	if s == nil || (s.Table == "" && s.Records == "" && s.Tool == "") {
+	if s == nil || (s.Table == "" && s.Records == "" && s.Tool == "" && s.Saved == "") {
 		ps.add(at+"/source", "%s needs the table it shows.", name)
 		return
 	}
 	n := 0
-	for _, x := range []string{s.Table, s.Records, s.Tool} {
+	for _, x := range []string{s.Table, s.Records, s.Tool, s.Saved} {
 		if x != "" {
 			n++
 		}
 	}
 	if n > 1 {
-		ps.add(at+"/source", "%s shows one table, Taskiem's own records or a tool's answer: one of them.", name)
+		ps.add(at+"/source", "%s shows one table, Taskiem's own records, a tool's answer or saved things: one of them.", name)
+	}
+	if s.Saved == "" && (s.Coming != "" || s.Within != 0) {
+		ps.add(at+"/source", "%s: only saved things are put in the order a date of theirs comes.", name)
+	}
+	if s.Saved != "" {
+		b.parseSaved(at, name, ps)
+		for j, u := range s.Uses {
+			if _, ok := filters[u]; !ok {
+				ps.add(fmt.Sprintf("%s/source/uses/%d", at, j), "%s uses a filter the page does not have: %s.", name, u)
+			}
+		}
+		if b.Type == "figure" && len(s.Uses) > 0 {
+			ps.add(at+"/source/uses", "%s counts every one: the page's filters narrow its lists and tables only.", name)
+		}
+		return
+	}
+	if s.Records != "" && (b.Type == "board" || b.Type == "chart") {
+		ps.add(at+"/source/records", "%s shows one of the business's own tables or a tool's answer, not Taskiem's own records.", name)
 	}
 	if s.Tool != "" {
 		if s.Output == "" {

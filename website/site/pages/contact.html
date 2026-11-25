@@ -1,0 +1,97 @@
+<!--page {"title": "Contact · Taskiem", "description": "Talk to Taskiem: chat on WhatsApp, write to us, or start on the web.", "path": "/contact"}-->
+<style>
+.ways{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:14px}
+.way{position:relative;display:flex;flex-direction:column;gap:4px;padding:22px;border-radius:24px;background:var(--card);border:1px solid var(--line);transition:transform .35s var(--spring),border-color .3s}
+.way:hover{transform:translateY(-4px);border-color:var(--acc)}
+.way-ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--pine);color:var(--lime);font-weight:800;margin-bottom:10px}
+.way b{font-size:19px;color:var(--head)}
+.way span:not(.way-ic){font-family:var(--f-mono);font-size:14px;color:var(--ink);word-break:break-word}
+.way em{font-style:normal;margin-top:10px;font-weight:800;color:var(--acc)}
+.way-none{grid-column:1/-1;padding:18px 22px;border-radius:20px;background:var(--mint-tint);color:var(--head);font-size:15.5px}
+.cgrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:clamp(24px,4vw,56px);align-items:start;padding-block:clamp(40px,6vw,80px)}
+@media (max-width:900px){.cgrid{grid-template-columns:minmax(0,1fr)}}
+.cform{display:grid;gap:14px;padding:clamp(20px,3vw,32px);border-radius:28px;background:var(--card);border:1px solid var(--line)}
+.cform label{display:grid;gap:6px;font-weight:700;font-size:14.5px;color:var(--head)}
+.cform input,.cform select,.cform textarea{font:inherit;font-weight:500;font-size:16px;color:var(--ink);background:var(--ground);border:1px solid var(--line);border-radius:14px;padding:12px 14px;min-height:48px}
+.cform textarea{min-height:140px;resize:vertical}
+.cform input:focus,.cform select:focus,.cform textarea:focus{outline:3px solid color-mix(in srgb,var(--acc) 30%,transparent);border-color:var(--acc)}
+.cform .note{font-size:13.5px;color:var(--muted)}
+.cform .msg{padding:12px 14px;border-radius:14px;background:var(--mint-tint);color:var(--head);font-weight:600;font-size:14.5px}
+.side{display:grid;gap:12px}
+.side a{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:18px 20px;border-radius:20px;background:var(--card);border:1px solid var(--line);font-weight:800;color:var(--head);transition:transform .3s var(--spring),border-color .3s}
+.side a:hover{transform:translateX(4px);border-color:var(--acc)}
+.side a span{font-weight:500;font-size:14px;color:var(--body)}
+.side a i{font-style:normal;color:var(--acc)}
+.bubbles{display:flex;flex-direction:column;gap:10px;width:min(340px,100%)}
+.bub{padding:12px 15px;border-radius:18px;font-size:15px;max-width:88%;animation:bub 7s infinite;animation-delay:calc(var(--k) * 1.2s)}
+.bub.o{align-self:flex-end;background:var(--lime);color:var(--pine);border-bottom-right-radius:5px;font-weight:600}
+.bub.i{align-self:flex-start;background:rgba(255,255,255,.1);color:#fff;border-bottom-left-radius:5px}
+@keyframes bub{0%,3%{opacity:0;transform:translateY(10px)}9%,90%{opacity:1;transform:none}97%,100%{opacity:0}}
+</style>
+{{HEADER}}
+<main>
+  <section class="hero phero">
+    <div class="hero-bleed" id="hero">
+      <div class="wrap">
+        <div class="hero-panel">
+          <div class="hero-copy">
+            <p class="label">Contact</p>
+            <h1 style="margin-top:16px">Talk to us. <em>We'd like to hear from you.</em></h1>
+            <p class="lede">Questions about your business, pricing, schools or partnering with Taskiem: send them our way, the way you'd message anyone.</p>
+          </div>
+          <div class="pvis" aria-hidden="true">
+            <div class="bubbles">
+              <span class="bub o" style="--k:0">Good morning, can Taskiem chase my debtors?</span>
+              <span class="bub i" style="--k:1">Yes. Tell me who owes you, and when you'd like them reminded.</span>
+              <span class="bub o" style="--k:2">Every Friday, 10am</span>
+              <span class="bub i" style="--k:3">Done. I'll send you the list each time.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section class="sec" style="padding-bottom:0">
+      <div class="ways" data-reveal>
+{{WAYS}}
+      </div>
+    </section>
+
+    <section class="cgrid">
+      <form class="cform" id="cform" data-email="{{EMAIL}}" data-reveal>
+        <label for="c-name">Your name<input id="c-name" name="name" autocomplete="name" required></label>
+        <label for="c-reply">Your phone or email<input id="c-reply" name="reply" required></label>
+        <label for="c-about">About<select id="c-about" name="about"><option>My business</option><option>A school</option><option>Pricing</option><option>Partnering with Taskiem</option><option>Something else</option></select></label>
+        <label for="c-msg">Your message<textarea id="c-msg" name="message" required></textarea></label>
+        <button class="btn btn-main btn-big" type="submit">Send</button>
+        <p class="note" id="c-note">Sending opens your email app with the message written, ready to send.</p>
+      </form>
+      <div class="side" data-reveal>
+        <a href="/pricing">Pricing <span>Plans in naira, and the 14 free days</span><i>→</i></a>
+        <a href="/schools">Schools <span>Fees, receipts and the gate</span><i>→</i></a>
+        <a href="/partners">For fintechs <span>Taskiem inside your product</span><i>→</i></a>
+        <a href="/security">Security <span>How your money and data are kept safe</span><i>→</i></a>
+      </div>
+    </section>
+  </div>
+</main>
+{{FOOTER}}
+<script>
+(() => {
+  // No server takes the form: it opens the visitor's email app with the message, to the address the site was built with.
+  const f = document.getElementById('cform'), note = document.getElementById('c-note');
+  if (!f) return;
+  const to = f.dataset.email;
+  if (!to) note.textContent = "Messages from this form aren't switched on yet. Please use one of the ways above.";
+  f.addEventListener('submit', e => {
+    e.preventDefault();
+    if (!to) { note.className = 'msg'; note.textContent = "Messages from this form aren't switched on yet. Please use one of the ways above."; return; }
+    const d = new FormData(f);
+    const body = `${d.get('message')}\n\n${d.get('name')} · ${d.get('reply')}`;
+    location.href = `mailto:${to}?subject=${encodeURIComponent('Taskiem: ' + d.get('about'))}&body=${encodeURIComponent(body)}`;
+    note.className = 'msg'; note.textContent = 'Your email app should open with the message. Send it from there, and we\'ll reply.';
+  });
+})();
+</script>

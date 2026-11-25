@@ -880,6 +880,37 @@ class _PayManySheetState extends State<PayManySheet> {
   }
 }
 
+/// A batch's fees and its balance after, as lines (web lib/batches.ts
+/// batchMoney): the fees quoted, those that show after paying.
+List<(String, String)> batchMoneyLines(PaymentBatch b) {
+  final rows = b.payments.where((p) => p.status == 'prepared');
+  final total = rows.fold(0, (n, p) => n + p.amountKobo);
+  final fees = b.feesKobo ?? 0;
+  final unknown = b.feesUnknown ?? 0;
+  final feeWords = unknown > 0 && fees == 0
+      ? 'The fees show after paying'
+      : unknown > 0
+      ? '${naira(fees)}, and the rest show after paying'
+      : naira(fees);
+  final balance = b.balanceKobo is num ? (b.balanceKobo as num).toInt() : null;
+  return [
+    ('Fees', feeWords),
+    if (balance != null && (b.shortKobo ?? 0) <= 0) ('Balance after', naira(balance - total - fees)),
+  ];
+}
+
+/// By how much the balance is short of a batch and how many rows fit, or
+/// null when it is not (never one lump "failed").
+String? batchShort(PaymentBatch b) {
+  final short = b.shortKobo ?? 0;
+  final balance = b.balanceKobo is num ? (b.balanceKobo as num).toInt() : null;
+  if (short <= 0 || balance == null) return null;
+  final rows = b.payments.where((p) => p.status == 'prepared').length;
+  final fit = (b.fit ?? const []).length;
+  return '${naira(balance)}: ${naira(short)} short for all ${peopleWords(rows)}. '
+      '${fit == 0 ? 'None fit: add money first.' : 'The first ${fit == 1 ? 'one fits' : '$fit fit'}: take some out, or add money first.'}';
+}
+
 /// A batch in words, and its tone: from the list's counts (its payments
 /// are read when it is opened).
 ({String words, CardTone tone}) batchStatus(PaymentBatch b) {
@@ -1311,6 +1342,17 @@ class _BatchSheetState extends State<BatchSheet> {
           leading: TkSquare('b-clock', color: look.teal),
           title: 'Checking each one with the bank…',
           color: look.teal,
+        ),
+      // The foot's money (H7): the fees, the balance after, and when the
+      // balance is short, by how much and how many fit.
+      if (open && prepared.isNotEmpty && b.feesKobo != null) TkFormGroup(children: [TkLines(batchMoneyLines(b))]),
+      if (open && batchShort(b) != null)
+        TkCallout(
+          leading: TkSquare('b-alert', color: look.orange),
+          title: 'Your balance is short',
+          sub: batchShort(b),
+          subLines: 4,
+          color: look.orange,
         ),
       TkSection(title: 'Each person', count: open && prepared.isNotEmpty ? prepared.length : null, children: [for (final p in rows) _row(p)]),
       if (_error != null)

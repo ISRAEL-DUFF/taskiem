@@ -113,44 +113,44 @@
       "reviewed": false
     },
     "button.treat_label_another": {
-      "text": "Another",
+      "text": "Wani daban",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: a label not offered, typed next"
+      "context": "Draft, not reviewed: A purchase line's label in chat: a label not offered, typed next"
     },
     "button.treat_label_none": {
-      "text": "No label",
+      "text": "Babu lakabi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: none (shown as Not labelled)"
+      "context": "Draft, not reviewed: A purchase line's label in chat: none (shown as Not labelled)"
     },
     "button.treat_many_record": {
-      "text": "Just record them",
+      "text": "A rubuta kawai",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: no, just record them"
+      "context": "Draft, not reviewed: Keeping track of more than 50 of something bought: no, just record them"
     },
     "button.treat_many_yes": {
-      "text": "Yes, one row each",
+      "text": "Eh, layi ga kowanne",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: yes, a row on Things we have for each"
+      "context": "Draft, not reviewed: Keeping track of more than 50 of something bought: yes, a row on Things we have for each"
     },
     "button.treat_new_item": {
-      "text": "A new one",
+      "text": "Sabon kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
+      "context": "Draft, not reviewed: Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
     },
     "button.treat_record": {
-      "text": "Just record it",
+      "text": "A rubuta shi kawai",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes"
+      "context": "Draft, not reviewed: A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes"
     },
     "button.treat_stock": {
-      "text": "Add to stock",
+      "text": "Ƙara cikin kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: counted into a stock item when it comes"
+      "context": "Draft, not reviewed: A purchase line's treatment in chat: counted into a stock item when it comes"
     },
     "button.treat_track": {
-      "text": "Keep track of it",
+      "text": "Bi diddiginsa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: each one a row on Things we have"
+      "context": "Draft, not reviewed: A purchase line's treatment in chat: each one a row on Things we have"
     },
     "button.yes": {
       "text": "Eh",
@@ -161,14 +161,14 @@
       "reviewed": false
     },
     "button.yes_sell": {
-      "text": "Yes, I sell it",
+      "text": "Eh, ina sayarwa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
+      "context": "Draft, not reviewed: Reply button, at most 20 characters: Do you sell it?"
     },
     "button.no_sell": {
-      "text": "No, I don't",
+      "text": "A'a, ba na sayarwa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
+      "context": "Draft, not reviewed: Reply button, at most 20 characters: Do you sell it?"
     },
     "button.yes_publish": {
       "text": "Eh, wallafa",
@@ -279,11 +279,11 @@
       "reviewed": false
     },
     "invoice.pay_unavailable_title": {
-      "text": "A customer could not pay online",
+      "text": "Abokin ciniki bai iya biya ta intanet ba",
       "reviewed": false
     },
     "invoice.pay_unavailable": {
-      "text": "A customer tried to pay {what} by {how}, but no payments service of yours can do that, so they were asked to pay you directly. Connect Paystack, Flutterwave, OPay or another payments service under Connections, and they can pay online.",
+      "text": "Wani abokin ciniki ya yi ƙoƙarin biyan {what} ta {how}, amma babu sabis ɗin biyan kuɗinka da zai iya yin haka, don haka an ce su biya ka kai tsaye. Haɗa Paystack, Flutterwave, OPay ko wani sabis na biyan kuɗi a ƙarƙashin Connections, kuma za su iya biya ta intanet.",
       "reviewed": false
     },
     "invoice.chat.account": {
@@ -312,10 +312,11 @@
     },
     "invoice.chat.link": {
       "text": "Invoice {number}: {link}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "invoice.chat.own_account": {
-      "text": "Pay {amount} for invoice {number} by bank transfer to your own account number:\nAccount number: {account}\nBank: {bank}\nIt is yours to keep: money paid into it is counted to your invoices.",
+      "text": "Ku biya {amount} na invoice {number} ta bank transfer zuwa lambar asusunku na kanku:\nLambar asusu: {account}\nBanki: {bank}\nNaku ne na dindindin: kuɗin da aka biya a ciki ana lissafa su ga invoice ɗinku.",
       "reviewed": false
     },
     "invoice.chat.paid": {
@@ -917,6 +918,11 @@
       "text": "Ƙari…",
       "reviewed": false,
       "context": "Draft, not reviewed: The last row of the topics list on WhatsApp, for the rest; at most 24 characters"
+    },
+    "menu.all": {
+      "text": "Duka {n}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The last button of a topic's menu on Telegram, after its first five: shows every one of its {n} actions"
     },
     "menu.more_line": {
       "text": "Sauran batutuwa",
@@ -1574,19 +1580,19 @@
       "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.stock.new": {
-      "text": "Add something to count",
+      "text": "Ƙara abin da za a ƙirga",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.stock.new.ask.what": {
-      "text": "What is it, and how many? Like 20 yards of ankara fabric.",
+      "text": "Menene shi, kuma nawa ne? Kamar yadi 20 na ankara.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.stock.new.line": {
-      "text": "Something new, sold or used: fabric, thread, bags",
+      "text": "Sabon abu, na sayarwa ko amfani: yadi, zare, jakunkuna",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.stock.one": {
       "text": "Adadin wani kaya",
@@ -1606,7 +1612,8 @@
     "menu.taken": {
       "text": "{title}: {values}.",
       "reviewed": false,
-      "context": "Draft, not reviewed: Before a menu's next question, what Taskiem already took from the message (its model)"
+      "context": "Draft, not reviewed: Before a menu's next question, what Taskiem already took from the message (its model)",
+      "same": true
     },
     "menu.tip": {
       "text": "Nan gaba za ka iya rubuta: *{command}*",
@@ -1752,31 +1759,31 @@
       "reviewed": false
     },
     "money.daily.riders": {
-      "text": "Riders yesterday:",
+      "text": "Masu kai kaya jiya:",
       "reviewed": false
     },
     "money.rider.delivered": {
-      "text": "{count} delivered",
+      "text": "an kai {count}",
       "reviewed": false
     },
     "money.rider.door": {
-      "text": "{amount} paid at the door",
+      "text": "{amount} an biya a bakin ƙofa",
       "reviewed": false
     },
     "money.rider.cash": {
-      "text": "{amount} cash",
+      "text": "{amount} tsabar kuɗi",
       "reviewed": false
     },
     "money.rider.remitted": {
-      "text": "{amount} handed in",
+      "text": "{amount} an miƙa",
       "reviewed": false
     },
     "money.rider.owes": {
-      "text": "owes {amount}",
+      "text": "yana bin {amount}",
       "reviewed": false
     },
     "money.rider.rated": {
-      "text": "rated {rating} of 5",
+      "text": "maki {rating} cikin 5",
       "reviewed": false
     },
     "money.daily.school": {
@@ -1820,7 +1827,7 @@
       "reviewed": false
     },
     "reach.stopped_dropped": {
-      "text": "You will no longer get updates from {business} here. Send START to get them again. What you were in the middle of here was dropped too.",
+      "text": "Ba za ka ƙara samun labarai daga {business} a nan ba. Aika START don sake samun su. An kuma soke abin da kake tsakiyar yi a nan.",
       "reviewed": false
     },
     "customer.resumed": {
@@ -1868,11 +1875,11 @@
       "reviewed": false
     },
     "ready.saved_invalid": {
-      "text": "The workflow reads saved.{name}, which no saved thing can be called: names are letters, numbers and -, written with _ for -.",
+      "text": "Workflow ɗin yana karanta saved.{name}, wanda babu abin ajiya da zai iya samun wannan suna: sunaye haruffa ne, lambobi da -, ana rubuta - da _.",
       "reviewed": false
     },
     "ready.saved": {
-      "text": "Save @{name} on the Saved page: the workflow reads it.",
+      "text": "Ajiye @{name} a shafin Saved: workflow ɗin yana karanta shi.",
       "reviewed": false
     },
     "ready.table": {
@@ -2168,11 +2175,11 @@
       "reviewed": false
     },
     "door.linked_told": {
-      "text": "A chat was linked to your Taskiem account: {chat}. Not you? Unlink it now in Account on the web.",
+      "text": "An haɗa wata hira da asusunka na Taskiem: {chat}. Ba kai ba ne? Cire haɗin yanzu a Account a yanar gizo.",
       "reviewed": false
     },
     "door.cooling": {
-      "text": "This chat was linked to your account less than 24 hours ago, so it cannot send a sign-in or password link yet. That keeps your account safe if someone else linked it. Sign in on the web the way you usually do: {link}",
+      "text": "An haɗa wannan hira da asusunka ƙasa da awa 24 da suka wuce, don haka ba za ta iya aika mahaɗar shiga ko ta kalmar sirri ba tukuna. Wannan yana kare asusunka idan wani ne ya haɗa ta. Shiga a yanar gizo kamar yadda ka saba: {link}",
       "reviewed": false
     },
     "wa.not_understood_help": {
@@ -2180,11 +2187,11 @@
       "reviewed": false
     },
     "wa.password.off": {
-      "text": "Signing in with WhatsApp or Telegram is off for you, so this chat sends no password link. Reset your password from the sign-in page, with your email: {link}",
+      "text": "Shiga da WhatsApp ko Telegram a kashe yake a gare ka, don haka wannan hira ba ta aika mahaɗar kalmar sirri. Sake saita kalmar sirrinka daga shafin shiga, da imel ɗinka: {link}",
       "reviewed": false
     },
     "wa.password.unconfirmed": {
-      "text": "Your email is not confirmed yet, so this chat cannot send a password link. Send *email you@example.com* and open the link we email you. Then send *password* again.",
+      "text": "Ba a tabbatar da imel ɗinka ba tukuna, don haka wannan hira ba za ta iya aika mahaɗar kalmar sirri ba. Aika *email you@example.com* ka buɗe mahaɗar da muka aika maka ta imel. Sannan ka sake aika *password*.",
       "reviewed": false
     },
     "door.tg_joined": {
@@ -2834,220 +2841,224 @@
       "context": "Draft, not reviewed: Customers' tools: a tool with an answer has started; the answer follows"
     },
     "wa.saved.bank": {
-      "text": "{bank}, account number {number}",
+      "text": "{bank}, lambar asusu {number}",
       "reviewed": false
     },
     "wa.saved.bank_name": {
-      "text": "The bank's name for it: {name}",
+      "text": "Sunan da bankin ya ba shi: {name}",
       "reviewed": false
     },
     "wa.saved.business": {
-      "text": "{org}'s:",
+      "text": "Na {org}:",
       "reviewed": false
     },
     "wa.saved.head": {
       "text": "@{name}: {title}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.saved.not_checked": {
-      "text": "Its name is not checked with the bank yet.",
+      "text": "Ba a tantance sunansa da banki ba tukuna.",
       "reviewed": false
     },
     "wa.saved.pick": {
-      "text": "Which @{name}?\n1. Your own: {mine}\n2. {org}'s: {theirs}\nReply 1 or 2.",
+      "text": "Wane @{name}?\n1. Naka: {mine}\n2. Na {org}: {theirs}\nAmsa 1 ko 2.",
       "reviewed": false
     },
     "wa.saved.offer": {
-      "text": "Save {title} as @{name} for next time?",
+      "text": "A ajiye {title} a matsayin @{name} don lokaci na gaba?",
       "reviewed": false
     },
     "wa.saved.suggest": {
-      "text": "You've invoiced {title} {count} times. Save them as @{name} for next time?",
+      "text": "Ka aika wa {title} invoice sau {count}. A ajiye su a matsayin @{name} don lokaci na gaba?",
       "reviewed": false
     },
     "wa.saved.two": {
-      "text": "You have two things called @{name}:",
+      "text": "Kana da abubuwa biyu masu suna @{name}:",
       "reviewed": false
     },
     "button.keep_mine": {
-      "text": "Keep it to myself",
+      "text": "Ajiye nawa kaɗai",
       "reviewed": false
     },
     "button.save": {
-      "text": "Save",
+      "text": "Ajiye",
       "reviewed": false
     },
     "wa.saved.need_bank": {
-      "text": "Which bank is {number} with? Say it again with the bank, like: save {name}: GTBank {number}",
+      "text": "A wane banki {number} yake? Sake faɗa da bankin, kamar: save {name}: GTBank {number}",
       "reviewed": false
     },
     "wa.saved.own_app": {
-      "text": "On this number only {org}'s saved things are kept and found. Keep your own in the Taskiem app.",
+      "text": "A wannan lambar, abubuwan ajiya na {org} kaɗai ake ajiyewa da nemowa. Ajiye naka a manhajar Taskiem.",
       "reviewed": false
     },
     "wa.saved.share_ask": {
       "text": "{question}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.saved.share_plain": {
-      "text": "Share @{name} with {to}?",
+      "text": "A raba @{name} da {to}?",
       "reviewed": false
     },
     "wa.saved.share_which": {
-      "text": "Which do you mean? {names}. Say it again with the whole name.",
+      "text": "Wanne kake nufi? {names}. Sake faɗa da cikakken sunan.",
       "reviewed": false
     },
     "wa.saved.share_nobody": {
-      "text": "No linked business or customer is called {to}.",
+      "text": "Babu kasuwancin da aka haɗa ko abokin ciniki mai suna {to}.",
       "reviewed": false
     },
     "wa.saved.share_none": {
-      "text": "You have nothing saved as @{name}.",
+      "text": "Ba ka da abin da aka ajiye a matsayin @{name}.",
       "reviewed": false
     },
     "wa.saved.shared": {
-      "text": "Shared @{name} with {to}.",
+      "text": "An raba @{name} da {to}.",
       "reviewed": false
     },
     "wa.saved.share_left": {
-      "text": "Not shared.",
+      "text": "Ba a raba ba.",
       "reviewed": false
     },
     "wa.saved.share_reminder": {
-      "text": "Share @{name}? Tap Share or Cancel.",
+      "text": "A raba @{name}? Taɓa Raba ko Soke.",
       "reviewed": false
     },
     "wa.saved.share_not": {
-      "text": "Not shared: {reason}",
+      "text": "Ba a raba ba: {reason}",
       "reviewed": false
     },
     "wa.saved.save_quoted_none": {
-      "text": "Reply to a message from a linked business to save it.",
+      "text": "Ka amsa saƙo daga kasuwancin da aka haɗa don ajiye shi.",
       "reviewed": false
     },
     "button.share": {
-      "text": "Share",
+      "text": "Raba",
       "reviewed": false
     },
     "wa.saved.field": {
       "text": "@{name}: {label}: {value}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.saved.field_empty": {
-      "text": "@{name} has no {label} saved.",
+      "text": "@{name} ba shi da {label} da aka ajiye.",
       "reviewed": false
     },
     "wa.saved.in_full": {
-      "text": "In full on the Saved page.",
+      "text": "Cikakke a shafin Saved.",
       "reviewed": false
     },
     "wa.invoice.saved_kind": {
-      "text": "@{name} is {kind}: an invoice goes to a person or a business. Write: invoice @someone 25k for \u2026",
+      "text": "@{name} {kind} ne: invoice yana zuwa ga mutum ko kasuwanci. Rubuta: invoice @someone 25k for …",
       "reviewed": false
     },
     "wa.deliver.to": {
-      "text": "Delivered to @{name}: {address}.",
+      "text": "Za a kai wa @{name}: {address}.",
       "reviewed": false
     },
     "wa.mention.deliver_how": {
-      "text": "To have it delivered to @{name}, end the order with \"deliver to @{name}\".",
+      "text": "Don a kai shi @{name}, ka ƙare odar da \"deliver to @{name}\".",
       "reviewed": false
     },
     "wa.deliver.set": {
-      "text": "{reference} will be delivered to @{name}: {address}.",
+      "text": "Za a kai {reference} zuwa @{name}: {address}.",
       "reviewed": false
     },
     "wa.deliver.saved_kind": {
-      "text": "@{name} is {kind}: an order is delivered to a place. Write: deliver P-7QX4KD to @warehouse",
+      "text": "@{name} {kind} ne: ana kai oda zuwa wani wuri. Rubuta: deliver P-7QX4KD to @warehouse",
       "reviewed": false
     },
     "wa.deliver.no_phone": {
-      "text": "@{name} has no phone for the rider. Add one to it on the Saved page, then try again.",
+      "text": "@{name} ba shi da lambar waya don mai kai kaya. Ƙara ɗaya a shafin Saved, sannan ka sake gwadawa.",
       "reviewed": false
     },
     "wa.deliver.not": {
-      "text": "Not changed: {reason}",
+      "text": "Ba a canza ba: {reason}",
       "reviewed": false
     },
     "wa.remind.set": {
-      "text": "I'll remind you on {date} that @{name}'s {label} is due, and each year after. Say *my reminders* to see them.",
+      "text": "Zan tuna maka a {date} cewa {label} na @{name} ya yi, da kowace shekara bayan haka. Faɗi *my reminders* don ganin su.",
       "reviewed": false
     },
     "wa.remind.set_once": {
-      "text": "I'll remind you on {date} that @{name}'s {label} is due. Say *my reminders* to see them.",
+      "text": "Zan tuna maka a {date} cewa {label} na @{name} ya yi. Faɗi *my reminders* don ganin su.",
       "reviewed": false
     },
     "wa.remind.no_dates": {
-      "text": "@{name} holds no date to remind you of. Give its kind a date field on the Saved page.",
+      "text": "@{name} ba shi da wata rana da za a tuna maka. Ba nau'insa filin rana a shafin Saved.",
       "reviewed": false
     },
     "wa.remind.which": {
-      "text": "Which of @{name}'s dates? {list}. Say it again with one, like: remind me when @{name} insurance is due",
+      "text": "Wace daga cikin ranakun @{name}? {list}. Sake faɗa da ɗaya, kamar: remind me when @{name} insurance is due",
       "reviewed": false
     },
     "wa.remind.passed": {
-      "text": "@{name}'s {label} was {date}, which has passed. Change it on the Saved page, or ask for a reminder each year.",
+      "text": "{label} na @{name} ya kasance {date}, wanda ya wuce. Canza shi a shafin Saved, ko ka nemi tunatarwa kowace shekara.",
       "reviewed": false
     },
     "wa.remind.none": {
-      "text": "You have no reminders. Say, for example: remind me when @car insurance is due",
+      "text": "Ba ka da tunatarwa. Faɗi, misali: remind me when @car insurance is due",
       "reviewed": false
     },
     "wa.remind.list": {
-      "text": "Your reminders:\n{list}\nTo stop one: stop reminding me about @car",
+      "text": "Tunatarwarka:\n{list}\nDon dakatar da ɗaya: stop reminding me about @car",
       "reviewed": false
     },
     "wa.remind.every_year": {
-      "text": ", each year",
+      "text": ", kowace shekara",
       "reviewed": false
     },
     "wa.remind.none_for": {
-      "text": "You have no reminders about @{name}.",
+      "text": "Ba ka da tunatarwa game da @{name}.",
       "reviewed": false
     },
     "wa.remind.stopped": {
-      "text": "No more reminders about @{name}.",
+      "text": "Babu sauran tunatarwa game da @{name}.",
       "reviewed": false
     },
     "wa.saved.not_saved": {
-      "text": "Not saved: {reason}",
+      "text": "Ba a ajiye ba: {reason}",
       "reviewed": false
     },
     "wa.saved.save_ask": {
-      "text": "Save this as @{name}?\n\n{card}\n\nIt goes in {where}.",
+      "text": "A ajiye wannan a matsayin @{name}?\n\n{card}\n\nZai shiga {where}.",
       "reviewed": false
     },
     "wa.saved.save_left": {
-      "text": "Not saved.",
+      "text": "Ba a ajiye ba.",
       "reviewed": false
     },
     "wa.saved.save_reminder": {
-      "text": "Tap Save to keep it as @{name}, or Cancel.",
+      "text": "Taɓa Ajiye don ajiye shi a matsayin @{name}, ko Soke.",
       "reviewed": false
     },
     "wa.saved.saved": {
-      "text": "Saved as @{name}. Type @{name} any time to call it up.",
+      "text": "An ajiye a matsayin @{name}. Rubuta @{name} a kowane lokaci don kiran sa.",
       "reviewed": false
     },
     "wa.saved.taken": {
-      "text": "You already have something called @{name}. Choose another name.",
+      "text": "Kana da wani abu mai suna @{name} tuni. Zaɓi wani suna.",
       "reviewed": false
     },
     "wa.saved.where_business": {
-      "text": "{org}'s saved things",
+      "text": "abubuwan ajiya na {org}",
       "reviewed": false
     },
     "wa.saved.where_mine": {
-      "text": "your own saved things, which only you see",
+      "text": "abubuwan ajiyarka na kanka, waɗanda kai kaɗai kake gani",
       "reviewed": false
     },
     "wa.saved.yours": {
-      "text": "Your own:",
+      "text": "Naka:",
       "reviewed": false
     },
     "wa.stock.category": {
       "text": "*{category}* ({count}):\n{list}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.stock.category_more": {
       "text": "Aika *more* don sauran.",
@@ -3270,84 +3281,95 @@
       "reviewed": false
     },
     "wa.treat.ask": {
-      "text": "*{item}* ({count}) from *{supplier}*: how should we treat it?",
+      "text": "*{item}* ({count}) daga *{supplier}*: yaya za mu ɗauke shi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. An order drafted in chat: a line the business has not said how to treat before"
+      "context": "Draft, not reviewed: An order drafted in chat: a line the business has not said how to treat before"
     },
     "wa.treat.how": {
-      "text": "*Just record it*: no stock moves. *Add to stock*: counted in when it comes. *Keep track of it*: each one on Things we have. Or type it, like _keep track of it, Machines_.",
+      "text": "*Just record it*: babu kayan da zai motsa. *Add to stock*: za a ƙirga shi a ciki idan ya iso. *Keep track of it*: kowanne a kan Things we have. Ko ka rubuta, kamar _keep track of it, Machines_.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under how should we treat it?: what each answer does, and how to type one with its label"
+      "context": "Draft, not reviewed: Under how should we treat it?: what each answer does, and how to type one with its label"
     },
     "wa.treat.item_reminder": {
-      "text": "Pick the stock item *{item}* goes into, or type its name. *A new one* makes it.",
+      "text": "Zaɓi kayan ajiya da *{item}* zai shiga, ko ka rubuta sunansa. *A new one* zai yi sabo.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Which stock item? was answered with something else"
+      "context": "Draft, not reviewed: Which stock item? was answered with something else"
     },
     "wa.treat.label": {
-      "text": "Label for *{item}*? Pick one, or type it.",
+      "text": "Lakabi na *{item}*? Zaɓi ɗaya, ko ka rubuta.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: the business's most used labels, Another, No label"
+      "context": "Draft, not reviewed: A purchase line's label in chat: the business's most used labels, Another, No label"
     },
     "wa.treat.label_reminder": {
-      "text": "Pick a label for *{item}*, type one, or press *No label*.",
+      "text": "Zaɓi lakabi na *{item}*, rubuta ɗaya, ko danna *No label*.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The label question was answered with something else"
+      "context": "Draft, not reviewed: The label question was answered with something else"
     },
     "wa.treat.label_type": {
-      "text": "Type the label for *{item}*, like _Machines_.",
+      "text": "Rubuta lakabi na *{item}*, kamar _Machines_.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Another was pressed: the label typed"
+      "context": "Draft, not reviewed: Another was pressed: the label typed"
     },
     "wa.treat.many": {
-      "text": "Put {count} {item} on Things we have, one row each?",
+      "text": "A saka {item} {count} a kan Things we have, layi ɗaya ga kowanne?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 50: asked first"
+      "context": "Draft, not reviewed: Keep track of it for more than 50: asked first"
     },
     "wa.treat.new_item": {
-      "text": "*{name}* will be a new stock item. Do you sell it?",
+      "text": "*{name}* zai zama sabon kayan ajiya. Kana sayar da shi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A new stock item for a purchase line: one question before it is made"
+      "context": "Draft, not reviewed: A new stock item for a purchase line: one question before it is made"
     },
     "wa.treat.no_item": {
-      "text": "None of your stock items is called *{name}*.",
+      "text": "Babu kayan ajiyarka mai suna *{name}*.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A stock item typed for a purchase line is not one of the business's"
+      "context": "Draft, not reviewed: A stock item typed for a purchase line is not one of the business's"
     },
     "wa.treat.not_labelled": {
-      "text": "Not labelled",
+      "text": "Ba shi da lakabi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line with no label, said back"
+      "context": "Draft, not reviewed: A purchase line with no label, said back"
     },
     "wa.treat.not_saved": {
-      "text": "*{item}* could not be changed: {reason}.",
+      "text": "Ba a iya canza *{item}* ba: {reason}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer could not be saved (the order moved on meanwhile)"
+      "context": "Draft, not reviewed: A purchase line's answer could not be saved (the order moved on meanwhile)"
     },
     "wa.treat.reminder": {
-      "text": "How should we treat *{item}*? Press one, or type *just record it*, *add to stock* or *keep track of it*. *cancel* leaves it.",
+      "text": "Yaya za mu ɗauki *{item}*? Danna ɗaya, ko ka rubuta *just record it*, *add to stock* ko *keep track of it*. *cancel* zai bar shi.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. How should we treat it? was answered with something else"
+      "context": "Draft, not reviewed: How should we treat it? was answered with something else"
     },
     "wa.treat.saved": {
       "text": "*{item}*: {how}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer saved and remembered: how it is treated, and its label"
+      "context": "Draft, not reviewed: A purchase line's answer saved and remembered: how it is treated, and its label",
+      "same": true
     },
     "wa.treat.to_stock": {
-      "text": "Add to stock ({item})",
+      "text": "Ƙara cikin kaya ({item})",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. How a purchase line is treated, said back: into which stock item"
+      "context": "Draft, not reviewed: How a purchase line is treated, said back: into which stock item"
     },
     "wa.treat.too_many": {
-      "text": "{count} {item} are too many to keep track of one by one (at most {max}), so it is just recorded. You can add one row for the lot on Things we have.",
+      "text": "{item} {count} sun yi yawa da za a bi diddigin su ɗaya bayan ɗaya (mafi yawa {max}), don haka an rubuta su kawai. Kana iya ƙara layi ɗaya don duka a kan Things we have.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 200: it cannot be, and is just recorded"
+      "context": "Draft, not reviewed: Keep track of it for more than 200: it cannot be, and is just recorded"
+    },
+    "wa.treat.uses": {
+      "text": "Ana ƙirga *{stock}* da {unit}. {unit} nawa ne a cikin {one} ɗaya? Faɗi lamba, kamar 1000.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Add to stock into a stock item counted in another unit (grams, yards): how many of the stock item one of the line bought is ({one} is the line's unit, like bag, or the item's name). Asked once; remembered with the item"
+    },
+    "wa.treat.uses_reminder": {
+      "text": "Faɗi {unit} nawa ne a cikin {one} ɗaya, a lamba, kamar 50.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The answer to how many of the stock item one of the line is was not a number: said again before the question"
     },
     "wa.treat.which_item": {
-      "text": "Which stock item does *{item}* go into? Pick one, or type its name.",
+      "text": "Wane kayan ajiya ne *{item}* zai shiga? Zaɓi ɗaya, ko ka rubuta sunansa.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Add to stock was chosen for a purchase line: the stock item, materials included"
+      "context": "Draft, not reviewed: Add to stock was chosen for a purchase line: the stock item, materials included"
     },
     "wa.understood.confirm": {
       "text": "Ina tsammani kana nufin: *{command}*\nIn yi shi?",
@@ -3358,15 +3380,15 @@
       "reviewed": false
     },
     "wa.yes_stale": {
-      "text": "That button was for something earlier, so nothing was done. Send *yes* to confirm what is waiting now, or *cancel* to drop it.",
+      "text": "Wannan maɓallin na wani abu ne na baya, don haka ba a yi komai ba. Aika *yes* don tabbatar da abin da ke jira yanzu, ko *cancel* don soke shi.",
       "reviewed": false
     },
     "wa.yes_stale_none": {
-      "text": "That button was for something earlier. Nothing is waiting for an answer now.",
+      "text": "Wannan maɓallin na wani abu ne na baya. Babu abin da ke jiran amsa yanzu.",
       "reviewed": false
     },
     "wa.yes_stale_public": {
-      "text": "That button was for something earlier, so nothing was started. Send *menu* to see what you can do here.",
+      "text": "Wannan maɓallin na wani abu ne na baya, don haka ba a fara komai ba. Aika *menu* don ganin abin da za ka iya yi a nan.",
       "reviewed": false
     },
     "wa.cancelled_nothing_started": {
@@ -3489,6 +3511,36 @@
       "text": "amsa da eh ko a'a",
       "reviewed": false
     },
+    "wa.field.send_location": {
+      "text": "Aika wurin da kake nan don {label}: haɗa, sannan Location. Dalili: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's location input in chat (device fields, build-plan-gaps H3): it is sent as WhatsApp's or Telegram's own location message; {label} is the input's title and {why} why it is asked, in the tenant's words"
+    },
+    "wa.field.send_photo": {
+      "text": "Aika hoto a nan don {label}. Dalili: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's photo input in chat: a photo sent in the chat; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.type_code": {
+      "text": "Rubuta lambar don {label}: hira ba ta iya karanta ta. Dalili: {why}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Asks for a tool's scan input in chat, where nothing can scan: the code is typed; {label} is the input's title and {why} why it is asked"
+    },
+    "wa.field.not_location": {
+      "text": "Wannan ba wuri ba ne. Aika shi a matsayin wuri: haɗa, sannan Location.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a location in chat and got words, or a location that did not come through"
+    },
+    "wa.field.not_photo": {
+      "text": "Wannan ba hoto ba ne. Aika hoton kansa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool asked for a photo in chat and got words"
+    },
+    "wa.field.photo_lost": {
+      "text": "Hoton bai iso ba. Sake aika shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A photo sent for a tool's input in chat could not be fetched from WhatsApp or Telegram"
+    },
     "wa.form.gone": {
       "text": "Ba a buƙatar wannan fom kuma. Aika *run* da sunan aiki don sake farawa.",
       "reviewed": false
@@ -3496,6 +3548,26 @@
     "wa.form.inputs": {
       "text": "{workflow} yana buƙatar bayanai {count}. Danna *{cta}* don shigar da su; za ka tabbatar kafin ya fara. Aika *cancel* don tsayawa.",
       "reviewed": false
+    },
+    "wa.form.code_now": {
+      "text": "Rubuta lambar a matsayin saƙonka na gaba a nan ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step put to the person in WhatsApp or Telegram asks a code (a scan field, build-plan-gaps H3 g-scan-wa): only their next message there is taken as the code; {why} is why it is asked, in the tenant's words"
+    },
+    "wa.form.code_then": {
+      "text": "Sannan rubuta lambar, idan an tambaya ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram asks a code after its location and photo: asked once they are sent; {why} is why it is asked"
+    },
+    "wa.form.code_next": {
+      "text": "An karɓa, don {title}. Yanzu rubuta lambar a matsayin saƙonka na gaba ({why}).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step's location and photo are in; its code is asked now, and only the person's next message there is taken as it; {title} is the question's title and {why} why the code is asked"
+    },
+    "wa.form.code_scan_only": {
+      "text": "Lambar da dole a karanta ba za a iya bayar da ita a hira ba: an bar ta.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form step in WhatsApp or Telegram has a code that must be scanned (typing not allowed): it cannot be given there"
     },
     "wa.form.invalid": {
       "text": "Wannan fom ba shi da inganci kuma.",
@@ -3643,7 +3715,8 @@
     },
     "wa.ask.count": {
       "text": "{reading}: {count}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.ask.sum": {
       "text": "Jimillar {column}, {reading}: {total}",
@@ -3659,14 +3732,15 @@
     },
     "wa.ask.rows_head": {
       "text": "{reading} ({count}):",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.help.intro": {
       "text": "Za ka iya aika:",
       "reviewed": false
     },
     "wa.help.saved": {
-      "text": "\u2022 *@* and a saved thing's name: tells it (*@mum*); ask about it (*what's @car insurance due?*); *save mum: GTBank 0123456789*; *remind me when @car insurance is due*; *my reminders*",
+      "text": "• *@* da sunan abin ajiya: yana faɗin sa (*@mum*); tambaya game da shi (*what's @car insurance due?*); *save mum: GTBank 0123456789*; *remind me when @car insurance is due*; *my reminders*",
       "reviewed": false
     },
     "wa.help.invoice": {
@@ -3726,15 +3800,15 @@
       "reviewed": false
     },
     "wa.invoice.confirm_linked": {
-      "text": "Send {name}, a business on Taskiem you are linked with, an invoice for {amount}: {for}? It goes into their bills.",
+      "text": "In aika wa {name}, kasuwanci a Taskiem da kuke haɗe, invoice na {amount}: {for}? Zai shiga cikin takardun kuɗinsu.",
       "reviewed": false
     },
     "wa.invoice.sent_linked": {
-      "text": "Sent {number} to {name}'s bills on Taskiem for {amount}. You can see it under Invoices in the web app.",
+      "text": "An aika {number} zuwa takardun kuɗin {name} a Taskiem na {amount}. Kuna iya ganin ta a ƙarƙashin Invoices a web app.",
       "reviewed": false
     },
     "wa.invoice.pick_linked": {
-      "text": "Which {name} do you mean?\n{list}\nReply with its number, or send a phone number or email to invoice someone else.",
+      "text": "Wane {name} kake nufi?\n{list}\nAmsa da lambarsa, ko aika lambar waya ko imel don aika wa wani invoice.",
       "reviewed": false
     },
     "wa.invoice.confirm_reminder": {
@@ -4038,23 +4112,23 @@
       "reviewed": false
     },
     "wa.receive.account": {
-      "text": "Your account number with Taskiem:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nAnyone can pay you into it at any time; each payment shows under Money, To match.",
+      "text": "Lambar asusunka da Taskiem:\nLambar asusu: {account}\nBanki: {bank}\nSunan asusu: {name}\nKowa zai iya biyan ka a ciki a kowane lokaci; kowane biya yana bayyana a ƙarƙashin Money, To match.",
       "reviewed": false
     },
     "wa.receive.balance": {
-      "text": "Your Taskiem wallet holds {amount} now.",
+      "text": "Walat ɗinka na Taskiem yana da {amount} yanzu.",
       "reviewed": false
     },
     "wa.receive.balance_unknown": {
-      "text": "We could not get your balance just now. Please try again in a few minutes.",
+      "text": "Ba mu iya samun ma'aunin kuɗinka yanzu ba. Don Allah sake gwadawa bayan 'yan mintuna.",
       "reviewed": false
     },
     "wa.receive.no_number": {
-      "text": "Your account number is not ready yet. Open Settings, Payments to see why: {link}",
+      "text": "Lambar asusunka ba ta shirya ba tukuna. Buɗe Settings, Payments don ganin dalili: {link}",
       "reviewed": false
     },
     "wa.receive.off": {
-      "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "text": "Ba ka karɓar kuɗi da Taskiem tukuna. Kunna shi a Settings, Payments: {link}",
       "reviewed": false
     },
     "wa.riders.add_how": {
@@ -4200,6 +4274,11 @@
       "text": "Buɗe shafin: {link}",
       "reviewed": false,
       "context": "Draft, not reviewed: A page's short form in a chat app: the link to open the page"
+    },
+    "wa.page.cannot_open": {
+      "text": "Wannan shafin ba naka ba ne da za ka iya buɗewa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A Tell me message's button that opens a page, pressed by someone the page's roles do not let open it (or the page is gone)"
     },
     "wa.tool.list_empty": {
       "text": "Babu abin da za a nuna.",
@@ -4787,15 +4866,15 @@
       "reviewed": false
     },
     "wa.shop.turn_on_deliveries": {
-      "text": "Turn on deliveries now? Each confirmed order for delivery is then offered to your riders in turn, and their Delivered completes it. Your order form stays as it is.",
+      "text": "A kunna kai kaya yanzu? Sannan kowace odar da aka tabbatar don kai wa za a ba masu kai kayanka ɗaya bayan ɗaya, kuma Na kai ɗinsu zai kammala ta. Fom ɗin odarka zai kasance yadda yake.",
       "reviewed": false
     },
     "wa.dispatch.on": {
-      "text": "Deliveries are on. Confirmed orders for delivery now go to your riders; reply *deliveries* to see today's.",
+      "text": "An kunna kai kaya. Odar da aka tabbatar don kai wa yanzu tana zuwa ga masu kai kayanka; amsa *deliveries* don ganin na yau.",
       "reviewed": false
     },
     "wa.dispatch.on_failed": {
-      "text": "Deliveries are not on: {reason}.",
+      "text": "Ba a kunna kai kaya ba: {reason}.",
       "reviewed": false
     },
     "wa.shop.which_item": {
@@ -4828,7 +4907,8 @@
     },
     "wa.stock.count": {
       "text": "*{name}*: {count}.",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.stock.is_low": {
       "text": "Ya yi kaɗan: kana sake saye a {level}.",
@@ -4887,29 +4967,29 @@
       "reviewed": false
     },
     "wa.stock.ask_sell": {
-      "text": "*{name}* is new: {qty}{cost}. Do you sell it?",
+      "text": "*{name}* sabo ne: {qty}{cost}. Kana sayar da shi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Counting in something the business has none of (add 20 yards of ankara fabric): one question before it is added"
+      "context": "Draft, not reviewed: Counting in something the business has none of (add 20 yards of ankara fabric): one question before it is added"
     },
     "wa.stock.ask_sell_first": {
-      "text": "Start keeping stock with *{name}*: {qty}{cost}. Do you sell it?",
+      "text": "Fara ajiye kaya da *{name}*: {qty}{cost}. Kana sayar da shi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The first thing counted in, which starts keeping stock: the same question"
+      "context": "Draft, not reviewed: The first thing counted in, which starts keeping stock: the same question"
     },
     "wa.stock.sell_how": {
-      "text": "*Yes* adds it to your products too. *No* only keeps count of it: something you use, not sell.",
+      "text": "*Yes* zai ƙara shi cikin kayan sayarwarka ma. *No* zai ƙirga shi kawai: abin da kake amfani da shi, ba sayarwa ba.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under Do you sell it?: what each answer does"
+      "context": "Draft, not reviewed: Under Do you sell it?: what each answer does"
     },
     "wa.stock.sell_reminder": {
-      "text": "Do you sell *{name}*? Reply *yes* or *no*, or *cancel* to leave it.",
+      "text": "Kana sayar da *{name}*? Amsa *yes* ko *no*, ko *cancel* don barin shi.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Do you sell it? was answered with something else"
+      "context": "Draft, not reviewed: Do you sell it? was answered with something else"
     },
     "wa.stock.added_material": {
-      "text": "It is counted only: it is not one of your products.",
+      "text": "Ana ƙirga shi kawai: ba ya cikin kayan sayarwarka.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. After adding something not sold (No to Do you sell it?)"
+      "context": "Draft, not reviewed: After adding something not sold (No to Do you sell it?)"
     },
     "wa.stock.confirm_topup": {
       "text": "A ƙara {qty} ga *{name}* ({from} → {to}){cost}?",
@@ -4968,7 +5048,7 @@
       "reviewed": false
     },
     "sales.by_transfer": {
-      "text": "Transfer",
+      "text": "Ta transfer",
       "reviewed": false
     },
     "sales.by_pos": {
@@ -5249,7 +5329,8 @@
     },
     "wa.count.line": {
       "text": "• {item}: {had} → {counted}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.count.same": {
       "text": "{count} kamar yadda Taskiem ke da su.",
@@ -5296,7 +5377,7 @@
       "reviewed": false
     },
     "wa.signin.off": {
-      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Sign in on the web with your email and password: {link}",
+      "text": "Shiga da WhatsApp ko Telegram a kashe yake a gare ka (Account a yanar gizo). Shiga a yanar gizo da imel ɗinka da kalmar sirri: {link}",
       "reviewed": false
     },
     "wa.signin.passkey": {
@@ -5929,7 +6010,8 @@
     },
     "wa.table.list_line_nocount": {
       "text": "{n}. {title}",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "wa.table.list_tail_add": {
       "text": "Aika *add to* da sunan tebur don ƙara layi.",
@@ -6040,11 +6122,11 @@
       "reviewed": false
     },
     "signup.ask_workspace": {
-      "text": "What should we call this workspace? (Send *cancel* to stop at any point.)",
+      "text": "Me za mu kira wannan workspace? (Aika *cancel* don tsayawa a kowane lokaci.)",
       "reviewed": false
     },
     "signup.workspace_bad": {
-      "text": "A workspace name needs 2 to 80 characters, and no links or email addresses. What should we call it?",
+      "text": "Sunan workspace yana buƙatar haruffa 2 zuwa 80, ba tare da hanyoyin haɗi ko adireshin imel ba. Me za mu kira shi?",
       "reviewed": false
     },
     "signup.ask_name": {
@@ -6132,23 +6214,23 @@
       "reviewed": false
     },
     "signup.ask_kind": {
-      "text": "Is this for a business, or for workflows?\n\n*A business*: sell, take orders and bookings, send invoices, with your staff.\n*Workflows*: get work done for you or your team: forms, reminders, approvals, your other apps.",
+      "text": "Wannan don kasuwanci ne, ko don tsarin aiki?\n\n*Kasuwanci*: sayarwa, karɓar oda da alƙawura, aika invoice, tare da ma'aikatanka.\n*Tsarin aiki*: a yi maka aiki ko ƙungiyarka: fom, tunatarwa, amincewa, sauran manhajojinka.",
       "reviewed": false
     },
     "signup.button_business": {
-      "text": "A business",
+      "text": "Kasuwanci",
       "reviewed": false
     },
     "signup.button_workflows": {
-      "text": "Workflows",
+      "text": "Tsarin aiki",
       "reviewed": false
     },
     "signup.starters_workflows": {
-      "text": "Here are two things to start with:",
+      "text": "Ga abubuwa biyu da za ka fara da su:",
       "reviewed": false
     },
     "signup.tpl.leave-request": {
-      "text": "Leave requests",
+      "text": "Neman hutu",
       "reviewed": false
     },
     "dormant.form_title": {
@@ -6262,6 +6344,201 @@
     "wd.and": {
       "text": "{list} da {last}",
       "reviewed": false
+    },
+    "wd.change.name": {
+      "text": "Yanzu ana kiran sa {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its name; {name} is the business's"
+    },
+    "wd.change.tool_new": {
+      "text": "Yanzu kayan aiki ne: {command}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: it became a tool people call from the chat; {command} is like /expense"
+    },
+    "wd.change.tool_gone": {
+      "text": "Ba kayan aiki ba ne kuma ({command} ya tafi)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: it is no longer a tool; {command} is like /expense"
+    },
+    "wd.change.tool_name": {
+      "text": "Yanzu ana kiran kayan aikin {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's name; {name} is the business's"
+    },
+    "wd.change.tool_command": {
+      "text": "Umarnin sa yanzu {command} ne (a da {was} ne)",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's command; {command} and {was} are like /expense"
+    },
+    "wd.change.tool_about": {
+      "text": "Yanzu yana cewa don: {about}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the line saying what the tool is for; {about} is the business's"
+    },
+    "wd.change.says_added": {
+      "text": "Yanzu yana kuma cewa '{phrase}'",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a phrase that finds the tool from a message was added; {phrase} is the business's, like spent"
+    },
+    "wd.change.says_removed": {
+      "text": "Ba ya cewa '{phrase}' kuma",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a phrase that found the tool was removed; {phrase} is the business's"
+    },
+    "wd.change.for_customers": {
+      "text": "Abokan ciniki za su iya amfani da shi yanzu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the business's customers may now use its tool"
+    },
+    "wd.change.for_members": {
+      "text": "Mutanen ku ne kaɗai za su iya amfani da shi yanzu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: only the business's own people may use its tool now"
+    },
+    "wd.change.for_linked": {
+      "text": "Kasuwancin da kuke haɗe da su za su iya amfani da shi yanzu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: businesses linked with this one may now use its tool"
+    },
+    "wd.change.tool_icon": {
+      "text": "Hotonsa ya canza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: the tool's picture"
+    },
+    "wd.change.answer_now": {
+      "text": "Yanzu yana amsawa da {kind}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what its tool answers with when it ends; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.change.answer_gone": {
+      "text": "Ba ya amsawa kuma: yana cewa ya fara ne kawai",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its tool no longer answers, it only says it started"
+    },
+    "wd.change.answer_changed": {
+      "text": "Abin da yake amsawa ya canza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what its tool's answer shows"
+    },
+    "wd.change.answer.text": {
+      "text": "kalmomi",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a few words"
+    },
+    "wd.change.answer.card": {
+      "text": "kati",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a card with lines"
+    },
+    "wd.change.answer.list": {
+      "text": "jerin abubuwa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a list of rows"
+    },
+    "wd.tool.called": {
+      "text": "Yi amfani da shi a hira da {command}: {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps (Describe it, the template library): it is a tool called from the chat; {command} is like /add-sale, {name} the tool's name"
+    },
+    "wd.tool.for_members": {
+      "text": "Mutanenka ne kawai za su iya amfani da shi",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the business's own people"
+    },
+    "wd.tool.for_customers": {
+      "text": "Abokan cinikinka za su iya amfani da shi, kuma za su ga abin da aka keɓe musu kawai",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the business's customers, whose answer shows only the outputs marked public"
+    },
+    "wd.tool.asks": {
+      "text": "Yana tambayar: {fields}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: what its tool asks for when it is called; {fields} is a list of field names"
+    },
+    "wd.tool.answers": {
+      "text": "Yana amsawa da {kind}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: what its tool says back; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.tool.says_ran": {
+      "text": "Yana faɗin cewa ya yi aiki kawai",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool has no answer, so it only says it ran"
+    },
+    "wd.tool.for_linked": {
+      "text": "Kasuwancin da kuke da alaƙa za su iya amfani da shi",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the businesses linked with this one"
+    },
+    "wd.tool.for_roles": {
+      "text": "Waɗannan kaɗai za su iya amfani da shi, ban da masu shi: {roles}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: only members with these roles may use its tool (owners always may); {roles} is a list of role names"
+    },
+    "wd.tool.companion": {
+      "text": "Yana zuwa da {name}, jadawali wanda maɓallinsa ke buɗe shi, an ajiye shi a matsayin daftari kusa da shi",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A drafted tool read back: the recipe it started from brings a schedule, saved as a draft beside it, whose button opens the tool; {name} is the schedule's name"
+    },
+    "wa.build.warn_customer_output": {
+      "text": "Kowane abokin ciniki da ya yi amfani da shi zai ga {output}, wanda ya fito daga abin da kake ajiyewa don kanka. Ka tabbata nasu ne.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Before saving a drafted tool for customers: an output it shows every customer is read from something the business keeps (a saved thing, a setting, a table's rows); {output} is the output's name"
+    },
+    "wa.build.tool_taken": {
+      "text": "An riga an ɗauki {asked}, don haka ana kiran sa da {command}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After saving a drafted tool: the command it asked for was taken (one of Taskiem's words, another tool's or a page's), so it was given the next free one; {asked} and {command} are like /prices"
+    },
+    "wa.build.tool_companion": {
+      "text": "An ajiye jadawalinsa, {name}, a matsayin daftari shi ma.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After saving a drafted tool started from a recipe: the recipe's schedule was saved as a draft too; {name} is its name"
+    },
+    "wd.change.roles": {
+      "text": "Waɗannan matsayi ne kaɗai za su iya fara shi yanzu: {roles}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: who may start it by hand; {roles} are the business's role names"
+    },
+    "wd.change.roles_all": {
+      "text": "Duk wanda zai iya fara ayyuka zai iya fara shi yanzu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: anyone who may start workflows may start it again"
+    },
+    "wd.change.trigger": {
+      "text": "Yanzu yana farawa: {trigger}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: how it starts; {trigger} is a read-back line like Every Monday at 9:00"
+    },
+    "wd.change.inputs": {
+      "text": "Abin da yake tambaya ya canza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what it asks for when started"
+    },
+    "wd.change.outputs": {
+      "text": "Abin da yake bayarwa ya canza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: what it gives back when it ends"
+    },
+    "wd.change.settings": {
+      "text": "Bayaninsa ko saitunansa sun canza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: its description or settings"
+    },
+    "wd.change.step_added": {
+      "text": "An ƙara: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step added; {step} is a read-back line"
+    },
+    "wd.change.step_removed": {
+      "text": "An cire: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step removed; {step} is a read-back line"
+    },
+    "wd.change.step_changed": {
+      "text": "An canza: {step}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: What changed in a new version of a workflow: a step changed; {step} is a read-back line"
     },
     "wd.approval": {
       "text": "Jira amincewa",
@@ -7416,7 +7693,7 @@
       "reviewed": false
     },
     "order.link.credit_unchecked_note": {
-      "text": "Waiting: {business} could not check your credit just now, so this order was not accepted by itself. Someone there will look at it.",
+      "text": "Ana jira: {business} bai iya duba bashinka yanzu ba, don haka ba a karɓi wannan odar da kanta ba. Wani a can zai duba ta.",
       "reviewed": false
     },
     "order.link.over_limit_title": {
@@ -7476,11 +7753,11 @@
       "reviewed": false
     },
     "wa.received.linked": {
-      "text": "{supplier} delivered order {reference} through Taskiem. Tap *All came* if it all came, or say what came of each item on the order's page.",
+      "text": "{supplier} ya kawo odar {reference} ta Taskiem. Danna *All came* idan duka ya iso, ko ka faɗi abin da ya iso na kowane kaya a shafin odar.",
       "reviewed": false
     },
     "wa.received.linked_wait": {
-      "text": "Order {reference} is with {supplier} on Taskiem and is not delivered yet; when it is, you record what came with *All came* or *Not all came*.",
+      "text": "Odar {reference} tana wurin {supplier} a Taskiem kuma ba a kawo ta ba tukuna; idan an kawo, za ka rubuta abin da ya iso da *All came* ko *Not all came*.",
       "reviewed": false
     },
     "wa.mention.which": {
@@ -7488,11 +7765,12 @@
       "reviewed": false
     },
     "order.link.auto_changed_title": {
-      "text": "{from} sent order {reference}, at your prices",
+      "text": "{from} ya aiko odar {reference}, a farashinka",
       "reviewed": false
     },
     "order.link.auto_changed": {
-      "text": "*{from}* ordered {note}. It proposed other prices, so it is sent back at yours for them to accept, as you set for them."
+      "text": "*{from}* ya yi odar {note}. Ya bayar da wasu farashi, don haka an mayar musu da ita a farashinka don su karɓa, kamar yadda ka saita musu.",
+      "reviewed": false
     },
     "wa.help.fronts": {
       "text": "• *fronts*: sauran shafukanka, kamar jerin abinci; *add front Snacks*; *add dish Jollof rice 2500*; *turn on orders for Snacks*; *front Snacks on*; *orders Snacks*",
@@ -7884,7 +8162,8 @@
     },
     "customer.order_which": {
       "text": "{said}: {choices}?",
-      "reviewed": false
+      "reviewed": false,
+      "same": true
     },
     "customer.order_size": {
       "text": "Wanne {product}? {choices}",
@@ -7903,63 +8182,63 @@
       "reviewed": false
     },
     "rider.photo_kept_for": {
-      "text": "Photo kept as proof of delivery for {reference}. Thank you.",
+      "text": "An ajiye hoton a matsayin shaidar kai kaya na {reference}. Na gode.",
       "reviewed": false
     },
     "rider.photo_kept_which": {
-      "text": "Photo kept as proof of delivery for {reference}. If it is for another order, tap that order.",
+      "text": "An ajiye hoton a matsayin shaidar kai kaya na {reference}. Idan na wata odar ne, taɓa waccan odar.",
       "reviewed": false
     },
     "rider.photo_moved": {
-      "text": "Done: the photo is now kept for {reference}.",
+      "text": "An gama: an mayar da hoton zuwa {reference}.",
       "reviewed": false
     },
     "link.ended_open.mine": {
-      "text": "You ended the link with {name}. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "text": "Ka ƙare haɗin da {name}. Waɗannan suna buɗe tsakaninku: {list}. Za su kasance yadda suke ba tare da ƙarin labarai a nan ba, don haka ka daidaita su da {name} kai tsaye.",
       "reviewed": false
     },
     "link.ended_open.theirs": {
-      "text": "{name} ended the link with your business. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "text": "{name} ya ƙare haɗin da kasuwancinka. Waɗannan suna buɗe tsakaninku: {list}. Za su kasance yadda suke ba tare da ƙarin labarai a nan ba, don haka ka daidaita su da {name} kai tsaye.",
       "reviewed": false
     },
     "link.ended_open.orders": {
-      "text": "orders {refs}",
+      "text": "odar {refs}",
       "reviewed": false
     },
     "link.ended_open.orders_more": {
-      "text": "orders {refs} and {more} more",
+      "text": "odar {refs} da ƙarin {more}",
       "reviewed": false
     },
     "link.ended_open.invoices": {
-      "text": "invoices {refs}",
+      "text": "invoice {refs}",
       "reviewed": false
     },
     "link.ended_open.invoices_more": {
-      "text": "invoices {refs} and {more} more",
+      "text": "invoice {refs} da ƙarin {more}",
       "reviewed": false
     },
     "reach.reply_in_app": {
-      "text": "Reply in the Taskiem app: {link}",
+      "text": "Amsa a manhajar Taskiem: {link}",
       "reviewed": false
     },
     "reach.chat_link": {
-      "text": "To chat with {business}, open {link}",
+      "text": "Don yin hira da {business}, buɗe {link}",
       "reviewed": false
     },
     "signup.offer_everyone": {
-      "text": "Hello! Taskiem runs your business's errands from this chat: payments, invoices, stock, reminders, your shop page. Do you want to start, for free? If you buy from a business on Taskiem, tap *I'm a customer*. Type *no* for not now.\n\nTo chat in another language, type its name: {languages}.",
+      "text": "Sannu! Taskiem yana gudanar da ayyukan kasuwancinka daga wannan hira: biyan kuɗi, invoice, kaya, tunatarwa, shafin shagonka. Kana son farawa, kyauta? Idan kana saye daga wani kasuwanci a Taskiem, taɓa *I'm a customer*. Rubuta *no* idan ba yanzu ba.\n\nDon yin hira da wani harshe, rubuta sunansa: {languages}.",
       "reviewed": false
     },
     "signup.button_customer": {
-      "text": "I'm a customer",
+      "text": "Ni abokin ciniki ne",
       "reviewed": false
     },
     "signup.customer": {
-      "text": "To chat with a business, open its Taskiem link, or find it in the Taskiem app: {link}",
+      "text": "Don yin hira da wani kasuwanci, buɗe mahaɗarsa ta Taskiem, ko ka nemo shi a manhajar Taskiem: {link}",
       "reviewed": false
     },
     "signup.customer_no_app": {
-      "text": "To chat with a business, open its Taskiem link: the business shares it on its page, its receipts and its messages.",
+      "text": "Don yin hira da wani kasuwanci, buɗe mahaɗarsa ta Taskiem: kasuwancin yana raba ta a shafinsa, rasidinsa da saƙonninsa.",
       "reviewed": false
     },
     "menu.pay.account": {
@@ -8063,35 +8342,35 @@
       "context": "Draft, not reviewed: A question's answer that is not an account number"
     },
     "wa.pay.which_bank": {
-      "text": "Which bank is the account with? Send it again with the bank, like: send 45k to 0123456789 gtbank for stock bought.",
+      "text": "A wane banki asusun yake? Sake aika da bankin, kamar: send 45k to 0123456789 gtbank for stock bought.",
       "reviewed": false
     },
     "wa.pay.not": {
-      "text": "Not prepared: {reason}",
+      "text": "Ba a shirya ba: {reason}",
       "reviewed": false
     },
     "wa.pay.prepared": {
-      "text": "Ready to pay {amount} to {to}, {bank} {account}, for {for}.",
+      "text": "An shirya biyan {amount} ga {to}, {bank} {account}, don {for}.",
       "reviewed": false
     },
     "wa.pay.first": {
-      "text": "This is the first payment to this account.",
+      "text": "Wannan ne biya na farko zuwa wannan asusun.",
       "reviewed": false
     },
     "wa.pay.changed": {
-      "text": "This account changed since it was last paid: the owner's OK is asked.",
+      "text": "Wannan asusun ya canza tun lokacin da aka biya shi a ƙarshe: ana neman amincewar mai shi.",
       "reviewed": false
     },
     "wa.pay.again": {
-      "text": "The same amount went to them in the last day: check it is not paid twice.",
+      "text": "Adadin kuɗi ɗaya ya tafi gare su cikin kwana ɗayan da ya wuce: duba kada a biya sau biyu.",
       "reviewed": false
     },
     "wa.pay.confirm_link": {
-      "text": "Nothing is sent yet. To pay, confirm with your passkey: {link}",
+      "text": "Ba a aika komai ba tukuna. Don biya, tabbatar da passkey ɗinka: {link}",
       "reviewed": false
     },
     "wa.pay.confirm_app": {
-      "text": "Nothing is sent yet. To pay, confirm it with your passkey in Taskiem, under Pay.",
+      "text": "Ba a aika komai ba tukuna. Don biya, tabbatar da shi da passkey ɗinka a Taskiem, a ƙarƙashin Pay.",
       "reviewed": false
     },
     "wa.pay.list.how": {
@@ -8190,24 +8469,982 @@
       "context": "Draft, not reviewed: The message carrying a PIN form bound to one prepared payment (the passkey link was said just before): amount, who is paid"
     },
     "bill.transfer.send": {
-      "text": "Send exactly {amount} to {to}, for {reference}.",
+      "text": "Aika daidai {amount} zuwa {to}, don {reference}.",
       "reviewed": false
     },
     "bill.transfer.good_for": {
-      "text": "Good for {minutes} minutes.",
+      "text": "Yana aiki na minti {minutes}.",
       "reviewed": false
     },
     "bill.transfer.next": {
-      "text": "I'll say here when it lands.",
+      "text": "Zan faɗa a nan idan ya iso.",
       "reviewed": false
     },
     "bill.transfer.asking": {
-      "text": "Getting an account number for {reference}: it comes here in a moment.",
+      "text": "Ana samo lambar asusu don {reference}: za ta zo nan ba da jimawa ba.",
       "reviewed": false
     },
     "bill.transfer.off": {
-      "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
+      "text": "Sun kashe invoice a Taskiem: ka biya a shafin biyan kuɗinsu maimakon haka.",
       "reviewed": false
+    },
+    "wa.pay.payee.paid": {
+      "text": "{business} ya biya ka {amount} domin {for} a ranar {date}, zuwa asusunka mai ƙarewa da {last4}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment told to the person paid (a rider, a staff member) once the bank confirmed it: who paid, how much, what for, the day, their account's last four digits. Never who approved, the balance or the fee"
+    },
+    "wa.pay.payee.back": {
+      "text": "{amount} da {business} ya biya ka a ranar {date} bai isa asusunka ba: banki ya mayar da shi. An gaya musu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment the person paid was told of did not reach them: the bank sent it back"
+    },
+    "wa.pay.result.reversed": {
+      "text": "{amount} zuwa ga {to} ya dawo daga banki: yana cikin ma'aunin kuɗinka kuma.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat was paid and later sent back by the bank: who and how much"
+    },
+    "wa.pay.result.receipt": {
+      "text": "Rasidin su, don ka aika musu: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After a payment's result: the link to its receipt, to send to the person paid (Send them a receipt)"
+    },
+    "wa.pay.wallet": {
+      "text": "Walat ɗin Taskiem · yana isa nan take, babu caji.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat goes Taskiem wallet to Taskiem wallet: at once, with no fee"
+    },
+    "wa.pay.fee": {
+      "text": "{amount} + cajin {fee}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat, before it is confirmed: the amount and the fee the payments account quoted (the business pays the fee)"
+    },
+    "wa.pay.fee_after": {
+      "text": "Cajin zai bayyana bayan an biya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat whose payments account quotes no fee before paying"
+    },
+    "wa.pay.balance_after": {
+      "text": "Ma'auni bayan biya: {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat: the balance once it and its fee are paid"
+    },
+    "wa.pay.fwd.ask": {
+      "text": "A biya {name} ({bank} {account}) nawa, kuma domin me?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Answer to a forwarded message (or a reply of pay) with account details: the bank's name for the account, the bank and the last four digits; asks the amount and what for"
+    },
+    "wa.pay.fwd.saved": {
+      "text": "Wannan asusun {name} ne. A biya {name} nawa?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Answer to a forwarded message with the account of one of the business's saved accounts: paid by its name; asks the amount"
+    },
+    "wa.pay.fwd.staff": {
+      "text": "Ma'aikata suna biyan asusun da kasuwanci ya adana ne kawai: roƙi mai shi ya adana wannan tukuna.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A staff member forwarded account details not saved: staff pay the business's saved accounts only"
+    },
+    "payroll.settings.chat": {
+      "text": "Yadda aka saita albashinka a Payrolla:\n{lines}\n\nCanza kowane a Payrolla. Duba shi a nan: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): the payroll's setup in words ({lines}: one line each) and a link"
+    },
+    "payroll.schedule.card": {
+      "text": "Jadawalin {kind} ɗinka na {period}: {amount} na {people}. {state}\nLayin kowane mutum yana bayan shiga: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a tax or pension schedule's total, never each person's line, and a link behind sign-in ({kind}: PAYE, pension, NHF or NHIS)"
+    },
+    "payroll.schedule.none": {
+      "text": "Babu jadawalin {kind} na {period} tukuna. Jadawali suna shirya da zarar an kulle albashin wannan watan.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): no schedule of that kind for that month"
+    },
+    "payroll.schedule.none_any": {
+      "text": "Babu jadawalin {kind} tukuna. Jadawali suna shirya da zarar an kulle albashi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): no schedule of that kind at all"
+    },
+    "payroll.schedule.to_pay": {
+      "text": "Za a biya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule still to pay"
+    },
+    "payroll.schedule.due": {
+      "text": "A biya kafin {when}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule still to pay, and its due date ({when}: 10 Dec)"
+    },
+    "payroll.schedule.paid": {
+      "text": "An biya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): a schedule that is paid"
+    },
+    "payroll.schedule.scope_owner": {
+      "text": "Payrolla ba ta ba Taskiem izinin karanta jadawalin haraji da fansho ɗinka ba. Sake haɗa Payrolla ka ba da izinin Read statutory reports.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): Payrolla's SCOPE_REQUIRED for reports:read, to an owner (Read statutory reports is the scope in Payrolla's own words)"
+    },
+    "payroll.schedule.scope_other": {
+      "text": "Ka ce mai shi ya ba da izinin Read statutory reports a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Payroll settings and schedules (P4b-5, api/payroll_reports_chat.go): Payrolla's SCOPE_REQUIRED for reports:read, to others"
+    },
+    "payroll.people": {
+      "text": "Mutane {n}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): how many people a payroll pays"
+    },
+    "payroll.people_one": {
+      "text": "Mutum 1",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll that pays one person"
+    },
+    "payroll.someone": {
+      "text": "Wani",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a person Payrolla did not name"
+    },
+    "payroll.state.draft": {
+      "text": "ba a lissafa ba tukuna",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence: \"it's now …\""
+    },
+    "payroll.state.computed": {
+      "text": "yana jiran amincewa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.approved": {
+      "text": "an amince",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.locked": {
+      "text": "an kulle",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.disbursing": {
+      "text": "ana biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.completed": {
+      "text": "an biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.partially_completed": {
+      "text": "an biya wani ɓangare",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.cancelled": {
+      "text": "an soke",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.failed": {
+      "text": "ya gaza",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state in a sentence"
+    },
+    "payroll.state.other": {
+      "text": "yana wani wuri a Payrolla",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's state Taskiem has no words for"
+    },
+    "payroll.short": {
+      "text": "Walat ɗinka na Payrolla yana da {available}. Wannan albashin yana buƙatar {needed}: ya rage {short}. Saka kuɗi kafin {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): the funding line: the wallet against the payroll's total"
+    },
+    "payroll.pays_on": {
+      "text": "Za a biya a {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a locked payroll's card"
+    },
+    "payroll.locked": {
+      "text": "An kulle. Payrolla za ta biya {people} {amount} a {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Lock and pay with the code"
+    },
+    "payroll.approved": {
+      "text": "An amince. A kulle a biya?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Approve with the code"
+    },
+    "payroll.rejected": {
+      "text": "An mayar da shi. Za a sanar da wanda ya shirya shi, tare da bayaninka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after Reject"
+    },
+    "payroll.code.totp": {
+      "text": "Buɗe manhajar authenticator ɗinka don lambar Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla's code is: an authenticator app"
+    },
+    "payroll.code.sms": {
+      "text": "Payrolla ta aika lamba zuwa wayarka mai ƙarewa da {hint}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: a phone"
+    },
+    "payroll.code.sms_any": {
+      "text": "Payrolla ta aika lamba zuwa wayarka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: a phone with no hint"
+    },
+    "payroll.code.email": {
+      "text": "Payrolla ta aika lamba zuwa imel ɗinka {hint}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: an email"
+    },
+    "payroll.code.email_any": {
+      "text": "Payrolla ta aika lamba zuwa imel ɗinka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: an email with no hint"
+    },
+    "payroll.code.any": {
+      "text": "Payrolla ta aiko maka lamba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): where Payrolla sent the code: unknown"
+    },
+    "payroll.code.type_approve": {
+      "text": "Rubuta ta a nan don amincewa da albashin {period}. Tana aiki sau ɗaya, na minti 5.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): in the chat thread: type the code to approve"
+    },
+    "payroll.code.type_lock": {
+      "text": "Rubuta ta a nan don kulle albashin {period} a biya kowa a {date}. Ba a iya buɗe albashin da aka kulle. Tana aiki sau ɗaya, na minti 5.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): in the chat thread: type the code to lock"
+    },
+    "payroll.code.safer": {
+      "text": "Lamba daga manhajar authenticator ta fi tsaro: saita ɗaya a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): under a code sent by text message"
+    },
+    "payroll.code.stopped": {
+      "text": "An dakata. Ba za a yi amfani da wannan lambar ba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"stop\" while a code waits"
+    },
+    "payroll.code.entered": {
+      "text": "An shigar da lamba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): what the conversation's history keeps instead of the code"
+    },
+    "payroll.code.again": {
+      "text": "Sake rubuta lambar, ko ka ce stop.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after a wrong code in the thread"
+    },
+    "payroll.card.title": {
+      "text": "*Albashin {period}*",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card in the chat: its title"
+    },
+    "payroll.card.line": {
+      "text": "{people} · {amount} · ranar biya {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: people, total and pay day"
+    },
+    "payroll.card.status": {
+      "text": "{status}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: its state, capitalised",
+      "same": true
+    },
+    "payroll.card.new": {
+      "text": "Sababbi a wannan wata: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: who is new since last month"
+    },
+    "payroll.card.left": {
+      "text": "Ba a biya su wannan wata ba: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: who was paid last month and is not now"
+    },
+    "payroll.card.changed": {
+      "text": "Albashi ya canza: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: whose pay changed"
+    },
+    "payroll.card.open": {
+      "text": "Buɗe: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: the link to its page"
+    },
+    "payroll.card.waiting": {
+      "text": "Yana jiran amincewa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.approved": {
+      "text": "An amince: a kulle a biya na gaba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.locked": {
+      "text": "An kulle. Za a biya a {date}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.draft": {
+      "text": "Ba a lissafa ba tukuna",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: state"
+    },
+    "payroll.card.done": {
+      "text": "Yanzu: {state}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's card: any other state"
+    },
+    "payroll.button.approve": {
+      "text": "Amince",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.reject": {
+      "text": "Ƙi",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.lock": {
+      "text": "Kulle ka biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button on the payroll's card (20 characters at most)"
+    },
+    "payroll.button.new_code": {
+      "text": "Aika sabuwar lamba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a button after an expired code (20 characters at most)"
+    },
+    "payroll.reject.how": {
+      "text": "Don mayar da shi, rubuta: reject payroll, tare da dalili. Misali: reject payroll, Musa's bonus is wrong",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): how to reject in the chat"
+    },
+    "payroll.none": {
+      "text": "Babu albashin da ke jiran hakan yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): approve or lock payroll with none at that step"
+    },
+    "payroll.no_run": {
+      "text": "Babu albashi a Payrolla tukuna. Rubuta: prepare {month} payroll",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"payroll\" with no run yet"
+    },
+    "payroll.prepared": {
+      "text": "Albashin {period} ya shirya don dubawa: {people}, {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): after preparing a payroll in the chat"
+    },
+    "payroll.prepare.which": {
+      "text": "Faɗi wane wata, misali: prepare december payroll",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): \"prepare payroll\" with no month"
+    },
+    "payroll.slack": {
+      "text": "Ana amincewa da albashi inda kake rubuta lambar Payrolla, ba a cikin hirar jama'a ba. Buɗe shi: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): approving from Slack: a link to the web"
+    },
+    "payroll.not_allowed": {
+      "text": "Ba za ka iya yin hakan ga albashin a nan ba. Tambayi mai shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a person without the permission"
+    },
+    "payroll.told.rejected": {
+      "text": "{by} ya mayar da albashin {period}: {note}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): told to whoever prepared it"
+    },
+    "payroll.told.approved": {
+      "text": "{by} ya amince da albashin {period} a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.rejected_there": {
+      "text": "{by} ya mayar da albashin {period} a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.locked": {
+      "text": "{by} ya kulle albashin {period} a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a decision made in Payrolla"
+    },
+    "payroll.told.scheduled": {
+      "text": "An kulle albashin {period}. Payrolla za ta biya {people} {amount} a {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a payroll's payment scheduled"
+    },
+    "payroll.refused.sod": {
+      "text": "Kai ne ka shirya wannan albashin, don haka dole wani ya amince da shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SOD_VIOLATION"
+    },
+    "payroll.refused.sod_who": {
+      "text": "Tambayi {who}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): who can approve instead"
+    },
+    "payroll.refused.not_linked": {
+      "text": "Haɗa asusunka na Payrolla tukuna. Yana buƙatar lamba ɗaya: Payroll settings, Link my Payrolla account.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's APPROVER_NOT_LINKED"
+    },
+    "payroll.refused.not_an_approver": {
+      "text": "A Payrolla ba za ka iya amincewa da albashi ba. Ka ce mai shi ya maishe ka Approver a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NOT_AN_APPROVER"
+    },
+    "payroll.refused.cannot_pay": {
+      "text": "A Payrolla ba za ka iya aika biya ba. Tambayi mai shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CANNOT_PAY"
+    },
+    "payroll.refused.no_factor": {
+      "text": "Payrolla ba ta da inda za ta aiko maka lamba tukuna. Ka ce mai shi ya saka wayarka a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's PAYMENT_CONFIRMATION_NOT_SET_UP"
+    },
+    "payroll.refused.code_invalid": {
+      "text": "Wannan lambar ba daidai ba ce. Duba ta ka sake rubutawa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_INVALID"
+    },
+    "payroll.refused.code_expired": {
+      "text": "Wannan lambar ta ƙare. Nemi sabuwar lamba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_EXPIRED"
+    },
+    "payroll.refused.code_locked": {
+      "text": "Kuskure ya yi yawa da wannan lambar. Nemi sabuwar lamba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_LOCKED"
+    },
+    "payroll.refused.code_used": {
+      "text": "An riga an yi amfani da wannan lambar. Nemi sabuwar lamba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's CODE_USED"
+    },
+    "payroll.refused.too_many_codes": {
+      "text": "Payrolla ta aiko maka lambobi da yawa. Sake gwadawa bayan minti 10.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's TOO_MANY_CODES"
+    },
+    "payroll.refused.invalid_state": {
+      "text": "Wannan albashin ya wuce wannan mataki: yanzu {state}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's INVALID_STATE"
+    },
+    "payroll.refused.invalid_state_unknown": {
+      "text": "Wannan albashin ya wuce wannan mataki. Sake buɗe shi don ganin inda yake.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's INVALID_STATE, the state unknown"
+    },
+    "payroll.refused.no_account": {
+      "text": "Wasu mutane ba su da asusun da za a biya su: {who}. Saka asusunsu, ko ka bar su a wannan wata.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NO_PAYOUT_DESTINATION"
+    },
+    "payroll.refused.no_account_some": {
+      "text": "Wasu mutane ba su da asusun da za a biya su. Saka asusunsu, ko ka bar su a wannan wata.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's NO_PAYOUT_DESTINATION, no names"
+    },
+    "payroll.refused.duplicate": {
+      "text": "Akwai albashi na {period} tuni.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's DUPLICATE_RUN"
+    },
+    "payroll.refused.compute_error": {
+      "text": "Payrolla ta kasa lissafa wannan albashin: {reason}. Gyara shi a saitunan Payrolla, sannan ka danna Recalculate.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a run's compute_error"
+    },
+    "payroll.refused.not_worked_out": {
+      "text": "Payrolla ba ta lissafa wannan albashin ba tukuna. Gyara shi a saitunan Payrolla, sannan ka danna Recalculate.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a run still not worked out"
+    },
+    "payroll.refused.scope_owner": {
+      "text": "Payrolla ba ta ba Taskiem izinin yin hakan ba. Sake haɗa Payrolla ka ba da izinin Prepare payroll da Approve and pay.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SCOPE_REQUIRED, to an owner"
+    },
+    "payroll.refused.scope_other": {
+      "text": "Ka ce mai shi ya ba da izinin hakan a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's SCOPE_REQUIRED, to others"
+    },
+    "payroll.refused.reason": {
+      "text": "Faɗi dalili.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): Payrolla's REASON_REQUIRED"
+    },
+    "payroll.refused.note": {
+      "text": "Faɗi dalilin da kake mayar da shi, a gajeren rubutu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a rejection with no note"
+    },
+    "payroll.button.open": {
+      "text": "Buɗe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's payroll (P4b-3, api/payroll_runs.go): a link button on the payroll's card on Telegram"
+    },
+    "payroll.pay.awaiting": {
+      "text": "Ana jiran kuɗi: ya rage {short}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a locked payroll's payment, waiting for the wallet"
+    },
+    "payroll.pay.awaiting_any": {
+      "text": "Ana jiran kuɗi",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a locked payroll's payment, waiting for the wallet, by how much not known"
+    },
+    "payroll.pay.paying": {
+      "text": "Ana biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll's payment under way"
+    },
+    "payroll.pay.paid": {
+      "text": "An biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll paid to everyone"
+    },
+    "payroll.pay.paid_some": {
+      "text": "An biya, {n} ba a biya ba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll paid to some, with how many were not"
+    },
+    "payroll.pay.failed": {
+      "text": "Ba a biya ba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payroll's payment that failed"
+    },
+    "payroll.pay.none_now": {
+      "text": "Babu albashin da aka kulle da ke jiran ranar biyansa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"pay payroll now\" with nothing to pay now"
+    },
+    "payroll.paid_now": {
+      "text": "Ana biya yanzu. Payrolla tana biyan {people} {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): after Pay now with the code"
+    },
+    "payroll.retried": {
+      "text": "An sake aikawa. Payrolla za ta biya kowannensu a asusunsa na yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): after Pay the failed ones again with the code"
+    },
+    "payroll.refused.awaiting_funds": {
+      "text": "Walat ɗinka na Payrolla ya rage {short}. Saka kuɗi, Payrolla za ta biya da zarar ya shiga.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's AWAITING_FUNDS"
+    },
+    "payroll.refused.awaiting_funds_some": {
+      "text": "Walat ɗinka na Payrolla bai isa ba. Saka kuɗi, Payrolla za ta biya da zarar ya shiga.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's AWAITING_FUNDS, by how much not known"
+    },
+    "payroll.refused.already_paying": {
+      "text": "Payrolla tana biyan wannan albashin tuni.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's ALREADY_PAYING"
+    },
+    "payroll.refused.nothing_to_retry": {
+      "text": "Babu biyan da ya gaza da za a sake aikawa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's NOTHING_TO_RETRY"
+    },
+    "payroll.refused.payslip_not_final": {
+      "text": "Wannan takardar albashi za ta shirya da zarar an kulle albashin.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's PAYSLIP_NOT_FINAL"
+    },
+    "payroll.refused.payslip_links_off": {
+      "text": "An kashe hanyoyin takardar albashi. Kunna su a Payrolla, Settings, Connected apps.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): Payrolla's PAYSLIP_LINKS_DISABLED"
+    },
+    "payroll.code.type_pay_now": {
+      "text": "Rubuta ta a nan don biyan albashin {period} yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): in the chat thread: type the code to pay now"
+    },
+    "payroll.code.type_retry": {
+      "text": "Rubuta ta a nan don sake aika biyan albashin {period} da suka gaza.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): in the chat thread: type the code to pay the failed ones again"
+    },
+    "payroll.button.retry": {
+      "text": "Sake biyan su",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a button (at most 20 characters): pay the failed ones again"
+    },
+    "payroll.told.short": {
+      "text": "Albashin {period} yana jiran kuɗi: ya rage {short}. Saka kuɗi a walat ɗinka na Payrolla; Payrolla za ta biya da zarar ya shiga.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told on the pay day when the wallet is short"
+    },
+    "payroll.told.warn3": {
+      "text": "Albashin {period} zai biya a {date}, nan da kwana 3. Walat ɗinka na Payrolla yana da {available}; yana buƙatar {needed}: ya rage {short}. Saka kuɗi kafin lokacin.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the morning warning three days before the pay day"
+    },
+    "payroll.told.warn1": {
+      "text": "Albashin {period} zai biya gobe, {date}. Walat ɗinka na Payrolla yana da {available}; yana buƙatar {needed}: ya rage {short}. Saka kuɗi yau.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the morning warning the day before the pay day"
+    },
+    "payroll.told.paid_all": {
+      "text": "An biya albashin {period}: duka {people}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told when everyone was paid"
+    },
+    "payroll.told.paid_some": {
+      "text": "Albashin {period}: an biya {paid} daga cikin mutane {total}. {n} ba a biya ba: {who}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): told when some were not paid, with who and why"
+    },
+    "payroll.slip.paid": {
+      "text": "An biya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment"
+    },
+    "payroll.slip.sent": {
+      "text": "Yana kan hanya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment sent, not yet arrived"
+    },
+    "payroll.slip.failed": {
+      "text": "Ba a biya ba",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment that failed"
+    },
+    "payroll.slip.returned": {
+      "text": "Banki ya mayar",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment the bank returned"
+    },
+    "payroll.slip.waiting": {
+      "text": "Ba a biya ba tukuna",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): a payslip's payment not sent yet"
+    },
+    "payroll.payslip.ready": {
+      "text": "Takardar albashinka ta {month} ta shirya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): the only words an employee is sent about their payslip"
+    },
+    "payroll.payslip.open": {
+      "text": "Buɗe ta a Taskiem. Za ka shiga da farko.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): under the payslip notice on a chat app, with its link"
+    },
+    "payroll.payslip.not_linked": {
+      "text": "Ba a haɗa ka da albashi a nan ba tukuna. Tambayi mai aikinka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslip\" from someone not linked to a Payrolla employee"
+    },
+    "payroll.payslip.none": {
+      "text": "Ba ka da takardar albashi tukuna. Suna zuwa da zarar an kulle albashi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslip\" with none yet"
+    },
+    "payroll.payslip.links": {
+      "text": "Takardun albashinka suna buɗewa a Taskiem bayan ka shiga:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslips\" on a chat app, before the links"
+    },
+    "payroll.payslip.link_line": {
+      "text": "{period}: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After locking (P4b-4, api/payroll_payment.go): \"my payslips\" on a chat app: one payslip's link",
+      "same": true
+    },
+    "payroll.button.approve_who": {
+      "text": "Amince {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): a button under the account changes waiting: approve this person's ({name}: their first name; 20 characters at most with it)"
+    },
+    "payroll.change.approved": {
+      "text": "An amince. Daga yanzu Payrolla za ta biya {name} a sabon asusun.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): after the code typed in the thread"
+    },
+    "payroll.change.approved_own": {
+      "text": "Wanda ya nema ne ya amince. Daga yanzu Payrolla za ta biya {name} a sabon asusun.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the company's only approver approved a change they asked for themselves, with their code"
+    },
+    "payroll.change.asked_employee": {
+      "text": "Ma'aikacin ne ya nema.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: the employee, with their own code"
+    },
+    "payroll.change.asked_payrolla": {
+      "text": "An nema a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Payrolla's own screens"
+    },
+    "payroll.change.asked_taskiem": {
+      "text": "{who} ne ya nema a Taskiem.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Taskiem ({who}: their name)"
+    },
+    "payroll.change.asked_taskiem_someone": {
+      "text": "An nema a Taskiem.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): who asked for a change: someone in Taskiem whose name isn't known"
+    },
+    "payroll.change.decided": {
+      "text": "An riga an yanke wannan canjin asusun.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): Payrolla's INVALID_STATE: approved or rejected already"
+    },
+    "payroll.change.gone": {
+      "text": "Payrolla ba ta da irin wannan canjin asusun. Wataƙila an riga an yanke shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the change is not in Payrolla any more"
+    },
+    "payroll.change.how": {
+      "text": "Don amincewa da ɗaya, rubuta: approve {name}'s account change.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): under the list, to those who may approve ({name}: a first name, in small letters)"
+    },
+    "payroll.change.line": {
+      "text": "{name}: {account}. {asked}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): one change waiting ({account}: the bank's name for the new account, the bank and its last four digits; {asked}: who asked)",
+      "same": true
+    },
+    "payroll.change.none": {
+      "text": "Babu canjin asusun da ke jira.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): nothing waiting"
+    },
+    "payroll.change.none_for": {
+      "text": "Babu canjin asusun da ke jiran {name}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): none waiting for the person named"
+    },
+    "payroll.change.open": {
+      "text": "Duba su duka: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): a link to Account changes"
+    },
+    "payroll.change.open_page": {
+      "text": "Ka amince da shi inda kake rubuta lambar Payrolla: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): on the web, in the app and on Slack, a link to Account changes, whose sheet takes the code"
+    },
+    "payroll.change.reject_how": {
+      "text": "Don ƙin shi, rubuta: reject {whose} account change, tare da dalili.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): \"reject … account change\" without a note ({whose}: musa's, or the)"
+    },
+    "payroll.change.rejected": {
+      "text": "An ƙi. Har yanzu ana biyan {name} a asusunsa na yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): after rejecting a change with a note"
+    },
+    "payroll.change.same_person": {
+      "text": "Kai ne ka nemi wannan canjin asusun, don haka dole wani ya amince da shi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): Payrolla's SAME_PERSON: whoever asked can't approve it, unless they are the only approver"
+    },
+    "payroll.change.title": {
+      "text": "Canje-canjen asusun da ke jira:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): the title of the list"
+    },
+    "payroll.change.type": {
+      "text": "Rubuta ta a nan don amincewa da sabon asusun albashin {name}: {account}. Tana aiki sau ɗaya, na minti 5.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): in the WhatsApp or Telegram thread: type the code to approve a change ({account}: the bank's name for it, the bank and its last four digits)"
+    },
+    "payroll.change.which": {
+      "text": "Wanne: {names}? Faɗi da sunansa, misali: approve musa's account change.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Account changes by chat (api/payroll_chat_words.go): more than one change, and no name or a name of two people"
+    },
+    "payroll.staff.add_form": {
+      "text": "Saka {name} cikin albashi a wannan fom, tare da albashinsa da asusun bankinsa. Sunan asusun daga banki zai bayyana kafin ka ajiye: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add musa to payroll\" for a staff member not yet in Payrolla: the Add someone form, filled in from them"
+    },
+    "payroll.staff.add_new": {
+      "text": "{name} ba ya cikin ma'aikatanka a Taskiem. Saka shi cikin albashi a wannan fom, tare da albashinsa da asusun bankinsa: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add … to payroll\" for someone not on the staff: the empty Add someone form"
+    },
+    "payroll.staff.already": {
+      "text": "{name} yana cikin albashi tuni. Duba shi a Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"add … to payroll\" for someone already in Payrolla"
+    },
+    "payroll.staff.ask_end": {
+      "text": "A kawo ƙarshen aikin {name}? Zai fara aiki yau. Payrolla ba za ta iya saita ranar ƙarshe ba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before ending someone's employment"
+    },
+    "payroll.staff.ask_move": {
+      "text": "A mayar da {name} zuwa {department}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's department"
+    },
+    "payroll.staff.ask_pay": {
+      "text": "A canza albashin {name} na wata daga {before} zuwa {amount}, farawa {date}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's pay (amounts before tax)"
+    },
+    "payroll.staff.ask_pay_new": {
+      "text": "A canza albashin {name} na wata zuwa {amount}, farawa {date}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): asks yes before changing someone's pay when their pay now isn't known"
+    },
+    "payroll.staff.bank_form": {
+      "text": "Ana rubuta sabon asusun albashi a fom kawai, don banki ya duba shi. Buɗe {name} a Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"change zainab's salary account\": the form, never the chat"
+    },
+    "payroll.staff.done_end": {
+      "text": "Aikin {name} ya ƙare yau.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes"
+    },
+    "payroll.staff.done_move": {
+      "text": "An gama. {name} yana {department} yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes"
+    },
+    "payroll.staff.done_pay": {
+      "text": "An gama. Sabon albashin {name} zai fara {date}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after yes ({date}: 1 January 2027)"
+    },
+    "payroll.staff.from_bad": {
+      "text": "Faɗi lokacin da sabon albashin zai fara, misali: from january, ko from 1 january.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a start date that can't be read"
+    },
+    "payroll.staff.left": {
+      "text": "{name} ya riga ya bar aiki.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): someone whose employment ended"
+    },
+    "payroll.staff.my_account": {
+      "text": "Canza asusun albashinka a My pay. A can za ka rubuta lambar da Payrolla ta tura maka: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): \"change my salary account\" from a linked employee"
+    },
+    "payroll.staff.parts_kept": {
+      "text": "Albashinsa na asali, na gidaje da na sufuri za su tsaya yadda suke.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): after the question about a change of pay, when they have those parts"
+    },
+    "payroll.staff.pay_form": {
+      "text": "Albashin asali, na gidaje da na sufuri na {name} sun haura {amount}. Canza albashinsa a fom ɗin da ke Team: {url}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a lower pay than the parts add up to: the form, not a guess"
+    },
+    "payroll.staff.today": {
+      "text": "yau",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Staff by chat (api/payroll_chat_words.go): a change of pay starting today, in \"starting {date}\""
+    },
+    "payroll.words.amount": {
+      "text": "Wannan adadin bai yi daidai ba. Faɗi shi kamar haka: 100k, ko ₦100,000.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): an amount that can't be read"
+    },
+    "payroll.words.ask_bonus": {
+      "text": "A ƙara kari na {amount} ga {name} a albashin {period}, saboda {reason}? Ana cire haraji daga kari, don haka albashin da yake karɓa ({net} yanzu) zai ƙaru ƙasa da haka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before adding a bonus ({net}: their take-home pay now, from Payrolla)"
+    },
+    "payroll.words.ask_deduction": {
+      "text": "A cire {amount} daga albashin {name} a albashin {period}, saboda {reason}? Albashin da yake karɓa {net} ne yanzu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before a deduction"
+    },
+    "payroll.words.ask_leave_out": {
+      "text": "A bar {name} daga albashin {period}, saboda {reason}? Ba za a biya shi komai wannan wata ba maimakon {net}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before leaving someone out this month"
+    },
+    "payroll.words.ask_put_back": {
+      "text": "A mayar da {name} cikin albashin {period}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks yes before putting someone left out back"
+    },
+    "payroll.words.done": {
+      "text": "An gama.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after yes, when the person's pay can't be read"
+    },
+    "payroll.words.done_adjust": {
+      "text": "An gama. Yanzu {name} zai karɓi {net} a wannan wata (a da {before} ne).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after a bonus or a deduction, with their take-home pay from Payrolla"
+    },
+    "payroll.words.done_leave_out": {
+      "text": "An gama. An bar {name} daga albashin {period}. Yanzu yana biyan {people} {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after leaving someone out"
+    },
+    "payroll.words.done_put_back": {
+      "text": "An gama. {name} ya dawo cikin albashin {period} kuma zai karɓi {net}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): after putting someone back"
+    },
+    "payroll.words.leave_reason": {
+      "text": "Me ya sa aka bar {name} a wannan wata? Faɗi a 'yan kalmomi, misali: hutu ba tare da albashi ba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks the reason for leaving someone out"
+    },
+    "payroll.words.no_open": {
+      "text": "Babu albashin da ke buɗe don canje-canje. Rubuta: prepare {month} payroll.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): no payroll prepared and not yet approved ({month}: this month, in small letters)"
+    },
+    "payroll.words.not_found": {
+      "text": "Babu wanda ake kira {name} a Payrolla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): a name that matches no one on payroll"
+    },
+    "payroll.words.not_found_run": {
+      "text": "Babu wanda ake kira {name} a albashin {period}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): a name that matches no one in the payroll"
+    },
+    "payroll.words.not_left_out": {
+      "text": "Ba a bar {name} daga albashin {period} ba.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): \"put … back\" for someone not left out"
+    },
+    "payroll.words.nothing": {
+      "text": "Babu abin da ya canza.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): no to a change waiting for yes"
+    },
+    "payroll.words.reason": {
+      "text": "Don me ne? Faɗi a 'yan kalmomi, misali: burin Q4.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: This month's changes by chat (api/payroll_chat_words.go): asks the reason for a bonus or a deduction"
+    },
+    "payroll.words.reason_short": {
+      "text": "Faɗi dalili a 'yan kalmomi (haruffa 200 a mafi yawa).",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): an empty or too long reason"
+    },
+    "payroll.words.which": {
+      "text": "Wanne: {names}? Sake faɗi da cikakken sunansa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Chat words (api/payroll_chat_words.go): a name that matches more than one person"
     }
   }
 }

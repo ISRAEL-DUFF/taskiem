@@ -13,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/forms"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -52,6 +53,7 @@ func (s *Server) FormAsk(ctx context.Context, a forms.ChatAsk) {
 	body := formAskWords(a.Schema, app)
 	type told struct {
 		channel, addr string
+		user          uuid.UUID
 	}
 	var to []told
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{a.Tenant}, func(tx pgx.Tx) error {
@@ -70,7 +72,7 @@ func (s *Server) FormAsk(ctx context.Context, a forms.ChatAsk) {
 			}
 			for _, u := range users {
 				if addr, ok := addrs[u]; ok {
-					to = append(to, told{channel, addr})
+					to = append(to, told{channel, addr, u})
 				}
 			}
 		}
@@ -87,7 +89,29 @@ func (s *Server) FormAsk(ctx context.Context, a forms.ChatAsk) {
 		}
 		if _, err := ch.Send(ctx, t.addr, linkPhoneMessage(a.Tenant, ch.Prefix(""), title, body, nil)); err != nil {
 			s.Logger.Warn("forms: a chat message", "tenant", a.Tenant, "err", err)
+			continue
 		}
+		s.armCode(ctx, a, t.user, t.channel)
+	}
+}
+
+// armCode marks a question's code as asked of user in channel, when the
+// message just sent asks for it (a question whose only chat answer left
+// is a code): their next message there is taken as it (g-scan-wa).
+func (s *Server) armCode(ctx context.Context, a forms.ChatAsk, user uuid.UUID, channel string) {
+	if channel != forms.AppWhatsApp && channel != forms.AppTelegram || !forms.ChatAnswerable(a.Schema) {
+		return
+	}
+	field := forms.CodeField(a.Schema, nil)
+	if field == "" {
+		return
+	}
+	tenant := a.Asking
+	if tenant == uuid.Nil {
+		tenant = a.Tenant
+	}
+	if err := s.Forms.ChatArm(ctx, tenant, a.Request, user, field, channel); err != nil {
+		s.Logger.Warn("forms: asking for a code in chat", "tenant", tenant, "err", err)
 	}
 }
 
@@ -119,6 +143,16 @@ func formAskWords(schema map[string]any, app string) string {
 			lines = append(lines, "Send a photo here"+why+".")
 		case wd.DeviceSignature:
 			lines = append(lines, "A signature cannot be given in a chat: it is left out.")
+		case wd.DeviceScan:
+			switch {
+			case p["allow_typed"] == false:
+				lines = append(lines, tr(lang.EN, "wa.form.code_scan_only"))
+			case forms.CodeField(schema, nil) != "":
+				// Nothing else to send first: the code is the next message.
+				lines = append(lines, tr(lang.EN, "wa.form.code_now", "why", strings.TrimPrefix(why, ", ")))
+			default:
+				lines = append(lines, tr(lang.EN, "wa.form.code_then", "why", strings.TrimPrefix(why, ", ")))
+			}
 		}
 	}
 	if len(forms.WeakerInChat(schema)) > 0 {
@@ -152,6 +186,24 @@ func (s *Server) formChatAnswer(ctx context.Context, c *chat) (bool, error) {
 	channel := c.ch.Name()
 	if channel != forms.AppWhatsApp && channel != forms.AppTelegram {
 		return false, nil
+	}
+	// A code asked for here (g-scan-wa): a message in the next ten minutes
+	// that can be a code is it (codeWords); the asking ends when it comes.
+	if q, field, err := s.Forms.ChatCodeWaiting(ctx, forms.ChatAsker{Tenant: c.tenant.ID, User: c.p.UserID, Roles: c.p.Roles}, channel); err != nil {
+		return false, err
+	} else if q != nil && codeWords(c) {
+		added, err := s.Forms.ChatAdd(ctx, *q, c.p.UserID, field, map[string]any{"text": strings.TrimSpace(c.in.Text)})
+		if errors.Is(err, forms.ErrNotWaiting) {
+			return true, c.say(ctx, s, q.Title+" has been answered already.")
+		}
+		if err != nil {
+			return true, err
+		}
+		// The code came: nothing more is taken as it.
+		if err := s.Forms.ChatDisarm(ctx, q.Tenant, q.Request, c.p.UserID); err != nil {
+			return true, err
+		}
+		return true, s.formChatAdded(ctx, c, *q, added)
 	}
 	pressed, isPress := strings.CutPrefix(c.in.Reply, formButtonPrefix+"send:")
 	send := isPress || (c.in.Type == "text" && normalizeCommand(c.in.Text) == "send")
@@ -214,20 +266,36 @@ func (s *Server) formChatAnswer(ctx context.Context, c *chat) (bool, error) {
 	if err != nil {
 		return true, err
 	}
+	return true, s.formChatAdded(ctx, c, *q, added)
+}
+
+// formChatAdded says what a question still waits for once a chat added to
+// it (asking for the code, when only the code is left, as the person's
+// next message), or holds it for require_source, or sends it.
+func (s *Server) formChatAdded(ctx context.Context, c *chat, q forms.ChatQuestion, added forms.ChatAdded) error {
 	if !added.Whole {
 		have := map[string]bool{}
 		for k := range added.Question.Held {
 			have[k] = true
 		}
-		return true, c.say(ctx, s, "Got it, for "+q.Title+". "+formStillWanted(q.Schema, have))
+		if code := forms.CodeField(q.Schema, have); code != "" {
+			if err := s.Forms.ChatArm(ctx, q.Tenant, q.Request, c.p.UserID, code, c.ch.Name()); err != nil {
+				return err
+			}
+			props, _ := q.Schema["properties"].(map[string]any)
+			p, _ := props[code].(map[string]any)
+			why, _ := p["why"].(string)
+			return c.say(ctx, s, c.t("wa.form.code_next", "title", whatsapp.SafeText(q.Title), "why", why))
+		}
+		return c.say(ctx, s, "Got it, for "+q.Title+". "+formStillWanted(q.Schema, have))
 	}
 	if added.Weak {
 		app := strings.TrimRight(s.formsAppURL(), "/") + "/forms/requests/" + q.Request.String()
-		return true, c.say(ctx, s, q.From+" wants your phone's own reading for "+q.Title+": what was sent in a chat may be from anywhere. "+
+		return c.say(ctx, s, q.From+" wants your phone's own reading for "+q.Title+": what was sent in a chat may be from anywhere. "+
 			"Answer it in the app instead: "+app+"\nOr send it as it is, marked unverified.",
 			whatsapp.Button{ID: formButtonPrefix + "send:" + q.Request.String(), Title: "Send as it is"})
 	}
-	return true, s.formChatSubmit(ctx, c, added.Question)
+	return s.formChatSubmit(ctx, c, added.Question)
 }
 
 // formStillWanted says which location or photo a question still waits for.

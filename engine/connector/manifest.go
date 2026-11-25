@@ -302,6 +302,41 @@ type HostMode struct {
 	// Client is the platform app connections in this mode are linked with
 	// by OAuth, where it is not the connector's (rule 20).
 	Client string `json:"client,omitempty"`
+	// AuthorizeURL is the mode's consent page, where it is not
+	// auth.oauth2.authorize_url (Payrolla's sign-in app is its own host
+	// per deployment). While any mode names one, a mode without one is not
+	// linked by OAuth: see ModeAuthorizeURL.
+	AuthorizeURL string `json:"authorize_url,omitempty"`
+}
+
+// ModeAuthorizeURL is the consent page for connections linked in mode:
+// the mode's own, else auth.oauth2.authorize_url. ok is false for a mode
+// without one while another mode names its own: that provider's sign-in
+// page differs per deployment and this one's is not known here.
+func (m *Manifest) ModeAuthorizeURL(mode string) (string, bool) {
+	perMode := false
+	for _, h := range m.Auth.HostModes {
+		if h.AuthorizeURL != "" {
+			perMode = true
+		}
+		if h.Mode == mode && h.AuthorizeURL != "" {
+			return h.AuthorizeURL, true
+		}
+	}
+	if perMode || m.Auth.OAuth2 == nil {
+		return "", false
+	}
+	return m.Auth.OAuth2.AuthorizeURL, true
+}
+
+// SetModeAuthorizeURL points a mode's consent page at another address (a
+// deployment's own, TASKIEM_PAYROLLA_APP_URL); empty leaves it.
+func (m *Manifest) SetModeAuthorizeURL(mode, u string) {
+	for i := range m.Auth.HostModes {
+		if m.Auth.HostModes[i].Mode == mode && u != "" {
+			m.Auth.HostModes[i].AuthorizeURL = u
+		}
+	}
 }
 
 // ModeKey is where a connection's mode reaches its connector: the vault

@@ -95,6 +95,7 @@ import { StatementPage } from "./pages/Statement";
 import { StorefrontFront, StorefrontFronts } from "./pages/StorefrontFronts";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
+import { thingsOnly } from "./lib/things";
 import {
   InvoiceEdit,
   InvoiceMatch,
@@ -156,7 +157,12 @@ import { PaymentPage, PaymentsPage } from "./pages/Payments";
 import { ToolPage } from "./pages/MadeToolSheet";
 import { BatchPage, PayListPage } from "./pages/PayBatch";
 import { CollectedListPage } from "./pages/PayCollect";
-import { PayrollPage, PayrollRunPage, PayrollStaffPage } from "./pages/Payroll";
+import { PayrollPage, PayrollStaffPage } from "./pages/Payroll";
+import { PayrollRunPage } from "./pages/PayrollRun";
+import { MyPayslipPage, PayslipPage } from "./pages/Payslip";
+import { PayrollSettingsPage } from "./pages/PayrollSettings";
+import { PayrollSchedulePage, PayrollSchedulesPage } from "./pages/PayrollSchedules";
+import { MyPayPage, PayrollChangesPage, PayrollTeamPage } from "./pages/PayrollTeam";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
 import { PasskeyNudge } from "./pages/PasskeyNudge";
@@ -515,10 +521,20 @@ function SignedIn() {
       "money",
       invoiceAccess(can).see && areaOn(me.areas, "money"),
     ],
+    // Things we have, for those who may see stock but not the money
+    // (what a business buys §5.3): Money shows them only this.
+    [
+      "/money/things",
+      "Things we have",
+      "tag",
+      thingsOnly(can) && areaOn(me.areas, "money"),
+    ],
     // Paying people from the business's payments account (pages/Payments.tsx).
     ["/payments", "Pay people", "send", can("money.pay")],
     // Payroll, read from Payrolla (pages/Payroll.tsx).
-    ["/payroll", "Payroll", "billing", can("payroll.read")],
+    ["/payroll", "Payroll", "billing", can("payroll.read") || can("payroll.prepare") || can("payroll.approve")],
+    // A staff member's own salary account in Payrolla (pages/PayrollTeam.tsx).
+    ["/payroll/me", "My pay", "billing", !can("payroll.read")],
     // Linked suppliers' invoices (business links, pages/Bills.tsx).
     [
       "/bills",
@@ -954,6 +970,14 @@ function SignedIn() {
                   <Route path="/payroll" element={<PayrollPage />} />
                   <Route path="/payroll/runs/:run" element={<PayrollRunPage />} />
                   <Route path="/payroll/staff" element={<PayrollStaffPage />} />
+                  <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
+                  <Route path="/payroll/schedules" element={<PayrollSchedulesPage />} />
+                  <Route path="/payroll/schedules/:id" element={<PayrollSchedulePage />} />
+                  <Route path="/payroll/team" element={<PayrollTeamPage />} />
+                  <Route path="/payroll/account-changes" element={<PayrollChangesPage />} />
+                  <Route path="/payroll/me" element={<MyPayPage />} />
+                  <Route path="/payroll/me/payslips/:id" element={<MyPayslipPage />} />
+                  <Route path="/payroll/payslips/:id" element={<PayslipPage />} />
                   <Route path="/money/labels" element={<MoneyLabels />} />
                   <Route path="/money/things" element={<ThingsPage />} />
                   <Route path="/money/things/:id" element={<ThingPage />} />

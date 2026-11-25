@@ -15,10 +15,12 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/totp"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/engine/wdtext"
 )
 
 // Governance (spec 9.1): approval policies, delegation, step-up, and
@@ -743,6 +745,9 @@ type publishRequest struct {
 	RequestedBy uuid.UUID `json:"requested_by"`
 	RequestedAt time.Time `json:"requested_at"`
 	Status      string    `json:"status"`
+	// Changes is what publishing it changes, in plain words: from the
+	// version live in prod, else the one before it (wdtext.Changes).
+	Changes []string `json:"changes,omitempty" db:"-"`
 }
 
 func (s *Server) listPublishRequests(w http.ResponseWriter, r *http.Request) {
@@ -754,7 +759,22 @@ func (s *Server) listPublishRequests(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[publishRequest])
-		return err
+		if err != nil {
+			return err
+		}
+		reg := s.changesRegistry(r.Context())
+		for i, q := range out {
+			var def, was []byte
+			if err := tx.QueryRow(r.Context(), `SELECT v.definition, COALESCE(
+				  (SELECT p.definition FROM deployments d JOIN workflow_versions p ON p.workflow_id = d.workflow_id AND p.version = d.version
+				    WHERE d.workflow_id = v.workflow_id AND d.environment = 'prod'),
+				  (SELECT p.definition FROM workflow_versions p WHERE p.workflow_id = v.workflow_id AND p.version = v.version - 1))
+				FROM workflow_versions v WHERE v.workflow_id = $1 AND v.version = $2`, q.WorkflowID, q.Version).Scan(&def, &was); err != nil {
+				return err
+			}
+			out[i].Changes = wdtext.Changes(was, def, reg, lang.EN)
+		}
+		return nil
 	})
 	if err != nil {
 		s.fail(w, r, err)

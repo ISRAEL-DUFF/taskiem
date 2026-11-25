@@ -93,6 +93,14 @@ YouRoute? _youRouteOf(String path) {
   return null;
 }
 
+/// A pages route's id as the page's name and the filters its link set
+/// ("disks?filters={…}"); the filters are read as applinks reads them.
+({String name, Map<String, String>? filters}) pageRouteOf(String id, Map<String, String>? Function(String?) filtersOf) {
+  final uri = Uri.tryParse(id);
+  if (uri == null) return (name: id, filters: null);
+  return (name: uri.path, filters: filtersOf(uri.queryParameters['filters']));
+}
+
 /// The tabs: Chats, Today, Money, Orders.
 const tabChats = 0, tabToday = 1, tabMoney = 2, tabOrders = 3;
 
@@ -139,7 +147,7 @@ AppRoute routeOf(String path) {
   }
   // Payroll (Payrolla's runs), and one run (/payroll/runs/{run}): over
   // Money; id '' for the list. Staff in Payrolla opens the list too.
-  final payroll = RegExp(r'^/payroll(?:/runs/([^/]+)|/staff)?$').firstMatch(p);
+  final payroll = RegExp(r'^/payroll(?:/runs/([^/]+)|/staff|/settings)?$').firstMatch(p);
   if (payroll != null) {
     try {
       return (tab: tabMoney, screen: RouteScreen.payroll, id: payroll[1] == null ? '' : Uri.decodeComponent(payroll[1]!));
@@ -149,8 +157,14 @@ AppRoute routeOf(String path) {
   }
   // Pages (decision 0072): the list, and one page by its short name, over
   // Today; id '' for the list. A page's editor is the web's.
+  // A page link's filters (a Tell me message's page button, pages H5) go
+  // with its name: "disks?filters=…", read where it opens (pageRouteOf).
   final pages = RegExp(r'^/pages(?:/([a-z][a-z0-9-]{1,23}))?$').firstMatch(p);
-  if (pages != null) return (tab: tabToday, screen: RouteScreen.pages, id: pages[1] ?? '');
+  if (pages != null) {
+    final name = pages[1] ?? '';
+    final f = uri.queryParameters['filters'];
+    return (tab: tabToday, screen: RouteScreen.pages, id: name.isNotEmpty && f != null ? Uri(path: name, queryParameters: {'filters': f}).toString() : name);
+  }
   final one = RegExp(r'^/(invoices|bills|purchases|trade-orders|storefront/orders)/([^/]+)$').firstMatch(p);
   if (one != null) {
     final kind = one[1]!;

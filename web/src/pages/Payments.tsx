@@ -4,7 +4,7 @@
 // payment's page, the link the chat sends to confirm with a passkey.
 
 import { useEffect, useState, type MouseEvent } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, Item, Items, Modal, PageHeader, Row, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
@@ -24,7 +24,7 @@ import {
   type PayLimit,
   type Payment,
 } from "../lib/payments";
-import { PayCheck, PaySheet, payWords, usePayConfirm } from "./PaySheet";
+import { PayCheck, PaySheet, payWords, ReceiptActions, usePayConfirm } from "./PaySheet";
 import { BatchesCard } from "./PayBatch";
 
 function StatusPill({ status }: { status: string }) {
@@ -248,6 +248,8 @@ export function PaymentPage() {
   };
   const pay = usePayConfirm(x, done);
   const cancel = useAction();
+  const again = useAction();
+  const navigate = useNavigate();
   const st = x ? paymentStatus(x.status) : undefined;
   return (
     <>
@@ -337,6 +339,27 @@ export function PaymentPage() {
                 <Link to="/approvals">Open Approvals</Link>
               </p>
             )}
+            {/* Paid: its receipt to send them; failed or sent back: Try again. */}
+            {x.status === "paid" && <ReceiptActions x={x} />}
+            {(x.status === "failed" || x.status === "reversed") && (
+              <div className="toolbar">
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={again.busy}
+                  onClick={() =>
+                    void again.run(async () => {
+                      const r = await post<{ payment: Payment }>(`/v1/payments/${encodeURIComponent(x.id)}/again`);
+                      navigate(`/payments/${encodeURIComponent(r.payment.id)}`);
+                    }, false)
+                  }
+                  data-testid="payment-again"
+                >
+                  {again.busy ? "Checking with the bank…" : "Try again"}
+                </button>
+              </div>
+            )}
+            <ErrorBox error={again.error} />
           </section>
         </>
       )}

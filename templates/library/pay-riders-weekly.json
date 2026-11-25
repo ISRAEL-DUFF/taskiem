@@ -195,7 +195,8 @@
             "riders": "=size(steps.list.output.to_pay)",
             "total_naira": "=double(sum(steps.list.output.to_pay.map(p, p.amount_kobo))) / 100.0",
             "pay": "=steps.list.output.lines.join('; ')",
-            "not_paid": "=steps.prepare.output.not_paid.join(', ')"
+            "not_paid": "=steps.prepare.output.not_paid.join(', ')",
+            "accounts": "=steps.list.output.to_pay.map(p, {'account_number': p.account_number, 'bank_code': p.bank_code})"
           }
         }
       },

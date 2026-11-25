@@ -43,7 +43,7 @@ func TestCustomerAnswerPublicOnly(t *testing.T) {
 
 	for _, ans := range []*wd.Answer{card, list, publicList} {
 		var a madeAnswer
-		drawAnswer(&a, ans, publicOutputs(d, outputs()))
+		drawAnswer(&a, ans, wd.PublicOutputs(d, outputs()))
 		raw, _ := json.Marshal(a)
 		if strings.Contains(string(raw), "SECRET") {
 			t.Errorf("%s for a customer: %s", ans.Type, raw)
@@ -58,11 +58,11 @@ func TestCustomerAnswerPublicOnly(t *testing.T) {
 		}
 	}
 	var a madeAnswer
-	drawAnswer(&a, card, publicOutputs(d, outputs()))
+	drawAnswer(&a, card, wd.PublicOutputs(d, outputs()))
 	if a.Title != "On its way" || a.Buttons[0].Inputs["state"] != "On its way" {
 		t.Errorf("public outputs left out: %+v", a)
 	}
-	drawAnswer(&a, publicList, publicOutputs(d, outputs()))
+	drawAnswer(&a, publicList, wd.PublicOutputs(d, outputs()))
 	if len(a.Rows) != 1 || a.Rows[0].Title != "Jollof" {
 		t.Errorf("public rows: %+v", a.Rows)
 	}
@@ -78,21 +78,5 @@ func TestCustomerAnswerLongList(t *testing.T) {
 	w := customerAnswerWords(lang.EN, a)
 	if !strings.HasSuffix(w, "…and 4 more.") || strings.Contains(w, "app") || strings.Count(w, "9:00") != 10 {
 		t.Errorf("words: %q", w)
-	}
-}
-
-// A public menu's label gives a command as migration 00569 does.
-func TestMenuCommand(t *testing.T) {
-	taken := map[string]bool{"pay-a-supplier": true}
-	for label, want := range map[string]string{
-		"Pay a supplier":           "pay-a-supplier-2",
-		"24/7 help":                "menu-24-7-help",
-		"Ọ̀rọ̀":                    "item",
-		"Check where my parcel is": "check-where-my-parcel",
-		"  Book!  ":                "book",
-	} {
-		if got := menuCommand(label, func(c string) bool { return taken[c] }); got != want {
-			t.Errorf("%q: %q, want %q", label, got, want)
-		}
 	}
 }

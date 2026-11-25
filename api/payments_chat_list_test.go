@@ -158,7 +158,7 @@ func TestPayListFromWhatsApp(t *testing.T) {
 		return r
 	}
 	sentBefore := len(w.graph.Sent(on))
-	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(rows[0]), uuid.MustParse(rows[0]), "paid", "CHIDI OKEKE", "po1", "", nil); err != nil {
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(rows[0]), uuid.MustParse(rows[0]), "paid", "CHIDI OKEKE", "po1", "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	w.tick(t)
@@ -166,7 +166,7 @@ func TestPayListFromWhatsApp(t *testing.T) {
 		t.Fatalf("told before the last row ended: %+v", got)
 	}
 	for range 2 { // the same end twice tells once
-		if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(rows[1]), uuid.MustParse(rows[1]), "failed", "", "", "The bank refused the account.", nil); err != nil {
+		if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(rows[1]), uuid.MustParse(rows[1]), "failed", "", "", "The bank refused the account.", nil, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -187,16 +187,17 @@ func TestPayListFromWhatsApp(t *testing.T) {
 	}
 	owner.must(202, "POST", "/v1/payments/"+one+"/confirm", map[string]any{"passkey": stepUp(t, owner, key, "money.pay", "payment:"+one), "again": true})
 	sentBefore = len(w.graph.Sent(on))
-	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(one), uuid.MustParse(one), "paid", "BAYO RICE MILLS", "po2", "", nil); err != nil {
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(one), uuid.MustParse(one), "paid", "BAYO RICE MILLS", "po2", "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	w.tick(t)
 	if got := w.graph.Sent(on)[sentBefore:]; len(got) != 1 || !strings.Contains(got[0].Text, "Paid BAYO RICE MILLS ₦2,500. Received by the bank.") {
 		t.Fatalf("one's result: %+v", got)
 	}
-	// A batch whose last open row is let go, not ended by the bank: the
-	// rows that went are told when the rest is let go. @bayo 2,500 again
-	// is held at confirm (paid the same in the last day) and stays prepared.
+	// A batch whose row is refused at confirming (@bayo 2,500 again, paid
+	// the same in the last day, not said to pay again) still ends: the
+	// row ends refused, with why, and the batch is told once its other
+	// row has ended (it used to stay prepared, and was never told).
 	if said := w.say(t, on, "pay these for a delivery\n@bayo 2.5k\nChidi 0987654321 GTBank 3k"); !strings.Contains(said, "2 people") {
 		t.Fatalf("the second list: %q", said)
 	}
@@ -218,22 +219,39 @@ func TestPayListFromWhatsApp(t *testing.T) {
 	}
 	list2.Close()
 	owner.must(202, "POST", "/v1/payment-batches/"+b2+"/confirm", map[string]any{"payments": rows2, "passkey": stepUp(t, owner, key, "money.pay.batch", "batch:"+b2)})
-	var went, held string
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT (SELECT id FROM payments WHERE batch_id = $1 AND status = 'sending'), (SELECT id FROM payments WHERE batch_id = $1 AND status = 'prepared')`, b2).Scan(&went, &held); err != nil {
-		t.Fatalf("one sent and one held: %v", err)
+	var went, held, heldWhy, b2Status string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT (SELECT id FROM payments WHERE batch_id = $1 AND status = 'sending'),
+		(SELECT id FROM payments WHERE batch_id = $1 AND status = 'rejected'), (SELECT reason FROM payments WHERE batch_id = $1 AND status = 'rejected'),
+		(SELECT status FROM payment_batches WHERE id = $1)`, b2).Scan(&went, &held, &heldWhy, &b2Status); err != nil {
+		t.Fatalf("one sent and one refused: %v", err)
+	}
+	if b2Status != "sent" || !strings.Contains(heldWhy, "Pay again?") {
+		t.Fatalf("the batch %q, the refused row's why %q", b2Status, heldWhy)
 	}
 	sentBefore = len(w.graph.Sent(on))
-	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(went), uuid.MustParse(went), "paid", "CHIDI OKEKE", "po3", "", nil); err != nil {
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(went), uuid.MustParse(went), "paid", "CHIDI OKEKE", "po3", "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	w.tick(t)
-	if got := w.graph.Sent(on)[sentBefore:]; len(got) != 0 {
-		t.Fatalf("told while a row waits: %+v", got)
+	if got := w.graph.Sent(on)[sentBefore:]; len(got) != 1 || !strings.Contains(got[0].Text, "Paid 1 of 2 people, ₦3,000.") || !strings.Contains(got[0].Text, "Pay again?") {
+		t.Fatalf("told once its other row ended: %+v", got)
 	}
-	owner.must(200, "POST", "/v1/payment-batches/"+b2+"/cancel", nil)
-	w.tick(t)
-	if got := w.graph.Sent(on)[sentBefore:]; len(got) != 1 || !strings.Contains(got[0].Text, "Paid 1 of 2 people, ₦3,000.") || !strings.Contains(got[0].Text, "let go, not sent") {
-		t.Fatalf("told once the rest was let go: %+v", got)
+	// Ended: nothing is left to cancel.
+	owner.must(409, "POST", "/v1/payment-batches/"+b2+"/cancel", nil)
+
+	// A batch whose only open row is refused at confirming, after the
+	// others ended: it ends, and is told, at the confirm itself.
+	if said := w.say(t, on, "pay these for a delivery\n@bayo 2.5k"); !strings.Contains(said, "1 person") && !strings.Contains(said, "₦2,500") {
+		t.Fatalf("the third list: %q", said)
+	}
+	var b3, r3 string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT b.id, p.id FROM payment_batches b JOIN payments p ON p.batch_id = b.id WHERE b.tenant_id = $1 ORDER BY b.created_at DESC LIMIT 1`, biz).Scan(&b3, &r3); err != nil {
+		t.Fatal(err)
+	}
+	owner.must(202, "POST", "/v1/payment-batches/"+b3+"/confirm", map[string]any{"payments": []string{r3}, "passkey": stepUp(t, owner, key, "money.pay.batch", "batch:"+b3)})
+	var b3Status string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status FROM payment_batches WHERE id = $1`, b3).Scan(&b3Status); err != nil || b3Status != "sent" {
+		t.Fatalf("a batch of one refused row: %q %v", b3Status, err)
 	}
 
 	// A payment from the app is not told in the chat.

@@ -9,7 +9,7 @@ Members with `audit.read` (owners, admins, auditors) get six reports over a peri
 | `approvals` | Every approval decision: approver, whom they covered for under a delegation, decision, level, step-up, channel, workflow, run, step, policy, amount and band | Count and total by approver, band and decision |
 | `effects` | Writes parked for an operator, results settled by reconciliation with the provider, and operator resolutions with their notes | Counts by outcome |
 | `pii` | Every reveal of personal data in run history, and every erasure: who, when, from where | Counts by person |
-| `changes` | Every workflow version: who wrote and published it, its Git commit or pull request, its digest, and what changed from the version before | — |
+| `changes` | Every workflow version: who wrote and published it, its Git commit or pull request, its digest, and what changed from the version before, in plain words (a tool's phrases, who it is for, its answer; who may start it; the steps), as the version history and Approvals say it | — |
 | `chain` | The signed anchors made in the period, with their signatures checked | The chain verified now, in the database: intact or the first broken entry |
 | `secret-use` | Reads of each secret and connection per day: count, last read, purposes ([secret use](#secret-use)) | Reads by kind; secrets and connections not used in the period, with their last use; the hourly digests checked against the reads |
 

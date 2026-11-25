@@ -1,0 +1,36 @@
+{
+  "id": "waiting-list",
+  "title": "Waiting list",
+  "about": "Who is waiting, first come first served, with Seen and Left on each, and a button to add someone.",
+  "icon": "members",
+  "tables": [
+    {"name": "waiting_list", "title": "Waiting list", "columns": [
+      {"name": "name", "title": "Name", "type": "text", "required": true},
+      {"name": "phone", "title": "Phone", "type": "phone"},
+      {"name": "party", "title": "How many", "type": "integer"},
+      {"name": "note", "title": "Note", "type": "text"},
+      {"name": "status", "title": "Status", "type": "text"}]}
+  ],
+  "tools": [
+    {"command": "add-waiting", "name": "Add to the list", "about": "Adds someone to the waiting list", "kind": "add", "table": "waiting_list",
+     "asks": ["name", "phone", "party", "note"], "sets": {"status": "waiting"}, "icon": "people"},
+    {"command": "waiting-mark", "name": "Mark someone waiting", "about": "Says someone on the list was seen, or left", "kind": "change", "table": "waiting_list",
+     "asks": ["status"], "icon": "check"}
+  ],
+  "page": {"page": "page/v1", "name": "waiting-list", "title": "Waiting list", "icon": "members", "about": "Who is waiting, first come first served",
+    "blocks": [
+      {"id": "waiting", "type": "figure", "label": "Waiting now", "value": "count", "tone": "warn", "lead": true,
+       "source": {"table": "waiting_list", "filters": [{"column": "status", "op": "eq", "value": "waiting"}]}},
+      {"id": "seen", "type": "figure", "label": "Seen", "value": "count", "tone": "good",
+       "source": {"table": "waiting_list", "filters": [{"column": "status", "op": "eq", "value": "seen"}]}},
+      {"id": "add", "type": "buttons", "actions": [{"label": "Add someone", "tool": "add-waiting"}]},
+      {"id": "list", "type": "list", "title": "In the queue",
+       "source": {"table": "waiting_list", "filters": [{"column": "status", "op": "eq", "value": "waiting"}], "order": [{"column": "created_at"}]},
+       "item": {"title": "=row.name", "sub": "=row.note"},
+       "detail": {"title": "=row.name", "lines": [{"label": "Phone", "value": "=row.phone"}, {"label": "How many", "value": "=row.party"}, {"label": "Since", "value": "=row.created_at"}, {"label": "Note", "value": "=row.note"}]},
+       "actions": [
+         {"label": "Seen", "tool": "waiting-mark", "inputs": {"ref": "=row.id", "status": "seen"}},
+         {"label": "Left", "tool": "waiting-mark", "inputs": {"ref": "=row.id", "status": "left"}}],
+       "empty": "Nobody is waiting"}
+    ]}
+}

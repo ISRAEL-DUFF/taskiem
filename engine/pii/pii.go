@@ -55,6 +55,17 @@ type Path struct {
 	// key of its own.
 	Owner         []string
 	OwnerCategory string
+	// By is the owner itself, when it is not in the value: a location
+	// is sealed under the person who answered it (device fields §5), so
+	// erasing them erases it and every copy the run makes of it.
+	By *Owner
+}
+
+// Owner is a person a value is sealed under: one of their own personal
+// values ("phone" and the number, "member" and the member's id).
+type Owner struct {
+	Category string
+	Value    any
 }
 
 // owner is a free text's owner: a personal value and its category.
@@ -136,7 +147,21 @@ func SchemaPaths(schema any, defs map[string]any) []Path {
 
 // Taint records plaintext values known to be personal data in a run, so
 // copies of them elsewhere (an approval subject, a transform) are sealed too.
-type Taint map[string]string // canonical scalar -> category
+type Taint map[string]Mark // canonical scalar -> its category, and owner
+
+// Mark is what a run knows of a personal value: its category and, for a
+// value sealed under its owner rather than under its own subject (a
+// location under the person who answered it, device fields §5), that
+// owner's subject. A copy of the value is sealed under the same subject,
+// so erasing the owner erases every copy.
+type Mark struct {
+	Category string
+	Subject  string
+}
+
+// Owned is the envelope key that says a value was sealed under its
+// owner's subject (Mark.Subject), not its own.
+const Owned = "owned"
 
 func scalarKey(v any) (string, bool) {
 	switch t := v.(type) {
@@ -153,12 +178,26 @@ func scalarKey(v any) (string, bool) {
 	return "", false
 }
 
-// Add records a personal value.
+// Add records a personal value. A value already known under an owner
+// keeps that owner.
 func (t Taint) Add(v any, category string) {
 	if k, ok := scalarKey(v); ok {
-		t[k] = category
+		if old, ok := t[k]; ok && old.Subject != "" {
+			return
+		}
+		t[k] = Mark{Category: category}
 	}
 }
+
+// AddUnder records a personal value sealed under its owner's subject.
+func (t Taint) AddUnder(v any, category, subject string) {
+	if k, ok := scalarKey(v); ok {
+		t[k] = Mark{Category: category, Subject: subject}
+	}
+}
+
+// Category is the category of a known value's key, "" when unknown.
+func (t Taint) Category(key string) string { return t[key].Category }
 
 // MinRedact is the shortest personal value RedactText looks for: shorter
 // strings ("Ada", a two-digit number) would mask unrelated text.
@@ -176,12 +215,12 @@ func (t Taint) RedactText(s string) string {
 	}
 	type hit struct{ val, cat string }
 	var hits []hit
-	for k, cat := range t {
+	for k, mk := range t {
 		v := k[2:] // "s:" or "n:" and the canonical value
 		if len(v) < MinRedact || !strings.Contains(s, v) {
 			continue
 		}
-		hits = append(hits, hit{v, cat})
+		hits = append(hits, hit{v, mk.Category})
 	}
 	if len(hits) == 0 {
 		return s
@@ -212,10 +251,10 @@ func (t Taint) Within(s string) (string, bool) {
 		return "", false
 	}
 	best, cat := "", ""
-	for k, c := range t {
+	for k, mk := range t {
 		v := k[2:]
 		if len(v) >= MinRedact && len(v) > len(best) && strings.Contains(s, v) {
-			best, cat = v, c
+			best, cat = v, mk.Category
 		}
 	}
 	if best == "" {
@@ -243,6 +282,10 @@ func Seal(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, pat
 	// sealed by an earlier path).
 	owners := make([]*owner, len(paths))
 	for i, p := range paths {
+		if p.By != nil && p.By.Category != "" && p.By.Value != nil {
+			owners[i] = &owner{cat: p.By.Category, value: p.By.Value}
+			continue
+		}
 		if len(p.Owner) == 0 {
 			continue
 		}
@@ -498,8 +541,11 @@ func sealTainted(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v a
 		return t, nil
 	}
 	if k, ok := scalarKey(v); ok {
-		if cat, hit := taint[k]; hit {
-			return sealScalar(ctx, c, tx, tenant, v, cat, nil, taint)
+		if mk, hit := taint[k]; hit {
+			if mk.Subject != "" {
+				return sealUnderOwner(ctx, c, tx, tenant, v, mk.Category, mk.Subject, taint)
+			}
+			return sealScalar(ctx, c, tx, tenant, v, mk.Category, nil, taint)
 		}
 	}
 	if str, ok := v.(string); ok {
@@ -517,6 +563,19 @@ func sealTainted(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v a
 // naming no one, without an owner, under the tenant's one subject for
 // "other" (Unattributed).
 func sealScalar(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, cat string, own *owner, taint Taint) (any, error) {
+	if own != nil && cat != "other" {
+		// A value that is its owner's (a location, the person who
+		// answered it): sealed under the owner's subject alone.
+		oenv, err := c.SealTx(ctx, tx, tenant, own.cat, own.value)
+		if errors.Is(err, ErrErased) {
+			return Erased, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		subject, _ := oenv["subject"].(string)
+		return sealUnderOwner(ctx, c, tx, tenant, v, cat, subject, taint)
+	}
 	if str, ok := v.(string); ok && cat == "other" {
 		if ss, ok := c.(SubjectSealer); ok && own != nil {
 			return sealOwned(ctx, c, ss, tx, tenant, str, own, taint)
@@ -546,6 +605,29 @@ func sealScalar(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v an
 	}
 	self, _ := env["subject"].(string)
 	return nestUnder(ctx, c, tx, tenant, str, env, self, taint)
+}
+
+// sealUnderOwner seals a value under its owner's subject (marked Owned,
+// so whoever opens it seals its copies there too), and remembers it with
+// that owner.
+func sealUnderOwner(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, cat, subject string, taint Taint) (any, error) {
+	ss, ok := c.(SubjectSealer)
+	if !ok {
+		return nil, errors.New("pii: this cipher cannot seal under an owner")
+	}
+	env, err := ss.SealUnderTx(ctx, tx, tenant, subject, cat, v)
+	if errors.Is(err, ErrErased) {
+		return Erased, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	env[Owned] = true
+	taint.AddUnder(v, cat, subject)
+	if str, ok := v.(string); ok {
+		return nestUnder(ctx, c, tx, tenant, str, env, subject, taint)
+	}
+	return env, nil
 }
 
 // sealOwned seals free text under its owner's subject (made if new: the
@@ -624,12 +706,13 @@ func nestUnder(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, s str
 		return out, nil
 	}
 	type hit struct {
-		value any
-		text  string
-		cat   string
+		value   any
+		text    string
+		cat     string
+		subject string
 	}
 	var hits []hit
-	for k, cat := range taint {
+	for k, mk := range taint {
 		text := k[2:]
 		if len(text) < MinRedact || !strings.Contains(s, text) {
 			continue
@@ -642,7 +725,7 @@ func nestUnder(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, s str
 			}
 			value = f
 		}
-		hits = append(hits, hit{value, text, cat})
+		hits = append(hits, hit{value, text, mk.Category, mk.Subject})
 	}
 	if len(hits) == 0 {
 		return out, nil
@@ -655,22 +738,31 @@ func nestUnder(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, s str
 	})
 	seen := map[string]bool{skip: true}
 	for _, h := range hits {
-		subject, err := ss.SubjectForTx(ctx, tx, tenant, h.cat, h.value)
-		if err != nil {
-			return nil, err
+		// A value known under its owner (a location) is the owner's.
+		subject := h.subject
+		if subject == "" {
+			var err error
+			if subject, err = ss.SubjectForTx(ctx, tx, tenant, h.cat, h.value); err != nil {
+				return nil, err
+			}
 		}
 		if seen[subject] {
 			continue
 		}
 		seen[subject] = true
-		// Sealing the value itself makes sure its subject has a key; one
-		// already erased leaves nothing of this string to keep.
-		if _, err := c.SealTx(ctx, tx, tenant, h.cat, h.value); errors.Is(err, ErrErased) {
-			return Erased, nil
-		} else if err != nil {
-			return nil, err
+		if h.subject == "" {
+			// Sealing the value itself makes sure its subject has a key;
+			// one already erased leaves nothing of this string to keep.
+			if _, err := c.SealTx(ctx, tx, tenant, h.cat, h.value); errors.Is(err, ErrErased) {
+				return Erased, nil
+			} else if err != nil {
+				return nil, err
+			}
 		}
-		if out, err = ss.SealUnderTx(ctx, tx, tenant, subject, h.cat, out); err != nil {
+		var err error
+		if out, err = ss.SealUnderTx(ctx, tx, tenant, subject, h.cat, out); errors.Is(err, ErrErased) {
+			return Erased, nil // its owner was erased: nothing of it is kept
+		} else if err != nil {
 			return nil, err
 		}
 	}
@@ -703,7 +795,11 @@ func Open(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, tai
 				// A place sealed whole: its text values are personal.
 				followStrings(pt, cat, taint)
 			default:
-				if nf, _ := t[NoFollow].(bool); !nf {
+				if own, _ := t[Owned].(bool); own {
+					// Sealed under its owner: so are its copies.
+					subject, _ := t["subject"].(string)
+					taint.AddUnder(pt, cat, subject)
+				} else if nf, _ := t[NoFollow].(bool); !nf {
 					taint.Add(pt, cat)
 				}
 			}

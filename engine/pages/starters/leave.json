@@ -1,0 +1,38 @@
+{
+  "id": "leave",
+  "title": "Leave",
+  "about": "Requests for time off, grouped by what was decided, with Approve and Decline on each, and a button to ask.",
+  "icon": "clock",
+  "tables": [
+    {"name": "leave_requests", "title": "Leave requests", "columns": [
+      {"name": "who", "title": "Who", "type": "text", "required": true},
+      {"name": "email", "title": "Email", "type": "email"},
+      {"name": "starts", "title": "From", "type": "date", "required": true},
+      {"name": "ends", "title": "To", "type": "date", "required": true},
+      {"name": "reason", "title": "Why", "type": "text"},
+      {"name": "status", "title": "Status", "type": "text"}]}
+  ],
+  "tools": [
+    {"command": "ask-leave", "name": "Ask for leave", "about": "Asks for days off, waiting for a decision", "kind": "add", "table": "leave_requests",
+     "asks": ["who", "email", "starts", "ends", "reason"], "sets": {"status": "pending"}, "icon": "calendar"},
+    {"command": "decide-leave", "name": "Decide on leave", "about": "Approves or declines a request for leave", "kind": "change", "table": "leave_requests",
+     "asks": ["status"], "icon": "check", "roles": ["admin"]}
+  ],
+  "page": {"page": "page/v1", "name": "leave-requests", "title": "Leave", "icon": "clock", "about": "Who asked for time off, and what was decided",
+    "filters": [{"id": "mine", "type": "mine", "column": "email", "label": "Mine"}],
+    "blocks": [
+      {"id": "waiting", "type": "figure", "label": "Waiting for a decision", "value": "count", "tone": "warn", "lead": true, "alert": true,
+       "source": {"table": "leave_requests", "filters": [{"column": "status", "op": "eq", "value": "pending"}]}},
+      {"id": "approved", "type": "figure", "label": "Approved", "value": "count", "tone": "good",
+       "source": {"table": "leave_requests", "filters": [{"column": "status", "op": "eq", "value": "approved"}]}},
+      {"id": "ask", "type": "buttons", "actions": [{"label": "Ask for leave", "tool": "ask-leave"}]},
+      {"id": "list", "type": "list", "title": "Requests", "source": {"table": "leave_requests", "order": [{"column": "starts"}], "uses": ["mine"]},
+       "item": {"title": "=row.who", "sub": "=row.starts + ' to ' + row.ends", "state": {"text": "=row.status", "tones": {"pending": "warn", "approved": "good", "declined": "bad"}}},
+       "group": {"column": "status", "order": ["pending", "approved", "declined"]},
+       "detail": {"title": "=row.who", "lines": [{"label": "From", "value": "=row.starts"}, {"label": "To", "value": "=row.ends"}, {"label": "Why", "value": "=row.reason"}]},
+       "actions": [
+         {"label": "Approve", "tool": "decide-leave", "inputs": {"ref": "=row.id", "status": "approved"}, "when": "=row.status == 'pending'"},
+         {"label": "Decline", "tool": "decide-leave", "inputs": {"ref": "=row.id", "status": "declined"}, "when": "=row.status == 'pending'"}],
+       "empty": "No requests yet"}
+    ]}
+}

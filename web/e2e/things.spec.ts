@@ -125,13 +125,21 @@ function thingsServer(page: Page, start: Thing[], money = true) {
         t.status_at = now;
       }
       if (b.sale_price_kobo) t.sale_entry_id = "e1";
+      if (b.supplier_id) {
+        t.supplier_id = b.supplier_id as string;
+        t.supplier = b.supplier_id === "s2" ? "Lister Power" : "Singer Ltd";
+      }
+      if (b.clear_supplier) {
+        delete t.supplier_id;
+        delete t.supplier;
+      }
     }
     return route.fulfill(json({ thing: t }));
   });
   return { things, sent, asked };
 }
 
-function labels(page: Page) {
+function labels(page: Page, suggest: Record<string, string> = {}) {
   const made: string[] = [];
   const list = [{ id: "lab-m", name: "Machines", uses: 4, created_by: "user:ada", created_at: now }];
   void page.route("**/v1/money/labels**", async (route) => {
@@ -140,7 +148,11 @@ function labels(page: Page) {
       made.push(name);
       return route.fulfill(json({ id: "lab-f", name, uses: 0, created_by: "user:ada", created_at: now }, 201));
     }
-    return route.fulfill(json({ labels: list, suggestions: [] }));
+    // A suggestion by the item's name, as the server makes one (not yet a
+    // label: no label_id).
+    const item = new URL(route.request().url()).searchParams.get("item") ?? "";
+    const s = suggest[item.toLowerCase()];
+    return route.fulfill(json({ labels: list, suggestions: s ? [{ name: s }] : [] }));
   });
   return made;
 }
@@ -502,4 +514,121 @@ test("the totals of the last filter are not shown while the next loads", async (
   letGo();
   await expect(hero).toContainText("3 things");
   await expect(hero).toContainText("₦615,000");
+});
+
+// H2 g-things-menu: someone who may see stock (table.read) but not
+// invoices opens Things we have from the menu, and Money is only that.
+test("a staff member with table.read and no invoice rights opens Things we have from the menu", async ({ page }) => {
+  await signUp(page);
+  await without(page, "invoice.read", "invoice.manage");
+  labels(page);
+  thingsServer(page, [generator, overlock]);
+  await page.goto("/home");
+  await page.getByRole("button", { name: "Open menu" }).click();
+  const nav = page.getByRole("navigation", { name: "Main" });
+  await expect(nav.getByRole("link", { name: "Money", exact: true })).toHaveCount(0);
+  await nav.getByRole("link", { name: "Things we have" }).click();
+  await expect(page).toHaveURL(/\/money\/things$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Things we have" })).toBeVisible();
+  await expect(page.getByTestId("thing-row")).toHaveCount(2);
+  // Money's tabs are Things we have alone.
+  const tabs = page.getByRole("navigation", { name: "Money" }).getByRole("link");
+  await expect(tabs).toHaveCount(1);
+  await expect(tabs.first()).toHaveText("Things we have");
+  await axeAt(page, "Things we have without invoice rights");
+  // Money itself leads there.
+  await page.goto("/money");
+  await expect(page).toHaveURL(/\/money\/things$/);
+});
+
+// H2 g-thing-extra: search on Things we have.
+test("Things we have searched by name, supplier and serial", async ({ page }) => {
+  await signUp(page);
+  labels(page);
+  thingsServer(page, [generator, overlock, fan]);
+  await page.goto("/money/things");
+  const search = page.getByTestId("things-search");
+  await search.fill("singer");
+  await expect(page.getByTestId("thing-row")).toHaveCount(2);
+  await search.fill("G-1");
+  await expect(page.getByTestId("thing-row")).toHaveCount(1);
+  await expect(page.getByTestId("thing-row")).toContainText("Generator");
+  await expect(page).toHaveURL(/q=G-1/);
+  // The hero is still what the business has.
+  await expect(page.getByTestId("things-hero")).toContainText("3 things");
+  await axeAt(page, "Things we have searched");
+  await search.fill("piano");
+  await expect(page.getByTestId("thing-row")).toHaveCount(0);
+  await expect(page.getByText("Nothing on Things we have matches “piano”.")).toBeVisible();
+});
+
+// H2 g-thing-extra: a row's supplier changed, and taken off.
+test("a row's supplier changed and taken off", async ({ page }) => {
+  await signUp(page);
+  labels(page);
+  const { sent } = thingsServer(page, [generator]);
+  await page.route("**/v1/stock/suppliers", (route) =>
+    route.fulfill(
+      json({
+        suppliers: [
+          { id: "s1", name: "Singer Ltd", phone: "", reached: "sms", owed_kobo: 0, open_orders: 0 },
+          { id: "s2", name: "Lister Power", phone: "", reached: "sms", owed_kobo: 0, open_orders: 0 },
+        ],
+        settings: {},
+      }),
+    ),
+  );
+  await page.goto("/money/things/t1");
+  await page.getByRole("button", { name: "Change the details" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("From whom")).toHaveValue("s1");
+  await dialog.getByLabel("From whom").selectOption("s2");
+  await axeAt(page, "a row's details with its supplier");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("thing-facts")).toContainText("Lister Power");
+  await page.getByRole("button", { name: "Change the details" }).click();
+  await dialog.getByLabel("From whom").selectOption("");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("thing-facts")).toContainText("Not said");
+  expect(sent.map((s) => s.body)).toEqual([{ supplier_id: "s2" }, { clear_supplier: true }]);
+});
+
+// H2 g-thing-suggest: Add something we have pre-selects the label
+// suggested by the name, made when the row is added.
+test("Add something we have pre-selects a label suggested by its name", async ({ page }) => {
+  await signUp(page);
+  const made = labels(page, { "office desk": "Furniture" });
+  const { sent } = thingsServer(page, []);
+  await page.route("**/v1/stock/suppliers", (route) => route.fulfill(json({ suppliers: [], settings: {} })));
+  await page.goto("/money/things");
+  await page.getByRole("button", { name: "Add something we have" }).click();
+  const form = page.getByTestId("add-thing");
+  await form.getByLabel("What is it?").fill("Office desk");
+  await expect(form.getByLabel("Label", { exact: true })).toHaveValue("Furniture");
+  await expect(form.getByRole("button", { name: "Furniture" })).toHaveAttribute("aria-pressed", "true");
+  await axeAt(page, "Add something we have with a suggested label");
+  await form.getByRole("button", { name: "Add it" }).click();
+  await expect(form).toHaveCount(0);
+  expect(made).toEqual(["Furniture"]);
+  expect(sent[0]?.body).toMatchObject({ name: "Office desk", label_id: "lab-f" });
+});
+
+// H2 g-thing-extra: Things we have reached from the Stock page.
+test("the Stock page leads to Things we have", async ({ page }) => {
+  await signUp(page);
+  labels(page);
+  thingsServer(page, [generator, overlock]);
+  // Stock kept, with nothing counted yet (no Xenibase here).
+  await page.route("**/v1/stock", (route) => route.fulfill(json({ keeps_stock: true, catalogue: "products", items: [] })));
+  await page.route("**/v1/stock/stock-items?**", (route) => route.fulfill(json({ keeps_stock: true, value_kobo: 0, low: 0, items: [] })));
+  await page.route("**/v1/stock/movements?**", (route) => route.fulfill(json({ movements: [] })));
+  await page.goto("/storefront/stock");
+  const card = page.getByTestId("stock-things");
+  await expect(card).toContainText("2 things you keep track of, one row each, that cost ₦590,000.");
+  await axeAt(page, "the Stock page with Things we have");
+  await card.getByRole("link", { name: "See Things we have" }).click();
+  await expect(page).toHaveURL(/\/money\/things$/);
+  await expect(page.getByTestId("thing-row")).toHaveCount(2);
 });

@@ -1,0 +1,221 @@
+<!--page {"title": "For fintechs and partners · Taskiem", "description": "Put Taskiem's workflows inside your product: each of your customers kept apart, the builder embedded or driven by API, under your brand, on your own keys, in our cloud or yours.", "path": "/partners"}-->
+<style>
+/* your product, with Taskiem inside */
+.brw{width:100%;max-width:500px;border-radius:20px;background:#fff;box-shadow:0 40px 80px -40px rgba(0,0,0,.6);overflow:hidden;color:#13261f;font-size:13px}
+.brw-top{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#eef1ec}
+.brw-top i{width:10px;height:10px;border-radius:50%;background:#d9e2d9}
+.brw-top span{margin-left:8px;flex:1;padding:5px 10px;border-radius:8px;background:#fff;font-family:var(--f-mono);font-size:11.5px;color:#5b6b64}
+.brw-body{display:grid;grid-template-columns:110px 1fr;min-height:280px}
+.brw-side{padding:14px 12px;background:var(--brand,#3b2f8f);color:#fff;display:flex;flex-direction:column;gap:8px;transition:background .6s}
+.brw-side b{font-size:14px;margin-bottom:6px}
+.brw-side span{font-size:12px;opacity:.75;padding:6px 8px;border-radius:8px}
+.brw-side span.on{opacity:1;background:rgba(255,255,255,.16)}
+.brw-main{padding:14px;background:#f6f7f4;display:flex;flex-direction:column;gap:10px}
+.brw-main .t{display:flex;justify-content:space-between;align-items:center}
+.brw-main .t b{font-size:14px}
+.brw-main .t em{font-style:normal;font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:999px;background:var(--brand,#3b2f8f);color:#fff;transition:background .6s}
+.mflow{display:flex;flex-direction:column;gap:12px;padding:14px;border-radius:14px;background:#fff;border:1px solid #e3e9e3;background-image:radial-gradient(#e3e9e3 1px,transparent 1.2px);background-size:16px 16px}
+.mnode{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:#fff;border:1px solid #d9e2d9;font-weight:700;font-size:12px;box-shadow:0 4px 10px -8px rgba(0,0,0,.4)}
+.mnode i{width:22px;height:22px;border-radius:7px;background:var(--brand,#3b2f8f);opacity:.15;flex:none;transition:background .6s}
+.mnode.trig{background:var(--brand,#3b2f8f);color:#fff;border-color:transparent;transition:background .6s}
+.mnode.trig i{background:#fff;opacity:.3}
+.brw-note{font-size:11px;color:#5b6b64;text-align:right}
+/* each customer of yours, kept apart */
+.tenants{display:grid;justify-items:center;gap:18px}
+.tp{padding:12px 18px;border-radius:14px;background:var(--lime);color:var(--pine);font-weight:800}
+.tl3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%}
+.tn{position:relative;display:flex;flex-direction:column;gap:4px;padding:14px 12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:#fff;font-size:13px}
+.tn b{font-size:14px}
+.tn span{font-size:11.5px;color:rgba(255,255,255,.65)}
+.tn::before{content:"";position:absolute;left:50%;top:-18px;height:16px;border-left:2px dashed rgba(200,241,105,.45)}
+.tn .lock{position:absolute;top:10px;right:10px;width:18px;height:18px;color:var(--lime);animation:lockp 4s infinite;animation-delay:calc(var(--k) * .6s)}
+@keyframes lockp{0%,70%,100%{transform:none}80%{transform:scale(1.3)}}
+/* code that changes with the tab */
+.code{border-radius:20px;background:#0b1512;color:#d9e2d9;overflow:hidden;font-family:var(--f-mono);font-size:12.5px;line-height:1.65}
+.code-tabs{display:flex;gap:4px;padding:8px;background:#0f1d18;border-bottom:1px solid rgba(255,255,255,.06)}
+.code-tabs span{padding:6px 12px;border-radius:8px;font-size:11.5px;color:rgba(255,255,255,.6)}
+.code-tabs span.on{background:rgba(200,241,105,.14);color:var(--lime)}
+.code pre{margin:0;padding:16px 18px;white-space:pre-wrap;word-break:break-word;min-height:200px}
+.code .c{color:#6f8a80}.code .k{color:#c8f169}.code .s{color:#ffd59a}.code .t{color:#9fd3ff}
+/* themes */
+.sw{display:flex;gap:10px;margin-top:4px}
+.sw i{width:36px;height:36px;border-radius:50%;border:3px solid var(--card);box-shadow:0 0 0 1px var(--line);cursor:pointer}
+.sw i.on{box-shadow:0 0 0 2px var(--acc)}
+/* connectors: a sandbox that only reaches named hosts */
+.sbx{display:grid;gap:10px}
+.sbx .box{position:relative;padding:16px;border-radius:16px;border:2px dashed var(--acc);background:var(--mint-tint);font-size:14px;color:var(--head)}
+.sbx .box b{display:block;font-family:var(--f-mono);font-size:13px}
+.sbx .out{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--ground);border:1px solid var(--line);font-family:var(--f-mono);font-size:12.5px}
+.sbx .out .ok{color:#0d6b45;font-weight:800}
+.sbx .out .no{color:#a0402a;font-weight:800}
+.sbx .out.blocked{animation:blk 5s infinite}
+@keyframes blk{0%,50%{opacity:.4}56%,90%{opacity:1}100%{opacity:.4}}
+</style>
+{{HEADER}}
+<main>
+  <section class="hero phero">
+    <div class="hero-bleed" id="hero">
+      <div class="wrap">
+        <div class="hero-panel">
+          <div class="hero-copy">
+            <p class="label">For fintechs and partners</p>
+            <h1 style="margin-top:16px">Taskiem, <em>inside your product.</em></h1>
+            <p class="lede">Give your customers workflows that move money safely, under your name. Embed the builder, or drive everything through the API, with each of your customers kept apart.</p>
+            <div class="cta-row">
+              <a class="btn btn-lime btn-big mag" href="/contact">Talk to us <span class="arr">→</span></a>
+              <a class="btn btn-ghost btn-big mag" href="#embed">See the code</a>
+            </div>
+          </div>
+          <div class="pvis" aria-hidden="true">
+            <div class="brw" id="brw">
+              <div class="brw-top"><i></i><i></i><i></i><span>app.yourbank.ng/automations</span></div>
+              <div class="brw-body">
+                <div class="brw-side"><b>YourBank</b><span>Accounts</span><span>Cards</span><span class="on">Automations</span><span>Settings</span></div>
+                <div class="brw-main">
+                  <div class="t"><b>Pay suppliers on Friday</b><em>Publish</em></div>
+                  <div class="mflow">
+                    <div class="mnode trig"><i></i>Every Friday, 10:00</div>
+                    <div class="mnode"><i></i>Read unpaid bills</div>
+                    <div class="mnode"><i></i>Approval · the owner, with a PIN</div>
+                    <div class="mnode"><i></i>Pay each supplier, once</div>
+                  </div>
+                  <span class="brw-note">Your brand. Taskiem underneath.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section class="frow" data-reveal>
+      <div class="fcopy">
+        <p class="label">Your customers</p>
+        <h2 class="h2">Every customer of yours, kept apart.</h2>
+        <p>Each of your customers gets their own space in Taskiem, with their own record of every action and their own keys. You run them all from one partner account: invite them, install workflows for them, and hear about what happens through signed webhooks.</p>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard dark">
+          <div class="tenants">
+            <span class="tp">YourBank · partner</span>
+            <div class="tl3">
+              <div class="tn" style="--k:0"><b>Ada's Kitchen</b><span>own record, own keys</span><svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></div>
+              <div class="tn" style="--k:1"><b>Bayo Provisions</b><span>own record, own keys</span><svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></div>
+              <div class="tn" style="--k:2"><b>Greenfield College</b><span>own record, own keys</span><svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow flip" id="embed" data-reveal>
+      <div class="fcopy">
+        <p class="label">Build it in</p>
+        <h2 class="h2">Embed the builder, or drive it by API.</h2>
+        <p>Drop the workflow builder into your app with one element, or build your own screens on the API. Your customers sign in through you with short-lived tokens. Developers can write workflows in TypeScript, and they open on the canvas like any other.</p>
+        <ul><li>An OpenAPI 3.1 reference, checked against the API by tests.</li><li>Your API, offered to your customers without them ever seeing a credential.</li></ul>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="code">
+          <div class="code-tabs" id="ctabs"><span class="on">Embed</span><span>API</span><span>TypeScript</span></div>
+          <pre id="cpre"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow" data-reveal>
+      <div class="fcopy">
+        <p class="label">Your brand</p>
+        <h2 class="h2">Your colours, your domain, your name.</h2>
+        <p>Theme what your customers see, serve it on your own domain, and put your name on it. WhatsApp messages still come from Taskiem's templates for now.</p>
+        <div class="sw" id="swatches" role="group" aria-label="Try a colour"><i style="background:#3b2f8f" class="on" data-c="#3b2f8f"></i><i style="background:#0a6cff" data-c="#0a6cff"></i><i style="background:#c2410c" data-c="#c2410c"></i><i style="background:#0d3b2e" data-c="#0d3b2e"></i></div>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="sbx">
+            <div class="out"><span>Theme</span><span class="ok" id="themeval">#3b2f8f</span></div>
+            <div class="out"><span>Domain</span><span class="ok">automations.yourbank.ng</span></div>
+            <div class="out"><span>Shown as</span><span class="ok">YourBank Automations</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow flip" data-reveal>
+      <div class="fcopy">
+        <p class="label">Connect your services</p>
+        <h2 class="h2">Your own connectors, safely boxed in.</h2>
+        <p>Write a connector for your service with the connector kit. It runs sealed off, and it can only reach the hosts it names. Keep it private to your customers, or publish it for every Taskiem business.</p>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="sbx">
+            <div class="box"><b>yourbank-transfers · connector</b>Runs sealed off. Reaches only the hosts it names.</div>
+            <div class="out"><span>api.yourbank.ng</span><span class="ok">allowed</span></div>
+            <div class="out blocked"><span>anything-else.com</span><span class="no">blocked</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><p class="label">For regulated work</p><h2 class="h2">Run it where you need it.</h2></div>
+      <ul class="facts" data-reveal>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l3 3"/></svg></span><b>Your own keys</b><span>Keep the keys in your vault: Vault or OpenBao, AWS KMS, Google Cloud KMS or Azure Key Vault. Take a key away and reading stops.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></span><b>On your own servers</b><span>A one-server kit with updates, rollback and nightly backups, or a Helm chart for Kubernetes.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5.5c0 4.5-3 8-7 9.5-4-1.5-7-5-7-9.5V6z"/></svg></span><b>A record for auditors</b><span>Every approval, payment and change on a record that can be checked end to end.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M12 4l8 8-8 8"/></svg></span><b>Money moves once</b><span>Retries never pay twice, on every rail.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 11l2 2 4-4"/></svg></span><b>Your team's sign-in</b><span>Single sign-on and automatic team set-up.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg></span><b>Room to grow</b><span>Dedicated workers and a database built to stay up, for busy partners.</span></li>
+      </ul>
+    </section>
+
+    <section class="pclose">
+      <div class="in">
+        <h2>Let's talk about what you're building.</h2>
+        <div class="cta-row"><a class="btn btn-lime btn-big mag" href="/contact">Talk to us <span class="arr">→</span></a><a class="btn btn-ghost btn-big mag" href="/security">Read about security</a></div>
+      </div>
+    </section>
+  </div>
+</main>
+{{FOOTER}}
+<script>
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // the code card: embed, API, TypeScript in turn
+  const tabs = [...document.querySelectorAll('#ctabs span')], pre = document.getElementById('cpre');
+  const CODE = [
+    `<span class="c">&lt;!-- in your app's page --&gt;</span>
+<span class="t">&lt;script</span> <span class="k">src</span>=<span class="s">"https://app.taskiem.com/embed/v1/taskiem.js"</span> <span class="k">defer</span><span class="t">&gt;&lt;/script&gt;</span>
+
+<span class="t">&lt;taskiem-builder</span> <span class="k">id</span>=<span class="s">"automations"</span> <span class="k">app</span>=<span class="s">"0190f0c4-..."</span><span class="t">&gt;&lt;/taskiem-builder&gt;</span>
+
+<span class="c">// your server mints a short-lived token for the signed-in customer</span>
+el.setToken(<span class="k">await</span> mint());`,
+    `<span class="c"># start a run for one of your customers</span>
+<span class="k">POST</span> /v1/embed/{app}/workflows/{wf}/runs
+<span class="k">Authorization</span>: Bearer <span class="s">&lt;end-user token&gt;</span>
+<span class="k">Idempotency-Key</span>: <span class="s">payroll-2026-11</span>`,
+    `<span class="k">import</span> { webhook, workflow } <span class="k">from</span> <span class="s">"@taskiem/sdk"</span>;
+<span class="k">import</span> { iswallet } <span class="k">from</span> <span class="s">"@taskiem/connectors"</span>;
+
+<span class="k">export default</span> workflow({
+  id: <span class="s">"wf_payEmployees"</span>,
+  name: <span class="s">"Pay employees"</span>,
+  trigger: webhook({ path: <span class="s">"/payroll"</span>, auth: <span class="s">"hmac"</span> }),
+})
+  .step(<span class="s">"balance"</span>, iswallet.get_balance({ wallet_id: <span class="s">"=trigger.body.wallet_id"</span> }));`,
+  ];
+  let k = 0;
+  const show = i => { tabs.forEach((t, j) => t.classList.toggle('on', j === i)); pre.innerHTML = CODE[i]; };
+  show(0);
+  if (!reduce) setInterval(() => { k = (k + 1) % CODE.length; show(k); }, 4200);
+  // colours: try one, and the browser mock follows
+  const brw = document.getElementById('brw'), val = document.getElementById('themeval'), sw = [...document.querySelectorAll('#swatches i')];
+  const set = el => { sw.forEach(x => x.classList.toggle('on', x === el)); brw.style.setProperty('--brand', el.dataset.c); val.textContent = el.dataset.c; };
+  sw.forEach(el => el.addEventListener('click', () => set(el)));
+  if (!reduce) { let i = 0; setInterval(() => { i = (i + 1) % sw.length; set(sw[i]); }, 3000); }
+})();
+</script>

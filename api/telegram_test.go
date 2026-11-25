@@ -407,3 +407,47 @@ func TestTelegramMenuButtons(t *testing.T) {
 		t.Fatalf("pressed: %+v", got)
 	}
 }
+
+// Telegram's menus (chat-menus.md §9): the topics two buttons to a row; a
+// topic's five rows one to a row, then All N, which shows every one; a
+// number picks among the rows as sent.
+func TestTelegramMenuLayout(t *testing.T) {
+	w := newTGWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	const on = int64(7102)
+	w.link(t, owner, on, "ada")
+	m := w.say(t, on, "help")
+	if len(m.Keyboard) < 2 {
+		t.Fatalf("topics: %+v", m.Keyboard)
+	}
+	buttons := 0
+	for i, row := range m.Keyboard {
+		buttons += len(row)
+		if len(row) != 2 && (len(row) != 1 || i != len(m.Keyboard)-1) {
+			t.Fatalf("topics row %d has %d buttons: %+v", i, len(row), m.Keyboard)
+		}
+	}
+	if buttons < 6 {
+		t.Fatalf("topics: %d buttons", buttons)
+	}
+	// Saved things has seven actions for an owner: five, then All 7.
+	m = w.say(t, on, "help saved")
+	if len(m.Keyboard) != 6 || m.Keyboard[5][0].Text != "All 7" || len(m.Keyboard[0]) != 1 {
+		t.Fatalf("a topic: %+v", m.Keyboard)
+	}
+	got := w.update(t, on, func(id int64) []byte { return telegramtest.Callback(id, on, m.MessageID, "q2", m.Keyboard[5][0].Data) })
+	var all telegramtest.Call
+	for _, c := range got {
+		if c.Method == "sendMessage" {
+			all = c
+		}
+	}
+	if len(all.Keyboard) != 7 {
+		t.Fatalf("All 7: %+v", got)
+	}
+	// By its number: the sixth row as sent is All 7.
+	w.say(t, on, "help saved")
+	if m := w.say(t, on, "6"); len(m.Keyboard) != 7 {
+		t.Fatalf("All 7 by its number: %+v", m.Keyboard)
+	}
+}

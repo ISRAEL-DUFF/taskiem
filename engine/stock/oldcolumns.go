@@ -207,7 +207,9 @@ func TellOldColumns(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, uses []Old
 //
 //   - a xenibase step on the table (the data_tables connection) naming the
 //     column in its select, filters or order (reads), or in the columns it
-//     sets, inserts or upserts (sets);
+//     sets, inserts or upserts (sets), each also when given as an
+//     expression ("=…"): the column as a string in it (a select's strings,
+//     a filter's column, a set's or a row's keys);
 //   - such a reading step with no select (every column) when anything else
 //     in the workflow reads the column off a row (.stock, ['stock']);
 //   - a row-changed trigger on the table that watches the column, or whose
@@ -295,11 +297,16 @@ func OldColumnsIn(doc []byte, c OldCatalogue) []OldColumnUse {
 			for col := range keys(in["row"]) {
 				set[col] = true
 			}
-			if rows, ok := in["rows"].([]any); ok {
+			switch rows := in["rows"].(type) {
+			case []any:
 				for _, r := range rows {
 					for col := range keys(r) {
 						set[col] = true
 					}
+				}
+			case string:
+				for col := range keys(rows) {
+					set[col] = true
 				}
 			}
 			for col := range names(in["on_conflict"]) {
@@ -356,26 +363,150 @@ func hasTable(list []any, table string) bool {
 
 var identRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
 
-// identifiers are the names in a select ("name, stock, owner:profiles(name)").
-func identifiers(s string) map[string]bool {
-	out := map[string]bool{}
-	if strings.HasPrefix(s, "=") {
-		return out
-	}
-	for _, id := range identRe.FindAllString(s, -1) {
-		out[id] = true
+// isExpr: a value given as an expression ("=…"), not as itself.
+func isExpr(s string) bool { return strings.HasPrefix(strings.TrimSpace(s), "=") }
+
+// litRe is a string in an expression, in single or double quotes.
+var litRe = regexp.MustCompile(`'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"`)
+
+// literals are the strings an expression holds ("='name, ' + 'stock'":
+// "name, " and "stock").
+func literals(expr string) []string {
+	var out []string
+	for _, m := range litRe.FindAllStringSubmatch(expr, -1) {
+		out = append(out, m[1]+m[2])
 	}
 	return out
 }
 
-// filterColumns are the columns filters or an order name, any nested.
+// mapEntry is an entry of a map literal in an expression whose key is a
+// string: the key, and the value when it is a string itself ("" else).
+type mapEntry struct{ key, value string }
+
+// mapEntries are the entries of the map literals in an expression
+// ({'stock': 3, 'column': 'qty'}), read by a small scanner, not a
+// pattern: a string is a key only directly inside braces, after the
+// brace or a comma and before a colon, so a ternary's `c ? 'a' : 'b'`
+// (H2 review fix 6) or a string in a list or a call is never one.
+func mapEntries(expr string) []mapEntry {
+	var out []mapEntry
+	var stack []byte
+	prev := byte(0) // the last character that is not a space or in a string
+	str := func(i int) (string, int, bool) {
+		q := expr[i]
+		var b strings.Builder
+		for j := i + 1; j < len(expr); j++ {
+			switch c := expr[j]; {
+			case c == '\\' && j+1 < len(expr):
+				b.WriteByte(expr[j+1])
+				j++
+			case c == q:
+				return b.String(), j + 1, true
+			default:
+				b.WriteByte(c)
+			}
+		}
+		return "", len(expr), false
+	}
+	next := func(i int) int {
+		for i < len(expr) && (expr[i] == ' ' || expr[i] == '\t' || expr[i] == '\n' || expr[i] == '\r') {
+			i++
+		}
+		return i
+	}
+	for i := 0; i < len(expr); {
+		c := expr[i]
+		switch c {
+		case '\'', '"':
+			s, end, ok := str(i)
+			if !ok {
+				return out
+			}
+			i = end
+			j := next(i)
+			if len(stack) > 0 && stack[len(stack)-1] == '{' && (prev == '{' || prev == ',') && j < len(expr) && expr[j] == ':' {
+				e := mapEntry{key: s}
+				if k := next(j + 1); k < len(expr) && (expr[k] == '\'' || expr[k] == '"') {
+					if v, end, ok := str(k); ok {
+						if after := next(end); after >= len(expr) || expr[after] == ',' || expr[after] == '}' {
+							e.value = v
+						}
+					}
+				}
+				out = append(out, e)
+			}
+			prev = '"'
+			continue
+		case '{', '[', '(':
+			stack = append(stack, c)
+		case '}', ']', ')':
+			if len(stack) > 0 {
+				stack = stack[:len(stack)-1]
+			}
+		}
+		if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
+			prev = c
+		}
+		i++
+	}
+	return out
+}
+
+// identifiers are the names in a select ("name, stock, owner:profiles(name)");
+// a select given as an expression, the names in the strings it holds
+// ("='name, ' + (all ? 'stock' : 'unit')").
+func identifiers(s string) map[string]bool {
+	out := map[string]bool{}
+	texts := []string{s}
+	if isExpr(s) {
+		texts = literals(s)
+	}
+	for _, t := range texts {
+		for _, id := range identRe.FindAllString(t, -1) {
+			out[id] = true
+		}
+	}
+	return out
+}
+
+// filterColumns are the columns filters or an order name, any nested: a
+// filter's column given as an expression names each string in it
+// ("=low ? 'stock' : 'name'"), and filters, one filter or an order given
+// as an expression the column of each filter in it
+// ("=[{'column': 'stock', 'op': 'lt', 'value': 5}]"). A filter's value is
+// never a column, so the strings of values are not read.
 func filterColumns(v any) map[string]bool {
 	out := map[string]bool{}
+	fromExpr := func(s string) {
+		for _, e := range mapEntries(s) {
+			if e.key == "column" && e.value != "" {
+				out[e.value] = true
+			}
+		}
+	}
+	if s, ok := v.(string); ok {
+		if isExpr(s) {
+			fromExpr(s)
+		}
+		return out
+	}
 	list, _ := v.([]any)
 	for _, f := range list {
+		if s, ok := f.(string); ok {
+			if isExpr(s) {
+				fromExpr(s)
+			}
+			continue
+		}
 		m, _ := f.(map[string]any)
 		if c := sval(m["column"]); c != "" {
-			out[c] = true
+			if isExpr(c) {
+				for _, l := range literals(c) {
+					out[strings.TrimSpace(l)] = true
+				}
+			} else {
+				out[c] = true
+			}
 		}
 		for c := range filterColumns(m["any"]) {
 			out[c] = true
@@ -384,8 +515,18 @@ func filterColumns(v any) map[string]bool {
 	return out
 }
 
+// keys are the columns a set or a row names: its keys, or given as an
+// expression, the strings it uses as keys ("={'stock': trigger.body.n}").
 func keys(v any) map[string]bool {
 	out := map[string]bool{}
+	if s, ok := v.(string); ok {
+		if isExpr(s) {
+			for _, e := range mapEntries(s) {
+				out[e.key] = true
+			}
+		}
+		return out
+	}
 	m, _ := v.(map[string]any)
 	for k := range m {
 		out[k] = true
@@ -393,11 +534,29 @@ func keys(v any) map[string]bool {
 	return out
 }
 
+// names are the strings of a list (an on_conflict's columns); given as
+// an expression, the names in the strings it holds.
 func names(v any) map[string]bool {
 	out := map[string]bool{}
+	if s, ok := v.(string); ok {
+		if isExpr(s) {
+			for _, l := range literals(s) {
+				for _, id := range identRe.FindAllString(l, -1) {
+					out[id] = true
+				}
+			}
+		}
+		return out
+	}
 	list, _ := v.([]any)
 	for _, x := range list {
 		if s := sval(x); s != "" {
+			if isExpr(s) {
+				for _, l := range literals(s) {
+					out[strings.TrimSpace(l)] = true
+				}
+				continue
+			}
 			out[s] = true
 		}
 	}

@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -31,6 +34,30 @@ func triggerPaths(def *wd.Definition) []pii.Path {
 	}
 	for _, p := range pii.SchemaPaths(schema, types) {
 		out = append(out, pii.Path{Segments: append([]string{"trigger", "body"}, p.Segments...), Category: p.Category})
+	}
+	return out
+}
+
+// deviceLocationsOwned gives the trigger's location device inputs (a
+// tool's top-level location inputs, wd.DeviceInputs) their owner; every
+// other path, another location the inputs declare included, is left as
+// it is.
+func deviceLocationsOwned(def *wd.Definition, paths []pii.Path, by *pii.Owner) []pii.Path {
+	locs := map[string]bool{}
+	for name, kind := range wd.DeviceInputs(def) {
+		if kind == wd.DeviceLocation {
+			locs[name] = true
+		}
+	}
+	if len(locs) == 0 {
+		return paths
+	}
+	out := make([]pii.Path, len(paths))
+	for i, p := range paths {
+		if p.Category == pii.CategoryLocation && len(p.Segments) == 4 && p.Segments[0] == "trigger" && p.Segments[1] == "body" && locs[p.Segments[2]] {
+			p.By = by
+		}
+		out[i] = p
 	}
 	return out
 }
@@ -74,8 +101,10 @@ var emailPaths = func() []pii.Path {
 	return out
 }()
 
-// sealPayload marshals payload with declared paths and tainted values sealed.
-func (s *Store) sealPayload(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, payload any, paths []pii.Path, taint pii.Taint) (any, error) {
+// sealPayload marshals payload with declared paths and tainted values
+// sealed, and a data table step's rows (rows; nil for any other payload)
+// column by column.
+func (s *Store) sealPayload(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, payload any, paths []pii.Path, taint pii.Taint, rows *tableStep) (any, error) {
 	if s.PII == nil || payload == nil {
 		return payload, nil
 	}
@@ -83,10 +112,67 @@ func (s *Store) sealPayload(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, pa
 	if err != nil {
 		return nil, err
 	}
+	if v, paths, err = sealTableRows(ctx, s.PII, tx, tenant, v, rows, paths, taint); err != nil {
+		return nil, err
+	}
 	if v, err = pii.Seal(ctx, s.PII, tx, tenant, v, paths, taint); err != nil {
 		return nil, err
 	}
 	return pii.SealDetected(ctx, s.PII, tx, tenant, v, taint)
+}
+
+// tableStep is a xenibase@1 step whose rows may be sealed column by
+// column (datatables.StepRows): its connection, the run's environment,
+// its action and resolved input, and whether its output is being sealed
+// (or its input).
+type tableStep struct {
+	connection, env, action string
+	input                   any
+	output                  bool
+}
+
+// tableRows is the tableStep of a scheduled connector step, nil for any
+// other. A capability step keeps its rail's declarations.
+func tableRows(p history.ScheduledPayload, env string, output bool) *tableStep {
+	id, _, _ := strings.Cut(p.Connector, "@")
+	if id != datatables.Connector || p.Capability != nil {
+		return nil
+	}
+	return &tableStep{connection: p.Connection, env: env, action: p.Action, input: p.Input, output: output}
+}
+
+// sealTableRows seals a data table step's rows column by column in v (a
+// payload as JSON values, with its input or output at the top): only the
+// table's personal columns, and fields its definition does not name. The
+// declared paths of the places it sealed are dropped from paths. A place
+// it could not seal so (rows that are not records, or more values than
+// are sealed one by one) keeps its declared path, which seals it whole,
+// as does every step StepRows leaves to the connector's declaration.
+func sealTableRows(ctx context.Context, c pii.Cipher, tx pgx.Tx, tenant uuid.UUID, v any, ts *tableStep, paths []pii.Path, taint pii.Taint) (any, []pii.Path, error) {
+	if c == nil || ts == nil {
+		return v, paths, nil
+	}
+	places, ok, err := datatables.StepRows(ctx, tx, ts.connection, ts.env, ts.action, ts.input, ts.output)
+	if err != nil || !ok {
+		return v, paths, err
+	}
+	root := "input"
+	if ts.output {
+		root = "output"
+	}
+	for _, pl := range places {
+		segs := append([]string{root}, pl.Segments...)
+		out, done, err := pii.SealFields(ctx, c, tx, tenant, v, segs, pl.Personal, "other", taint)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !done {
+			continue
+		}
+		v = out
+		paths = slices.DeleteFunc(slices.Clone(paths), func(p pii.Path) bool { return slices.Equal(p.Segments, segs) })
+	}
+	return v, paths, nil
 }
 
 // redactText masks personal data in the free text of a worker result:

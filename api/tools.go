@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -56,10 +57,6 @@ type toolRow struct {
 	AnswerType  string         `json:"answer,omitempty"`
 	AlwaysAsk   bool           `json:"always_ask"`
 	Inputs      map[string]any `json:"inputs,omitempty"`
-	// Menu: a customers' tool carried over from the public menu (made
-	// tools T5, migration 00569): its workflow declares no tool, its name
-	// is the menu's label, and it has no answer but how its run ended.
-	Menu bool `json:"-"`
 }
 
 // Asks is the care the person meets: the steps' care, raised to yes by
@@ -69,6 +66,17 @@ func (t toolRow) Asks() string {
 		return wdcheck.CareYes
 	}
 	return t.Care.Level
+}
+
+// AsksFor is the care a call with input meets: a members' tool that asks
+// yes only for steps whose condition reads what it was asked (a list whose
+// row button marks a row) answers at once when none holds for input. The
+// owner's always ask still holds.
+func (t toolRow) AsksFor(input map[string]any) string {
+	if t.AlwaysAsk {
+		return t.Asks()
+	}
+	return t.Care.For(input)
 }
 
 const toolCols = `workflow_id, environment, version, command, name, about, says, icon, audience, roles, care, answer_type, always_ask`
@@ -130,17 +138,16 @@ func (s *Server) writeToolIndex(ctx context.Context, tx pgx.Tx, tenant, wf uuid.
 	case !errors.Is(err, pgx.ErrNoRows):
 		return err
 	}
-	if env == "prod" {
-		// A public menu's entry is a customers' tool by its command too
-		// (made tools T5).
-		var label string
-		err := tx.QueryRow(ctx, `SELECT label FROM whatsapp_public_workflows WHERE command = $1 AND workflow_id <> $2`, t.Command, wf).Scan(&label)
-		switch {
-		case err == nil:
-			return fmt.Errorf("%w: the command /%s is your public menu's %s; choose another", errConflict, t.Command, label)
-		case !errors.Is(err, pgx.ErrNoRows):
-			return err
-		}
+	// A page is called by its name as a tool is by its command ("/" and
+	// the word, its short form in the chat), so one word is one of them
+	// (review M6, 3).
+	var page string
+	err = tx.QueryRow(ctx, `SELECT title FROM pages WHERE name = $1 LIMIT 1`, t.Command).Scan(&page)
+	switch {
+	case err == nil:
+		return fmt.Errorf("%w: /%s is already the page %s's word; choose another command", errConflict, t.Command, page)
+	case !errors.Is(err, pgx.ErrNoRows):
+		return err
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO workflow_tools (tenant_id, workflow_id, environment, version, command, name, about, says, icon, audience, roles, care, answer_type)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -245,8 +252,13 @@ func toolValues(d *wd.Definition, input map[string]any) []toolValue {
 	}
 	slices.Sort(names)
 	out := []toolValue{}
+	devices := wd.DeviceInputs(d)
 	for _, k := range names {
 		label, value := k, fmt.Sprint(input[k])
+		if kind := devices[k]; kind != "" && kind != wd.DeviceScan {
+			// A place, a photo, a signature: in words, never coordinates.
+			value = deviceInputWords(kind, input[k])
+		}
 		// A scanned code ({text, format}, or as the run keeps it) reads as
 		// its text.
 		if m, ok := input[k].(map[string]any); ok {
@@ -291,7 +303,7 @@ func (s *Server) startTool(ctx context.Context, p *Principal, t toolRow, input m
 	if probs := s.inputProblems(t.Workflow, t.Version, def, raw); len(probs) > 0 {
 		return toolStart{}, toolInputError(probs)
 	}
-	out := toolStart{Care: t.Asks(), Values: toolValues(d, input)}
+	out := toolStart{Care: t.AsksFor(input), Values: toolValues(d, input)}
 	if out.Care == wdcheck.CareAnswers {
 		// A once button is spent by the run it starts.
 		if err := s.claimButton(ctx, p, button); err != nil {
@@ -390,13 +402,48 @@ func (s *Server) confirmTool(ctx context.Context, p *Principal, t toolRow, confi
 // runTool starts tool t's run as p, recorded with the tool's command and
 // the channel, under the plan's run limits as any run.
 func (s *Server) runTool(ctx context.Context, p *Principal, t toolRow, input map[string]any, channel, dedup string) (uuid.UUID, bool, error) {
+	trigger := "tool/" + t.Workflow.String()
+	if dedup != "" {
+		// The same start sent again (its Idempotency-Key, a chat's nonce):
+		// its run, before its files are asked for a second time.
+		if run, ok, err := s.startedBefore(ctx, p.TenantID, trigger, dedup); err != nil || ok {
+			return run, false, err
+		}
+	} else if toolNamesFiles(input) {
+		// A start naming files has a key of its own, so its files are
+		// known as this start's until the run is set on them.
+		dedup = "files:" + uuid.NewString()
+	}
+	// A location, a photo and a signature read as a form step's answers
+	// are (tools_device.go); the files named taken for this start.
+	start := forms.ToolStartKey{Trigger: trigger, Dedup: dedup}
+	input, files, err := s.readToolDevices(ctx, p, t, input, channel, start)
+	if err != nil {
+		if run, ok, err2 := s.startedBefore(ctx, p.TenantID, trigger, dedup); err2 == nil && ok && dedup != "" {
+			return run, false, nil // started by the same start meanwhile
+		}
+		return uuid.Nil, false, err
+	}
 	ref, created, err := s.Store.StartRun(ctx, runtime.StartRequest{
 		TenantID: p.TenantID, WorkflowID: t.Workflow, Version: t.Version, Environment: t.Environment,
 		Trigger:   map[string]any{"type": "manual", "body": input, "tool": t.Command, "channel": channel},
-		StartedBy: p.Actor(), TriggerID: "tool/" + t.Workflow.String(), DedupKey: dedup,
+		StartedBy: p.Actor(), TriggerID: trigger, DedupKey: dedup, DevicesRead: true,
 	})
 	if err != nil {
+		if len(files) > 0 {
+			// Not started: given back.
+			err = errors.Join(err, s.Forms.ReleaseToolFiles(context.WithoutCancel(ctx), p.TenantID, files))
+		}
 		return uuid.Nil, false, err
+	}
+	if len(files) > 0 {
+		// The run has its files. Should this fail, the run is still
+		// started: AttachTakenToolFiles gives them to it later, and they
+		// are kept meanwhile.
+		actx := context.WithoutCancel(ctx)
+		if aerr := s.Forms.AttachToolFiles(actx, p.TenantID, files, ref.ID); aerr != nil {
+			s.Logger.Error("tools: giving a run its files", "tenant", p.TenantID, "run", ref.ID, "err", aerr)
+		}
 	}
 	err = db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
 		// A start from a chat is told its answer there by the run watch;

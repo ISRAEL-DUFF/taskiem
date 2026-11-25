@@ -16,21 +16,24 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart' show ApiError;
 import '../app/auth.dart';
-import '../app/links.dart' show openOutside;
 import '../kit/forms.dart' show errorWords;
 import '../kit/kit.dart' show TkSmallButton;
 import '../kit/list.dart' show TkEmpty;
 import '../kit/look.dart';
 import '../kit/mobile.dart';
-import '../kit/modal.dart' show openOrSay, showTkToast;
+import '../kit/modal.dart' show showTkToast;
 import '../kit/page.dart';
-import '../kit/sheet.dart' show TkCta;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
 import 'groups.dart' show askSure, pickOneOf;
 import 'invoices_page.dart' show shortDay;
-import 'team_pages.dart' show StaffPersonPage;
+import 'payroll_run.dart' show PayrollRunPage, PayrollThisMonth;
+
+export 'payroll_run.dart' show PayrollRunPage;
+import 'payroll_schedules.dart' show openPayrollSchedules;
+import 'payroll_settings.dart' show PayrollSettingsPage;
+import 'payroll_team.dart' show openMyPay, openPayrollChanges, openPayrollTeam;
 import 'words.dart' show CardTone, naira;
 
 Map<String, dynamic>? _mapOrNull(Object? v) => v is Map ? v.cast<String, dynamic>() : null;
@@ -100,7 +103,7 @@ String _refusalTitle(Object e, String otherwise) => switch (e is ApiError ? _str
 };
 
 /// The server's words whole (the app's font has no arrow: "Settings, Connected apps").
-Widget _refusal(BuildContext context, Object e, String otherwise) {
+Widget payrollRefusal(BuildContext context, Object e, String otherwise) {
   final look = TkLook.of(context);
   final down = e is ApiError && e.body['code'] == 'payrolla_down';
   final color = down ? look.orange : look.red;
@@ -222,13 +225,21 @@ class _PayrollPageState extends State<PayrollPage> {
           'Nothing here pays anyone.',
       onRefresh: _load,
       children: [
-        if (_error != null) _refusal(context, _error!, 'Payroll did not load'),
+        if (_error != null) payrollRefusal(context, _error!, 'Payroll did not load'),
         if (got == null && _error == null) const TkSkeleton(rows: 3, label: 'Loading the payroll…'),
-        if (got != null && !got.connected)
+        if (got != null && !got.connected && got.ended == true)
+          TkCallout(
+            leading: TkSquare('b-alert', color: look.red),
+            title: got.isOwner == true ? 'Payrolla is no longer connected' : 'Payroll isn’t connected right now',
+            sub: got.isOwner == true ? 'Reconnect Payrolla to see and run your payroll here.' : 'The owner has been told.',
+            subLines: 4,
+            color: look.red,
+          )
+        else if (got != null && !got.connected)
           TkCallout(
             leading: TkSquare('b-calendar', color: look.violet),
             title: 'Payroll runs in Payrolla',
-            sub: 'Connect Payrolla to see its runs here, with the key from Payrolla’s Connected apps.',
+            sub: 'Connect Payrolla to see its runs here: in one step, or with the key from Payrolla’s Connected apps.',
             subLines: 4,
             color: look.violet,
           ),
@@ -236,15 +247,26 @@ class _PayrollPageState extends State<PayrollPage> {
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: TkSmallButton(
-              label: 'Connect Payrolla',
+              label: got.ended == true ? 'Reconnect Payrolla' : 'Connect Payrolla',
               primary: true,
-              onPressed: () => unawaited(openOrSay(
-                  context, () => openOutside(Uri.parse('${widget.auth.transport.base}/connections?connect=payrolla')), 'Connections could not be opened.')),
+              onPressed: () => unawaited(_push(context, PayrollSettingsPage(auth: _auth))),
             ),
+          ),
+        if (got != null && got.connected && got.auth == 'key' && got.isOwner == true)
+          TkCallout(
+            leading: TkSquare('b-alert', color: look.orange),
+            title: 'Reconnect Payrolla',
+            sub: 'Connect again in one step so you can run payroll here.',
+            subLines: 3,
+            color: look.orange,
+            button: 'Reconnect Payrolla',
+            onPressed: () => unawaited(_push(context, PayrollSettingsPage(auth: _auth))),
           ),
         if (got != null && got.connected) ...[
           if (got.test == true)
             TkCallout(leading: TkSquare('b-alert', color: look.orange), title: 'Payrolla’s test mode', sub: 'These runs are practice: no one is paid.', color: look.orange),
+          if (got.thisMonth != null)
+            PayrollThisMonth(auth: _auth, month: got.thisMonth!, mayPrepare: got.mayPrepare ?? false, onChanged: () => unawaited(_load())),
           if (latest != null) _top(context, latest, got.company?.name ?? ''),
           if (_runs.isEmpty)
             const TkEmpty(icon: 'b-calendar', title: 'No payroll runs yet', line: 'Runs made in Payrolla show here.')
@@ -258,6 +280,30 @@ class _PayrollPageState extends State<PayrollPage> {
             inset: 56,
             children: [
               TkListRow(
+                title: 'Team',
+                sub: 'Everyone, their pay and account',
+                subLines: 1,
+                icon: 'b-people',
+                square: look.lime,
+                onTap: () => unawaited(openPayrollTeam(context, _auth)),
+              ),
+              TkListRow(
+                title: 'Account changes',
+                sub: 'New accounts waiting for approval',
+                subLines: 1,
+                icon: 'b-bank',
+                square: look.orange,
+                onTap: () => unawaited(openPayrollChanges(context, _auth)),
+              ),
+              TkListRow(
+                title: 'My pay',
+                sub: 'Your own salary account',
+                subLines: 1,
+                icon: 'b-cash',
+                square: look.blue,
+                onTap: () => unawaited(openMyPay(context, _auth, backLabel: 'Back to Payroll')),
+              ),
+              TkListRow(
                 title: 'Staff in Payrolla',
                 sub: 'Who each of your staff is there',
                 subLines: 1,
@@ -265,148 +311,25 @@ class _PayrollPageState extends State<PayrollPage> {
                 square: look.teal,
                 onTap: () => unawaited(_push(context, PayrollStaffPage(auth: _auth, backLabel: 'Back to Payroll'))),
               ),
+              TkListRow(
+                title: 'Tax and pension',
+                sub: 'PAYE, pension, NHF and NHIS to pay',
+                subLines: 1,
+                icon: 'b-receipt',
+                square: look.blue,
+                onTap: () => unawaited(openPayrollSchedules(context, _auth)),
+              ),
+              TkListRow(
+                title: 'Payroll settings',
+                sub: 'Connecting, setup, and who approves',
+                subLines: 1,
+                icon: 'b-tools',
+                square: look.violet,
+                onTap: () => unawaited(_push(context, PayrollSettingsPage(auth: _auth))),
+              ),
             ],
           ),
         ],
-      ],
-    );
-  }
-}
-
-// --- one run ---
-
-class PayrollRunPage extends StatefulWidget {
-  const PayrollRunPage({super.key, required this.auth, required this.run, this.summary, this.backLabel = 'Back to Payroll'});
-  final Auth auth;
-  final String run;
-
-  /// The run as the list had it, shown while the whole run is read.
-  final PayrollRun? summary;
-  final String backLabel;
-
-  @override
-  State<PayrollRunPage> createState() => _PayrollRunPageState();
-}
-
-class _PayrollRunPageState extends State<PayrollRunPage> {
-  GetPayrollRunResponse? _got;
-  Object? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_load());
-  }
-
-  Future<void> _load() async {
-    try {
-      final r = await widget.auth.api.getPayrollRun(run: widget.run);
-      if (mounted) setState(() => (_got = r, _error = null));
-    } on Object catch (e) {
-      if (mounted) setState(() => _error = e);
-    }
-  }
-
-  static const _order = {'failed': 0, 'returned': 1, 'waiting': 2, 'paid': 3};
-
-  Widget _line(BuildContext context, GetPayrollRunResponseLinesItem l) {
-    final s = payrollLineState(l.state);
-    final staff = _mapOrNull(l.staff);
-    final staffId = _str(staff?['user_id']);
-    final staffName = _str(staff?['name']);
-    final reason = (l.reason ?? '').trim();
-    final sub = [
-      if (reason.isNotEmpty) reason,
-      if (reason.isEmpty && staffId.isNotEmpty && staffName.isNotEmpty && staffName != l.name) 'Staff: $staffName',
-      if (reason.isEmpty && staffId.isEmpty) 'Not linked to your staff',
-    ].join(' · ');
-    return TkListRow(
-      title: l.name.isEmpty ? 'Someone' : l.name,
-      letters: l.name,
-      sub: sub,
-      subLines: reason.isNotEmpty ? 3 : 1,
-      titleLines: 1,
-      amount: naira(l.netKobo),
-      status: s.words,
-      statusTone: s.tone,
-      waiting: l.state == 'failed' || l.state == 'returned',
-      chevron: staffId.isNotEmpty,
-      semanticsLabel: '${l.name}: ${naira(l.netKobo)}, ${s.words}${reason.isNotEmpty ? '. $reason' : ''}${staffId.isNotEmpty ? '. Open their staff page' : ''}',
-      onTap: staffId.isEmpty ? null : () => unawaited(_push(context, StaffPersonPage(auth: widget.auth, user: staffId, backLabel: 'Back to the run'))),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final look = TkLook.of(context);
-    final got = _got;
-    final r = got?.run.summary ?? widget.summary;
-    final s = payrollStatus(r?.status ?? '');
-    final lines = [...?got?.lines]..sort((a, b) => (_order[a.state] ?? 2) - (_order[b.state] ?? 2));
-    final notPaid = lines.where((l) => l.state == 'failed' || l.state == 'returned').toList();
-    final rest = lines.where((l) => l.state != 'failed' && l.state != 'returned').toList();
-    final c = got?.counts;
-    final day = r == null ? '' : shortDay(r.payDate);
-    final approval = got?.approvalUrl;
-    final counts = c == null
-        ? const <String>[]
-        : [
-            if (c.paid > 0) '${c.paid} paid',
-            if (c.waiting > 0) '${c.waiting} waiting',
-            if (c.failed > 0) '${c.failed} not paid',
-            if (c.returned > 0) '${c.returned} returned',
-          ];
-    return TkPageScreen(
-      title: r == null ? 'Payroll run' : payrollPeriod(r.periodStart, r.periodEnd),
-      titleSize: 22,
-      backLabel: widget.backLabel,
-      description: 'A run as Payrolla has it: each person’s net pay and whether it arrived. Approving and paying are done in Payrolla.',
-      onRefresh: _load,
-      children: [
-        if (_error != null) _refusal(context, _error!, 'The run did not load'),
-        if (r != null)
-          TkTopCard(
-            semanticsLabel: '${naira(r.totalNetKobo)} net to ${peopleCount(r.employeeCount)}${day.isEmpty ? '' : ', pay day $day'}. ${s.words}',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TkEyebrow('Net pay', color: look.limeInk, icon: 'b-cash', trailing: day.isEmpty ? null : 'Pay day $day'),
-                const SizedBox(height: 8),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(naira(r.totalNetKobo), style: tkFigure(context, size: 38)),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  [peopleCount(r.employeeCount), if (r.totalGrossKobo > 0) '${naira(r.totalGrossKobo)} before deductions'].join(' · '),
-                  style: tkText(size: 14, lineHeight: 1.35, color: t.muted),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    CardPill(s.words, s.tone),
-                    if (counts.isNotEmpty) ...[
-                      const SizedBox(width: 10),
-                      Expanded(child: Text(counts.join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 13, color: t.muted))),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        if (approval != null && approval.isNotEmpty)
-          TkCta(
-            label: 'Review and approve in Payrolla',
-            icon: 'b-arrow',
-            iconAfter: true,
-            onTap: () => unawaited(openOrSay(context, () => openOutside(Uri.parse(approval)), 'Payrolla could not be opened.')),
-          ),
-        if (got == null && _error == null) const TkSkeleton(rows: 3, label: 'Loading the run…'),
-        if (got != null && lines.isEmpty) const TkEmpty(icon: 'b-people', title: 'No one in this run yet', line: 'Payrolla adds each person’s pay as it works the run out.'),
-        if (notPaid.isNotEmpty) TkSection(title: 'Not paid', count: notPaid.length, children: [for (final l in notPaid) _line(context, l)]),
-        if (rest.isNotEmpty) TkSection(title: notPaid.isEmpty ? 'People' : 'Everyone else', children: [for (final l in rest) _line(context, l)]),
       ],
     );
   }
@@ -574,7 +497,7 @@ class _PayrollStaffPageState extends State<PayrollStaffPage> {
           'Taskiem suggests the employee with the same email or phone; an owner confirms each one. Nothing changes in Payrolla.',
       onRefresh: _load,
       children: [
-        if (_error != null) _refusal(context, _error!, 'The staff did not load'),
+        if (_error != null) payrollRefusal(context, _error!, 'The staff did not load'),
         if (got == null && _error == null) const TkSkeleton(rows: 4, label: 'Loading your staff…'),
         if (got != null && !_owner)
           TkCallout(leading: TkSquare('b-lock', color: look.violet), title: 'An owner links staff to Payrolla', color: look.violet),

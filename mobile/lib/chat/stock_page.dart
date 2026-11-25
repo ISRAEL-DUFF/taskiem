@@ -28,6 +28,7 @@ import 'groups.dart' show pickOneOf;
 import 'product_form.dart' show sizesWords;
 import 'purchases_page.dart' show PurchasesCard, SuppliesPage;
 import 'stock_items.dart';
+import 'things_page.dart' show ThingsPage;
 import 'words.dart' show Tone, naira;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -343,6 +344,22 @@ class _StockPageState extends State<StockPage> {
           if (sales != null) ..._salesLists(t, sales, items),
           _stockItems(look, rows, items),
           _CountsCard(key: const ValueKey('counts'), auth: widget.auth, items: items, onChanged: _reload),
+          // Things we have (§5.3): what is kept track of, not counted.
+          if (widget.auth.can('table.read'))
+            TkSection(
+              key: const ValueKey('things'),
+              title: 'Kept, not counted',
+              inset: 56,
+              children: [
+                TkListRow(
+                  title: 'Things we have',
+                  sub: 'Machines, tools, furniture: one row each',
+                  icon: 'b-hash',
+                  square: look.violet,
+                  onTap: () => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => ThingsPage(auth: widget.auth, backLabel: 'Back to Stock'))),
+                ),
+              ],
+            ),
           TkPageCard(
             title: _item.isNotEmpty ? '${items.where((i) => i['id'] == _item).map((i) => i['name']).firstOrNull ?? 'The item'}: every change' : 'Every change',
             children: [

@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "../api";
 import {
   NEW_STOCK,
+  askUses,
   billLineOf,
+  lineLabel,
+  singular,
+  usesProblem,
+  usesQuestion,
   choiceProblem,
   choiceWords,
   fromLine,
@@ -134,7 +139,7 @@ describe("the question on a line bought", () => {
       label_id: "l2",
       track_many: true,
     });
-    expect(lineBody({ treatment: "stock", uses: 6, label: "", trackMany: true }, { stockItemId: "s1" })).toEqual({
+    expect(lineBody({ treatment: "stock", uses: 6, usesAsk: "How many bottle is one pack?", label: "", trackMany: true }, { stockItemId: "s1" })).toEqual({
       treatment: "stock",
       stock_item_id: "s1",
       uses: 6,
@@ -252,5 +257,73 @@ describe("orders by hand and labels", () => {
     expect(labelNameProblem(" ", labels)).toBe("Give the label a name.");
     expect(labelNameProblem("machines", labels, "l1")).toBe("Machines is already a label: merge them instead.");
     expect(labelNameProblem("Machines", labels, "l2")).toBe("");
+  });
+});
+
+describe("a merged label on a line (H2 g-label-merge)", () => {
+  // Snacks merged into Staff welfare: the business's labels leave it out.
+  const kept = [label("l-w", "Staff welfare", 5)];
+  it("names the label kept, as the server sends it", () => {
+    expect(lineLabel({ label_id: "l-snacks", label: "Staff welfare" }, kept)).toBe("Staff welfare");
+    expect(fromLine({ treatment: "record", label_id: "l-snacks", label: "Staff welfare" }, kept).label).toBe("Staff welfare");
+  });
+  it("falls back to the business's labels, and none for none", () => {
+    expect(lineLabel({ label_id: "l-w" }, kept)).toBe("Staff welfare");
+    expect(lineLabel({}, kept)).toBe("");
+  });
+});
+
+describe("how many of a stock item one is (H2 g-uses-ask)", () => {
+  // The same cases as engine/stock TestAskUses.
+  it.each([
+    ["bag", "g", 1, true],
+    ["", "g", 1, true],
+    ["", "yards", 1, true],
+    ["", "bag", 1, false],
+    ["tin", "carton", 1, true],
+    ["bags", "kg", 0, true],
+    ["yard", "yards", 1, false],
+    ["Bags", "bag", 1, false],
+    ["bag", "", 1, false],
+    ["bag", "pcs", 1, false],
+    ["carton", "piece", 1, false],
+    ["bag", "g", 1000, false],
+  ] as const)("%s into %s (uses %d) asks %s", (line, stock, uses, ask) => {
+    expect(askUses(line, stock, uses)).toBe(ask);
+  });
+  it("says the question, and checks the number", () => {
+    expect(usesQuestion("g", "bags", "Rice")).toBe("How many g is one bag?");
+    expect(usesQuestion("g", "", "Rice")).toBe("How many g is one Rice?");
+    expect(singular("boxes")).toBe("box");
+    expect(usesProblem("50,000")).toBe("");
+    expect(usesProblem("")).toBe("");
+    expect(usesProblem("half")).toBe("A whole number, like 1000.");
+    expect(usesProblem("0")).toBe("A whole number, like 1000.");
+    expect(usesProblem("2,5")).toBe("A whole number, like 1000.");
+    expect(usesProblem("1.5")).toBe("A whole number, like 1000.");
+    expect(usesProblem("50 kg")).toBe("A whole number, like 1000.");
+  });
+  const ask = "How many g is one bag?";
+  it("sends uses with a stock line, only when asked (review fix 3)", () => {
+    expect(lineBody({ treatment: "stock", stockItemId: "si-rice", uses: 50_000, usesAsk: ask, label: "" }, { stockItemId: "si-rice" })).toEqual({
+      treatment: "stock",
+      stock_item_id: "si-rice",
+      uses: 50_000,
+    });
+    // The stock item's own, as remembered or on the order line: sent.
+    const kept = fromLine({ treatment: "stock", stock_item_id: "si-malt", uses: 6 }, []);
+    expect(lineBody(kept, { stockItemId: "si-malt" })).toEqual({ treatment: "stock", stock_item_id: "si-malt", uses: 6 });
+    // Kept from another stock item, not asked of this one: not sent.
+    expect(lineBody({ treatment: "stock", stockItemId: "si-malt", uses: 50_000, label: "" }, { stockItemId: "si-malt" })).toEqual({
+      treatment: "stock",
+      stock_item_id: "si-malt",
+    });
+  });
+  it("waits for an answer while asked, and refuses a bad one (review fix 2)", () => {
+    const base = { treatment: "stock" as const, stockItemId: "si-rice", label: "", usesAsk: ask };
+    expect(choiceProblem(base)).toBe(`Say: ${ask}`);
+    expect(choiceProblem({ ...base, usesBad: true })).toBe("How many is a whole number, like 1000.");
+    expect(choiceProblem({ ...base, uses: 50_000 })).toBe("");
+    expect(choiceProblem({ ...base, usesAsk: undefined })).toBe("");
   });
 });

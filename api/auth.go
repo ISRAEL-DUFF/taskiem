@@ -64,6 +64,18 @@ const (
 	PermMoneyPay    = access.MoneyPay
 	// PermPayrollRead is seeing the payroll Payrolla keeps.
 	PermPayrollRead = access.PayrollRead
+	// PermPayrollApprove is approving the payroll as one's linked Payrolla
+	// user, and linking to it (P4b).
+	PermPayrollApprove = access.PayrollApprove
+	// PermPayrollPrepare is adding and changing staff and pay, and
+	// preparing runs, in Payrolla (P4b).
+	PermPayrollPrepare = access.PayrollPrepare
+	// PermPayrollSee is seeing a run: each payroll permission comes with
+	// seeing it.
+	PermPayrollSee = access.PayrollRead + "|" + access.PayrollPrepare + "|" + access.PayrollApprove
+	// PermPayrollPeople is seeing who may approve the payroll and how it is
+	// connected: either payroll permission.
+	PermPayrollPeople = access.PayrollRead + "|" + access.PayrollApprove
 	// PermTaskGive is giving staff tasks and seeing everyone's: those who
 	// run the business (staff_tasks.go).
 	PermTaskGive = access.MemberManage + "|" + access.InvoiceManage

@@ -3,6 +3,7 @@
 // file has the page's types, and the editor's work on its document in
 // plain words: no "block", "source" or "query" ever reaches the owner.
 
+import { savedListPart, savedPartWords, type ChoiceKind } from "./pages_g5";
 import type { Column, Table } from "./tables";
 
 export type Tone = "plain" | "good" | "warn" | "bad";
@@ -25,6 +26,10 @@ export interface Source {
   tool?: string;
   inputs?: Record<string, unknown>;
   output?: string;
+  /** G5: the business's saved things of a kind it made (by name), in the order a date field comes, within some days. */
+  saved?: string;
+  coming?: string;
+  within?: number;
 }
 
 /** A button (G2): a tool's form, a signal to a run, or a run's approval. */
@@ -40,7 +45,7 @@ export interface PageActionDef {
 
 export interface Part {
   id: string;
-  type: "heading" | "figure" | "list" | "table" | "buttons" | "status";
+  type: "heading" | "figure" | "list" | "table" | "buttons" | "status" | "board" | "chart";
   title?: string;
   text?: string;
   label?: string;
@@ -54,13 +59,41 @@ export interface Part {
   source?: Source;
   item?: { title: string; sub?: string; state?: { text: string; tone?: Tone; tones?: Record<string, Tone> } };
   group?: { column: string; order?: string[] };
-  columns?: { column: string; label?: string; naira?: boolean }[];
+  columns?: { column: string; label?: string; naira?: boolean; edit?: boolean }[];
   detail?: { title: string; lines?: { label: string; value: string; naira?: boolean }[] };
   empty?: string;
   /** G2: buttons (the page's, or each row's), a counting figure as an alert, a status's workflow. */
   actions?: PageActionDef[];
   alert?: boolean;
   workflow?: string;
+  /** H5: each row shows where a run of workflow is (its number in a column, or what it waits for). */
+  status?: { workflow: string; run?: string; to?: string };
+  /** G4: a board's columns by a choice, and the tool a card moved runs. */
+  board?: BoardDef;
+  /** G4: what a chart shows. */
+  chart?: ChartDef;
+}
+
+/** A board's columns (G4): the choice they are by, each column's value and
+ * heading, and the tool a card moved opens (its values may read "=to", the
+ * column it goes to). */
+export interface BoardDef {
+  column: string;
+  columns: { value: string; label?: string }[];
+  move?: PageActionDef;
+}
+
+/** What a chart shows (G4): over time (by a date column, a period and how
+ * many) or by a group (a column of words), counted or added up (of); or a
+ * tool's rows, each a label and a number. */
+export interface ChartDef {
+  kind: "bars" | "line";
+  of?: string;
+  by?: string;
+  period?: "day" | "week" | "month";
+  last?: number;
+  label?: string;
+  value?: string;
 }
 
 export interface PageFilterDef {
@@ -112,6 +145,73 @@ export interface PageDetail extends PageSummary {
   draft_at?: string;
   problems?: PageProblem[];
   shows?: string[];
+  /** The page's settings: about how many runs its tools start a day. */
+  runs?: PageRuns;
+}
+
+export interface PageRuns {
+  views_a_day: number;
+  tools: number;
+  runs_a_day: number;
+  runs_per_day?: number;
+  runs_per_month?: number;
+}
+
+/** The estimate of a page's runs a day, in words (pages §13): "About 40
+ * runs a day: 20 views a day, 2 tools each. Your plan allows 500 a day." */
+export function runsWords(r: PageRuns | undefined): { line: string; over: boolean } | null {
+  if (!r || r.tools === 0) return null;
+  const n = (x: number) => x.toLocaleString("en-NG");
+  const each = r.tools === 1 ? "1 tool each" : `${n(r.tools)} tools each`;
+  const views = r.views_a_day === 0 ? "no views yet in the last week" : `${n(r.views_a_day)} ${r.views_a_day === 1 ? "view" : "views"} a day`;
+  let line = `About ${n(r.runs_a_day)} ${r.runs_a_day === 1 ? "run" : "runs"} a day from this page: ${views}, ${each}. Each person's answer is kept for a minute.`;
+  let over = false;
+  if (r.runs_per_day && r.runs_per_day > 0) {
+    over = r.runs_a_day > r.runs_per_day;
+    line += ` Your plan allows ${n(r.runs_per_day)} runs a day for everything.`;
+  } else if (r.runs_per_month && r.runs_per_month > 0) {
+    over = r.runs_a_day * 30 > r.runs_per_month;
+    line += ` Your plan allows ${n(r.runs_per_month)} runs a month for everything (about ${n(r.runs_a_day * 30)} a month from this page).`;
+  }
+  return { line, over };
+}
+
+/** A page link's filters (?filters={"day":"today"}, the link a Tell me
+ * message's page button answers with): at most four short words by filter
+ * id; null when there are none or they are not that. */
+export function linkFilters(raw: string | null): Record<string, string> | null {
+  if (!raw || raw.length > 600) return null;
+  try {
+    const m: unknown = JSON.parse(raw);
+    if (!m || typeof m !== "object" || Array.isArray(m)) return null;
+    const entries = Object.entries(m as Record<string, unknown>);
+    if (entries.length === 0 || entries.length > 4) return null;
+    const out: Record<string, string> = {};
+    for (const [k, v] of entries) {
+      if (!/^[a-z][a-z0-9_-]{0,23}$/.test(k) || typeof v !== "string" || v.length > 100) return null;
+      out[k] = v;
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+export interface RowRunStatus {
+  status?: string;
+  words: string;
+  tone: string;
+  run?: string;
+  started_at?: string;
+  ended_at?: string;
+  waiting_for?: { kind: string; who: string; you?: boolean; request?: string }[];
+}
+
+/** A row's run status as one line: "Waiting for Ada", "Done". */
+export function runStatusLine(s: RowRunStatus | undefined): string {
+  if (!s) return "";
+  const who = (s.waiting_for ?? []).map((w) => (w.you ? "you" : w.who)).filter(Boolean);
+  return who.length ? `${s.words}: for ${who.join(", ")}` : s.words;
 }
 
 export interface PageList {
@@ -136,6 +236,9 @@ export interface DrawnRow {
   actions?: DrawnAction[];
   /** A table's yes/no cells this person may tick here, by column; null for the rest. */
   ticks?: (boolean | null)[];
+  /** Where the row's run is (the part's status): words for everyone; the
+   * run, its times and who it waits for only for those who may read runs. */
+  run_status?: RowRunStatus;
 }
 
 /** A button as drawn: pressed by its part, row and place (POST /v1/pages/{name}/act). */
@@ -237,6 +340,36 @@ export interface DrawnPart {
   error?: string;
   /** In place of a part over Taskiem's records: "You cannot see orders.", or its area is off. */
   unavailable?: string;
+  /** A board (G4): its columns with their first cards, and the move. */
+  lanes?: DrawnLane[];
+  move?: { label: string; tool: string; disabled?: string };
+  /** A chart (G4), every figure worked out by the server. */
+  kind?: "bars" | "line";
+  points?: ChartPoint[];
+  ticks?: { value: number; shown: string; share: number }[];
+  zero?: number;
+  label_head?: string;
+  value_head?: string;
+  summary?: string;
+}
+
+/** One of a board's columns as drawn. */
+export interface DrawnLane {
+  value: string;
+  label: string;
+  count: number;
+  rows: DrawnRow[];
+  more?: string | null;
+}
+
+/** One of a chart's bars or points: its place on the scale (share, 0 to 1) is the server's. */
+export interface ChartPoint {
+  label: string;
+  long: string;
+  value: number;
+  shown: string;
+  share: number;
+  tick: boolean;
 }
 
 export interface DrawnFilter {
@@ -431,7 +564,7 @@ const isDate = (c: Column) => c.type === "date" || c.type === "datetime";
 /** The columns a part may group by, order by, add up or compare by. A
  * personal column is never added up, compared by, grouped by or chosen
  * by (sum and date leave it out): the server refuses it (pages §18). */
-export function columnsFor(t: Table | undefined, what: "any" | "pick" | "number" | "sum" | "date" | "group" | "text" | "email"): { name: string; words: string }[] {
+export function columnsFor(t: Table | undefined, what: "any" | "pick" | "number" | "sum" | "date" | "group" | "text" | "mine"): { name: string; words: string }[] {
   const cols = t?.columns ?? [];
   // pick: what rows may be narrowed or ordered by; a personal column of
   // Taskiem's records is masked for everyone, and never one of them.
@@ -448,8 +581,8 @@ export function columnsFor(t: Table | undefined, what: "any" | "pick" | "number"
         return c.type === "text" && !c.personal;
       case "text":
         return c.type === "text";
-      case "email":
-        return c.type === "email";
+      case "mine":
+        return c.type === "email" || c.type === "phone";
     }
     return c.type !== "json";
   });
@@ -473,13 +606,237 @@ export const PART_KINDS: { kind: string; words: string; hint: string }[] = [
   { kind: "list", words: "A list", hint: "Rows one under another, in groups if you like" },
   { kind: "table", words: "A table", hint: "Rows in columns you pick" },
   { kind: "heading", words: "A heading", hint: "A title and a line of words" },
+  { kind: "tool-figure", words: "A figure a tool works out", hint: "One of a tool's answers, like this month's spending" },
+  { kind: "tool-list", words: "A list a tool works out", hint: "The rows a tool answers with" },
+  { kind: "buttons", words: "Buttons", hint: "Up to three for the whole page, like New ticket" },
+  { kind: "status", words: "Where a run is", hint: "Waiting, done or stopped, and who it waits for" },
+  { kind: "board", words: "A board", hint: "Rows in columns, like Open, Doing and Done; moving a card runs a tool" },
+  { kind: "chart", words: "A chart", hint: "Bars or a line: a total by week, or by kind" },
+  { kind: "tool-chart", words: "A chart a tool works out", hint: "Bars or a line of the rows a tool answers with" },
+  { kind: "tool-board", words: "A board a tool works out", hint: "The rows a tool answers with, in columns; moving a card runs a tool" },
+  { kind: "saved-list", words: "A list of saved things", hint: "Things of a kind you made, like Generators, with their dates coming up" },
 ];
 
-/** A new part of a kind over a table (or Taskiem's records), filled in with sensible choices. */
-export function newPart(kind: string, t: Table | undefined, parts: { id: string }[]): Part {
+/** The kinds that need no table (a tool, a run, or nothing feeds them). */
+export const NO_TABLE_KINDS = ["heading", "tool-figure", "tool-list", "buttons", "status", "tool-chart", "tool-board", "saved-list"];
+
+/** The kinds that read only a business's own table, never Taskiem's records. */
+export const OWN_TABLE_KINDS = ["board", "chart"];
+
+// --- the tools and workflows a page may use (GET /v1/page-choices) ---
+
+export interface ChoiceTool {
+  command: string;
+  name: string;
+  /** Answers at once (changes nothing): only such a tool feeds a part. */
+  answers: boolean;
+  outputs: { name: string; title: string; type: string }[];
+  inputs: { name: string; title: string; personal: boolean }[];
+  list?: { from: string; title: string; sub?: string };
+}
+
+export interface ChoiceWorkflow {
+  name: string;
+  /** The signals a page may send it. */
+  signals: string[];
+  approvals: { step: string; name: string }[];
+}
+
+export interface PageChoices {
+  tools: ChoiceTool[];
+  workflows: ChoiceWorkflow[];
+  /** G5: the business's kinds of saved things, names and fields only. */
+  saved_kinds?: ChoiceKind[];
+}
+
+/** The tools that may feed a part showing one figure, or a list. */
+export function feedingTools(c: PageChoices, kind: "figure" | "list"): ChoiceTool[] {
+  return c.tools.filter((t) => t.answers && t.outputs.some((o) => (kind === "list" ? o.type === "list" : o.type !== "list" && o.type !== "object")));
+}
+
+/** A CEL string literal of words: nothing in it is worked out. */
+export const quoted = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+
+/** Where a button's value comes from, in plain words: a column of the row,
+ * one of the page's filters, words written here, or nothing (asked). */
+export type ValueFrom = { from: "column"; column: string } | { from: "filter"; id: string } | { from: "words"; words: string } | { from: "asked" };
+
+/** A value as the document keeps it. */
+export function valueExpr(v: ValueFrom): string | undefined {
+  switch (v.from) {
+    case "column":
+      return v.column ? `=row.${v.column}` : undefined;
+    case "filter":
+      return v.id ? `=filters.${v.id}` : undefined;
+    case "words":
+      return v.words === "" ? undefined : v.words.startsWith("=") ? `=${quoted(v.words)}` : v.words;
+  }
+  return undefined;
+}
+
+/** A value read back for the editor: null when it was written another way (a file). */
+export function valueFrom(v: unknown): ValueFrom | null {
+  if (v === undefined) return { from: "asked" };
+  if (typeof v !== "string") return { from: "words", words: String(v) };
+  let m = /^=row\.([a-z][a-z0-9_]*)$/.exec(v);
+  if (m) return { from: "column", column: m[1] ?? "" };
+  m = /^=filters\.([a-z][a-z0-9_-]*)$/.exec(v);
+  if (m) return { from: "filter", id: m[1] ?? "" };
+  m = /^='((?:[^'\\]|\\.)*)'$/.exec(v);
+  if (m) return { from: "words", words: (m[1] ?? "").replace(/\\(.)/g, "$1") };
+  if (v.startsWith("=")) return null;
+  return { from: "words", words: v };
+}
+
+/** One "Show it only when" condition, in plain words. */
+export interface WhenCond {
+  column: string;
+  how: "is" | "is not" | "is empty" | "is not empty";
+  value?: string;
+}
+
+/** The conditions as a button's when: every one must hold. */
+export function whenExpr(conds: WhenCond[]): string | undefined {
+  const parts = conds
+    .filter((c) => c.column)
+    .map((c) => {
+      const col = `row.${c.column}`;
+      switch (c.how) {
+        case "is":
+          return `${col} == ${quoted(c.value ?? "")}`;
+        case "is not":
+          return `${col} != ${quoted(c.value ?? "")}`;
+        case "is empty":
+          return `${col} == ''`;
+        case "is not empty":
+          return `${col} != ''`;
+      }
+      return "";
+    });
+  return parts.length ? `=${parts.join(" && ")}` : undefined;
+}
+
+/** A button's when read back as conditions; null when written another way. */
+export function whenConds(when: string | undefined): WhenCond[] | null {
+  if (!when) return [];
+  if (!when.startsWith("=")) return null;
+  const out: WhenCond[] = [];
+  for (const part of when.slice(1).split(" && ")) {
+    const m = /^row\.([a-z][a-z0-9_]*) (==|!=) '((?:[^'\\]|\\.)*)'$/.exec(part.trim());
+    if (!m) return null;
+    const value = (m[3] ?? "").replace(/\\(.)/g, "$1");
+    const eq = m[2] === "==";
+    out.push(value === "" ? { column: m[1] ?? "", how: eq ? "is empty" : "is not empty" } : { column: m[1] ?? "", how: eq ? "is" : "is not", value });
+  }
+  return out;
+}
+
+/** A row's title of one column, or two with a dot between ("AC-12 · Musa"). */
+export function titleExpr(a: string, b?: string): string {
+  if (!a) return "";
+  return b ? `=row.${a} + ' · ' + row.${b}` : `=row.${a}`;
+}
+
+/** A row's title read back as its columns; [] when written another way. */
+export function titleCols(v: string | undefined): string[] {
+  const one = columnOf(v);
+  if (one) return [one];
+  const m = /^=row\.([a-z][a-z0-9_]*) \+ ' · ' \+ row\.([a-z][a-z0-9_]*)$/.exec(v ?? "");
+  return m ? [m[1] ?? "", m[2] ?? ""] : [];
+}
+
+/** New page's "Nothing yet": a page started with a heading only. */
+export const EMPTY = "empty:";
+
+/** A page's short name from its name ("Deliveries today" → deliveries-today),
+ * not one of taken (the next free: -2, -3). */
+export function pageName(title: string, taken: string[]): string {
+  let base = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^[^a-z]+/, "")
+    .slice(0, 24)
+    .replace(/-+$/, "");
+  if (base.length < 2) base = "page";
+  let name = base;
+  for (let i = 2; taken.includes(name); i++) name = `${base.slice(0, 24 - String(i).length - 1).replace(/-+$/, "")}-${i}`;
+  return name;
+}
+
+/** A new page's first draft: over Taskiem's records, how many and their
+ * rows as a list (as Show as a page does for a table); else a heading only. */
+export function newPageDoc(title: string, taken: string[], view: Table | undefined): PageDoc {
+  const t = title.trim() || view?.title || "A page";
+  const blocks: Part[] = view ? [newPart("count", view, []), newPart("list", view, [{ id: "count" }])] : [newPart("heading", undefined, [])];
+  if (!view && blocks[0]) blocks[0].title = t;
+  return { page: "page/v1", name: pageName(t, taken), title: t, icon: "tables", blocks };
+}
+
+/** Taskiem's areas a page may be a tab under, in Settings' words. */
+export const PLACE_AREAS: { area: string; words: string }[] = [
+  { area: "storefront", words: "Online shop" },
+  { area: "orders", words: "Orders" },
+  { area: "stock", words: "Stock" },
+  { area: "money", words: "Money" },
+  { area: "links", words: "Linked businesses" },
+  { area: "schools", words: "Schools" },
+];
+
+/** A new part of a kind over a table (or Taskiem's records), or a tool or
+ * a workflow the business has, filled in with sensible choices. */
+export function newPart(kind: string, t: Table | undefined, parts: { id: string }[], choices?: PageChoices): Part {
   const table = t?.name ?? "";
   const text = columnsFor(t, "text");
   const any = columnsFor(t, "any").filter((c) => c.name !== "created_at");
+  switch (kind) {
+    case "tool-figure": {
+      const tool = feedingTools(choices ?? { tools: [], workflows: [] }, "figure")[0];
+      const out = tool?.outputs.find((o) => o.type !== "list" && o.type !== "object");
+      return { id: freeId(parts, "figure"), type: "figure", label: out?.title || "A figure", value: "output", source: { tool: tool?.command ?? "", output: out?.name ?? "" } };
+    }
+    case "tool-list": {
+      const tool = feedingTools(choices ?? { tools: [], workflows: [] }, "list")[0];
+      const out = tool?.outputs.find((o) => o.type === "list");
+      const own = tool?.list && tool.list.from === out?.name ? tool.list : undefined;
+      return {
+        id: freeId(parts, "list"),
+        type: "list",
+        title: tool?.name || "List",
+        source: { tool: tool?.command ?? "", output: out?.name ?? "" },
+        item: { title: own?.title || "=item.name", ...(own?.sub ? { sub: own.sub } : {}) },
+      };
+    }
+    case "tool-board": {
+      const tool = feedingTools(choices ?? { tools: [], workflows: [] }, "list")[0];
+      const out = tool?.outputs.find((o) => o.type === "list");
+      const own = tool?.list && tool.list.from === out?.name ? tool.list : undefined;
+      return {
+        id: freeId(parts, "board"),
+        type: "board",
+        title: tool?.name || "Board",
+        source: { tool: tool?.command ?? "", output: out?.name ?? "" },
+        item: { title: own?.title || "=item.name", ...(own?.sub ? { sub: own.sub } : {}) },
+        board: { column: "status", columns: BOARD_START.map((c) => ({ ...c })) },
+      };
+    }
+    case "tool-chart": {
+      const tool = feedingTools(choices ?? { tools: [], workflows: [] }, "list")[0];
+      const out = tool?.outputs.find((o) => o.type === "list");
+      return {
+        id: freeId(parts, "chart"),
+        type: "chart",
+        title: tool?.name || "Chart",
+        source: { tool: tool?.command ?? "", output: out?.name ?? "" },
+        chart: { kind: "bars", label: "=item.name", value: "=item.total" },
+      };
+    }
+    case "saved-list":
+      return savedListPart(choices?.saved_kinds?.[0], freeId(parts, "saved"));
+    case "buttons":
+      return { id: freeId(parts, "buttons"), type: "buttons", actions: [] };
+    case "status":
+      return { id: freeId(parts, "status"), type: "status", title: "Where it is", workflow: choices?.workflows[0]?.name ?? "" };
+  }
   switch (kind) {
     case "heading":
       return { id: freeId(parts, "heading"), type: "heading", title: "A heading" };
@@ -501,6 +858,29 @@ export function newPart(kind: string, t: Table | undefined, parts: { id: string 
     }
     case "table":
       return { id: freeId(parts, "table"), type: "table", title: t?.title || t?.name || "Table", source: { table }, columns: any.slice(0, 3).map((c) => ({ column: c.name })) };
+    case "board": {
+      const title = text[0]?.name ?? any[0]?.name ?? "";
+      const by = columnsFor(t, "group").find((c) => /status|state|stage/.test(c.name)) ?? columnsFor(t, "group")[0];
+      return {
+        id: freeId(parts, "board"),
+        type: "board",
+        title: t?.title || t?.name || "Board",
+        source: { table },
+        item: { title: showColumn(title) || "='#' + row.id" },
+        board: { column: by?.name ?? "", columns: BOARD_START.map((c) => ({ ...c })) },
+      };
+    }
+    case "chart": {
+      const date = columnsFor(t, "date").find((c) => c.name !== "created_at") ?? columnsFor(t, "date")[0];
+      const num = columnsFor(t, "sum")[0];
+      return {
+        id: freeId(parts, "chart"),
+        type: "chart",
+        title: num ? `${num.words} by week` : "How many by week",
+        source: { table },
+        chart: { kind: "bars", by: date?.name ?? "created_at", period: "week", last: 8, ...(num ? { of: num.name } : {}) },
+      };
+    }
   }
   return { id: freeId(parts, "count"), type: "figure", label: t?.title || t?.name || "How many", value: "count", source: { table } };
 }
@@ -510,7 +890,8 @@ export function partWords(p: Part, tables: Table[]): string {
   const t = tables.find((x) => x.name === p.source?.table);
   const from = t ? t.title || t.name : p.source?.table ?? "";
   const where = (p.source?.filters ?? []).length ? `, only some rows` : "";
-  if (p.source?.tool) return `${p.type === "figure" ? p.label ?? "A figure" : "A list"} worked out by /${p.source.tool}`;
+  if (p.source?.saved) return savedPartWords(p, []);
+  if (p.source?.tool) return `${p.type === "figure" ? p.label ?? "A figure" : p.type === "chart" ? "A chart" : p.type === "board" ? "A board" : "A list"} worked out by /${p.source.tool}`;
   switch (p.type) {
     case "heading":
       return `Heading: ${p.title ?? ""}`;
@@ -526,6 +907,10 @@ export function partWords(p: Part, tables: Table[]): string {
       return `List of ${from}${p.group ? `, in groups by ${columnWords(t, p.group.column)}` : ""}${where}`;
     case "table":
       return `Table of ${from}: ${(p.columns ?? []).map((c) => c.label || columnWords(t, c.column)).join(", ")}${where}`;
+    case "board":
+      return `Board of ${from} in columns by ${columnWords(t, p.board?.column ?? "")}: ${(p.board?.columns ?? []).map((c) => c.label || c.value).join(", ")}${p.board?.move?.tool ? `; moving a card opens /${p.board.move.tool}` : ""}${where}`;
+    case "chart":
+      return `${p.chart?.kind === "line" ? "A line" : "Bars"} of ${p.chart?.of ? `${columnWords(t, p.chart.of)} added up` : "how many"} in ${from}, ${p.chart?.period ? `by ${p.chart.period}` : `by ${columnWords(t, p.chart?.by ?? "")}`}${where}`;
   }
   return p.type;
 }
@@ -576,7 +961,7 @@ export function filterFits(f: PageFilterDef, t: Table | undefined): boolean {
     case "dates":
       return f.column === "created_at" || (!!col && isDate(col) && !col.personal);
     case "mine":
-      return col?.type === "email" && !isRecords(t.name);
+      return (col?.type === "email" || col?.type === "phone") && !isRecords(t.name);
   }
   return false;
 }
@@ -590,7 +975,7 @@ export function withUses(doc: PageDoc, tables: Table[]): PageDoc {
     ...doc,
     blocks: doc.blocks.map((b) => {
       if (!b.source) return b;
-      if (b.type !== "list" && b.type !== "table") return { ...b, source: docSource(b.source) };
+      if (b.type !== "list" && b.type !== "table" && b.type !== "board") return { ...b, source: docSource(b.source) };
       const t = tables.find((x) => x.name === b.source?.table);
       const uses = filters.filter((f) => filterFits(f, t)).map((f) => f.id);
       const source = { ...b.source };
@@ -728,4 +1113,84 @@ export function liveQueue(read: (ids: string[], all: boolean) => Promise<void> |
       pending = new Set();
     },
   };
+}
+
+// --- a board and a chart (G4) ---
+
+/** A new board's columns, until the owner names their own. */
+export const BOARD_START: { value: string; label: string }[] = [
+  { value: "open", label: "Open" },
+  { value: "doing", label: "Doing" },
+  { value: "done", label: "Done" },
+];
+
+/** The column next to one (by -1 to the left, 1 to the right), for moving a card by the keyboard; the same at either end. */
+export function laneStep(lanes: string[], at: string, by: -1 | 1): string {
+  const i = lanes.indexOf(at);
+  if (i < 0) return lanes[0] ?? at;
+  return lanes[Math.min(lanes.length - 1, Math.max(0, i + by))] ?? at;
+}
+
+/** What a screen reader is told while a card is moved by the keyboard. */
+export function moveWords(step: "picked" | "over" | "dropped" | "left", card: string, lane: string, from?: string): string {
+  switch (step) {
+    case "picked":
+      return `${card} picked up, in ${lane}. Left and right arrows choose a column, Enter moves it there, Escape leaves it.`;
+    case "over":
+      return lane === from ? `${card} stays in ${lane}.` : `Move ${card} to ${lane}?`;
+    case "dropped":
+      return `Moving ${card} to ${lane}.`;
+    case "left":
+      return `${card} left in ${lane}.`;
+  }
+}
+
+/** Where each bar or point is drawn in a plot of this width and height,
+ * from the server's places on its scale (share, zero): nothing is worked
+ * out here but the pixels. */
+export function chartLayout(points: ChartPoint[], zero: number, width: number, height: number) {
+  const n = Math.max(1, points.length);
+  const band = width / n;
+  const bar = Math.max(4, Math.min(24, band - 8));
+  const y = (share: number) => height - share * height;
+  return points.map((p, i) => {
+    const cx = band * i + band / 2;
+    const top = Math.min(y(p.share), y(zero));
+    const bottom = Math.max(y(p.share), y(zero));
+    return { cx, x: cx - bar / 2, w: bar, y: y(p.share), top, h: bottom - top, band, up: p.share >= zero };
+  });
+}
+
+/** A bar's outline: 4px round at its data end, square on its foot (pages G4, as the money screens' bars). */
+export function barPath(x: number, top: number, w: number, h: number, up: boolean): string {
+  if (h <= 0) return "";
+  const r = Math.min(4, w / 2, h);
+  if (up) {
+    return `M${x},${top + h}V${top + r}Q${x},${top} ${x + r},${top}H${x + w - r}Q${x + w},${top} ${x + w},${top + r}V${top + h}Z`;
+  }
+  const b = top + h;
+  return `M${x},${top}V${b - r}Q${x},${b} ${x + r},${b}H${x + w - r}Q${x + w},${b} ${x + w},${b - r}V${top}Z`;
+}
+
+/** Where a board's move value comes from: the column the card goes to, or as a button's (the card's column, words, asked). */
+export type MoveFrom = { from: "to" } | ValueFrom;
+
+/** A move's value read back for the editor: null when written another way (a file). */
+export function moveFrom(v: unknown): MoveFrom | null {
+  return v === "=to" ? { from: "to" } : valueFrom(v);
+}
+
+/** A move's value as the document keeps it. */
+export function moveExpr(v: MoveFrom): string | undefined {
+  return v.from === "to" ? "=to" : valueExpr(v);
+}
+
+/** A move tool's first values: an input named for the board's column (or a status) gets the column the card goes to; one named for the card's number gets it. */
+export function moveInputs(tool: ChoiceTool | undefined, column: string, fromTool = false): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {};
+  for (const i of tool?.inputs ?? []) {
+    if (i.name === column || /status|state|stage|column/.test(i.name)) out[i.name] = "=to";
+    else if (!fromTool && /^(id|ref|row|number|ticket)$/.test(i.name)) out[i.name] = "=row.id";
+  }
+  return Object.keys(out).length ? out : undefined;
 }

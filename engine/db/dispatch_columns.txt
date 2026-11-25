@@ -704,6 +704,7 @@ oauth_connection_requests.kek_version
 oauth_connection_requests.mode
 oauth_connection_requests.name
 oauth_connection_requests.person
+oauth_connection_requests.replaces
 oauth_connection_requests.state_hash
 oauth_connection_requests.tenant_id
 oauth_connection_requests.used_at
@@ -1423,6 +1424,10 @@ users.status
 ussd_sessions.tenant_id
 voice_transcripts.expires_at
 voice_transcripts.id
+wallet_accounts.account_key
+wallet_accounts.mode
+wallet_accounts.tenant_id
+wallet_accounts.wallet_id
 webauthn_credentials.alg
 webauthn_credentials.id
 webauthn_credentials.public_key
@@ -1444,7 +1449,6 @@ whatsapp_numbers.created_by
 whatsapp_numbers.display_number
 whatsapp_numbers.own_app
 whatsapp_numbers.phone_number_id
-whatsapp_numbers.public_menu
 whatsapp_numbers.source
 whatsapp_numbers.status
 whatsapp_numbers.tenant_id
@@ -1728,6 +1732,12 @@ saved_files.tenant_id
 saved_files.object_id
 saved_files.path
 saved_files.created_at
+saved_file_links.token_hash
+saved_file_links.tenant_id
+saved_file_links.object_id
+saved_file_links.expires_at
+saved_uses.tenant_id
+saved_uses.run_id
 saved_reminders.id
 saved_reminders.last_sent
 saved_reminders.person_id

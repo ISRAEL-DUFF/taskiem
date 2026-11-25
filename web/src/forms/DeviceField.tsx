@@ -7,6 +7,9 @@
 // the code typed. A refusal is an answer.
 import { useEffect, useId, useRef, useState } from "react";
 import {
+  canScanWithCamera,
+  scanFormatOf,
+  scanFormatsOf,
   deviceSummary,
   labelOf,
   locationAnswer,
@@ -146,16 +149,12 @@ export function DeviceField({
         />
       )}
       {kind === "scan" && (
-        <input
-          aria-label={`${label}: type the code`}
-          placeholder="The code under the barcode"
-          onChange={(e) =>
-            onChange(
-              e.target.value.trim()
-                ? { text: e.target.value.trim() }
-                : undefined,
-            )
-          }
+        <CodeScan
+          label={label}
+          formats={scanFormatsOf(schema)}
+          allowTyped={p.allow_typed !== false}
+          value={value}
+          onChange={onChange}
         />
       )}
       {summary && (
@@ -185,6 +184,133 @@ export function DeviceField({
         </p>
       )}
     </fieldset>
+  );
+}
+
+/** The browser's own barcode reader (no outside library). */
+interface Detector {
+  detect(v: HTMLVideoElement): Promise<{ rawValue: string; format: string }[]>;
+}
+type DetectorClass = {
+  new (o: { formats: string[] }): Detector;
+  getSupportedFormats(): Promise<string[]>;
+};
+
+/** A code: typed, or (build-plan-gaps H3, g-scan-web) read by the camera
+ * where the browser has a barcode reader, asked only at the tap. A code
+ * read keeps its format (the server marks it read by the camera); typed
+ * over, it is typed. */
+function CodeScan({
+  label,
+  formats,
+  allowTyped,
+  value,
+  onChange,
+}: {
+  label: string;
+  formats: string[];
+  allowTyped: boolean;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const video = useRef<HTMLVideoElement>(null);
+  const stream = useRef<MediaStream | null>(null);
+  const timer = useRef<number>(0);
+  const [on, setOn] = useState(false);
+  const [problem, setProblem] = useState("");
+  const [usable, setUsable] = useState<string[]>([]);
+  const text = (value as { text?: string } | undefined)?.text ?? "";
+
+  useEffect(() => {
+    if (!canScanWithCamera()) return;
+    const D = (window as unknown as { BarcodeDetector: DetectorClass }).BarcodeDetector;
+    D.getSupportedFormats()
+      .then((have) => setUsable(have.filter((f) => formats.includes(scanFormatOf(f) ?? ""))))
+      .catch(() => setUsable([]));
+  }, [formats]);
+
+  const stop = () => {
+    window.clearTimeout(timer.current);
+    stream.current?.getTracks().forEach((t) => t.stop());
+    stream.current = null;
+    setOn(false);
+  };
+  useEffect(() => stop, []);
+
+  const start = async () => {
+    setProblem("");
+    const D = (window as unknown as { BarcodeDetector: DetectorClass }).BarcodeDetector;
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+      stream.current = s;
+      setOn(true);
+      const v = video.current;
+      if (!v) return stop();
+      v.srcObject = s;
+      await v.play();
+      const detector = new D({ formats: usable });
+      const look = async () => {
+        if (!stream.current) return;
+        try {
+          const found = await detector.detect(v);
+          const hit = found.find((c) => formats.includes(scanFormatOf(c.format) ?? ""));
+          if (hit) {
+            onChange({ text: hit.rawValue, format: scanFormatOf(hit.format) });
+            stop();
+            return;
+          }
+        } catch {
+          // A frame not ready yet: the next one.
+        }
+        timer.current = window.setTimeout(() => void look(), 300);
+      };
+      void look();
+    } catch (e) {
+      stop();
+      setProblem(
+        (e as { name?: string }).name === "NotAllowedError"
+          ? "The camera was not allowed. Type the code instead."
+          : "The camera could not start. Type the code instead.",
+      );
+    }
+  };
+
+  return (
+    <div className="code-scan">
+      {usable.length > 0 && (
+        <div className="toolbar">
+          <button type="button" onClick={() => (on ? stop() : void start())}>
+            {on ? "Stop the camera" : "Scan with the camera"}
+          </button>
+        </div>
+      )}
+      {usable.length > 0 && (
+        <video
+          ref={video}
+          hidden={!on}
+          className="code-scan-video"
+          playsInline
+          muted
+          aria-label={`${label}: the camera's view; hold the code in front of it`}
+        />
+      )}
+      {(allowTyped || text) && (
+        <input
+          aria-label={`${label}: type the code`}
+          placeholder="The code under the barcode"
+          value={text}
+          readOnly={!allowTyped}
+          onChange={(e) =>
+            onChange(e.target.value.trim() ? { text: e.target.value.trim() } : undefined)
+          }
+        />
+      )}
+      {problem && (
+        <p className="hint" role="alert">
+          {problem}
+        </p>
+      )}
+    </div>
   );
 }
 

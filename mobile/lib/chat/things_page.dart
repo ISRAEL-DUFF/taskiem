@@ -7,6 +7,8 @@
 // Seen with table.read, changed with table.edit; sold with a price is
 // money in (Sale of things we had), which needs invoice.manage too.
 
+import 'dart:async' show Timer;
+
 import 'package:flutter/material.dart' show showDatePicker;
 import 'package:flutter/widgets.dart';
 
@@ -16,7 +18,7 @@ import '../app/auth.dart';
 import '../app/session.dart' show uuid4;
 import '../kit/forms.dart' show TkMoneyField, nairaKobo;
 import '../kit/kit.dart' show TkSmallButton;
-import '../kit/list.dart' show TkEmpty, TkLoading;
+import '../kit/list.dart' show TkEmpty, TkLoading, TkSearchBox;
 import '../kit/look.dart' show TkCallout, TkEyebrow, TkSplitBar, TkSquare, TkTopCard, tkFigure;
 import '../kit/mobile.dart' show TkCountUp, TkFormGroup, TkFormSheet, TkHeadButton, TkListRow, TkRoute, TkSection, TkChips, TkTick;
 import '../kit/modal.dart' show showTkToast;
@@ -29,7 +31,7 @@ import 'book_sheet.dart' show lagosDay;
 import 'groups.dart' show pickAction, pickOneOf;
 import 'money_sheets.dart' show dateLabel;
 import 'purchases_page.dart' show openPurchase;
-import 'treat_line.dart' show LabelPickSheet, TreatChoices;
+import 'treat_line.dart' show LabelPickSheet, Treat, TreatChoices;
 import 'words.dart' show CardTone, naira;
 
 String _why(Object e) => e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.';
@@ -60,6 +62,26 @@ String thingSub(Thing t) => [(t.label ?? '').isEmpty ? 'Not labelled' : t.label!
 /// "1 thing", "3 things".
 String thingsCount(int n) => n == 1 ? '1 thing' : '$n things';
 
+/// Whether Money is only Things we have for someone: they may see stock
+/// (table.read) but not invoices (build-plan-gaps H2, g-things-menu; the
+/// web's thingsOnly).
+bool thingsOnly(Auth auth) => auth.can('table.read') && !auth.can('invoice.read');
+
+/// The rows a search keeps: each of its words in the name, label,
+/// supplier, serial, note or the order's number, without case.
+List<Thing> searchThings(List<Thing> things, String q) {
+  final words = q.trim().toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return things;
+  return [
+    for (final t in things)
+      if (() {
+        final text = [t.name, t.label, t.supplier, t.serial, t.note, t.orderReference].whereType<String>().join(' ').toLowerCase();
+        return words.every(text.contains);
+      }())
+        t,
+  ];
+}
+
 /// Things we have, opened from Money's Go to (or from an order's lines,
 /// [order] then the order the rows came on).
 class ThingsPage extends StatefulWidget {
@@ -84,12 +106,20 @@ class _ThingsPageState extends State<ThingsPage> {
   bool _all = false;
   String _by = 'date';
   int _asked = 0;
+  final _q = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _all = widget.order != null;
+    _q.addListener(() => setState(() {}));
     _load();
+  }
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -141,8 +171,11 @@ class _ThingsPageState extends State<ThingsPage> {
     final look = TkLook.of(context);
     final order = widget.order;
     final list = _things;
-    final had = list?.where((x) => x.status == 'have').toList() ?? const <Thing>[];
-    final gone = list?.where((x) => x.status != 'have').toList() ?? const <Thing>[];
+    // A search keeps the rows it finds; the top card stays what is had.
+    final q = _q.text.trim();
+    final found = list == null ? null : searchThings(list, q);
+    final had = found?.where((x) => x.status == 'have').toList() ?? const <Thing>[];
+    final gone = found?.where((x) => x.status != 'have').toList() ?? const <Thing>[];
     final colours = [look.violet, look.teal, look.orange, look.blue];
     final edit = widget.auth.can('table.edit');
     return TkPageScreen(
@@ -193,14 +226,18 @@ class _ThingsPageState extends State<ThingsPage> {
             '${widget.orderReference == null ? 'From this order' : 'From ${widget.orderReference}'}: ${thingsCount(list.length)}',
             style: tkText(size: 13.5, color: t.muted),
           ),
+        if (list != null && list.isNotEmpty && order == null)
+          TkSearchBox(controller: _q, hint: 'Search by name, label, supplier or serial', label: 'Search Things we have', margin: EdgeInsets.zero),
         if (list != null && list.isEmpty && order == null)
           TkEmpty(
             icon: 'tag',
             title: _all ? 'Nothing on Things we have yet' : 'Nothing kept track of yet',
             line: 'Order something with Keep track of it, or add what you already have.',
           ),
-        if (list != null && had.isNotEmpty && (_by == 'date' || order != null)) TkSection(title: order == null ? 'What we have' : null, children: [for (final x in had) _row(x)]),
-        if (list != null && had.isNotEmpty && _by == 'label' && order == null)
+        if (list != null && list.isNotEmpty && q.isNotEmpty && found!.isEmpty)
+          TkEmpty(icon: 'search', title: 'Nothing matches “$q”', line: 'Try part of its name, its label, its supplier or its serial number.'),
+        if (list != null && had.isNotEmpty && (_by == 'date' || order != null || q.isNotEmpty)) TkSection(title: order == null ? 'What we have' : null, children: [for (final x in had) _row(x)]),
+        if (list != null && had.isNotEmpty && _by == 'label' && order == null && q.isEmpty)
           for (final g in _groups)
             TkSection(
               title: g.label.isEmpty ? 'Not labelled' : g.label,
@@ -359,6 +396,35 @@ class _ThingPageState extends State<ThingPage> {
     await _patch(PatchThingRequest(labelId: l.id), 'Labelled ${l.name}');
   }
 
+  /// From whom: one of the business's suppliers, or Not said.
+  Future<void> _supplier() async {
+    List<Map<String, dynamic>> list;
+    try {
+      final r = (await widget.auth.transport.send('GET', '/v1/stock/suppliers') as Map).cast<String, dynamic>();
+      list = (r['suppliers'] as List? ?? const []).whereType<Map<String, dynamic>>().toList();
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, _why(e), error: true);
+      return;
+    }
+    if (!mounted) return;
+    final id = await pickOneOf(
+      context,
+      title: 'From whom',
+      value: _t.supplierId ?? '',
+      searchHint: list.length > 8 ? 'Search your suppliers' : null,
+      choices: [
+        ('', 'Not said', 'Bought outside your suppliers'),
+        for (final s in list) ('${s['id']}', '${s['name']}', ''),
+      ],
+    );
+    if (id == null || !mounted || id == (_t.supplierId ?? '')) return;
+    if (id.isEmpty) {
+      await _patch(const PatchThingRequest(clearSupplier: true), 'Supplier taken off');
+      return;
+    }
+    await _patch(PatchThingRequest(supplierId: id), 'From ${list.firstWhere((s) => s['id'] == id)['name']}');
+  }
+
   Widget _choice(String s, String sub, bool edit) => Semantics(
     selected: _t.status == s,
     child: TkListRow(
@@ -501,7 +567,15 @@ class _ThingPageState extends State<ThingPage> {
             title: 'Where it came from',
             inset: 56,
             children: [
-              TkListRow(title: 'From', sub: (x.supplier ?? '').isEmpty ? 'Not said' : x.supplier!, icon: 'b-truck', square: look.violet, chevron: false),
+              TkListRow(
+                title: 'From',
+                sub: (x.supplier ?? '').isEmpty ? 'Not said' : x.supplier!,
+                icon: 'b-truck',
+                square: look.violet,
+                chevron: edit,
+                semanticsLabel: 'From: ${(x.supplier ?? '').isEmpty ? 'Not said' : x.supplier!}',
+                onTap: edit && !_busy ? _supplier : null,
+              ),
               if (order.isNotEmpty)
                 TkListRow(
                   title: (x.orderReference ?? '').isEmpty ? 'The order it came on' : 'Order ${x.orderReference}',
@@ -693,12 +767,31 @@ class _AddThingSheetState extends State<AddThingSheet> {
 
   List<TextEditingController> get _all => [_name, _cost, _serial, _note];
 
+  /// The name once it settles, for its suggested label; the label picked
+  /// by the person (or No label), which a suggestion never replaces.
+  String _named = '';
+  Timer? _settle;
+  bool _picked = false;
+
+  /// The label as it will be added: picked, else the server's suggestion
+  /// for the name (made when the row is added, if not a label yet).
+  ({String? id, String name})? get _labelNow => _picked ? _label : (_named.isEmpty ? null : _choices.suggestedLabel(_named));
+
   @override
   void initState() {
     super.initState();
     for (final c in _all) {
       c.addListener(() => setState(() {}));
     }
+    _name.addListener(() {
+      _settle?.cancel();
+      _settle = Timer(const Duration(milliseconds: 600), () {
+        if (mounted && _named != _name.text.trim()) setState(() => _named = _name.text.trim());
+      });
+    });
+    _choices.addListener(() {
+      if (mounted) setState(() {});
+    });
     _choices.load();
     () async {
       try {
@@ -715,6 +808,7 @@ class _AddThingSheetState extends State<AddThingSheet> {
     for (final c in _all) {
       c.dispose();
     }
+    _settle?.cancel();
     _choices.dispose();
     super.dispose();
   }
@@ -730,9 +824,9 @@ class _AddThingSheetState extends State<AddThingSheet> {
     if (!mounted) return;
     final l = await showTkSheet<({String? id, String name})>(
       context,
-      (_) => LabelPickSheet(choices: _choices, item: _name.text.trim().isEmpty ? 'Something we have' : _name.text.trim(), now: _label?.id),
+      (_) => LabelPickSheet(choices: _choices, item: _name.text.trim().isEmpty ? 'Something we have' : _name.text.trim(), now: _labelNow?.id),
     );
-    if (l != null && mounted) setState(() => _label = l.name.isEmpty ? null : l);
+    if (l != null && mounted) setState(() => (_label = l.name.isEmpty ? null : l, _picked = true));
   }
 
   Future<void> _pickSupplier() async {
@@ -764,10 +858,13 @@ class _AddThingSheetState extends State<AddThingSheet> {
   Future<void> _save() async {
     setState(() => (_busy = true, _error = null));
     try {
+      // A suggested label not yet a label is made now.
+      final l = _labelNow;
+      final labelId = l == null ? null : (await _choices.madeOrNone(Treat(labelId: l.id, label: l.name))).labelId;
       final r = await widget.auth.api.addThing(
         body: AddThingRequest(
           name: _name.text.trim(),
-          labelId: _label?.id,
+          labelId: labelId,
           supplierId: _supplier?.id,
           costKobo: _cost.text.trim().isEmpty ? null : nairaKobo(_cost.text),
           receivedAt: _came == null ? null : DateTime.utc(_came!.year, _came!.month, _came!.day, 11),
@@ -822,7 +919,8 @@ class _AddThingSheetState extends State<AddThingSheet> {
             TkKitField(
               field: false,
               label: 'Label',
-              child: TkPickBox(label: 'Label', shown: _label?.name ?? 'Not labelled', onTap: _pickLabel),
+              hint: !_picked && _labelNow != null ? 'Suggested from its name' : null,
+              child: TkPickBox(label: 'Label', shown: _labelNow?.name ?? 'Not labelled', onTap: _pickLabel),
             ),
           ],
         ),

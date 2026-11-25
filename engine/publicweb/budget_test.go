@@ -3,6 +3,7 @@ package publicweb
 import (
 	"io/fs"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -17,7 +18,7 @@ const (
 	maxPageHTML   = 60 << 10 // per page, before images
 	maxStylesPage = 36 << 10 // the stylesheets a page loads: its theme's (a skin's, on top of the theme it is drawn on), its colour's and the shop sheet every page has
 	maxBasketJS   = 10 << 10 // the basket's scripts, which an order page loads together: the total and − + (order.js) and the bag (bagpill.js)
-	maxScriptTot  = 16 << 10 // every script together
+	maxScriptTot  = 16 << 10 // the scripts one kind of page may load together: a shop's (the basket, the item sheet, copying), a form's (framing, device fields)
 )
 
 func TestPageBudget(t *testing.T) {
@@ -37,10 +38,15 @@ func TestPageBudget(t *testing.T) {
 			t.Errorf("%s: page is %d bytes, budget %d", path, n, maxPageHTML)
 		}
 	}
-	var js, basket int
-	for name, a := range assets {
-		if strings.HasSuffix(name, ".js") {
-			js += len(a.body)
+	var basket int
+	kinds := map[string][]string{"shop": {"order.js", "bagpill.js", "item.js", "copy.js"}, "form": {"form-embed.js", "form-device.js"}}
+	var every []string
+	for _, names := range kinds {
+		every = append(every, names...)
+	}
+	for name := range assetNames {
+		if strings.HasSuffix(name, ".js") && !slices.Contains(every, name) {
+			t.Errorf("%s: a script no page kind is counted with; add it to one", name)
 		}
 	}
 	for _, name := range []string{"order.js", "bagpill.js"} {
@@ -53,8 +59,14 @@ func TestPageBudget(t *testing.T) {
 	if basket > maxBasketJS {
 		t.Errorf("the basket's scripts: %d bytes (budget %d)", basket, maxBasketJS)
 	}
-	if js > maxScriptTot {
-		t.Errorf("static files: js %d bytes (budget %d)", js, maxScriptTot)
+	for kind, names := range kinds {
+		js := 0
+		for _, name := range names {
+			js += len(assets[strings.TrimPrefix(assetNames[name], staticPrefix)].body)
+		}
+		if js > maxScriptTot {
+			t.Errorf("a %s page's scripts: %d bytes (budget %d)", kind, js, maxScriptTot)
+		}
 	}
 	// A page loads one theme's stylesheet, and its colour's.
 	colour := len(brand.PaletteOf("#0b6e4f").CSS()) + len(assets[strings.TrimPrefix(assetNames["item-sheet.css"], staticPrefix)].body)
