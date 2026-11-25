@@ -31,6 +31,7 @@ import '../kit/mobile.dart';
 import '../kit/modal.dart' show showTkToast;
 import '../kit/sheet.dart';
 import '../screens/sign_in.dart' show CodeBoxes;
+import '../screens/you_pin.dart' show pinDigits;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
@@ -1221,7 +1222,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
                   ? 'Taskiem never asks for your PIN in a message.'
                   : 'Pays up to ${naira(_pinLimit!)} now. Taskiem never asks for your PIN in a message.',
               field: false,
-              child: CodeBoxes(key: const ValueKey('pay-pin'), controller: _pin, obscure: true, hint: 'Your PIN'),
+              child: CodeBoxes(key: const ValueKey('pay-pin'), controller: _pin, length: pinDigits, obscure: true, hint: 'Your PIN'),
             ),
           ],
         ),
@@ -1286,7 +1287,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
     if (!prepared) {
       return TkFormSheet(title: 'Payment', crumb: 'Pay', action: 'Done', onAction: () => Navigator.of(context).pop(), overlay: overlay, children: children);
     }
-    final ready = !_busy && (_usePin ? pin.length == 6 : (!_useCode || code.length == 6));
+    final ready = !_busy && (_usePin ? pin.length == pinDigits : (!_useCode || code.length == 6));
     return TkFormSheet(
       title: 'Check before you pay',
       crumb: 'Pay',
