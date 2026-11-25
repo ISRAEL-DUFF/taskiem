@@ -69,7 +69,10 @@ test("every payment in and out, filtered, searched and opened", async ({ page })
   await expect(page).toHaveURL(/q=12%2C345/);
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Transactions e2e sales");
-  await expect(rows.first()).toContainText("Not matched");
+  // Not matched, or To match once the matcher has looked at it (moments
+  // later, so either can show here); never Taskiem's own reference.
+  await expect(rows.first()).toContainText(/Not matched|To match/);
+  await expect(rows.first()).not.toContainText("entered:");
 
   // Its own page: the amount on the hero, then the details.
   await rows.first().click();

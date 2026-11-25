@@ -16,6 +16,7 @@ import {
   narrowed,
   otherLine,
   pendingLine,
+  shownReference,
   sourceWords,
   statusWord,
   totalsHero,
@@ -309,10 +310,10 @@ export function MoneyTransaction() {
               )}
               <dt>Where</dt>
               <dd>{whereWords(m.channel) || "—"}</dd>
-              {m.reference && (
+              {shownReference(m.reference) && (
                 <>
                   <dt>Reference</dt>
-                  <dd>{m.reference}</dd>
+                  <dd>{shownReference(m.reference)}</dd>
                 </>
               )}
               {m.description && m.description !== txTitle(m) ? (

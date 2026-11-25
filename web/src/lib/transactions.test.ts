@@ -19,6 +19,7 @@ import {
   txProblem,
   txStatus,
   txSub,
+  shownReference,
   txTitle,
   whereWords,
   type Movement,
@@ -116,6 +117,11 @@ describe("a row's words", () => {
   it("says where, the reference and what it counts towards", () => {
     expect(txSub(m({ towards: "invoice INV-0104" }))).toBe("Paystack (main) · P-1 · invoice INV-0104");
     expect(txSub(m({ kind: "cash", description: "Cash from Bisi", channel: "cash", reference: "Cash from Bisi" }))).toBe("Cash");
+    // Taskiem's own references never show; a payments account's do.
+    expect(txSub(m({ kind: "cash", description: "Sales", channel: "till-1", reference: "entered:87a17496-5fdf-419f-af00-6b819d42a402" }))).not.toContain("entered:");
+    for (const r of ["entered:1", "sale:k", "posting:p", "chat:n", "tnt:x", "purchase:y", "thing-sale:z", "withdraw:w", "delivery-fee:d"]) expect(shownReference(r)).toBe("");
+    for (const r of ["P-1", "T1234567890", "TRF-0099"]) expect(shownReference(r)).toBe(r);
+    expect(shownReference(undefined)).toBe("");
     expect(whereWords("iswallet/taskiem")).toBe("Taskiem wallet");
     expect(whereWords(undefined)).toBe("");
   });

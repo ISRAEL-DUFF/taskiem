@@ -141,13 +141,21 @@ String txAmount({int? amountKobo, required String direction, String? currency}) 
   return '${direction == 'in' ? '+' : '−'}$amount';
 }
 
+/// Taskiem's own references in the money log (`entered:` and an id, `sale:` and a key,
+/// `posting:` and an id…): keys it keeps to record each movement once, which mean
+/// nothing to a person (as the web's shownReference).
+final _internalReference = RegExp(r'^(entered|chat|sale|rider-fee|remittance|posting|delivery|delivery-fee|tnt|payment|payments|purchase|thing-sale|withdraw):');
+
+/// The reference as a person sees it: '' for one of Taskiem's own.
+String shownReference(String? ref) => ref == null || _internalReference.hasMatch(ref) ? '' : ref;
+
 /// A row's line: "Paystack (main) · P-1 · invoice INV-0104".
 String txSub(Movement m) {
   final typed = (m.description ?? '').isNotEmpty || (m.vendor ?? '').isNotEmpty;
   final parts = <String>[
     if (typed) kindWords(m.kind),
     whereWords(m.channel),
-    if ((m.reference ?? '').isNotEmpty && m.reference != m.description) m.reference!,
+    if (shownReference(m.reference).isNotEmpty && m.reference != m.description) m.reference!,
     if ((m.towards ?? '').isNotEmpty) m.towards!,
   ].where((s) => s.isNotEmpty);
   return parts.toSet().join(' · ');
@@ -608,7 +616,7 @@ class _MoneyTransactionPageState extends State<MoneyTransactionPage> {
                 if (who.isNotEmpty) (out ? 'To' : 'From', [who, if ((a?.payerAccount ?? '').isNotEmpty) a!.payerAccount!].join(' · ')),
                 ('Fee', (d.feeKobo ?? 0) > 0 ? naira(d.feeKobo!) : 'None'),
                 ('Account', whereWords(d.channel).isEmpty ? '—' : whereWords(d.channel)),
-                if ((d.reference ?? '').isNotEmpty) ('Reference', d.reference!),
+                if (shownReference(d.reference).isNotEmpty) ('Reference', d.reference!),
                 if ((d.description ?? '').isNotEmpty && d.description != title) ('Description', d.description!),
                 if ((d.category ?? '').isNotEmpty) ('Label', d.category!),
                 if ((d.note ?? '').isNotEmpty) ('Note', d.note!),
