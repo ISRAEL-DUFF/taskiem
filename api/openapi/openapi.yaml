@@ -33481,11 +33481,12 @@ paths:
       tags:
       - Account
       summary: Ask for a code to set your PIN
-      description: 'A six-digit code to the account''s phone (by WhatsApp, else SMS; `via: "sms"` asks for SMS), good only for setting or changing the PIN (PUT /v1/me/pin {code}), for 10 minutes. 409 `no_phone` for an account with no phone (it confirms with its passkey); 429 as other codes are limited. A personal session reaches it.'
+      description: 'A six-digit code to the account''s phone (by WhatsApp, else SMS; `via: "sms"` asks for SMS), good only for setting or changing the PIN (PUT /v1/me/pin {code}), for 10 minutes. 409 `no_phone` for an account with no phone (it confirms with its passkey); 429 as other codes are limited; 403 for an API key. A personal session reaches it.'
       security:
       - sessionCookie: []
         csrfHeader: []
       - sessionToken: []
+      - apiKey: []
       requestBody:
         content:
           application/json:
