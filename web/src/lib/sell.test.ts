@@ -4,6 +4,7 @@ import {
   areaName,
   areaOffOf,
   dearerEach,
+  newerVersionOf,
   packageLabel,
   readPackages,
   startingRows,
@@ -80,5 +81,15 @@ describe("forms that sell", () => {
     expect(areaOffOf(new ApiError(409, "no"))).toBe("");
     expect(areaOffOf(new Error("x"))).toBe("");
     expect(areaName("storefront")).toBe("Storefront");
+  });
+
+  it("knows a refusal for a newer version to publish first", () => {
+    expect(
+      newerVersionOf(
+        new ApiError(409, "newer", [], { code: "newer_version", newer_version: 3 }),
+      ),
+    ).toBe(3);
+    expect(newerVersionOf(new ApiError(409, "off", [], { area_off: "storefront" }))).toBe(0);
+    expect(newerVersionOf(new Error("x"))).toBe(0);
   });
 });

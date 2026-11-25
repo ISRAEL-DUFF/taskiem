@@ -489,28 +489,47 @@ func (o *Orders) checkPrices(ctx context.Context, x inboxRow, sub Submission, op
 		}
 	}
 	live, err := o.Live.Items(ctx, x.tenant, from, ids)
+	var pf PackagesField
+	var only []string
+	if err == nil {
+		// The page as published: what a package costs, and the rows a
+		// basket offers. Unread, prices are not checked, as when the table
+		// does not answer: never every package line gone.
+		pf, only, err = o.publishedForm(ctx, x)
+	}
 	if err != nil {
 		if o.now().Sub(sub.Submitted) < PriceCheckGrace {
 			return PriceChange{}, false, "", fmt.Errorf("price check: %w", err)
 		}
-		o.log().Warn("storefront: prices not checked; the table did not answer", "reference", x.reference, "err", err)
+		o.log().Warn("storefront: prices not checked; the table or the published page could not be read", "reference", x.reference, "err", err)
 		return PriceChange{}, false, "Prices were not checked: the table could not be read", nil
 	}
-	pc, changed := reprice(sub, live, opts, o.publishedPackages(ctx, x))
+	// A row the form's basket does not name is gone, as a row the table
+	// lost is: the form never offered it.
+	for id, it := range live {
+		if !OnForm(it, only) {
+			delete(live, id)
+		}
+	}
+	pc, changed := reprice(sub, live, opts, pf)
 	return pc, changed, "", nil
 }
 
-// publishedPackages is the packages field of the action a submission was
-// sent to, as the storefront has it published now: what a package costs.
-// None when the action sells no packages, or cannot be read: a package's
-// lines are then gone, never priced from anything else.
-func (o *Orders) publishedPackages(ctx context.Context, x inboxRow) PackagesField {
+// publishedForm reads the action a submission was sent to as the
+// storefront has it published now: its packages field (what a package
+// costs; none when it sells no packages, whose lines are then gone) and
+// the rows its basket names (nil: every row).
+func (o *Orders) publishedForm(ctx context.Context, x inboxRow) (PackagesField, []string, error) {
 	var pf PackagesField
+	var only []string
 	if x.action == nil {
-		return pf
+		return pf, nil, nil
 	}
-	_ = db.InTenantTx(ctx, o.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
+	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
 		m, err := PublishedModel(ctx, tx, x.tenant)
+		if errors.Is(err, ErrNotFound) {
+			return nil // never published: nothing it offers
+		}
 		if err != nil {
 			return err
 		}
@@ -518,12 +537,13 @@ func (o *Orders) publishedPackages(ctx context.Context, x inboxRow) PackagesFiel
 			for _, a := range f.Actions {
 				if a.ID != nil && *a.ID == *x.action {
 					pf, _ = FormPackages(a.Form)
+					only = BasketItems(a.Form)
 				}
 			}
 		}
 		return nil
 	})
-	return pf
+	return pf, only, err
 }
 
 func priceChangedText(ord Order) string {

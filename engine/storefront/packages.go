@@ -145,6 +145,20 @@ func BasketItems(form []byte) []string {
 	return nil
 }
 
+// OnForm reports whether a basket whose form names ids (nil: every row)
+// may order it: a row named, or a size or colour of one.
+func OnForm(it Item, ids []string) bool {
+	if len(ids) == 0 {
+		return true
+	}
+	for _, id := range ids {
+		if it.ID == id || (it.VariantOf != "" && it.VariantOf == id) {
+			return true
+		}
+	}
+	return false
+}
+
 // OneItem is the single product a form sells, when it names one: its
 // packages field's item, or a basket of one row (§5.3). The page draws it
 // at the top and never asks the buyer to pick a product.

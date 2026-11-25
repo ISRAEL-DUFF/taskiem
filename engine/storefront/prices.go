@@ -86,9 +86,22 @@ func reprice(sub Submission, live map[string]Item, opts ActionOptions, published
 		}
 	}
 	pkgPrice := pkgLeft
-	for i, l := range sub.Basket {
+	// A package is had whole or not at all: when one of its lines is gone
+	// (a size sold out), what is left of it is no package the form offers,
+	// so every line of it goes, never the survivor at the package's price.
+	gone := func(l Line) bool {
 		it, ok := live[l.ID]
-		if !ok || !it.Available || it.PriceKobo == nil || it.SoldOut() || (l.PackageQty > 0 && pkgPrice == 0) {
+		return !ok || !it.Available || it.PriceKobo == nil || it.SoldOut()
+	}
+	pkgGone := false
+	for _, l := range sub.Basket {
+		if l.PackageQty > 0 && (pkgPrice == 0 || gone(l)) {
+			pkgGone = true
+		}
+	}
+	for i, l := range sub.Basket {
+		it := live[l.ID]
+		if gone(l) || (l.PackageQty > 0 && pkgGone) {
 			pc.Gone = append(pc.Gone, l.Name)
 			changed = true
 			continue

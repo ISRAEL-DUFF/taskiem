@@ -1,6 +1,9 @@
 package storefront
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The price check on a package (forms-that-sell §5.2): its lines are
 // priced as the package from the published form, never per item from the
@@ -44,5 +47,21 @@ func TestRepricePackages(t *testing.T) {
 	pc, changed = reprice(each, map[string]Item{"7m": m, "7l": l}, ActionOptions{}, three)
 	if changed || pc.TotalKobo != 6500000 || pc.Basket[0].LineKobo+pc.Basket[1].LineKobo != 6500000 {
 		t.Fatalf("each: %v %+v", changed, pc)
+	}
+	// One size gone: the whole package is gone, never 1 L at the price
+	// of three.
+	each = Submission{Kind: "order", TotalKobo: 6500000, Basket: []Line{
+		{ID: "7m", Name: "Shirt – M", Quantity: 2, LineKobo: 4333333, PackageQty: 3, PackageKobo: 6500000},
+		{ID: "7l", Name: "Shirt – L", Quantity: 1, LineKobo: 2166667, PackageQty: 3, PackageKobo: 6500000}}}
+	pc, changed = reprice(each, map[string]Item{"7l": l}, ActionOptions{}, three)
+	if !changed || len(pc.Basket) != 0 || pc.TotalKobo != 0 || strings.Join(pc.Gone, ", ") != "Shirt – M, Shirt – L" {
+		t.Fatalf("a size gone: %v %+v", changed, pc)
+	}
+	// A line beside the package stays.
+	withTea := each
+	withTea.Basket = append(append([]Line{}, each.Basket...), Line{ID: "9", Name: "Tea", Quantity: 1, PriceKobo: price, LineKobo: price})
+	pc, _ = reprice(withTea, map[string]Item{"7l": l, "9": {ID: "9", Name: "Tea", PriceKobo: &price, Available: true}}, ActionOptions{}, three)
+	if len(pc.Basket) != 1 || pc.Basket[0].ID != "9" || len(pc.Gone) != 2 {
+		t.Fatalf("a line beside a package gone: %+v", pc)
 	}
 }

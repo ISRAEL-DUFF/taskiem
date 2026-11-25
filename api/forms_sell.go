@@ -60,30 +60,78 @@ type sellFront struct {
 // bodyRef is a reference to the submission's answers in a definition.
 var bodyRef = regexp.MustCompile(`\btrigger\.body\b(\.[A-Za-z_][A-Za-z0-9_]*|\[['"][A-Za-z_][A-Za-z0-9_]*['"]\])?`)
 
-// customerOf is where a hosted form's field is on an order: the buyer's
-// name, phone, email or address (the order form asks them itself), or
-// "" for one of the form's own questions.
-func customerOf(name string, p map[string]any) string {
+// customerOf is which of the buyer's details a hosted form's field may be
+// on an order (the order form asks them itself): name, phone, email or
+// address, and how well it matches (3 marked as that detail, 2 named it
+// exactly, 1 of its format only); "" for one of the form's own questions.
+func customerOf(name string, p map[string]any) (string, int) {
 	pii, _ := p["x-pii"].(string)
 	format, _ := p["format"].(string)
-	switch {
-	case pii == "name" || slices.Contains([]string{"name", "full_name", "your_name", "customer_name"}, name):
-		return "name"
-	case pii == "phone" || format == "phone-ng" || slices.Contains([]string{"phone", "phone_number", "mobile"}, name):
-		return "phone"
-	case pii == "email" || format == "email" || name == "email":
-		return "email"
-	case pii == "address" || slices.Contains([]string{"address", "delivery_address"}, name):
-		return "address"
+	names := map[string][]string{"name": {"name", "full_name", "your_name", "customer_name"}, "phone": {"phone", "phone_number", "mobile"},
+		"email": {"email"}, "address": {"address", "delivery_address"}}
+	formats := map[string]string{"phone": "phone-ng", "email": "email"}
+	best, rank := "", 0
+	for _, slot := range []string{"name", "phone", "email", "address"} {
+		r := 0
+		switch {
+		case pii == slot:
+			r = 3
+		case slices.Contains(names[slot], name):
+			r = 2
+		case formats[slot] != "" && format == formats[slot]:
+			r = 1
+		}
+		if r > rank {
+			best, rank = slot, r
+		}
 	}
-	return ""
+	return best, rank
 }
 
-// sellingDefinition is a hosted form's workflow as an order form's: its
-// trigger the storefront's naming the action, its inputs the order's, its
-// reads of the form's answers moved to the buyer and the answers, and the
-// form's own questions (extra) for the action.
+// customerFields picks, for each of the buyer's details, the one field of
+// the form that is it: the best match, the first by name on a tie. Every
+// other field stays the form's own question, a gift's phone beside the
+// buyer's too. An address is the buyer's only where the order form
+// delivers: one that only takes pickup asks none.
+func customerFields(props map[string]any, delivery bool) map[string]string {
+	type pick struct {
+		field string
+		rank  int
+	}
+	best := map[string]pick{}
+	names := make([]string, 0, len(props))
+	for name := range props {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		p, _ := props[name].(map[string]any)
+		slot, rank := customerOf(name, p)
+		if slot == "" || (slot == "address" && !delivery) {
+			continue
+		}
+		if rank > best[slot].rank {
+			best[slot] = pick{name, rank}
+		}
+	}
+	out := map[string]string{}
+	for slot, p := range best {
+		out[p.field] = slot
+	}
+	return out
+}
+
+// sellingDefinition is sellingDefinitionFor an order form that delivers.
 func sellingDefinition(def []byte, action uuid.UUID) ([]byte, map[string]json.RawMessage, []string, error) {
+	return sellingDefinitionFor(def, action, true)
+}
+
+// sellingDefinitionFor is a hosted form's workflow as an order form's:
+// its trigger the storefront's naming the action, its inputs the order's,
+// its reads of the form's answers moved to the buyer and the answers, and
+// the form's own questions (extra) for the action. delivery is whether
+// the order form delivers, so asks the buyer's address itself.
+func sellingDefinitionFor(def []byte, action uuid.UUID, delivery bool) ([]byte, map[string]json.RawMessage, []string, error) {
 	d, err := wd.Load(def)
 	if err != nil || d.Trigger.Type != "form" {
 		return nil, nil, nil, fmt.Errorf("%w: only a form that starts its workflow can sell", errConflict)
@@ -102,9 +150,10 @@ func sellingDefinition(def []byte, action uuid.UUID) ([]byte, map[string]json.Ra
 	extra := map[string]json.RawMessage{}
 	moved := map[string]string{}
 	var reqd []string
+	customer := customerFields(props, delivery)
 	for name, v := range props {
 		p, _ := v.(map[string]any)
-		if c := customerOf(name, p); c != "" {
+		if c := customer[name]; c != "" {
 			moved[name] = "trigger.body.customer." + c
 			continue
 		}
@@ -187,6 +236,17 @@ type areaOff struct{ area areas.Area }
 func (e areaOff) Error() string { return errConflict.Error() + ": " + areaOffSentence(e.area) }
 func (e areaOff) Unwrap() error { return errConflict }
 
+// newerDraft refuses to sell a form whose workflow has a version newer
+// than the live one: the order form's version is built from the live one,
+// so the newer one's changes would be set aside unseen.
+type newerDraft struct{ latest, live int }
+
+func (e newerDraft) Error() string {
+	return fmt.Sprintf("%s: this workflow has a newer version (%d) than the live form's (%d): publish it first, then sell with this form",
+		errConflict.Error(), e.latest, e.live)
+}
+func (e newerDraft) Unwrap() error { return errConflict }
+
 // sellFormHandler answers POST /v1/forms/{id}/sell.
 func (s *Server) sellFormHandler(w http.ResponseWriter, r *http.Request) {
 	var req sellForm
@@ -209,6 +269,12 @@ func (s *Server) sellFormHandler(w http.ResponseWriter, r *http.Request) {
 	var off areaOff
 	if errors.As(err, &off) {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": areaOffSentence(off.area), "code": "area_off", "area_off": string(off.area)})
+		return
+	}
+	var newer newerDraft
+	if errors.As(err, &newer) {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": strings.TrimPrefix(newer.Error(), errConflict.Error()+": "), "code": "newer_version",
+			"newer_version": newer.latest})
 		return
 	}
 	var notReady *errNotReady
@@ -268,6 +334,11 @@ func (s *Server) sellFormTx(r *http.Request, tx pgx.Tx, p *Principal, endpoint u
 		WHERE workflow_id = $1 AND version = $2`, wf, version).Scan(&def, &layout, &latest); err != nil {
 		return out, err
 	}
+	// The order form's version is built from the live one and numbered
+	// after the latest: a newer draft would be set aside unseen.
+	if latest > version {
+		return out, newerDraft{latest: latest, live: version}
+	}
 	front := uuid.Nil
 	if req.Front != nil {
 		front = *req.Front
@@ -289,7 +360,14 @@ func (s *Server) sellFormTx(r *http.Request, tx pgx.Tx, p *Principal, endpoint u
 	// The action, off, with a placeholder id for the trigger; the real
 	// one names it below.
 	id := uuid.Must(uuid.NewV7())
-	next, extra, required, err := sellingDefinition(def, id)
+	// The order form takes the home order form's pickup and delivery
+	// (AddOrderAction): an address is the buyer's only where it delivers.
+	var delivers bool
+	if err := tx.QueryRow(ctx, `SELECT COALESCE((options->>'delivery')::boolean, false) FROM storefront_actions
+		WHERE storefront_id = $1 AND kind = 'order' AND builtin`, sf.ID).Scan(&delivers); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return out, err
+	}
+	next, extra, required, err := sellingDefinitionFor(def, id, delivers)
 	if err != nil {
 		return out, err
 	}

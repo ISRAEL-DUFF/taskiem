@@ -327,6 +327,16 @@ Built 25 November 2026 on the decisions of §12.
 - **The phone app** has no screen where forms or fronts are edited (they open on the web), so Sell and Add are the web's; its order page says "Package of 2 for ₦45,000" under a package's line, as the web's Orders does (`storefront_orders_page_test.dart`, pictures light and dark).
 - **Done when** (`TestFormThatSellsEndToEnd`, with the database): an order form selling the Smart Ear Cleaner in three packages is added and set up, framed on a verified website with its code, a buyer orders two to Lekki paying at the door (₦45,000 and ₦1,500), the order is in Orders with the package as one line, the run's `trigger.body.lines` and `trigger.submission` carry it, the owner accepts in WhatsApp, and Musa is offered it. Playwright repeats the buyer's part on the public host, with axe in both themes at 360 and 390 px.
 
+**Review fixes** (25 November 2026, after a review of L0 and L1):
+- A basket's `items` hold when sent, not only when drawn: a row the form does not name is never ordered (`TestBasketItems`), and the price check treats such a line as gone (`TestPriceCheckHoldsTheForm`).
+- A package is had whole or not at all at the price check: when one of its sizes is gone, every line of it is gone and said so, never the rest at the package's price (`TestRepricePackages`).
+- The published page unread at the price check is tried again, then noted *Prices were not checked*, as a table that does not answer is, never every package line gone (`TestPriceCheckHoldsTheForm`).
+- A form that sells is closed as a form when it sells: `/f` and `/embed/f` still lead to the action while it is there, it cannot be paused or reopened on the Forms page, and once the action is deleted its address says it is closed, never serving or running the old version; a form trigger deployed again opens it (`TestSoldFormClosedWhenItsActionGoes`, `TestSellSomethingWithThisForm`).
+- **Sell something with this form** takes at most one field for each of the buyer's name, phone, email and address (marked `x-pii`, else named so, else of its format), the address only where the order form delivers; every other field stays the action's question, read from `trigger.answers` (`TestSellingDefinitionKeepsOtherFields`).
+- Selling is refused while the workflow has a version newer than the live form's (`newer_version`), and the web sheet says to publish it first (`TestSellRefusesOverANewerVersion`, `sell.test.ts`).
+- **Secure checkout** shows only where the order form is paid through the payment page on a connected Paystack account (`TestSecureCheckoutOnlyWhenConnected`).
+- `taskiem_form_left_put` keeps a front only as its action's own (migration 00860), reading the action's business through its storefront: it read columns its owner may not, so a keep for an action was refused (`TestFormLeftFrontIsTheActions`).
+
 ## 17. As built (L2)
 
 Built 25 November 2026 on the decisions of §12.

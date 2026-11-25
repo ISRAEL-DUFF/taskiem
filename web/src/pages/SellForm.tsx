@@ -4,6 +4,7 @@
 // that shows one order form on the business's own website.
 import { useState } from "react";
 import { get, post, put } from "../api";
+import { Link } from "react-router-dom";
 import { ErrorBox, Field, Modal, useAction, useLoad } from "../ui";
 import { Copy } from "./Forms";
 import type { FrontsView } from "../lib/fronts";
@@ -13,6 +14,7 @@ import {
   areaName,
   areaOffOf,
   dearerEach,
+  newerVersionOf,
   readPackages,
   startingRows,
   type ActionEmbed,
@@ -32,6 +34,7 @@ export interface Sold {
 export function SellSheet({
   title,
   formId,
+  workflowId,
   frontId,
   defaultLabel,
   onClose,
@@ -39,6 +42,8 @@ export function SellSheet({
 }: {
   title: string;
   formId?: string;
+  /** The form's workflow, to open when it has a newer version to publish. */
+  workflowId?: string;
   frontId?: string;
   defaultLabel: string;
   onClose: () => void;
@@ -78,6 +83,9 @@ export function SellSheet({
   // the server refuses, with the offer to turn it on.
   const off =
     areaOffOf(act.error) || areaOffOf(fronts.error) || areaOffOf(items.error);
+  // The workflow has a version newer than the live form's: selling would
+  // set it aside, so it is published first.
+  const newer = newerVersionOf(act.error);
   const setRow = (i: number, p: Partial<PackageRow>) =>
     setRows(shownRows.map((r, j) => (j === i ? { ...r, ...p } : r)));
   const send = () =>
@@ -313,6 +321,19 @@ export function SellSheet({
             >
               Turn on {areaName(off)}
             </button>
+          </div>
+        ) : newer ? (
+          <div className="notice" role="alert">
+            <p style={{ marginTop: 0 }}>
+              This form's workflow has changes you have not published yet
+              (version {newer}). Publish them first, so the form sells with
+              them, then come back here.
+            </p>
+            {workflowId && (
+              <Link to={`/workflows/${workflowId}?v=${newer}`}>
+                Open the workflow
+              </Link>
+            )}
           </div>
         ) : (
           <ErrorBox error={act.error} />

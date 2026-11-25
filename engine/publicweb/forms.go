@@ -89,6 +89,9 @@ type formData struct {
 	// size sold out, or none of those values): kept so a submission is
 	// refused with it rather than sent without the line.
 	pickError string
+	// basketOnly are the rows the form's basket names (nil: every row):
+	// the only ones a submission may order, whatever the browser posts.
+	basketOnly []string
 	pageData
 	Business string
 	Kind     string
@@ -438,9 +441,10 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 		}
 		f.Notice = storefront.NoticeFor(storefront.ActionOptions{Notice: act.Notice}, f.One != nil)
 		if storefront.HasWidget(form, "basket") {
-			f.Items = onlyItems(basketItems(storefront.WithSizes(p.Items)), storefront.BasketItems(form))
+			f.basketOnly = storefront.BasketItems(form)
+			f.Items = onlyItems(basketItems(storefront.WithSizes(p.Items)), f.basketOnly)
 			for _, it := range p.Items {
-				if len(it.Sizes) > 0 {
+				if len(it.Sizes) > 0 && storefront.OnForm(it, f.basketOnly) {
 					f.products = append(f.products, it)
 				}
 			}
@@ -869,7 +873,7 @@ func readAnswers(qs []*field, v url.Values) (map[string]any, string) {
 func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront.Submission) string {
 	seen := map[string]bool{}
 	for _, it := range items {
-		if seen[it.ID] {
+		if seen[it.ID] || !storefront.OnForm(it, f.basketOnly) {
 			continue
 		}
 		seen[it.ID] = true
