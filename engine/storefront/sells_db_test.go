@@ -1,13 +1,16 @@
 package storefront_test
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -87,5 +90,84 @@ func TestPriceCheckHoldsTheForm(t *testing.T) {
 	}
 	if o := w.order(ref); o.Status == "price_changed" || o.Status == "cancelled" || !strings.HasPrefix(o.Note, "Prices were not checked") {
 		t.Fatalf("unread page: %+v", o)
+	}
+}
+
+// Secure checkout is marked only where an order is paid through the
+// payment page on a payments account that is connected (§5.3): not for
+// one paid at the door only, nor before Paystack is connected, nor on
+// another rail's bank transfers.
+func TestSecureCheckoutOnlyWhenConnected(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	checkout := func(payment, connection string) bool {
+		t.Helper()
+		var on bool
+		w.in(func(tx pgx.Tx) error {
+			if _, err := storefront.SaveAction(ctx, tx, w.env.Tenant, storefront.Action{Kind: "order", Enabled: true, Payment: payment,
+				Options: storefront.ActionOptions{Pickup: true, Connection: connection}}); err != nil {
+				return err
+			}
+			if _, err := storefront.Publish(ctx, tx, w.env.Tenant, "shops.test", "user:ada", false); err != nil {
+				return err
+			}
+			m, err := storefront.PublishedModel(ctx, tx, w.env.Tenant)
+			for _, f := range m.Fronts {
+				for _, a := range f.Actions {
+					if a.Kind == "order" {
+						on = a.Checkout
+					}
+				}
+			}
+			return err
+		})
+		return on
+	}
+	if checkout("at_order", "") {
+		t.Fatal("Secure checkout with no payments account connected")
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO connections (id, tenant_id, environment, connector, name, auth_type) VALUES (gen_random_uuid(), $1, 'prod', 'paystack', 'main', 'none')`,
+		w.env.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	if !checkout("at_order", "") || !checkout("after_accept", "main") {
+		t.Fatal("no Secure checkout with Paystack connected")
+	}
+	if checkout("none", "") || checkout("at_order", "iswallet/taskiem") || checkout("at_order", "other") {
+		t.Fatal("Secure checkout paid at the door, by bank transfer, or on an account not connected")
+	}
+}
+
+// A form left half-filled is kept with its action's own front only
+// (review of L0): another of the business's fronts, or a front for no
+// action, is refused.
+func TestFormLeftFrontIsTheActions(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	var action, home uuid.UUID
+	var other storefront.Front
+	w.in(func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT id, front_id FROM storefront_actions WHERE tenant_id = $1 AND kind = 'order' AND builtin`, w.env.Tenant).Scan(&action, &home); err != nil {
+			return err
+		}
+		var err error
+		other, err = storefront.CreateFront(ctx, tx, w.env.Tenant, storefront.NewFront{Name: "Repairs", Kind: "custom"})
+		return err
+	})
+	put := func(action *uuid.UUID, front uuid.UUID) error {
+		return db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.env.Tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `SELECT taskiem_form_left_put($1, NULL, $2, $3, NULL, '{}'::jsonb, $4, 'phone', '{}'::jsonb, now())`,
+				w.env.Tenant, action, front, bytes.Repeat([]byte{7}, 32))
+			return err
+		})
+	}
+	if err := put(&action, home); err != nil {
+		t.Fatalf("the action's own front: %v", err)
+	}
+	if err := put(&action, other.ID); err == nil || !strings.Contains(err.Error(), "not this business's form") {
+		t.Fatalf("another front: %v", err)
+	}
+	if err := put(nil, home); err == nil {
+		t.Fatal("a front for no action")
 	}
 }

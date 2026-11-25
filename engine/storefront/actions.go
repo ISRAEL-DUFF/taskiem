@@ -535,12 +535,35 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 	return a, nil
 }
 
-// publicAction is an action as a snapshot holds it.
-func publicAction(a Action) PublicAction {
+// publicAction is an action as a snapshot holds it, Secure checkout
+// marked only where an order is paid through the payment page on a
+// payments account that is connected (forms-that-sell §5.3).
+func publicAction(ctx context.Context, tx pgx.Tx, a Action) (PublicAction, error) {
+	checkout, err := paysThroughCheckout(ctx, tx, a)
+	if err != nil {
+		return PublicAction{}, err
+	}
 	return PublicAction{Kind: a.Kind, Label: a.Label, Payment: a.Payment, Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote,
 		Zones: a.Options.Zones, PayOnDelivery: a.Options.PayOnDelivery, DepositPercent: a.Options.DepositPercent,
 		MaxPerOrder: a.Options.MaxPerOrder, Instalments: a.Options.Instalments, WaitingList: a.Options.WaitingList,
-		Notice: a.Options.Notice, Checkout: a.Kind == "order" && a.Payment != "none"}
+		Notice: a.Options.Notice, Checkout: checkout}, nil
+}
+
+// paysThroughCheckout reports whether an order form is paid through the
+// payment page: it takes payment, by card on a Paystack connection (not
+// another rail's bank transfer), and that connection is connected in prod.
+func paysThroughCheckout(ctx context.Context, tx pgx.Tx, a Action) (bool, error) {
+	if a.Kind != "order" || a.Payment == "none" {
+		return false, nil
+	}
+	name, card := paystackConnection(a.Options.Connection)
+	if !card {
+		return false, nil
+	}
+	var ok bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM connections WHERE environment = 'prod' AND connector = 'paystack' AND name = $1 AND status = 'active')`,
+		name).Scan(&ok)
+	return ok, err
 }
 
 // Ref is how a page addresses the action, /a/<ref>: its slug, or for one
@@ -616,7 +639,11 @@ func publicActions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]PublicAc
 	var out []PublicAction
 	for _, a := range list {
 		if a.Enabled && a.Builtin {
-			out = append(out, publicAction(a))
+			pa, err := publicAction(ctx, tx, a)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, pa)
 		}
 	}
 	return out, nil

@@ -329,18 +329,33 @@ func otherActions(ctx context.Context, tx pgx.Tx, front uuid.UUID) ([]PublicActi
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (PublicAction, error) {
-		var a Action
-		var id uuid.UUID
-		var opts, form []byte
-		if err := r.Scan(&id, &a.Slug, &a.Kind, &a.Label, &a.Payment, &opts, &form); err != nil {
-			return PublicAction{}, err
+	type row struct {
+		a    Action
+		id   uuid.UUID
+		form []byte
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+		var x row
+		var opts []byte
+		if err := r.Scan(&x.id, &x.a.Slug, &x.a.Kind, &x.a.Label, &x.a.Payment, &opts, &x.form); err != nil {
+			return row{}, err
 		}
-		_ = json.Unmarshal(opts, &a.Options)
-		pa := publicAction(a)
-		pa.ID, pa.Slug, pa.Form = &id, a.Slug, EffectiveForm(form, a.Kind)
-		return pa, nil
+		_ = json.Unmarshal(opts, &x.a.Options)
+		return x, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PublicAction, 0, len(list))
+	for _, x := range list {
+		pa, err := publicAction(ctx, tx, x.a)
+		if err != nil {
+			return nil, err
+		}
+		pa.ID, pa.Slug, pa.Form = &x.id, x.a.Slug, EffectiveForm(x.form, x.a.Kind)
+		out = append(out, pa)
+	}
+	return out, nil
 }
 
 // ReservedFrontSlugs are the addresses the public host routes itself
