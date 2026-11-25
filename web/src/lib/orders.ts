@@ -58,6 +58,9 @@ export interface OrderLine {
   quantity?: number;
   price_kobo?: number;
   line_kobo?: number;
+  /** The package the line is (part of), from a form that sells: how many it is and its price. */
+  package_qty?: number;
+  package_kobo?: number;
 }
 
 export type OrderStatus =

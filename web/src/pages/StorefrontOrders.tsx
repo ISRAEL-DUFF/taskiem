@@ -565,6 +565,7 @@ export function StorefrontOrder() {
                       {o.basket.map((l, i) => (
                         <li key={l.id ?? i}>
                           {l.quantity ?? 1} × {l.name}
+                          {l.package_qty ? <span className="hint"> (package of {l.package_qty} for {formatPrice(l.package_kobo ?? 0)})</span> : null}
                           {l.line_kobo !== undefined && (
                             <span className="sf-price">
                               {" "}
