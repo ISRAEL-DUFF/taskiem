@@ -6,6 +6,7 @@ import { addPasskey, passkeysSupported, proof, stepUpAssert } from "../passkeys"
 import { ErrorBox, Field, Items, PageHeader, Row, fmtTime, useAction, useLoad, PasswordInput } from "../ui";
 import { ChangePassword } from "./Password";
 import { savedTheme, setTheme, type Theme } from "../theme";
+import { pinProblem } from "../lib/pin";
 
 interface Passkey {
   id: string;
@@ -215,49 +216,108 @@ interface WhatsAppBinding {
   dormant?: boolean;
 }
 
-/** The person's one PIN (GET/PUT/DELETE /v1/me/pin): it approves on
- * WhatsApp and pays small amounts in WhatsApp's form or the app's pad when a
- * passkey is not to hand. Behind a passkey or an authenticator it pays at
- * once; set without (a first PIN, or moments after signing in again) it
- * pays 24 hours on. */
+/** The person's one PIN (GET/PUT/DELETE /v1/me/pin;
+ * docs/spec/transaction-pin.md): four digits that approve on WhatsApp and
+ * pay small amounts in WhatsApp's form, the app's pad or the Pay sheet
+ * when a passkey is not to hand. Setting or changing it is confirmed by a
+ * code to the person's phone (POST /v1/me/pin/code), their passkey or an
+ * authenticator code, and it pays at once. */
 interface MePin {
   set: boolean;
   set_at?: string;
   locked_until?: string;
-  pays_from?: string;
-  change_without: boolean;
-  change_without_until?: string;
+  digits: number;
+  /** What may confirm a change now: "code", "passkey", "totp". */
+  ways: string[];
+  code_to?: string;
+  /** The old six-digit PIN went when PINs became four digits. */
+  renew?: boolean;
 }
 
 function YourPin() {
   const { me } = useAuth();
-  const pin = useLoad<MePin>(() => get<MePin>("/v1/me/pin"), []);
+  const phone = me?.user?.phone ?? null;
+  const pin = useLoad<MePin>(() => get<MePin>("/v1/me/pin"), [phone]);
   const [value, setValue] = useState("");
   const [again, setAgain] = useState("");
   const [typed, setTyped] = useState("");
+  // The code sent to the phone, and where it went.
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  // The passkey put aside for a code.
+  const [byCode, setByCode] = useState(false);
   const act = useAction();
   const p = pin.data;
-  const strong = me?.factors?.passkey || me?.factors?.totp;
-  const waiting = p?.pays_from && new Date(p.pays_from).getTime() > Date.now();
-  // Without a passkey or an authenticator, only a first PIN or one changed
-  // moments after signing in again.
-  const may = !!p && (strong || p.change_without);
+  const digits = p?.digits ?? 4;
+  const ways = p?.ways ?? [];
+  const way =
+    ways.includes("passkey") && passkeysSupported() && !(byCode && ways.includes("code"))
+      ? "passkey"
+      : ways.includes("code")
+        ? "code"
+        : ways.includes("totp")
+          ? "totp"
+          : null;
+  const reset = () => {
+    setValue("");
+    setAgain("");
+    setTyped("");
+    setCode("");
+    setSentTo(null);
+  };
+  const sendCode = () =>
+    act.run(async () => {
+      const problem = pinProblem(value, again, digits);
+      if (problem) throw new Error(problem);
+      const r = await post<{ code_to: string }>("/v1/me/pin/code", {});
+      setSentTo(r.code_to);
+      setCode("");
+    }, "Code sent");
+  const save = () =>
+    act.run(async () => {
+      const problem = pinProblem(value, again, digits);
+      if (problem) throw new Error(problem);
+      const body: Record<string, unknown> = { pin: value };
+      if (way === "code") body.code = code;
+      else if (way === "passkey") body.passkey = await stepUpAssert("account.reauth", "pin.set");
+      else if (way === "totp") body.totp = typed;
+      await put("/v1/me/pin", body);
+      reset();
+      pin.reload();
+    }, "PIN saved. It can pay now.");
+  const pinInput = (label: string, v: string, set: (v: string) => void, hint?: string) => (
+    <Field label={label} hint={hint}>
+      <input
+        type="password"
+        inputMode="numeric"
+        autoComplete="new-password"
+        maxLength={digits}
+        value={v}
+        disabled={sentTo !== null}
+        onChange={(e) => set(e.target.value.replace(/\D/g, ""))}
+      />
+    </Field>
+  );
   return (
     <section className="card" data-testid="your-pin">
       <h2 style={{ marginTop: 0 }}>Your PIN</h2>
       <p className="hint">
-        Six digits for when your passkey is not to hand: it approves on
-        WhatsApp, and pays up to ₦100,000 (₦200,000 a day) in WhatsApp&rsquo;s
-        form or the app. Taskiem never asks for it in a message. Five wrong
-        PINs lock it for 15 minutes.
+        Four digits for when your passkey is not to hand: it approves on
+        WhatsApp, and pays up to ₦100,000 (₦200,000 a day) here, in the app or
+        in WhatsApp&rsquo;s form. Taskiem never asks for it in a message. Five
+        wrong PINs lock it for 15 minutes.
       </p>
       <ErrorBox error={pin.error ?? act.error} />
+      {p && !p.set && p.renew && (
+        <p className="pay-warn warn" role="status" data-testid="your-pin-renew">
+          PINs are now 4 digits, so your old PIN was removed. Set a new one.
+        </p>
+      )}
       {p?.set && (
         <div className="row">
           <p className="grow" data-testid="your-pin-state">
             PIN set{" "}
             {p.set_at && <span className="hint">{fmtTime(p.set_at)}</span>}
-            {waiting && p.pays_from && <> · can pay from {fmtTime(p.pays_from)}</>}
             {p.locked_until && <strong> · locked until {fmtTime(p.locked_until)}</strong>}
           </p>
           <button
@@ -265,63 +325,97 @@ function YourPin() {
             disabled={act.busy}
             onClick={() =>
               confirm("Remove your PIN?") &&
-              void act.run(async () => (await del("/v1/me/pin"), pin.reload()), "PIN removed")
+              void act.run(async () => (await del("/v1/me/pin"), reset(), pin.reload()), "PIN removed")
             }
           >
             Remove
           </button>
         </div>
       )}
-      {p && may && (
+      {p && way && (
         <form
           className="row"
           style={{ alignItems: "flex-end" }}
           onSubmit={(e) => {
             e.preventDefault();
-            void act.run(async () => {
-              if (value !== again) throw new Error("The two PINs are not the same.");
-              const body: Record<string, unknown> = { pin: value };
-              // Behind a passkey or an authenticator: it pays at once.
-              if (strong) Object.assign(body, await proof(me?.factors, typed, "pin.set"));
-              await put("/v1/me/pin", body);
-              setValue("");
-              setAgain("");
-              setTyped("");
-              pin.reload();
-            }, "PIN saved");
+            void (way === "code" && sentTo === null ? sendCode() : save());
           }}
         >
-          <Field label={p.set ? "New PIN" : "PIN"} hint="Not one digit repeated, nor a run like 123456">
-            <input
-              type="password"
-              inputMode="numeric"
-              autoComplete="new-password"
-              maxLength={6}
-              value={value}
-              onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
-            />
-          </Field>
-          <Field label="The same PIN again">
-            <input
-              type="password"
-              inputMode="numeric"
-              autoComplete="new-password"
-              maxLength={6}
-              value={again}
-              onChange={(e) => setAgain(e.target.value.replace(/\D/g, ""))}
-            />
-          </Field>
-          {strong && <ProofField to="set the PIN" value={typed} onChange={setTyped} />}
-          <button type="submit" disabled={act.busy || value.length !== 6 || again.length !== 6}>
-            {p.set ? "Change PIN" : "Set PIN"}
+          {pinInput(p.set ? "New PIN" : "PIN", value, setValue, "4 digits, not one repeated nor a run like 1234")}
+          {pinInput("The same PIN again", again, setAgain)}
+          {way === "totp" && (
+            <Field label="Authenticator code, to set the PIN">
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={typed}
+                onChange={(e) => setTyped(e.target.value.replace(/\D/g, ""))}
+              />
+            </Field>
+          )}
+          {way === "code" && sentTo !== null && (
+            <Field label="The code we sent" hint={`Sent to ${sentTo}. It works for 10 minutes.`}>
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                data-testid="your-pin-code"
+              />
+            </Field>
+          )}
+          <button
+            type="submit"
+            disabled={
+              act.busy ||
+              value.length !== digits ||
+              again.length !== digits ||
+              (way === "code" && sentTo !== null && code.length !== 6) ||
+              (way === "totp" && typed.length !== 6)
+            }
+          >
+            {way === "code" && sentTo === null
+              ? "Send me a code"
+              : way === "passkey"
+                ? p.set
+                  ? "Change PIN with my passkey"
+                  : "Set PIN with my passkey"
+                : p.set
+                  ? "Change PIN"
+                  : "Set PIN"}
           </button>
         </form>
       )}
-      {p && !strong && (
-        <p className="hint" data-testid="your-pin-hold">
-          {p.change_without
-            ? "Without a passkey, a PIN set now can pay from 24 hours on."
-            : "To change it without a passkey, sign out, sign in again and change it within 10 minutes; it can pay from 24 hours on."}
+      {p && way === "code" && sentTo !== null && (
+        <p className="hint">
+          <button type="button" className="link" disabled={act.busy} onClick={() => void sendCode()}>
+            Send the code again
+          </button>{" "}
+          ·{" "}
+          <button type="button" className="link" disabled={act.busy} onClick={reset}>
+            Start again
+          </button>
+        </p>
+      )}
+      {p && way === "passkey" && ways.includes("code") && (
+        <p className="hint">
+          <button type="button" className="link" onClick={() => setByCode(true)}>
+            Use a code to my phone instead
+          </button>
+        </p>
+      )}
+      {p && way === "code" && (
+        <p className="hint" data-testid="your-pin-how">
+          We send a code to {p.code_to ?? "your phone"} to check it is you. Once it is
+          typed, your PIN can pay at once.
+        </p>
+      )}
+      {p && !way && (
+        <p className="hint" data-testid="your-pin-how">
+          To set a PIN, add your phone number above: we send a code to it to
+          check it is you. A passkey works too.
         </p>
       )}
     </section>
