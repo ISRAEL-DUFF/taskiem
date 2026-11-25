@@ -14,6 +14,8 @@ Taskiem pays people from your payments account (your Taskiem wallet, or Paystack
 
 **After you pay**, a line in the chat you paid from says *Paid Chidi Okeke ₦45,000 (delivery) · GTBank ••6789*, then *Received by the bank*. If it fails, the money comes back to your balance and the line says so, with **Try again**.
 
+**Pay with your fingerprint** in the phone app. Turn it on in **Settings › Fingerprint**, or tap **Pay by fingerprint from now on** on the Pay sheet, and confirm it is you with your PIN, your passkey or a code to your phone. From then on, that phone pays with its own fingerprint or face check: up to ₦500,000 a payment and ₦1,000,000 a day. A list of payments, an account changed since you last paid it, and anything that waits for the owner's OK still take your passkey. The fingerprint works only on the phone you turned it on for; on the web you pay with your passkey or PIN, and under **Account › Fingerprint on your phones** you can see and remove those phones.
+
 **From a message.** A message with an account number gets **Pay this account** under it. On WhatsApp, Telegram or Slack, forward the message to Taskiem, or reply *pay* to it: Taskiem checks the name and asks *how much, and for what?*. You confirm by the link, or with your PIN in WhatsApp's form.
 
 **Pay several people** in one list: the foot shows the total, the fees, and your balance after. If the balance is short, it says by how much and which people fit. The list has one line in the chat, and each person their own result.

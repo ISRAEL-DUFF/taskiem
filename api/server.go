@@ -558,6 +558,11 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me/pin", s.getMePin)
 			r.Put("/me/pin", s.putMePin)
 			r.Delete("/me/pin", s.removeWhatsAppPin)
+			// Paying by fingerprint: the person's phones with a key (fingerprint_me.go).
+			r.Get("/me/fingerprint", s.getMeFingerprint)
+			r.Post("/me/fingerprint", s.putMeFingerprint)
+			r.Post("/me/fingerprint/code", s.fingerprintCode)
+			r.Delete("/me/fingerprint/{id}", s.removeMeFingerprint)
 			r.Delete("/me/whatsapp/pin", s.removeWhatsAppPin)
 			r.Get("/me/telegram", s.getTelegram)
 			r.Post("/me/telegram", s.startTelegramLink)
@@ -678,6 +683,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts/{id}/actions", s.addFrontAction)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/form", s.putActionForm)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
+			// Paying by fingerprint (payments_fingerprint.go).
+			s.fingerprintPayRoutes(r)
 			s.invoiceRoutes(r)
 			s.linkRoutes(r)         // business links (links.go)
 			s.profileRoutes(r)      // a business's profile and gallery (business_profile.go)

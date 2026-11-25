@@ -520,3 +520,11 @@ getPayrollPayslip
 sendPayrollPayslipLink
 getMyPayslips
 getMyPayslip
+
+# Paying by fingerprint: a key on this phone (docs/spec/fingerprint-key.md)
+getMeFingerprint
+addMeFingerprint
+fingerprintCode
+removeMeFingerprint
+fingerprintPayChallenge
+fingerprintPayConfirm

@@ -65,6 +65,11 @@ dependencies:
   # Scan a code and the person's tools on the app's icon (lib/app/shortcuts.dart;
   # device fields D2). BSD-3-Clause.
   quick_actions: 1.1.1
+  # Paying by fingerprint: a key made in the phone's secure hardware (Android
+  # Keystore, iPhone Secure Enclave), usable only after its fingerprint or face
+  # check, that signs the server's words for one payment (lib/app/pay_key.dart;
+  # docs/spec/fingerprint-key.md). MIT; R8 rules ship with it.
+  biometric_signature: 13.3.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

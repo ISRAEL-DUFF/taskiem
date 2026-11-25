@@ -2400,6 +2400,41 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/payroll/me/payslips/${Uri.encodeComponent(payslip)}');
     return GetMyPayslipResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Your phones that pay by fingerprint (`GET /v1/me/fingerprint`)
+  Future<MeFingerprint> getMeFingerprint() async {
+    final j = await _t.send('GET', '/v1/me/fingerprint');
+    return MeFingerprint.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay by fingerprint on this phone (`POST /v1/me/fingerprint`)
+  Future<AddMeFingerprintResponse> addMeFingerprint({required AddMeFingerprintRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/fingerprint', body: body.toJson());
+    return AddMeFingerprintResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A code to your phone, to turn on paying by fingerprint (`POST /v1/me/fingerprint/code`)
+  Future<FingerprintCodeResponse> fingerprintCode({required FingerprintCodeRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/fingerprint/code', body: body.toJson());
+    return FingerprintCodeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Stop paying by fingerprint on a phone (`DELETE /v1/me/fingerprint/{id}`)
+  Future<void> removeMeFingerprint({required String id}) async {
+    await _t.send('DELETE', '/v1/me/fingerprint/${Uri.encodeComponent(id)}');
+  }
+
+  /// The words for this phone's fingerprint key to sign, to send a payment (`POST /v1/payments/{id}/fingerprint`)
+  Future<FingerprintPayChallengeResponse> fingerprintPayChallenge({required FingerprintPayChallengeRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payments/${Uri.encodeComponent(id)}/fingerprint', body: body.toJson());
+    return FingerprintPayChallengeResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Send a prepared payment with the phone's fingerprint (`POST /v1/payments/{id}/fingerprint/confirm`)
+  Future<FingerprintPayConfirmResponse> fingerprintPayConfirm({required FingerprintPayConfirmRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payments/${Uri.encodeComponent(id)}/fingerprint/confirm', body: body.toJson());
+    return FingerprintPayConfirmResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -22997,5 +23032,240 @@ class GetMyPayslipResponse {
 
   Map<String, dynamic> toJson() => {
         'payslip': payslip.toJson(),
+      };
+}
+
+class MeFingerprint {
+  const MeFingerprint({required this.dayKobo, required this.devices, required this.leftTodayKobo, required this.oneKobo, required this.proofs});
+
+  final int dayKobo;
+  final List<FingerprintDevice> devices;
+  final int leftTodayKobo;
+  final int oneKobo;
+  final List<String> proofs;
+
+  factory MeFingerprint.fromJson(Map<String, dynamic> j) => MeFingerprint(
+        dayKobo: (j['day_kobo'] as num).toInt(),
+        devices: (j['devices'] as List).map((e) => FingerprintDevice.fromJson(e as Map<String, dynamic>)).toList(),
+        leftTodayKobo: (j['left_today_kobo'] as num).toInt(),
+        oneKobo: (j['one_kobo'] as num).toInt(),
+        proofs: (j['proofs'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'day_kobo': dayKobo,
+        'devices': devices.map((e) => e.toJson()).toList(),
+        'left_today_kobo': leftTodayKobo,
+        'one_kobo': oneKobo,
+        'proofs': proofs.map((e) => e).toList(),
+      };
+}
+
+/// A phone that pays by fingerprint
+class FingerprintDevice {
+  const FingerprintDevice({required this.createdAt, required this.deviceId, required this.id, this.lastUsedAt, required this.name, required this.platform});
+
+  final DateTime createdAt;
+  final String deviceId;
+  final String id;
+  final DateTime? lastUsedAt;
+  final String name;
+  final String platform;
+
+  factory FingerprintDevice.fromJson(Map<String, dynamic> j) => FingerprintDevice(
+        createdAt: DateTime.parse(j['created_at'] as String),
+        deviceId: j['device_id'] as String,
+        id: j['id'] as String,
+        lastUsedAt: j['last_used_at'] == null ? null : DateTime.parse(j['last_used_at'] as String),
+        name: j['name'] as String,
+        platform: j['platform'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'device_id': deviceId,
+        'id': id,
+        'last_used_at': ?lastUsedAt?.toUtc().toIso8601String(),
+        'name': name,
+        'platform': platform,
+      };
+}
+
+class AddMeFingerprintRequest {
+  const AddMeFingerprintRequest({this.code, required this.device, this.passkey, this.pin, required this.publicKey, this.totp});
+
+  final String? code;
+  final AddMeFingerprintRequestDevice device;
+  final Map<String, dynamic>? passkey;
+  final String? pin;
+  final String publicKey;
+  final String? totp;
+
+  factory AddMeFingerprintRequest.fromJson(Map<String, dynamic> j) => AddMeFingerprintRequest(
+        code: j['code'] == null ? null : j['code'] as String,
+        device: AddMeFingerprintRequestDevice.fromJson(j['device'] as Map<String, dynamic>),
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        pin: j['pin'] == null ? null : j['pin'] as String,
+        publicKey: j['public_key'] as String,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'device': device.toJson(),
+        'passkey': ?passkey,
+        'pin': ?pin,
+        'public_key': publicKey,
+        'totp': ?totp,
+      };
+}
+
+class AddMeFingerprintRequestDevice {
+  const AddMeFingerprintRequestDevice({required this.id, required this.name, required this.platform});
+
+  final String id;
+  final String name;
+  final String platform;
+
+  factory AddMeFingerprintRequestDevice.fromJson(Map<String, dynamic> j) => AddMeFingerprintRequestDevice(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        platform: j['platform'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'platform': platform,
+      };
+}
+
+class AddMeFingerprintResponse {
+  const AddMeFingerprintResponse({required this.device});
+
+  final FingerprintDevice device;
+
+  factory AddMeFingerprintResponse.fromJson(Map<String, dynamic> j) => AddMeFingerprintResponse(
+        device: FingerprintDevice.fromJson(j['device'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'device': device.toJson(),
+      };
+}
+
+class FingerprintCodeRequest {
+  const FingerprintCodeRequest({this.via});
+
+  final String? via;
+
+  factory FingerprintCodeRequest.fromJson(Map<String, dynamic> j) => FingerprintCodeRequest(
+        via: j['via'] == null ? null : j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'via': ?via,
+      };
+}
+
+class FingerprintCodeResponse {
+  const FingerprintCodeResponse({required this.expiresIn, required this.sentVia});
+
+  final int expiresIn;
+  final String sentVia;
+
+  factory FingerprintCodeResponse.fromJson(Map<String, dynamic> j) => FingerprintCodeResponse(
+        expiresIn: (j['expires_in'] as num).toInt(),
+        sentVia: j['sent_via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': expiresIn,
+        'sent_via': sentVia,
+      };
+}
+
+class FingerprintPayChallengeRequest {
+  const FingerprintPayChallengeRequest({this.again, required this.keyId});
+
+  final bool? again;
+  final String keyId;
+
+  factory FingerprintPayChallengeRequest.fromJson(Map<String, dynamic> j) => FingerprintPayChallengeRequest(
+        again: j['again'] == null ? null : j['again'] as bool,
+        keyId: j['key_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'again': ?again,
+        'key_id': keyId,
+      };
+}
+
+class FingerprintPayChallengeResponse {
+  const FingerprintPayChallengeResponse({required this.challenge, required this.expiresIn, required this.limitKobo});
+
+  /// The words the phone signs, as they are (the payment, its amount and a
+  /// one-use nonce)
+  final String challenge;
+  final int expiresIn;
+  final int limitKobo;
+
+  factory FingerprintPayChallengeResponse.fromJson(Map<String, dynamic> j) => FingerprintPayChallengeResponse(
+        challenge: j['challenge'] as String,
+        expiresIn: (j['expires_in'] as num).toInt(),
+        limitKobo: (j['limit_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'challenge': challenge,
+        'expires_in': expiresIn,
+        'limit_kobo': limitKobo,
+      };
+}
+
+class FingerprintPayConfirmRequest {
+  const FingerprintPayConfirmRequest({this.again, required this.challenge, required this.keyId, this.sendReceipt, required this.signature, this.tellPayee});
+
+  final bool? again;
+  final String challenge;
+  final String keyId;
+  /// The sheet's Send them a receipt, as it is confirmed
+  final bool? sendReceipt;
+  /// Base64 DER ECDSA signature of the challenge
+  final String signature;
+  /// The sheet's Tell them in the chat, as it is confirmed
+  final bool? tellPayee;
+
+  factory FingerprintPayConfirmRequest.fromJson(Map<String, dynamic> j) => FingerprintPayConfirmRequest(
+        again: j['again'] == null ? null : j['again'] as bool,
+        challenge: j['challenge'] as String,
+        keyId: j['key_id'] as String,
+        sendReceipt: j['send_receipt'] == null ? null : j['send_receipt'] as bool,
+        signature: j['signature'] as String,
+        tellPayee: j['tell_payee'] == null ? null : j['tell_payee'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'again': ?again,
+        'challenge': challenge,
+        'key_id': keyId,
+        'send_receipt': ?sendReceipt,
+        'signature': signature,
+        'tell_payee': ?tellPayee,
+      };
+}
+
+class FingerprintPayConfirmResponse {
+  const FingerprintPayConfirmResponse({required this.payment});
+
+  final Payment payment;
+
+  factory FingerprintPayConfirmResponse.fromJson(Map<String, dynamic> j) => FingerprintPayConfirmResponse(
+        payment: Payment.fromJson(j['payment'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payment': payment.toJson(),
       };
 }
