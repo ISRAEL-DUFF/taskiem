@@ -176,6 +176,7 @@ func TestReviewL4WhatsAppFallsBackToText(t *testing.T) {
 	if f := w.ada.must(200, "GET", "/v1/storefront/actions/"+w.id+"/left", nil)["followups"].(map[string]any); f["whatsapp_opt_in"] != true {
 		t.Fatalf("marketing asks first: %v", f)
 	}
+	w.newHost(t) // a host of its own: one address names five contacts a form an hour
 	w.leave(t, page, "08035558001", nil)
 	want("+2348035558001", "… 8001")
 	// The form drawn now asks with the box, its line text or email.
