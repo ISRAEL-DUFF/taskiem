@@ -150,7 +150,7 @@ void main() {
     expect(feeProblem('paystack/main', '', '', ''), 'Give the percent, the flat fee, or both.');
   });
 
-  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home, {Object? answer, double height = 3200}) async {
+  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home, {Object? answer, double height = 3200, Map<String, dynamic>? provider}) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = Size(390, height);
     t.view.devicePixelRatio = 1;
@@ -172,10 +172,15 @@ void main() {
                   {'entry_id': 'E1', 'amount_kobo': 300000},
                 ],
               }),
-              '/v1/settings/receive-money' => ok({
-                'on': true,
-                'account': {'account_number': '9900000001', 'bank_name': 'Wema Bank', 'account_name': 'Ada’s Kitchen'},
-              }),
+              '/v1/settings/receive-money' => ok(
+                provider != null
+                    ? {'on': false, 'available': true, 'plan': true, 'default_owner_type': 'client_end_business'}
+                    : {
+                        'on': true,
+                        'account': {'account_number': '9900000001', 'bank_name': 'Wema Bank', 'account_name': 'Ada’s Kitchen'},
+                      },
+              ),
+              '/v1/saved/provider' => provider == null ? null : ok(provider),
               '/v1/money/exports/log' => http.Response('date,amount\n', 200, headers: {'content-type': 'text/csv'}),
               '/v1/money/leaks' => ok({
                 'leaks': [
@@ -417,6 +422,48 @@ void main() {
     await t.tap(find.bySemanticsLabel('Use paystack/main'));
     await t.pump();
     expect(find.text('paystack/main'), findsWidgets);
+  });
+
+  testWidgets('Get paid: an owner with no payments account opens a Taskiem wallet, or connects one on the web', (t) async {
+    const providers = [
+      {'id': 'paystack', 'name': 'Paystack'},
+      {'id': 'flutterwave', 'name': 'Flutterwave'},
+    ];
+    // The wallet offered: Receive money with Taskiem opens its sheet.
+    await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now), provider: {
+      'connected': null,
+      'owner': true,
+      'wallet': {'available': true, 'plan': true},
+      'providers': providers,
+    });
+    expect(find.text('Get paid'), findsOneWidget);
+    expect(find.text('I already have an account'), findsOneWidget);
+    expect(find.text('Paystack, Flutterwave, on the web'), findsOneWidget);
+    await looks(t, 'money-get-paid');
+    await t.ensureVisible(find.text('Receive money with Taskiem'));
+    await t.tap(find.text('Receive money with Taskiem'));
+    await settle(t);
+    expect(find.text('Open a Taskiem wallet'), findsWidgets, reason: 'the wallet sheet opens');
+
+    // Not offered on this Taskiem: connecting an account is the only way.
+    await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now), provider: {
+      'connected': null,
+      'owner': true,
+      'wallet': {'available': false, 'plan': true},
+      'providers': providers,
+    });
+    expect(find.text('Get paid'), findsOneWidget);
+    expect(find.text('Receive money with Taskiem'), findsNothing);
+    expect(find.text('Connect a payments account'), findsOneWidget);
+
+    // A business with a payments account, or someone not an owner: nothing.
+    await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now), provider: {
+      'connected': {'channel': 'paystack/main', 'name': 'Paystack', 'wallet': false},
+      'owner': true,
+    });
+    expect(find.text('Get paid'), findsNothing);
+    await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now), provider: {'connected': null, 'owner': false});
+    expect(find.text('Get paid'), findsNothing);
   });
 
   testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {

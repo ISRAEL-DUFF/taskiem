@@ -187,6 +187,7 @@ Built in the app's own look from the start (`mobile-app-look.md`, Stock and supp
 | One of Things we have | `chat/things_page.dart` `ThingPage` | Things we have › a row | Cost and status card, status as five ticked rows, details, where it came from (the order, or Added by hand with its day) | [fine] ticked rows since 23 Nov |
 | Sold | `chat/things_page.dart` `SoldSheet` | A thing › Sold, Add what it sold for | The price, Paid in cash or by transfer (ticked rows) | [fine] ticked rows since 23 Nov |
 | Add something we have | `chat/things_page.dart` `AddThingSheet` | Things we have's + | Name, cost, when, from whom, label, serial, warranty, note | [fine] |
+| Get paid | `chat/money_page.dart` `_GetPaid` | Money (an owner of a business with no payments account, above Go to) | Receive money with Taskiem (opens `OpenWalletSheet`) where this Taskiem offers it; I already have an account, or Connect a payments account where it does not (Connections on the web) | [fine] 25 November 2026 |
 | Spending by label | `chat/spending.dart` `SpendingCard`, `SpendingPage` | Money (the card), its See all | The split, the labels spent on most; by month, profit without Bought to keep | [fine] |
 | A bill (changes) | `chat/bills_page.dart` `BillPage` | Money › Bills › a bill | Line marks, On Things we have for `table.read` | [fine] |
 
