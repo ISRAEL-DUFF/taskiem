@@ -39,7 +39,7 @@ func TestPageBudget(t *testing.T) {
 		}
 	}
 	var basket int
-	kinds := map[string][]string{"shop": {"order.js", "bagpill.js", "item.js", "copy.js"}, "form": {"form-embed.js", "form-device.js"}}
+	kinds := map[string][]string{"shop": {"order.js", "bagpill.js", "item.js", "copy.js"}, "form": {"form-embed.js", "form-device.js"}, "selling": {"sell.js", "form-embed.js"}}
 	var every []string
 	for _, names := range kinds {
 		every = append(every, names...)

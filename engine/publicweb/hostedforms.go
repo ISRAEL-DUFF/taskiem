@@ -305,6 +305,27 @@ func allowed(w http.ResponseWriter, r *http.Request, methods ...string) bool {
 }
 
 // serveFormTrigger serves /f/{public_id} and /embed/f/{public_id}.
+// sellsURL is the address of a form that sells, on its storefront: its
+// own domain, else its name on the preview domain ("" when there is none).
+func (s *Server) sellsURL(x *FormSells, embed bool) string {
+	if x == nil || !strings.HasPrefix(x.Path, "/") || strings.Contains(x.Path, "//") {
+		return ""
+	}
+	host := ""
+	switch {
+	case x.Domain != nil && *x.Domain != "":
+		host = *x.Domain
+	case x.Slug != "" && s.PreviewDomain != "":
+		host = x.Slug + "." + s.PreviewDomain
+	default:
+		return ""
+	}
+	if embed {
+		return "https://" + host + "/embed" + x.Path
+	}
+	return "https://" + host + x.Path
+}
+
 func (s *Server) serveFormTrigger(w http.ResponseWriter, r *http.Request, id, sub string, embed bool) {
 	if !allowed(w, r, http.MethodGet, http.MethodHead, http.MethodPost) {
 		return
@@ -316,6 +337,20 @@ func (s *Server) serveFormTrigger(w http.ResponseWriter, r *http.Request, id, su
 	}
 	if !ok {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
+		return
+	}
+	// A form that sells now is the storefront's order form: its address
+	// sends buyers there, framed or not (forms-that-sell §5.1).
+	if pub.Sold {
+		to := s.sellsURL(pub.Sells, embed)
+		if to == "" || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+			s.formNotice(w, r, http.StatusNotFound, pub.Trigger.Title, pub.Tenant, pub.Business, pub.Business+" is not taking this form right now.")
+			return
+		}
+		if item := r.URL.Query().Get(oneItemQuery); item != "" && len(item) <= 64 {
+			to += "?" + url.Values{oneItemQuery: {item}}.Encode()
+		}
+		http.Redirect(w, r, to, http.StatusSeeOther) //nolint:gosec // the storefront's own address, read from the database
 		return
 	}
 	switch pub.Trigger.Access {

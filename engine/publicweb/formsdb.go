@@ -40,6 +40,19 @@ type PublicForm struct {
 	// Guarded: the form tripped its submission limit within the hour, so
 	// a public form asks for a phone code first (forms 7.3).
 	Guarded bool
+	// Sold: the form was turned into an order form of the storefront
+	// (forms-that-sell §5.1); Sells is where that form is live, nil while
+	// it is not.
+	Sold  bool
+	Sells *FormSells
+}
+
+// FormSells is where a form that sells is served: the storefront's
+// published name or its own domain, and the action's path.
+type FormSells struct {
+	Slug   string  `json:"slug"`
+	Domain *string `json:"domain"`
+	Path   string  `json:"path"`
 }
 
 // FormLink is a one-time link to a link form.
@@ -143,11 +156,14 @@ func ParsePublicForm(publicID string, raw []byte) (PublicForm, error) {
 		Types         json.RawMessage `json:"types"`
 		Reach         []string        `json:"reach"`
 		Guarded       bool            `json:"guarded"`
+		Sold          bool            `json:"sold"`
+		Sells         *FormSells      `json:"sells"`
 	}
 	if err := json.Unmarshal(raw, &x); err != nil {
 		return PublicForm{}, err
 	}
-	f := PublicForm{Endpoint: x.Endpoint, Tenant: x.Tenant, PublicID: publicID, Status: x.Status, Open: x.Open, Business: x.Business, Reach: x.Reach, Guarded: x.Guarded}
+	f := PublicForm{Endpoint: x.Endpoint, Tenant: x.Tenant, PublicID: publicID, Status: x.Status, Open: x.Open, Business: x.Business, Reach: x.Reach, Guarded: x.Guarded,
+		Sold: x.Sold, Sells: x.Sells}
 	if x.ClosedMessage != nil {
 		f.ClosedMessage = *x.ClosedMessage
 	}

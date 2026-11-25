@@ -488,6 +488,7 @@ form_codes.payload
 form_codes.scope
 form_codes.tenant_id
 form_codes.verified_at
+form_endpoints.action_id
 form_endpoints.closed_message
 form_endpoints.closes_at
 form_endpoints.created_at

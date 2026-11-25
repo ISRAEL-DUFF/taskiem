@@ -313,10 +313,12 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			return err
 		}
 	}
-	// A workflow that no longer has a form trigger closes its form.
+	// A workflow that no longer has a form trigger closes its form, but
+	// for a form that sells now: its address sends buyers to its action
+	// on the storefront (forms-that-sell §5.1).
 	if def.Trigger.Type != "form" {
 		if _, err := tx.Exec(ctx, `UPDATE form_endpoints SET status = 'closed', updated_at = now()
-			WHERE workflow_id = $1 AND environment = ANY ($2) AND status IN ('live', 'paused')`, wf, envs); err != nil {
+			WHERE workflow_id = $1 AND environment = ANY ($2) AND status IN ('live', 'paused') AND action_id IS NULL`, wf, envs); err != nil {
 			return err
 		}
 	}
@@ -407,7 +409,7 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			if err == nil {
 				_, err = tx.Exec(ctx, `INSERT INTO form_endpoints (id, tenant_id, workflow_id, environment, public_id, version, form)
 					VALUES ($1, $2, $3, $4, $5, $6, $7)
-					ON CONFLICT (workflow_id, environment) DO UPDATE SET version = EXCLUDED.version, form = EXCLUDED.form, updated_at = now()`,
+					ON CONFLICT (workflow_id, environment) DO UPDATE SET version = EXCLUDED.version, form = EXCLUDED.form, action_id = NULL, updated_at = now()`,
 					uuid.Must(uuid.NewV7()), tenant, wf, env, NewFormID(), version, formCopy(def))
 			}
 		case "email":

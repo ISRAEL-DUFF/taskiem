@@ -159,10 +159,10 @@ func (s *Service) recordKeep(ctx context.Context, x keepRow) error {
 	var k Keep
 	if err := s.Keys.Open(KeepAAD(*scope), x.payload, &k); err != nil {
 		s.log().Warn("forms: a keep that does not open; dropped")
-		return nil
+		return nil //nolint:nilerr // dropped: it is taken off the inbox, never retried
 	}
 	if k.Check() != nil {
-		return nil
+		return nil //nolint:nilerr // a keep that does not read is dropped
 	}
 	kind, value, _ := k.ContactOf()
 	at := k.At

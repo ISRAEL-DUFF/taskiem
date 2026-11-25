@@ -677,6 +677,9 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/fronts/{id}/items/{row}/photo/main", s.mainFrontItemPhoto)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts/{id}/actions", s.addFrontAction)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/form", s.putActionForm)
+			// Forms that sell (forms_sell.go): what an order form sells, and the code for one on a website.
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/sells", s.putActionSells)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/embed", s.getStorefrontEmbed)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
 			s.invoiceRoutes(r)
 			s.linkRoutes(r)         // business links (links.go)
@@ -776,6 +779,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowRead)).Get("/forms", s.listForms)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Patch("/forms/{id}", s.patchForm)
 			r.With(s.need(PermFormLinks), s.tenantWide).Post("/forms/{id}/links", s.mintFormLinks)
+			r.With(s.need(PermWorkflowPublish), s.need(PermStorefrontManage), s.tenantWide).Post("/forms/{id}/sell", s.sellFormHandler) // forms_sell.go
 			r.Get("/forms/{id}/view", s.memberForm)
 			r.With(s.tenantWide).Post("/forms/{id}/submissions", s.submitMemberForm)
 			r.With(s.need(PermRunRead)).Get("/form-submissions", s.listFormSubmissions)

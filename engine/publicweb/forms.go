@@ -141,6 +141,20 @@ type formData struct {
 	// step's button says how much); Whats is the business's WhatsApp.
 	PayNow bool
 	Whats  string
+	// Forms that sell (forms-that-sell §5): One is the product a form
+	// sells, drawn at the top; Packages its packages field (pkgField as
+	// published, which prices it); Notice the warning line above the
+	// button.
+	One      *oneView
+	Packages *packagesView
+	pkgField storefront.PackagesField
+	Notice   string
+	// Embed and Origins: a frame on the business's verified websites,
+	// which is told the page's height and, once sent, the action and the
+	// reference (storefront:height, storefront:submitted).
+	Embed   bool
+	Origins string
+	Ref     string
 }
 
 type zoneItem struct {
@@ -341,9 +355,17 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 		s.serveBooking(w, r, site, p, act, embed)
 		return
 	}
+	if embed {
+		// A frame is told where it may post its height and its reference.
+		origins, err := s.embedOrigins(r.Context(), site.Tenant)
+		if err == nil {
+			f.Embed, f.Origins = true, strings.Join(origins, " ")
+		}
+	}
 	if r.Method != http.MethodPost {
 		f.stepFor(r.URL.Query())
-		if item := r.URL.Query().Get("item"); item != "" {
+		f.Packages.choose(r.URL.Query())
+		if item := r.URL.Query().Get(oneItemQuery); item != "" && f.One == nil {
 			for i := range f.Items {
 				if f.Items[i].ID == item && f.Items[i].Orderable {
 					f.Items[i].Qty = 1
@@ -364,7 +386,7 @@ func (s *Server) formsOpen() bool {
 func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bool, base string) formData {
 	c := p.Model.Card
 	f := formData{pageData: pageData{Title: act.Label, Lang: c.Language}, Business: c.Name, Kind: act.Kind, Label: act.Label,
-		Action: base + "/a/" + act.Ref(), Home: "/", Honeypot: formguard.HoneypotField, Purpose: purposes[act.Kind],
+		Action: base + "/a/" + act.Ref(), Home: "/", Honeypot: formguard.HoneypotField, Purpose: purposes[act.Kind], Ref: act.Ref(),
 		form: formID(site.ID, strings.TrimPrefix(base+"/"+act.Ref(), "/"))}
 	if base != "" {
 		f.Home = base
@@ -404,8 +426,19 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 		case f.Delivery && !f.Pickup:
 			f.Fulfilment = "delivery"
 		}
+		if storefront.HasWidget(form, "packages") {
+			f.Packages, f.pkgField = packagesFieldView(form, storefront.WithSizes(p.Items))
+		}
+		// One product, pre-chosen at the top (§5.3), with Secure checkout
+		// where it is paid through the payment page.
+		if one := storefront.OneItem(form); one != "" {
+			if it, ok := findItem(p.Items, one); ok {
+				f.One = oneItemView(it, act.Checkout)
+			}
+		}
+		f.Notice = storefront.NoticeFor(storefront.ActionOptions{Notice: act.Notice}, f.One != nil)
 		if storefront.HasWidget(form, "basket") {
-			f.Items = basketItems(storefront.WithSizes(p.Items))
+			f.Items = onlyItems(basketItems(storefront.WithSizes(p.Items)), storefront.BasketItems(form))
 			for _, it := range p.Items {
 				if len(it.Sizes) > 0 {
 					f.products = append(f.products, it)
@@ -548,11 +581,13 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 			Message: f.Business + " is not taking this form right now.", Home: f.Home})
 		return
 	}
-	prefix := ""
+	prefix, sent := "", ""
 	if embed {
-		prefix = "/embed"
+		// The frame's status page tells the website once which action
+		// was sent, and the reference.
+		prefix, sent = "/embed", "&sent="+url.QueryEscape(act.Ref())
 	}
-	http.Redirect(w, r, prefix+"/o/"+url.PathEscape(ref)+"?k="+url.QueryEscape(sub.StatusKey), http.StatusSeeOther)
+	http.Redirect(w, r, prefix+"/o/"+url.PathEscape(ref)+"?k="+url.QueryEscape(sub.StatusKey)+sent, http.StatusSeeOther)
 }
 
 // record seals a submission and records it, with a new reference if the
@@ -592,6 +627,7 @@ func (f *formData) keep(v url.Values) {
 	for _, q := range f.Questions {
 		q.show(v)
 	}
+	f.Packages.choose(v)
 	f.keepBasket(v)
 }
 
@@ -706,7 +742,11 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 		if f.pickError != "" {
 			return sub, f.pickError
 		}
-		if msg := f.basket(v, items, &sub); msg != "" {
+		if f.Packages != nil {
+			if msg := f.packageLines(v, items, &sub); msg != "" {
+				return sub, msg
+			}
+		} else if msg := f.basket(v, items, &sub); msg != "" {
 			return sub, msg
 		}
 		switch {

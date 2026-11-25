@@ -1341,7 +1341,7 @@ paths:
       tags:
       - Storefront
       summary: Add a form to a front
-      description: A form added to a front, off (fronts F7) - a blank form (form, a question form whose questions you write), a question (enquiry), a call-back (callback) or a quote request (quote). Set it up and turn it on as any form is.
+      description: A form added to a front, off (fronts F7) - a blank form (form, a question form whose questions you write), a question (enquiry), a call-back (callback) or a quote request (quote); or an order form that sells (order, forms-that-sell §5.1) - one product in packages, or a basket of some of the front's items - with the home page's payment, delivery areas and pay at the door, and its notice. Set it up and turn it on as any form is. An order form answers {action, warnings}, the warnings saying a package costs more per item than its product.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -1367,10 +1367,16 @@ paths:
               properties:
                 kind:
                   type: string
-                  enum: [form, enquiry, callback, quote]
+                  enum: [form, enquiry, callback, quote, order]
                 label:
                   type: string
                   maxLength: 40
+                sells:
+                  $ref: '#/components/schemas/SellSpec'
+                notice:
+                  type: string
+                  maxLength: 160
+                  description: An order form's warning line above its button; '-' for none
       responses:
         '201':
           description: The form, off
@@ -1379,6 +1385,87 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/actions/{id}/sells:
+    put:
+      operationId: putStorefrontActionSells
+      tags:
+      - Storefront
+      summary: Set what an order form sells
+      description: An order form's packages (one product, one to six packages each a quantity once and a price, labels drawn from the quantity and price when none) or its basket's items, and its notice (forms-that-sell §5.2), keeping its own questions. The product must be on the front's list. A published page is published again. Warnings say a package costs more per item than its product; they do not refuse.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [sells]
+              properties:
+                sells:
+                  $ref: '#/components/schemas/SellSpec'
+                notice:
+                  type: string
+                  maxLength: 160
+      responses:
+        '200':
+          description: What the packages say against the list's prices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, warnings]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/embed:
+    get:
+      operationId: getStorefrontEmbed
+      tags:
+      - Storefront
+      summary: The code for one order form on a website
+      description: 'Where one action''s form is, framed and not, and the code that shows it on the business''s own verified website (forms-that-sell §5.5): a frame with the few lines that size it to the height its form tells it (storefront:height), or a plain frame of a fixed height for a site builder that takes no script. The frame tells the website storefront:submitted with the action and the reference only.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: action
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The form's addresses and code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionEmbed'
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/actions/{id}/form:
@@ -18152,6 +18239,98 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Form'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/forms/{id}/sell:
+    post:
+      operationId: sellForm
+      tags:
+      - Forms
+      summary: Sell something with this form
+      description: 'Turns a live hosted form into an order form of the storefront (forms-that-sell §5.1): an action of the home page, or the front named, selling one product in packages or a basket of some items, with the form''s own questions (its name, phone, email and address are asked by the order form itself); the workflow becomes the action''s, its storefront trigger naming the action and its reads of the answers moved to trigger.body.customer and trigger.answers, published, and the page published again. The form keeps its address, which now leads to the action''s. Refused (409, code area_off and the area) while the Storefront or Orders area is off, so the owner can be offered to turn it on; refused before the page is published, under four-eyes publishing, for a form that asks for a file or reads trigger.form, and for one that sells already.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.publish,storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [sells]
+              properties:
+                front_id:
+                  type: string
+                  format: uuid
+                label:
+                  type: string
+                  maxLength: 40
+                sells:
+                  $ref: '#/components/schemas/SellSpec'
+                notice:
+                  type: string
+                  maxLength: 160
+      responses:
+        '201':
+          description: The order form, live
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [action, front, workflow_id, version, url, form_url, warnings]
+                properties:
+                  action:
+                    $ref: '#/components/schemas/StorefrontAction'
+                  front:
+                    type: object
+                    required: [id, slug, name]
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      slug:
+                        type: string
+                      name:
+                        type: string
+                  workflow_id:
+                    type: string
+                    format: uuid
+                  version:
+                    type: integer
+                  url:
+                    type: string
+                  form_url:
+                    type: string
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+        '409':
+          description: Refused, with the area that is off (area_off) when that is why
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                  area_off:
+                    type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/forms/{id}/links:
@@ -50894,6 +51073,11 @@ components:
         url:
           type: string
           description: 'The page''s public address for links, QR codes and cards: its own primary domain once verified, else preview_url'
+        warnings:
+          type: array
+          items:
+            type: string
+          description: What a publish says without refusing - an order form's package dearer per item than its product, or a product no longer on its list (forms-that-sell §5.2)
         domain:
           type:
           - string
@@ -51192,6 +51376,73 @@ components:
           minimum: 0
           maximum: 60
           description: How long a quote stands for the customer to accept (fronts F7; 7 by default)
+        notice:
+          type: string
+          maxLength: 160
+          description: An order form's warning line above its button (forms-that-sell §5.2); a form selling one product shows a default when unset, '-' shows none
+    SellSpec:
+      type: object
+      additionalProperties: false
+      description: What an order form sells (forms-that-sell §5.2) - one product (item, a row of the front's list) in one to six packages, or a basket of some items (all of the list when none)
+      properties:
+        item:
+          type: string
+          maxLength: 64
+        packages:
+          type: array
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/Package'
+        choose:
+          type: string
+          enum: [all, each, '']
+          description: For a product in sizes and colours, one choice for all its units or one for each
+        items:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+    Package:
+      type: object
+      additionalProperties: false
+      required: [qty, price_kobo]
+      properties:
+        qty:
+          type: integer
+          minimum: 1
+          maximum: 20
+        price_kobo:
+          type: integer
+          minimum: 100
+        label:
+          type: string
+          maxLength: 60
+          description: The owner's words; drawn from the quantity and price when none (2 items · ₦45,000)
+    ActionEmbed:
+      type: object
+      required: [action_id, label, 'on', url, embed_url, frame, script, plain]
+      properties:
+        action_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        'on':
+          type: boolean
+          description: Whether the form is on; an off form shows nothing
+        url:
+          type: string
+        embed_url:
+          type: string
+        frame:
+          type: string
+          description: The frame, to go with script
+        script:
+          type: string
+          description: The lines that give the frame its form's height
+        plain:
+          type: string
+          description: A frame of a fixed height, for a site builder that takes no script
     Delivery:
       type: object
       required: [id, order_id, reference, rider_id, rider, status, offered_at, fee_kobo]
@@ -58145,6 +58396,12 @@ components:
           description: Where people fill it in (the app, for a members form)
         embed_url:
           type: string
+        sells_as:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The storefront's order form this form became (Sell something with this form); its address leads there
     FormSubmission:
       type: object
       required: [id, reference, answers, respondent, channel, status, created_at]

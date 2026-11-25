@@ -48,7 +48,7 @@ const PriceCheckGrace = 10 * time.Minute
 
 // reprice prices a submission from live rows; changed is false when
 // everything is as the customer saw it.
-func reprice(sub Submission, live map[string]Item, opts ActionOptions) (PriceChange, bool) {
+func reprice(sub Submission, live map[string]Item, opts ActionOptions, published PackagesField) (PriceChange, bool) {
 	var pc PriceChange
 	changed := false
 	if sub.Booking != nil {
@@ -69,11 +69,41 @@ func reprice(sub Submission, live map[string]Item, opts ActionOptions) (PriceCha
 		}
 		return pc, changed
 	}
+	// A package's lines are priced as the package, from the published
+	// form, never per item from the table (forms-that-sell §5.2).
+	pkgUnits, pkgWas := 0, int64(0)
 	for _, l := range sub.Basket {
+		if l.PackageQty > 0 {
+			pkgUnits += l.Quantity
+			pkgWas = l.PackageKobo
+		}
+	}
+	pkgLeft := int64(0)
+	if p, ok := published.Find(pkgUnits); pkgUnits > 0 && ok {
+		pkgLeft = p.PriceKobo
+		if p.PriceKobo != pkgWas {
+			changed = true
+		}
+	}
+	pkgPrice := pkgLeft
+	for i, l := range sub.Basket {
 		it, ok := live[l.ID]
-		if !ok || !it.Available || it.PriceKobo == nil || it.SoldOut() {
+		if !ok || !it.Available || it.PriceKobo == nil || it.SoldOut() || (l.PackageQty > 0 && pkgPrice == 0) {
 			pc.Gone = append(pc.Gone, l.Name)
 			changed = true
+			continue
+		}
+		if l.PackageQty > 0 {
+			n := l
+			n.PackageKobo = pkgPrice
+			n.LineKobo = pkgPrice * int64(l.Quantity) / int64(pkgUnits)
+			if lastPackageLine(sub.Basket, i) {
+				n.LineKobo = pkgLeft
+			}
+			pkgLeft -= n.LineKobo
+			n.PriceKobo = n.LineKobo / int64(max(1, n.Quantity))
+			pc.Basket = append(pc.Basket, n)
+			pc.TotalKobo += n.LineKobo
 			continue
 		}
 		n := l
@@ -100,6 +130,17 @@ func reprice(sub Submission, live map[string]Item, opts ActionOptions) (PriceCha
 		pc.DepositKobo = repricedDeposit(sub, pc.TotalKobo, opts)
 	}
 	return pc, changed
+}
+
+// lastPackageLine reports whether basket[i] is the last of its package
+// lines, which takes what is left of the package's price.
+func lastPackageLine(basket []Line, i int) bool {
+	for j := i + 1; j < len(basket); j++ {
+		if basket[j].PackageQty > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // repricedDeposit is an order's deposit at a new total: the action's

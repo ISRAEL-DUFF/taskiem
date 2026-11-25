@@ -105,18 +105,21 @@ type formOut struct {
 	ClosedMessage  *string    `json:"closed_message"`
 	URL            string     `json:"url"`
 	EmbedURL       string     `json:"embed_url"`
+	// SellsAs is the storefront's order form this form became (Sell
+	// something with this form): its address leads there.
+	SellsAs *uuid.UUID `json:"sells_as"`
 }
 
 const formCols = `e.id, e.public_id, e.workflow_id, w.name, e.environment, e.version, COALESCE(v.definition->'trigger'->'config'->>'title', ''),
 	COALESCE(v.definition->'trigger'->'config'->>'access', 'public'), e.status, e.opens_at, e.closes_at, e.max_submissions, e.submissions,
-	(SELECT count(*) FROM form_submissions s WHERE s.endpoint_id = e.id AND s.created_at > now() - interval '7 days')::int, e.closed_message`
+	(SELECT count(*) FROM form_submissions s WHERE s.endpoint_id = e.id AND s.created_at > now() - interval '7 days')::int, e.closed_message, e.action_id`
 
 const formFrom = ` FROM form_endpoints e JOIN workflows w ON w.id = e.workflow_id JOIN workflow_versions v ON v.workflow_id = e.workflow_id AND v.version = e.version`
 
 func (s *Server) scanForm(r pgx.Row) (formOut, error) {
 	var f formOut
 	err := r.Scan(&f.ID, &f.PublicID, &f.WorkflowID, &f.Workflow, &f.Environment, &f.Version, &f.Title, &f.Access, &f.Status, &f.OpensAt, &f.ClosesAt,
-		&f.MaxSubmissions, &f.Submissions, &f.Week, &f.ClosedMessage)
+		&f.MaxSubmissions, &f.Submissions, &f.Week, &f.ClosedMessage, &f.SellsAs)
 	switch {
 	case err != nil || s.Forms == nil:
 	case f.Access == "members":

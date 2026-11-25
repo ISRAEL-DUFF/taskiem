@@ -25,6 +25,35 @@ func EmbedSnippet(pageURL, business string) string {
 	return `<iframe src="` + strings.TrimRight(pageURL, "/") + `/embed" title="` + title + `" style="width:100%;min-height:720px;border:0" loading="lazy"></iframe>`
 }
 
+// One order form on a website (forms-that-sell §5.5): a frame with an id,
+// and the few lines that give it the height the form tells it
+// (storefront:height), so a packages field that opens is never cut off;
+// or a plain frame of a fixed height, for a site builder that takes no
+// script. The lines read nothing but the frame's own height message.
+
+var attrEscaper = strings.NewReplacer(`"`, "&quot;", "<", "&lt;", ">", "&gt;", "&", "&amp;")
+
+// EmbedFrame is one order form's frame, for EmbedScript to size.
+func EmbedFrame(src, title, id string) string {
+	return `<iframe id="` + attrEscaper.Replace(id) + `" src="` + attrEscaper.Replace(src) + `" title="` + attrEscaper.Replace(title) +
+		`" style="width:100%;height:760px;border:0" loading="lazy"></iframe>`
+}
+
+// EmbedScript sizes the frame id to the height its form tells it.
+func EmbedScript(src, id string) string {
+	origin := src
+	if i := strings.Index(src[min(len(src), len("https://")):], "/"); i >= 0 {
+		origin = src[:len("https://")+i]
+	}
+	return `<script>window.addEventListener("message",function(e){var f=document.getElementById("` + attrEscaper.Replace(id) + `");` +
+		`if(f&&e.origin==="` + attrEscaper.Replace(origin) + `"&&e.source===f.contentWindow&&e.data&&e.data.type==="storefront:height"){f.style.height=e.data.height+"px"}});</script>`
+}
+
+// EmbedPlain is one order form's frame of a fixed height.
+func EmbedPlain(src, title string) string {
+	return `<iframe src="` + attrEscaper.Replace(src) + `" title="` + attrEscaper.Replace(title) + `" style="width:100%;min-height:1100px;border:0" loading="lazy"></iframe>`
+}
+
 // designerEmail is the email's subject and body.
 func designerEmail(business, owner string, site embedsites.Site, pageURL string) (string, string) {
 	var proof string

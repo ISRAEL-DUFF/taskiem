@@ -319,7 +319,16 @@ func (s *Server) setupActionTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, false, err
 	}
-	tpl, ok := templates.Default().Get(actionTemplates[kind])
+	name := actionTemplates[kind]
+	// An order form of a business whose orders go to its riders gets the
+	// same workflow, so its orders are offered to them too (forms that
+	// sell §5.6).
+	if kind == "order" {
+		if _, tplID, _, err := orderWorkflowNamedTx(ctx, tx); err == nil && tplID == dispatchOrdersTemplate {
+			name = dispatchOrdersTemplate
+		}
+	}
+	tpl, ok := templates.Default().Get(name)
 	if !ok {
 		return uuid.Nil, false, fmt.Errorf("%w: no workflow template for a %s", errConflict, kind)
 	}

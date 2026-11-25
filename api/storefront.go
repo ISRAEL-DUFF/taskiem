@@ -38,6 +38,9 @@ type storefrontOut struct {
 	URL       string            `json:"url"`
 	Templates []string          `json:"templates"`
 	Accents   map[string]string `json:"accents"`
+	// Warnings are what a publish says without refusing: an order form's
+	// package dearer per item than its product (forms-that-sell §5.2).
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 func (s *Server) previewDomain() string {
@@ -158,6 +161,7 @@ func (s *Server) publishStorefront(w http.ResponseWriter, r *http.Request) {
 	}
 	s.prewarmPublish(r.Context(), tenant, false)
 	var sf storefront.Storefront
+	var warnings []string
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		res, err := s.publishGated(r.Context(), tx, tenant, principalFrom(r.Context()).Actor())
@@ -165,6 +169,9 @@ func (s *Server) publishStorefront(w http.ResponseWriter, r *http.Request) {
 			return storefrontErr(err)
 		}
 		sf = res.Storefront
+		if warnings, err = storefront.PublishWarnings(r.Context(), tx, tenant); err != nil {
+			return err
+		}
 		return auditTx(r, tx, "storefront.publish", sf.Slug, map[string]any{"version": sf.PublishedVersion, "held_for_review": res.Held,
 			"checks": res.Checks.Verdict})
 	})
@@ -173,6 +180,7 @@ func (s *Server) publishStorefront(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := s.storefrontOut(sf)
+	out.Warnings = warnings
 	if p := principalFrom(r.Context()); p.Agent != nil && p.Agent.Kind == "onboarding" && sf.Status != "in_review" {
 		// Live: the onboarding is done (agents.go). Held for review, the
 		// agent may still change it.

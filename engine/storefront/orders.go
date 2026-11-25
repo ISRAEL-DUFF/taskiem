@@ -496,8 +496,34 @@ func (o *Orders) checkPrices(ctx context.Context, x inboxRow, sub Submission, op
 		o.log().Warn("storefront: prices not checked; the table did not answer", "reference", x.reference, "err", err)
 		return PriceChange{}, false, "Prices were not checked: the table could not be read", nil
 	}
-	pc, changed := reprice(sub, live, opts)
+	pc, changed := reprice(sub, live, opts, o.publishedPackages(ctx, x))
 	return pc, changed, "", nil
+}
+
+// publishedPackages is the packages field of the action a submission was
+// sent to, as the storefront has it published now: what a package costs.
+// None when the action sells no packages, or cannot be read: a package's
+// lines are then gone, never priced from anything else.
+func (o *Orders) publishedPackages(ctx context.Context, x inboxRow) PackagesField {
+	var pf PackagesField
+	if x.action == nil {
+		return pf
+	}
+	_ = db.InTenantTx(ctx, o.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
+		m, err := PublishedModel(ctx, tx, x.tenant)
+		if err != nil {
+			return err
+		}
+		for _, f := range m.Fronts {
+			for _, a := range f.Actions {
+				if a.ID != nil && *a.ID == *x.action {
+					pf, _ = FormPackages(a.Form)
+				}
+			}
+		}
+		return nil
+	})
+	return pf
 }
 
 func priceChangedText(ord Order) string {
@@ -922,7 +948,10 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 	if runKind == "app" {
 		runKind = "order"
 	}
-	body := map[string]any{"reference": ord.Reference, "kind": runKind, "customer": ord.Customer, "basket": ord.Basket, "total_kobo": ord.TotalKobo,
+	// lines are the basket again under the record's name, so a package's
+	// line reads the same in trigger.body and trigger.submission
+	// (forms-that-sell §5.6).
+	body := map[string]any{"reference": ord.Reference, "kind": runKind, "customer": ord.Customer, "basket": ord.Basket, "lines": ord.Basket, "total_kobo": ord.TotalKobo,
 		"total": FormatNaira(ord.TotalKobo), "summary": Summary(ord.Basket), "fulfilment": ord.Fulfilment, "payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}}
 	if ord.Zone != "" {
 		// The delivery area and its fee (dispatch D1), in the summary too.

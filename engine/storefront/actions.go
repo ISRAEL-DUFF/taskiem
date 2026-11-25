@@ -239,6 +239,11 @@ type PublicAction struct {
 	MaxPerOrder int  `json:"max_per_order,omitempty"`
 	Instalments int  `json:"instalments,omitempty"`
 	WaitingList bool `json:"waiting_list,omitempty"`
+	// Notice is an order form's warning line (forms-that-sell §5.2);
+	// Checkout that it is paid through the payment page, which the page
+	// marks Secure checkout.
+	Notice   string `json:"notice,omitempty"`
+	Checkout bool   `json:"checkout,omitempty"`
 }
 
 var defaultLabels = map[string]string{"order": "Order now", "enquiry": "Ask a question", "callback": "Request a call back", "booking": "Book", "hire": "Hire now",
@@ -534,7 +539,8 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 func publicAction(a Action) PublicAction {
 	return PublicAction{Kind: a.Kind, Label: a.Label, Payment: a.Payment, Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote,
 		Zones: a.Options.Zones, PayOnDelivery: a.Options.PayOnDelivery, DepositPercent: a.Options.DepositPercent,
-		MaxPerOrder: a.Options.MaxPerOrder, Instalments: a.Options.Instalments, WaitingList: a.Options.WaitingList}
+		MaxPerOrder: a.Options.MaxPerOrder, Instalments: a.Options.Instalments, WaitingList: a.Options.WaitingList,
+		Notice: a.Options.Notice, Checkout: a.Kind == "order" && a.Payment != "none"}
 }
 
 // Ref is how a page addresses the action, /a/<ref>: its slug, or for one

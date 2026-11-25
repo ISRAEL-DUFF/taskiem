@@ -131,6 +131,13 @@ type Line struct {
 	// Options are the choices a Food dish took (fronts F3); PriceKobo is
 	// the dish's price with them.
 	Options []LineOption `json:"options,omitempty"`
+	// PackageQty and PackageKobo are the package the line is (part of):
+	// how many it is and its price, from the published form
+	// (forms-that-sell §5.2). LineKobo is then the line's share of that
+	// price, which is not PriceKobo times Quantity; the lines of one
+	// package add up to PackageKobo.
+	PackageQty  int   `json:"package_qty,omitempty"`
+	PackageKobo int64 `json:"package_kobo,omitempty"`
 }
 
 // SealSubmission encrypts a submission for the inbox, bound to its
