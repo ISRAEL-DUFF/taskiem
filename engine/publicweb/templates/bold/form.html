@@ -6,7 +6,12 @@
 <p class="lede">{{if eq .Kind "order"}}Pick what you want, then tell us where it goes.{{else if eq .Kind "callback"}}Leave your number and we will call you.{{else}}We will answer as soon as we can.{{end}}</p>
 {{template "fmain" .}}
 {{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
-{{if eq .Step "bag"}}{{template "bagstep" .}}{{else}}<form method="post" action="{{.Action}}" class="form{{if eq .Step "details"}} co{{end}}"{{if .Packages}} data-sell{{end}}{{if .Items}} data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}{{end}}>
+{{if eq .Step "bag"}}{{template "bagstep" .}}{{else}}{{template "orderform" .}}{{end}}
+{{template "sfembed" .}}{{template "ffoot" .}}
+
+{{/* The order form itself, drawn on its own page and under a One product
+front (forms that sell §5.4, oneproduct.html). */}}
+{{define "orderform"}}<form method="post" action="{{.Action}}" class="form{{if eq .Step "details"}} co{{end}}"{{if .Packages}} data-sell{{end}}{{if .Items}} data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}{{end}}>
 {{template "guard" .}}
 {{template "sfone" .}}{{template "sfpackages" .}}{{if eq .Step "details"}}{{template "bagsummary" .}}{{else if .Items}}
 <fieldset class="basket">
@@ -81,4 +86,3 @@
 </div>
 </form>
 {{end}}
-{{template "sfembed" .}}{{template "ffoot" .}}

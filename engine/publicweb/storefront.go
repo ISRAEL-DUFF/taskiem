@@ -381,6 +381,11 @@ func (s *Server) serveFront(w http.ResponseWriter, r *http.Request, site Site, s
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return
 	}
+	// A One product front is the product's own page (forms that sell
+	// §5.4), while its order form sells it.
+	if f.Kind == storefront.OneProduct && s.serveOneProduct(w, r, site, p, f) {
+		return
+	}
 	front := p
 	front.Items = p.Lists[f.ListTable()]
 	front.Model.HasServices = false

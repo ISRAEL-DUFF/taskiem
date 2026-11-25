@@ -5,7 +5,12 @@
 {{if not .Step}}{{template "kicker" (or (and .Items "Your order") "Get in touch")}}{{end}}
 <h1>{{if eq .Step "bag"}}{{.Brand.Words.Your}}{{else if eq .Step "details"}}Checkout{{else}}{{.Label}}{{end}}</h1>
 {{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
-{{if eq .Step "bag"}}{{template "bagstep" .}}{{else}}<form method="post" action="{{.Action}}" class="form{{if eq .Step "details"}} co{{end}}"{{if .Packages}} data-sell{{end}}{{if .Items}} data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}{{end}}>
+{{if eq .Step "bag"}}{{template "bagstep" .}}{{else}}{{template "orderform" .}}{{end}}
+{{template "sfembed" .}}{{template "ffoot" .}}
+
+{{/* The order form itself, drawn on its own page and under a One product
+front (forms that sell §5.4, oneproduct.html). */}}
+{{define "orderform"}}<form method="post" action="{{.Action}}" class="form{{if eq .Step "details"}} co{{end}}"{{if .Packages}} data-sell{{end}}{{if .Items}} data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}{{end}}>
 {{template "guard" .}}
 {{template "sfone" .}}{{template "sfpackages" .}}{{if eq .Step "details"}}{{template "bagsummary" .}}{{else if .Items}}
 <fieldset class="basket">
@@ -71,4 +76,3 @@
 <p class="row-sub center">Your details go to {{.Business}} only, to {{.Purpose}} and to contact you about it. Taskiem runs this page for them.</p>
 </form>
 {{end}}
-{{template "sfembed" .}}{{template "ffoot" .}}

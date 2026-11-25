@@ -117,7 +117,7 @@ func TestPackagesField(t *testing.T) {
 
 // The One product kind (§5.4): its settings are a promise line, up to six
 // chips from the fixed icons and the stock line, checked strictly; it is
-// checked with the other kinds but not offered until its page is drawn.
+// checked with the other kinds and offered second, after Shop (L2 draws it).
 func TestOneProductSettings(t *testing.T) {
 	good := `{"promise":"Pay on delivery nationwide","chips":[{"icon":"truck","text":"Free delivery in Lagos"},{"icon":"shield","text":"30-day warranty"}],"stock_line":true}`
 	out, err := storefront.CheckFrontSettings(storefront.OneProduct, json.RawMessage(good))
@@ -155,7 +155,7 @@ func TestOneProductSettings(t *testing.T) {
 	for _, k := range storefront.FrontKinds() {
 		offered = append(offered, k.Name)
 	}
-	if !slices.Contains(all, storefront.OneProduct) || slices.Contains(offered, storefront.OneProduct) {
+	if !slices.Contains(all, storefront.OneProduct) || !slices.Contains(offered, storefront.OneProduct) || offered[1] != storefront.OneProduct {
 		t.Fatalf("kinds: all %v, offered %v", all, offered)
 	}
 	k, _ := storefront.FrontKindOf("shop")

@@ -37,7 +37,7 @@ type FrontKind struct {
 	// product front's promise, chips and stock line.
 	Settings json.RawMessage `json:"settings,omitempty"`
 	// Later is a kind whose page is not drawn yet: checked, never offered
-	// (One product until forms-that-sell L2).
+	// (One product was, until forms-that-sell L2 drew it).
 	Later bool `json:"later,omitempty"`
 }
 

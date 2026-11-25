@@ -2,10 +2,15 @@ package storefront
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // The One product kind of front (docs/spec/forms-that-sell.md §5.4): the
@@ -13,8 +18,10 @@ import (
 // settings are the front's (storefront_fronts.options): the promise line
 // at the top, up to six feature chips each with an icon from a fixed set,
 // and whether the stock line ("Only 14 left", from the item's stock and
-// never a made-up number) shows. The page is drawn in phase L2; here is
-// what the settings are and how they are checked.
+// never a made-up number) shows. Its headline and reason to buy are the
+// front's name and line; its photos the item's; its form an order action
+// selling the item in packages. The public host draws it
+// (engine/publicweb/oneproduct.go).
 
 // OneProduct is the One product kind's name.
 const OneProduct = "one-product"
@@ -97,4 +104,133 @@ func CheckFrontSettings(kind string, raw json.RawMessage) (json.RawMessage, erro
 		return nil, err
 	}
 	return json.Marshal(s)
+}
+
+// ReadOneProduct reads a One product front's settings as stored (checked
+// when they were saved); settings that do not read are none.
+func ReadOneProduct(raw json.RawMessage) OneProductSettings {
+	var s OneProductSettings
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &s)
+	}
+	return s
+}
+
+// NewOneProduct is a One product front to make from one catalogue row:
+// its name (the item's by default), its reason to buy (the item's words
+// by default), the item and its packages (one of one at the item's price
+// when none are given), and the order form's button and notice.
+type NewOneProduct struct {
+	Name     string
+	Tagline  string
+	Item     string
+	Packages []Package
+	Choose   string
+	Label    string
+	Notice   string
+}
+
+// OneProductFront is what CreateOneProduct made: the front, its order
+// form, the item it sells, and the warnings of its packages.
+type OneProductFront struct {
+	Front    Front
+	Action   Action
+	Item     Item
+	Warnings []string
+}
+
+// errNoProducts is a One product page asked for with no products.
+var errNoProducts = fmt.Errorf("%w: add your products first: a One product page sells one of them", ErrInvalid)
+
+// CreateOneProduct makes a One product front (forms that sell §5.4) from
+// a catalogue row, off: its list is the catalogue's own table (shared with
+// the home page, so a hero item is not copied), its settings the kind's,
+// and its order form sells the item in packages, delivered and paid at
+// the door, with the home order form's delivery areas and payments.
+func CreateOneProduct(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in NewOneProduct) (OneProductFront, error) {
+	k, ok := oneProductKind()
+	if !ok || len(k.Actions) == 0 {
+		return OneProductFront{}, fmt.Errorf("%w: no One product kind", ErrInvalid)
+	}
+	sf, err := Get(ctx, tx, tenant)
+	if err != nil {
+		return OneProductFront{}, err
+	}
+	if sf.CatalogueTable == nil {
+		return OneProductFront{}, errNoProducts
+	}
+	var table string
+	if err := tx.QueryRow(ctx, `SELECT name FROM data_tables WHERE id = $1`, *sf.CatalogueTable).Scan(&table); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return OneProductFront{}, errNoProducts
+		}
+		return OneProductFront{}, err
+	}
+	items, err := Catalogue(ctx, tx, tenant)
+	if err != nil {
+		return OneProductFront{}, err
+	}
+	var it Item
+	for _, x := range items {
+		if x.ID == in.Item && in.Item != "" {
+			it = x
+		}
+	}
+	switch {
+	case it.ID == "" || it.VariantOf != "":
+		return OneProductFront{}, fmt.Errorf("%w: choose a product from your list", ErrInvalid)
+	case it.PriceKobo == nil:
+		return OneProductFront{}, fmt.Errorf("%w: %s has no price on your list: give it one first", ErrInvalid, it.Name)
+	}
+	pkgs := in.Packages
+	if len(pkgs) == 0 {
+		pkgs = []Package{{Qty: 1, PriceKobo: *it.PriceKobo}}
+	}
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		name = trimRunes(it.Name, 80)
+	}
+	tagline := strings.TrimSpace(in.Tagline)
+	if tagline == "" && !hasLink(it.Description) {
+		tagline = strings.Join(strings.Fields(it.Description), " ")
+		if r := []rune(tagline); len(r) > 120 {
+			tagline = strings.TrimSpace(string(r[:119])) + "…"
+		}
+	}
+	cols := sf.CatalogueColumns
+	f, err := CreateFront(ctx, tx, tenant, NewFront{Name: name, Kind: OneProduct, Table: sf.CatalogueTable, TableName: table, Columns: &cols, Tagline: tagline, NoActions: true})
+	if err != nil {
+		return OneProductFront{}, err
+	}
+	ka := k.Actions[0]
+	label := in.Label
+	if label == "" {
+		label = ka.Label
+	}
+	notice := in.Notice
+	if notice == "" {
+		notice = ka.Options.Notice
+	}
+	a, warnings, err := AddOrderAction(ctx, tx, tenant, f.ID, NewOrderForm{Label: label, Sells: SellSpec{Item: it.ID, Packages: pkgs, Choose: in.Choose}, Notice: notice})
+	if err != nil {
+		return OneProductFront{}, err
+	}
+	// Delivered and paid at the door, as the video's page is (§5.4), with
+	// the home order form's areas and payments kept.
+	a.Options.Pickup, a.Options.Delivery, a.Options.PayOnDelivery = false, true, true
+	raw, _ := json.Marshal(a.Options)
+	if _, err := tx.Exec(ctx, `UPDATE storefront_actions SET options = $2, updated_at = now() WHERE id = $1`, a.ID, raw); err != nil {
+		return OneProductFront{}, err
+	}
+	return OneProductFront{Front: f, Action: a, Item: it, Warnings: warnings}, nil
+}
+
+// oneProductKind is the One product kind's preset.
+func oneProductKind() (FrontKind, bool) {
+	for _, k := range AllFrontKinds() {
+		if k.Name == OneProduct {
+			return k, true
+		}
+	}
+	return FrontKind{}, false
 }

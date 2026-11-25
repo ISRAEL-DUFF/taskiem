@@ -32,6 +32,10 @@ type Front struct {
 	Photo    string    `json:"photo,omitempty"`
 	Position int       `json:"position"`
 	Enabled  bool      `json:"enabled"`
+	// Settings are the front's own settings for its kind (a One product
+	// front's promise, chips and stock line; CheckFrontSettings), null for
+	// a kind with none.
+	Settings json.RawMessage `json:"settings"`
 }
 
 // Block is one thing a front shows.
@@ -116,11 +120,16 @@ func clockHour(s string) (int, error) {
 	return h, nil
 }
 
-const frontCols = `id, slug, kind, name, COALESCE(tagline, ''), COALESCE(photo, ''), position, enabled`
+const frontCols = `id, slug, kind, name, COALESCE(tagline, ''), COALESCE(photo, ''), position, enabled, options`
 
 func scanFront(r pgx.Row) (Front, error) {
 	var f Front
-	err := r.Scan(&f.ID, &f.Slug, &f.Kind, &f.Name, &f.Tagline, &f.Photo, &f.Position, &f.Enabled)
+	var opts []byte
+	err := r.Scan(&f.ID, &f.Slug, &f.Kind, &f.Name, &f.Tagline, &f.Photo, &f.Position, &f.Enabled, &opts)
+	if err == nil && f.Kind == OneProduct {
+		// Only a One product front has settings.
+		f.Settings = opts
+	}
 	return f, err
 }
 
@@ -236,6 +245,9 @@ type PublicFront struct {
 	Photo   string         `json:"photo,omitempty"`
 	Blocks  []PublicBlock  `json:"blocks,omitempty"`
 	Actions []PublicAction `json:"actions,omitempty"`
+	// OneProduct is a One product front's settings (forms that sell
+	// §5.4), as published; nil for another kind.
+	OneProduct *OneProductSettings `json:"one_product,omitempty"`
 }
 
 // PublicBlock is a published block.
@@ -294,6 +306,10 @@ func publicFronts(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, actions []Pu
 			continue
 		}
 		pf := PublicFront{ID: f.ID, Slug: f.Slug, Kind: f.Kind, Name: f.Name, Tagline: f.Tagline, Photo: f.Photo}
+		if f.Kind == OneProduct {
+			op := ReadOneProduct(f.Settings)
+			pf.OneProduct = &op
+		}
 		blocks, err := Blocks(ctx, tx, f.ID)
 		if err != nil {
 			return nil, err
@@ -382,6 +398,15 @@ type NewFront struct {
 	Kind      string
 	Table     *uuid.UUID
 	TableName string
+	// Columns are the list's columns when the table is not the kind's own
+	// (a One product front lists the catalogue's table, with its mapping);
+	// the kind's mapping otherwise.
+	Columns *Columns
+	// Tagline is the front's line (a One product front's reason to buy).
+	Tagline string
+	// NoActions makes the front without its kind's actions, for a maker
+	// that adds its own (CreateOneProduct).
+	NoActions bool
 }
 
 // CreateFront makes a front of a kind (§6), off, at the end: its address
@@ -395,6 +420,10 @@ func CreateFront(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in NewFront) 
 	name := strings.TrimSpace(in.Name)
 	if r := []rune(name); len(r) == 0 || len(r) > 80 || hasLink(name) {
 		return Front{}, fmt.Errorf("%w: a front's name is 1 to 80 characters, with no links", ErrInvalid)
+	}
+	in.Tagline = strings.TrimSpace(in.Tagline)
+	if len([]rune(in.Tagline)) > 120 || hasLink(in.Tagline) {
+		return Front{}, fmt.Errorf("%w: a front's line is up to 120 characters, with no links", ErrInvalid)
 	}
 	sf, err := Get(ctx, tx, tenant)
 	if err != nil {
@@ -420,19 +449,30 @@ func CreateFront(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in NewFront) 
 		slug = fmt.Sprintf("%s-%d", strings.TrimRight(string([]rune(base)[:min(len([]rune(base)), 36)]), "-"), n)
 	}
 	id := uuid.Must(uuid.NewV7())
-	if _, err := tx.Exec(ctx, `INSERT INTO storefront_fronts (id, tenant_id, storefront_id, slug, kind, name, position, enabled)
-		SELECT $1, $2, $3, $4, $5, $6, COALESCE(max(position), 0) + 1, false FROM storefront_fronts WHERE storefront_id = $3`,
-		id, tenant, sf.ID, slug, k.Name, name); err != nil {
+	settings := []byte("{}")
+	if len(k.Settings) > 0 {
+		settings = k.Settings
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO storefront_fronts (id, tenant_id, storefront_id, slug, kind, name, tagline, position, enabled, options)
+		SELECT $1, $2, $3, $4, $5, $6, NULLIF($7, ''), COALESCE(max(position), 0) + 1, false, $8 FROM storefront_fronts WHERE storefront_id = $3`,
+		id, tenant, sf.ID, slug, k.Name, name, in.Tagline, settings); err != nil {
 		return Front{}, err
 	}
 	if in.Table != nil {
-		cfg, _ := json.Marshal(ListConfig{Table: in.Table, TableName: in.TableName, Columns: k.Mapping, Calendar: k.Calendar})
+		cols := k.Mapping
+		if in.Columns != nil {
+			cols = *in.Columns
+		}
+		cfg, _ := json.Marshal(ListConfig{Table: in.Table, TableName: in.TableName, Columns: cols, Calendar: k.Calendar})
 		if _, err := tx.Exec(ctx, `INSERT INTO storefront_blocks (id, tenant_id, front_id, position, kind, config) VALUES ($1, $2, $3, 0, 'list', $4)`,
 			uuid.Must(uuid.NewV7()), tenant, id, cfg); err != nil {
 			return Front{}, err
 		}
 	}
 	for i, a := range k.Actions {
+		if in.NoActions {
+			break
+		}
 		payment := "none"
 		switch {
 		case a.Kind == "tickets" || a.Kind == "class":
@@ -457,6 +497,9 @@ type FrontPatch struct {
 	Slug     *string `json:"slug"`
 	Enabled  *bool   `json:"enabled"`
 	Position *int    `json:"position"`
+	// Settings replace the front's settings for its kind (a One product
+	// front's), checked by CheckFrontSettings.
+	Settings json.RawMessage `json:"settings"`
 }
 
 // UpdateFront changes a front. The first front, the home page, keeps its
@@ -501,8 +544,16 @@ func UpdateFront(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, p FrontPa
 	if p.Position != nil && f.Slug != "" {
 		f.Position = max(*p.Position, 1)
 	}
-	_, err = tx.Exec(ctx, `UPDATE storefront_fronts SET name = $2, tagline = NULLIF($3, ''), slug = $4, enabled = $5, position = $6, updated_at = now() WHERE id = $1`,
-		id, f.Name, f.Tagline, f.Slug, f.Enabled, f.Position)
+	if len(p.Settings) > 0 && string(p.Settings) != "null" {
+		clean, err := CheckFrontSettings(f.Kind, p.Settings)
+		if err != nil {
+			return Front{}, err
+		}
+		f.Settings = clean
+	}
+	_, err = tx.Exec(ctx, `UPDATE storefront_fronts SET name = $2, tagline = NULLIF($3, ''), slug = $4, enabled = $5, position = $6,
+		options = COALESCE($7::jsonb, options), updated_at = now() WHERE id = $1`,
+		id, f.Name, f.Tagline, f.Slug, f.Enabled, f.Position, []byte(f.Settings))
 	var pe *pgconn.PgError
 	if errors.As(err, &pe) && pe.Code == "23505" {
 		return Front{}, fmt.Errorf("%w: another front has the address %q", ErrInvalid, f.Slug)
