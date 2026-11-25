@@ -27,7 +27,7 @@ If your phone has no internet when you open Taskiem, or a page of it, you see a 
 
 - **The bar at the bottom** takes you to Home, Money, Orders and Workflows (the ones your role can see). **Menu** opens everything else.
 - **Pull down from the top of a page** to load it again with the latest figures, in the app on your home screen. In a browser tab, the browser's own pull to refresh does the same.
-- **Tabs that do not fit**, such as Money's Overview, Leaks, Upload statement, Cash and expenses and Fees, slide sideways. The one you are on is always in view.
+- **Tabs that do not fit**, such as Money's Overview, Transactions, Leaks, Upload statement, Cash and expenses and Fees, slide sideways. The one you are on is always in view.
 - **The (i) button** beside a page's title says what the page is for. It is folded away on a phone so the page opens on what it shows.
 - **Search** (the magnifier at the top of Home and of Chats) finds anything in one box: what Taskiem can do ("add rider"), your chats, products, services, invoices, orders, customers and saved things. A saved thing is found by its name or its kind ("mum", "bank account"), yours and your business's, and shows only its name, its kind and whose it is: never the account number or anything else it holds. Three of each show; **Show more** shows them all.
 
@@ -35,7 +35,7 @@ If your phone has no internet when you open Taskiem, or a page of it, you see a 
 
 **Home** opens on a green card with the money that came in today, how many payments, a line showing how the day built up, the money that went out, and how many payments still need matching to an invoice. Under it: today's orders and this week's jobs, then **Needs you**.
 
-**Money** shows Today, This week or This month (other periods under **Other**): money in, money out and what you kept, a bar for each day (press one to see its figures), where the money came from, and what to look at.
+**Money** shows Today, This week or This month (other periods under **Other**): money in, money out and what you kept, a bar for each day (press one to see its figures), where the money came from, and what to look at. **Transactions** lists every payment in and out of the period, one by one, with filters and a search (see [Receiving money](receiving-money.md#every-payment-one-by-one)).
 
 **Orders, Workflows, Activity and Invoices** are lists you tap: each row shows who or what it is, the amount or time, and its status, and opens the order, workflow, run or invoice. Activity puts today's runs first, then yesterday's; the workflow, environment and date filters are under **More filters**.
 

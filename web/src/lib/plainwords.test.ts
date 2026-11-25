@@ -87,6 +87,8 @@ const OWNER_FILES = [
   "pages/MoneyLabels.tsx",
   "pages/Things.tsx",
   "pages/MoneySpending.tsx",
+  "pages/Transactions.tsx",
+  "lib/transactions.ts",
   "lib/things.ts",
   "lib/treat.ts",
   "pages/Areas.tsx",
