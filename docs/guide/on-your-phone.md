@@ -54,3 +54,5 @@ If the payment is to a bank account your business has never paid through Taskiem
 ## The colours
 
 The bar at the top of your phone is dark green in the light theme and follows the page in the dark theme. Choose light, dark or your phone's setting under **Account**.
+
+**Paying with your fingerprint.** In **Settings › Fingerprint**, turn on **Pay with my fingerprint** for this phone, and confirm it is you with your PIN, your passkey or a code to your phone. The Pay sheet then pays with the phone's own fingerprint or face check, up to ₦500,000 a payment and ₦1,000,000 a day. The page lists every phone it is on for, with **Remove**. If you add or remove a fingerprint or face on the phone, turn it on again ([more](paying-people.md)).

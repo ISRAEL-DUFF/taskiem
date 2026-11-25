@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { addPasskey, passkeysSupported, proof, stepUpAssert } from "../passkeys";
 import { ErrorBox, Field, Items, PageHeader, Row, fmtTime, useAction, useLoad, PasswordInput } from "../ui";
 import { ChangePassword } from "./Password";
+import { FingerprintPhones } from "./PayFingerprint";
 import { savedTheme, setTheme, type Theme } from "../theme";
 
 interface Passkey {
@@ -862,6 +863,7 @@ export function Account() {
       <div id="your-pin">
         <YourPin />
       </div>
+      <FingerprintPhones />
       <WhatsApp />
       <Telegram />
       <Slack />

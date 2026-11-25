@@ -59,6 +59,7 @@ import 'home_tabs.dart';
 import 'second_proof.dart';
 import 'start_something.dart';
 import 'you_links.dart';
+import 'you_fingerprint.dart' show FingerprintScreen;
 import 'you_pin.dart' show PinScreen;
 import 'you_account.dart';
 import '../chat/composer.dart' show Pickers;
@@ -820,6 +821,14 @@ class YouSettingsScreen extends StatelessWidget {
                   icon: 'b-lock',
                   square: look.violet,
                   onTap: () => tkPush<void>(context, PinScreen(auth: auth, now: now)),
+                ),
+                // Paying with this phone's fingerprint (you_fingerprint.dart).
+                TkListRow(
+                  title: 'Fingerprint',
+                  sub: 'Pays with this phone’s fingerprint or face',
+                  icon: 'fingerprint',
+                  square: look.lime,
+                  onTap: () => tkPush<void>(context, FingerprintScreen(auth: auth, now: now)),
                 ),
                 // My pay (P4b-2): a staff member's own salary account in
                 // Payrolla; those who see payroll find it on Payroll.

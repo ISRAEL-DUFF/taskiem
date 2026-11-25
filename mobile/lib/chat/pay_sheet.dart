@@ -23,6 +23,7 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/passkey.dart';
+import '../app/pay_key.dart';
 import '../kit/forms.dart' show TkSwitchRow, errorWords;
 import '../kit/icon.dart' show TkIcon;
 import '../kit/kit.dart';
@@ -31,6 +32,7 @@ import '../kit/mobile.dart';
 import '../kit/modal.dart' show showTkToast;
 import '../kit/sheet.dart';
 import '../screens/sign_in.dart' show CodeBoxes;
+import '../screens/you_fingerprint.dart' show turnOnFingerprintSheet;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
@@ -935,11 +937,21 @@ class _PaymentSheetState extends State<PaymentSheet> {
 
   Auth get _auth => widget.auth;
 
+  // Paying by fingerprint (lib/app/pay_key.dart): this phone's key for
+  // the person ([_fpKey]), the phone able to make one ([_fpCan]), and
+  // whether Pay uses it. Chosen first when the payment is within its
+  // limit; the server's refusal goes back to the passkey or PIN.
+  String? _fpKey;
+  bool _fpCan = false;
+  bool _useFp = false;
+  bool get _fp => _useFp && _fpKey != null && !_usePin && !_useCode;
+
   @override
   void initState() {
     super.initState();
     _code.addListener(() => setState(() {}));
     _pin.addListener(() => setState(() {}));
+    unawaited(_lookForFingerprint());
   }
 
   @override
@@ -1105,6 +1117,77 @@ class _PaymentSheetState extends State<PaymentSheet> {
     }
   }
 
+  /// This phone's fingerprint key for the person, if it has one.
+  Future<void> _lookForFingerprint() async {
+    try {
+      final key = await payKeyHere(_auth);
+      final can = await payKeys.available();
+      // Within its limit for one payment, and not a changed account or a
+      // row of a list, which take the passkey.
+      final fits = widget.payment.amountKobo <= 50000000 && widget.payment.changedAccount != true && widget.payment.batchId == null;
+      if (mounted) setState(() => (_fpKey = key, _fpCan = can, _useFp = key != null && fits));
+    } on Object {
+      // The passkey and the PIN, as before.
+    }
+  }
+
+  /// Turning it on from the sheet, then Pay uses it.
+  Future<void> _fingerprintOn() async {
+    if (!await turnOnFingerprintSheet(context, _auth, crumb: 'Pay') || !mounted) return;
+    final key = await payKeyHere(_auth);
+    if (!mounted) return;
+    setState(() => (_fpKey = key, _useFp = true, _usePin = false, _useCode = false, _error = null));
+    showTkToast(context, 'Fingerprint on: tap Pay');
+  }
+
+  /// Paying with this phone's fingerprint: the server's words for this
+  /// payment signed after the fingerprint (payByFingerprint).
+  Future<void> _payFingerprint() async {
+    setState(() => (_busy = true, _error = null, _errorTitle = 'Not paid'));
+    try {
+      _tried = true;
+      final p = await payByFingerprint(
+        _auth,
+        _p,
+        again: _again,
+        tellPayee: _p.mayTell == true && _tell != (_p.tellPayee ?? true) ? _tell : null,
+        sendReceipt: _p.mayTell != true && _receipt != (_p.sendReceipt ?? false) ? _receipt : null,
+      );
+      setState(() => (_p = p, _sent = true));
+      unawaited(_saveBeneficiary(p));
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      if (mounted) Navigator.of(context).pop(p);
+    } on ApiError catch (e) {
+      final code = e.body['code'];
+      setState(() {
+        if (code == 'pay_again') {
+          _again = true;
+          _againWords = e.message;
+        } else if (code == 'no_fingerprint' || code == 'fingerprint_limit' || code == 'fingerprint_passkey_only') {
+          // Not this one, or not on any more: back to the passkey or PIN.
+          if (code == 'no_fingerprint') _fpKey = null;
+          _useFp = false;
+          _errorTitle = 'Use your passkey or PIN for this one';
+          _error = e.message;
+        } else {
+          _error = e.message;
+        }
+      });
+      if (code == 'no_fingerprint') unawaited(turnOffFingerprintHere(_auth, server: false));
+      if (code == 'not_prepared') unawaited(_reload());
+    } on FingerprintCancelled {
+      // Closed the phone's prompt: the payment waits.
+    } on FingerprintGone catch (e) {
+      setState(() => (_fpKey = null, _useFp = false, _errorTitle = 'Fingerprint is off', _error = e.message));
+    } on FingerprintUnavailable catch (e) {
+      setState(() => _error = e.message);
+    } on Object catch (e) {
+      setState(() => _error = errorWords(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _reload() async {
     try {
       final p = (await _auth.api.getPayment(id: _p.id)).payment;
@@ -1247,6 +1330,19 @@ class _PaymentSheetState extends State<PaymentSheet> {
             }),
           ),
         ),
+      // Paying by fingerprint: chosen, offered, or offered to turn on.
+      if (prepared && !_busy && _fpKey != null && !_fp)
+        Center(
+          child: TkLink(
+            label: 'Pay with my fingerprint',
+            bold: true,
+            onTap: () => setState(() => (_useFp = true, _usePin = false, _useCode = false, _error = null)),
+          ),
+        ),
+      if (prepared && !_busy && _fp)
+        Center(child: TkLink(label: 'Use my passkey or PIN instead', bold: true, onTap: () => setState(() => (_useFp = false, _error = null)))),
+      if (prepared && !_busy && _fpKey == null && _fpCan)
+        Center(child: TkLink(label: 'Pay by fingerprint from now on', bold: true, onTap: _fingerprintOn)),
       if (prepared)
         TkFormGroup(
           title: 'After paying',
@@ -1293,7 +1389,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       overlay: overlay,
       action: _busy ? 'Paying…' : (_again ? 'Pay again $amount' : 'Pay $amount'),
       actionIcon: _useCode || _usePin ? null : 'fingerprint',
-      onAction: ready ? _pay : null,
+      onAction: ready ? (_fp ? _payFingerprint : _pay) : null,
       second: widget.onBack == null ? 'Cancel it' : 'Back',
       secondDanger: widget.onBack == null,
       onSecond: _busy ? null : (widget.onBack ?? _cancel),
