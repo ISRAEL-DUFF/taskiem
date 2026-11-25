@@ -233,6 +233,13 @@ function GuideSteps({ t }: { t: Template }) {
   const [values, setValues] = useState(() => initialValues(t.params));
   const conns = useLoad(() => get<{ connections: Conn[] }>("/v1/connections"), []);
   const connectors = useLoad(() => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"), []);
+  // Taskiem's own wallet (an iswallet account Taskiem keeps), offered first
+  // where it can do what the template needs and this Taskiem offers it.
+  const { can: canDo } = useAuth();
+  const wallet = useLoad(
+    () => (canDo("invoice.read") ? get<{ available: boolean; plan: boolean; on: boolean }>("/v1/settings/receive-money") : Promise.resolve(undefined)),
+    [],
+  );
   const vars = useLoad(() => get<{ variables: { environment: string; name: string }[] }>("/v1/variables"), []);
   const [wf, setWf] = useState<{ id: string; published: boolean; problems: Problem[] } | null>(null);
 
@@ -314,6 +321,14 @@ function GuideSteps({ t }: { t: Template }) {
                     ? "You have more than one payments account that can do this: choose one under Fill in the details."
                     : "Connect the payments account it should use. Any of these can:"}
                 </p>
+                {wallet.data?.available && wallet.data.plan && !wallet.data.on && railNeed.rails.includes("iswallet") && (railNeed.name === "" || railNeed.name === "taskiem") && (
+                  <p data-testid="rail-taskiem-wallet">
+                    <Link className="button" to="/settings/payments">
+                      Open a Taskiem wallet
+                    </Link>{" "}
+                    <span className="hint">No account to sign up for. Or connect one you already have:</span>
+                  </p>
+                )}
                 {railNeed.rails.map((id) => {
                   const info = connectors.data?.connectors.find((c) => c.id === id);
                   return info && <ConnectForm key={id} info={info} name={railNeed.name || "main"} onDone={conns.reload} />;
