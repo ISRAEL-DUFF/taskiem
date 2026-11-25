@@ -162,11 +162,6 @@ type config struct {
 	Limits runtime.Limits
 	// WhatsApp is the platform number (TASKIEM_WHATSAPP_*); nil: off.
 	WhatsApp *whatsapp.Config
-	// WAFollowup is the template a follow-up of a form left half-filled
-	// goes by on WhatsApp (TASKIEM_WA_FOLLOWUP_TEMPLATE, its _LANGUAGE and
-	// _CATEGORY); nil: none, and follow-ups go by text or email
-	// (forms-that-sell L4).
-	WAFollowup *whatsapp.Template
 	// Telegram is the platform bot (TASKIEM_TELEGRAM_*, decision 0035);
 	// nil: off.
 	Telegram *telegram.Config
@@ -630,13 +625,6 @@ func loadConfig() (config, error) {
 	if c.WhatsApp, err = whatsapp.ConfigFromEnv(os.LookupEnv); err != nil {
 		return c, err
 	}
-	if c.WAFollowup, err = whatsapp.FollowupTemplateFromEnv(os.LookupEnv); err != nil {
-		return c, err
-	}
-	if c.WAFollowup != nil && c.WhatsApp != nil {
-		// Submitted, tracked and sent as the library's templates are.
-		c.WhatsApp.Templates = append(c.WhatsApp.Templates, *c.WAFollowup)
-	}
 	if c.Telegram, err = telegram.ConfigFromEnv(os.LookupEnv); err != nil {
 		return c, err
 	}
@@ -952,10 +940,12 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 			return l.WhatsAppTemplatesMonthly, err
 		}}
 	}
-	if e.forms != nil && e.wa != nil && cfg.WAFollowup != nil {
-		// Follow-ups of forms left half-filled on WhatsApp, by the named
-		// template from a business's own number (forms-that-sell L4).
-		e.forms.FollowupChat = api.WAFollowups(e.wa, *cfg.WAFollowup)
+	if e.forms != nil && e.wa != nil {
+		// Follow-ups of forms left half-filled go by text, email or
+		// WhatsApp: on WhatsApp by the built-in template from a business's
+		// own number, where its account holds it approved and the owner
+		// lets them (forms-that-sell L4); nothing here switches it.
+		e.forms.FollowupChat = api.WAFollowups(e.wa)
 	}
 	if cfg.Telegram != nil {
 		e.tg = telegram.New(pool, *cfg.Telegram, &egress.Guard{Logger: log}, log)
@@ -1910,9 +1900,6 @@ func (e *engine) chat(srv *api.Server) {
 	}
 	peoplechats.JoinPeople(srv.People)
 	srv.AppGetURL, srv.UpdateChatTemplate = e.cfg.AppGetURL, e.cfg.UpdateChatTemplate
-	if e.wa != nil {
-		srv.FollowupTemplate = e.cfg.WAFollowup
-	}
 	// A person's own sign-in code by SMS, through the same providers: no
 	// tenant, no outbox (docs/spec/taskiem-for-everyone.md §5.1).
 	if sms := e.cfg.Messages.smsProviders(e.log); len(sms) > 0 {

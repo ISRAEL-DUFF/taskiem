@@ -14,24 +14,44 @@ import (
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
-// Follow-ups of forms left half-filled on WhatsApp
-// (docs/spec/forms-that-sell.md §6.4, L4): the approved template from the
-// business's own number, never the shared number and never a free-form
-// message; STOP, typed or the template's button, stops them; and a send
-// WhatsApp later reports failed goes by text.
+// Follow-ups of forms left half-filled go by text, email or WhatsApp
+// (docs/spec/forms-that-sell.md §6.4, L4). On WhatsApp: the built-in
+// template (whatsapp.TplFinishOrder) from the business's own number,
+// never the shared number and never a free-form message, where Meta holds
+// it approved in the business's account with our words and the owner
+// lets follow-ups go there; nothing in the deployment's environment
+// switches it (the founder, 25 November 2026). STOP, typed or the
+// template's button, stops them; and a send WhatsApp later reports failed
+// goes by text.
 
 // WAFollowups reaches a buyer's typed phone by the follow-up's template
 // from the business's own number (forms.FollowupChat).
-func WAFollowups(wa *whatsapp.Platform, t whatsapp.Template) forms.FollowupChat {
-	return waFollowups{wa: wa, tpl: t}
+func WAFollowups(wa *whatsapp.Platform) forms.FollowupChat {
+	return waFollowups{wa: wa}
 }
 
 type waFollowups struct {
-	wa  *whatsapp.Platform
-	tpl whatsapp.Template
+	wa *whatsapp.Platform
 }
 
-func (f waFollowups) OptIn() bool { return f.tpl.OptIn() }
+// followupWA is how a business's follow-ups may go on WhatsApp: the
+// category Meta gave the follow-up's template in its active own number's
+// account, where it is approved with our words in a category the form can
+// ask consent for (utility or marketing; "" otherwise), and the owner's
+// choice to let follow-ups go there (on unless turned off). The public
+// host asks the same of taskiem_public_form_followup_whatsapp.
+func followupWA(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, language string) (category string, on bool, err error) {
+	var c *string
+	err = tx.QueryRow(ctx, `SELECT (SELECT lower(w.meta_category) FROM whatsapp_numbers n JOIN whatsapp_templates w ON w.waba_id = n.waba_id AND w.tenant_id = n.tenant_id
+		  WHERE n.tenant_id = $1 AND n.status = 'active' AND w.name = $2 AND w.language = $3 AND w.status = 'approved' AND w.meta_matches
+		    AND lower(w.meta_category) IN ('utility', 'marketing') LIMIT 1),
+		COALESCE((SELECT followup_whatsapp FROM storefronts WHERE tenant_id = $1), true)`,
+		tenant, whatsapp.TplFinishOrder.Name, language).Scan(&c, &on)
+	if c != nil {
+		category = *c
+	}
+	return category, on, err
+}
 
 // own is the business's own number, or nil when it has none or its
 // credentials do not read (the text goes, rather than the follow-up
@@ -50,58 +70,77 @@ func (f waFollowups) own(ctx context.Context, tenant uuid.UUID) *whatsapp.Platfo
 	return wa
 }
 
-// Ready: the business has an own number whose account holds the template
-// approved, in the category the deployment names, with our body and
-// buttons (whatsapp.Platform.TemplateReady).
-func (f waFollowups) Ready(ctx context.Context, tenant uuid.UUID) (bool, error) {
+// Ready: the category Meta gave the template in the business's own
+// number's account (whatsapp.Platform.TemplateCategory), where it is
+// approved with our body and buttons, the number's credentials read and
+// the owner lets follow-ups go there; "" otherwise.
+func (f waFollowups) Ready(ctx context.Context, tenant uuid.UUID) (string, error) {
 	wa := f.own(ctx, tenant)
 	if wa == nil {
-		return false, nil
+		return "", nil
 	}
-	return wa.TemplateReady(ctx, f.tpl)
+	category, err := wa.TemplateCategory(ctx, whatsapp.TplFinishOrder)
+	if err != nil || category == "" {
+		return "", err
+	}
+	var on bool
+	if err := db.InTenantTx(ctx, wa.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		_, on, err = followupWA(ctx, tx, tenant, wa.Config.Language)
+		return err
+	}); err != nil || !on {
+		return "", err
+	}
+	return category, nil
 }
 
 // Send sends the template once. Whatever stops it before it leaves (no
-// own number, the template no longer ready, held back past the
-// business's allowance, a link its button cannot open) and WhatsApp's
-// refusal are forms.ErrChatNotSent: the text goes instead. Anything else
-// (a timeout, a server error) leaves it unclear whether WhatsApp took it.
+// own number, the template no longer ready or filed by Meta where the
+// buyer's consent no longer covers it, the owner's choice turned off,
+// held back past the business's allowance, a link its button cannot
+// open) and WhatsApp's refusal are forms.ErrChatNotSent: the text goes
+// instead. Anything else (a timeout, a server error) leaves it unclear
+// whether WhatsApp took it.
 func (f waFollowups) Send(ctx context.Context, m forms.FollowupMessage) (string, error) {
 	wa := f.own(ctx, m.Tenant)
 	if wa == nil || m.Token == "" {
 		return "", forms.ErrChatNotSent
 	}
-	switch ok, err := wa.TemplateReady(ctx, f.tpl); {
+	category, err := f.Ready(ctx, m.Tenant)
+	switch {
 	case err != nil:
 		return "", fmt.Errorf("%w: %w", forms.ErrChatNotSent, err)
-	case !ok:
-		return "", fmt.Errorf("%w: the template is not ready in the account", forms.ErrChatNotSent)
+	case !forms.ChatConsented(category, m.Asked):
+		return "", fmt.Errorf("%w: the template is not ready in the account for this buyer", forms.ErrChatNotSent)
 	}
+	// Counted, and held back past the allowance, in Meta's category.
+	tpl := whatsapp.TplFinishOrder
+	tpl.Category = strings.ToUpper(category)
 	what := m.Product
 	if m.Detail != "" {
 		what += " (" + m.Detail + ")"
 	}
 	vars := map[string]string{"business": m.Business, "what": what, "link": wa.Client.Hosts.Of(whatsapp.HostForms) + whatsapp.FollowupLinkPath + m.Token}
 	payloads := []string{whatsapp.FollowupStopPayload}
-	lang := f.tpl.LanguageOr(wa.Config.Language)
-	if _, err := f.tpl.Payload(lang, vars, payloads, wa.Client.Hosts); err != nil {
+	lang := wa.Config.Language
+	if _, err := tpl.Payload(lang, vars, payloads, wa.Client.Hosts); err != nil {
 		return "", fmt.Errorf("%w: %w", forms.ErrChatNotSent, err)
 	}
 	if wa.Meter != nil {
-		switch ok, err := wa.Meter.Allow(ctx, m.Tenant, f.tpl); {
+		switch ok, err := wa.Meter.Allow(ctx, m.Tenant, tpl); {
 		case err != nil:
 			return "", fmt.Errorf("%w: %w", forms.ErrChatNotSent, err)
 		case !ok:
 			return "", fmt.Errorf("%w: %w", forms.ErrChatNotSent, whatsapp.ErrTemplateBlocked)
 		}
 	}
-	id, err := wa.Client.SendTemplate(ctx, m.To, f.tpl, lang, vars, payloads)
+	id, err := wa.Client.SendTemplate(ctx, m.To, tpl, lang, vars, payloads)
 	var ge *whatsapp.GraphError
 	switch {
 	case err == nil:
 		if wa.Meter != nil {
-			if merr := wa.Meter.Record(ctx, m.Tenant, f.tpl); merr != nil && f.wa.Logger != nil {
-				f.wa.Logger.Error("whatsapp: counting a template", "template", f.tpl.Name, "err", merr)
+			if merr := wa.Meter.Record(ctx, m.Tenant, tpl); merr != nil && f.wa.Logger != nil {
+				f.wa.Logger.Error("whatsapp: counting a template", "template", tpl.Name, "err", merr)
 			}
 		}
 		return id, nil
@@ -117,7 +156,7 @@ func (f waFollowups) Send(ctx context.Context, m forms.FollowupMessage) (string,
 // number failed to the follow-ups, which text the buyer instead when it
 // was one (or record a stop, for 131050).
 func (s *Server) followupStatuses(ctx context.Context, hook *whatsapp.Platform, sts []whatsapp.StatusUpdate) {
-	if s.Forms == nil || s.FollowupTemplate == nil {
+	if s.Forms == nil {
 		return
 	}
 	for _, u := range sts {

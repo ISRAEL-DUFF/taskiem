@@ -10,7 +10,7 @@ import (
 // component, as Meta lists them.
 func TestComponentsMatch(t *testing.T) {
 	hosts := Hosts{App: "https://app.example.com", Forms: "https://forms.example.com"}
-	tpl := FollowupTemplate("taskiem_finish_order", "", "utility")
+	tpl := TplFinishOrder
 	def, err := tpl.Submission("en", hosts)
 	if err != nil {
 		t.Fatal(err)

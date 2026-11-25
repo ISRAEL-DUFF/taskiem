@@ -18,6 +18,9 @@ describe("whatsapp templates", () => {
     expect(metaLine({ ...tpl("a", "approved"), meta_category: "utility", matches: true })).toEqual({ text: "Meta: utility", warn: false });
     expect(metaLine({ ...tpl("a", "approved"), meta_category: "marketing", matches: true })).toEqual({ text: "Meta filed it as marketing, not utility", warn: true });
     expect(metaLine({ ...tpl("a", "approved"), meta_category: "utility", matches: false })).toEqual({ text: "Meta: utility, with other words than ours", warn: true });
+    // The follow-up's category decides who gets it: marketing is no warning.
+    expect(metaLine({ ...tpl("taskiem_finish_order", "approved"), meta_category: "marketing", matches: true })?.warn).toBe(false);
+    expect(metaLine({ ...tpl("taskiem_finish_order", "approved"), meta_category: "authentication", matches: true })?.warn).toBe(true);
   });
 
   it("offers Submit only for templates Meta does not hold", () => {

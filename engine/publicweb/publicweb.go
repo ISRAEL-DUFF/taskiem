@@ -183,11 +183,6 @@ type Server struct {
 	// keepSeen remembers the contacts an address named on a form within
 	// the last two hours, so a contact named again is not counted again.
 	keepSeen *lru.Cache[string, bool]
-	// WAFollowups is the category of the template a follow-up goes by on
-	// WhatsApp (TASKIEM_WA_FOLLOWUP_TEMPLATE_CATEGORY: utility or
-	// marketing); "" when the deployment names none, and the consent line
-	// says text or email only (forms-that-sell L4).
-	WAFollowups string
 	// Reach offers updates on WhatsApp and Telegram (N11); nil: none.
 	Reach ReachStore
 	// AppURL is the web app's, where members' forms open.

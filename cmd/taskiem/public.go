@@ -20,7 +20,6 @@ import (
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/storefront"
-	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // publicConfig is the public host's (docs/public-host.md): the server for
@@ -65,6 +64,13 @@ type publicConfig struct {
 	// registrable domains, which cannot be a CNAME. Unset, owners are told
 	// to use their DNS provider's ALIAS or CNAME flattening.
 	Addresses []string
+	// WALanguage is the language WhatsApp templates are in
+	// (TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE, "en"): an order form names
+	// WhatsApp where the business's own number's account holds the
+	// follow-up's template approved in it (forms-that-sell L4). The public
+	// host reads nothing else of WhatsApp: none of the platform number's
+	// settings or secrets.
+	WALanguage string
 }
 
 func publicConfigFromEnv() (publicConfig, error) {
@@ -78,6 +84,9 @@ func publicConfigFromEnv() (publicConfig, error) {
 		DSN:      os.Getenv("TASKIEM_PUBLIC_DATABASE_URL"),
 		Role:     env("TASKIEM_PUBLIC_DATABASE_ROLE", "taskiem_public"),
 		PoolSize: 5,
+	}
+	if c.WALanguage = strings.TrimSpace(os.Getenv("TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE")); c.WALanguage == "" {
+		c.WALanguage = "en" // as whatsapp.New
 	}
 	for _, d := range strings.Split(os.Getenv("TASKIEM_PUBLIC_DOMAINS"), ",") {
 		if d = strings.ToLower(strings.TrimSpace(d)); d != "" {
@@ -152,15 +161,6 @@ func loadPublicConfig() (config, error) {
 	if c.Shutdown, err = shutdownConfig(); err != nil {
 		return c, err
 	}
-	// The follow-up's template (forms-that-sell L4), for the consent line:
-	// named only where the platform's WhatsApp is set too (its number;
-	// none of its secrets, which this role never holds).
-	if c.WAFollowup, err = whatsapp.FollowupTemplateFromEnv(os.LookupEnv); err != nil {
-		return c, err
-	}
-	if pn := strings.TrimSpace(os.Getenv("TASKIEM_WHATSAPP_PHONE_NUMBER_ID")); pn != "" {
-		c.WhatsApp = &whatsapp.Config{PhoneNumberID: pn, Language: strings.TrimSpace(os.Getenv("TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE"))}
-	}
 	return c, nil
 }
 
@@ -191,28 +191,12 @@ func publicPool(ctx context.Context, cfg config, log *slog.Logger) (*pgxpool.Poo
 
 // publicTask opens the public host's own pool and returns its server, the
 // task that serves it, and the pool, which the caller closes.
-// publicWAFollowup is the follow-up's template as the public host asks
-// after it in each business's account: only where the deployment runs
-// WhatsApp (its platform settings) and names the template, so a form
-// never promises WhatsApp the api cannot send (forms-that-sell L4).
-func publicWAFollowup(cfg config) (publicweb.WAFollowup, bool) {
-	if cfg.WAFollowup == nil || cfg.WhatsApp == nil {
-		return publicweb.WAFollowup{}, false
-	}
-	t := *cfg.WAFollowup
-	def := cfg.WhatsApp.Language
-	if def == "" {
-		def = "en" // as whatsapp.New
-	}
-	return publicweb.WAFollowup{Name: t.Name, Language: t.LanguageOr(def), Category: whatsapp.Category(t)}, true
-}
-
 func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.Server, func(context.Context) error, *pgxpool.Pool, error) {
 	pool, err := publicPool(ctx, cfg, log)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	srv := &publicweb.Server{Lookup: publicweb.DBLookup(pool), Origins: publicweb.DBOrigins(pool), Storefronts: publicweb.DBStorefronts(pool), Reports: publicweb.DBReports(pool), Brands: publicweb.DBBrands(pool),
+	srv := &publicweb.Server{Lookup: publicweb.DBLookup(pool), Origins: publicweb.DBOrigins(pool), Storefronts: publicweb.DBStorefronts(pool, cfg.Public.WALanguage), Reports: publicweb.DBReports(pool), Brands: publicweb.DBBrands(pool),
 		Submit: publicweb.DBSubmit(pool), OrderStatus: publicweb.DBOrderStatus(pool),
 		Services: publicweb.DBServices(pool), Busy: publicweb.DBBusy(pool), Book: publicweb.DBBook(pool), Claim: publicweb.DBClaim(pool), Booking: publicweb.DBBookingStatus(pool),
 		Change: publicweb.DBChange(pool), PriceChange: publicweb.DBPriceChange(pool),
@@ -220,11 +204,6 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 		Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
 	if len(cfg.Public.Domains) > 0 {
 		srv.PreviewDomain = cfg.Public.Domains[0]
-	}
-	if fu, ok := publicWAFollowup(cfg); ok {
-		// The consent line names WhatsApp where a follow-up may go there,
-		// and a marketing template asks for it (forms-that-sell L4).
-		srv.WAFollowups, srv.Storefronts = fu.Category, publicweb.DBStorefronts(pool, fu)
 	}
 	if k := cfg.Public.Key; k != nil {
 		if srv.FormKey, err = storefront.FormKey(k); err != nil {

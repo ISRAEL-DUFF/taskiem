@@ -141,7 +141,7 @@ class _LeftPageState extends State<LeftPage> {
       titleSize: 30,
       backLabel: widget.backLabel,
       description:
-          'People who typed their phone or email into your order form and left without sending it. Taskiem keeps only how to reach them and what they chose, for 7 days, and sends them one message with a link to finish.',
+          'People who typed their phone or email into your order form and left without sending it. Taskiem keeps only how to reach them and what they chose, for 7 days, and sends them one message, by text, email or WhatsApp, with a link to finish.',
       onRefresh: _load,
       children: [
         if (_error != null) TkCallout(leading: TkSquare('b-alert', color: look.red), title: _error!, color: look.red, subLines: 3),
@@ -166,9 +166,9 @@ class _LeftPageState extends State<LeftPage> {
                 sub: !d.followups.on
                     ? 'Off: your form keeps nothing of them'
                     : d.followups.whatsappOptIn == true
-                    ? 'On WhatsApp if they ask on the form, else one text or email'
+                    ? 'One message by text, email or WhatsApp; WhatsApp if they ask on the form'
                     : d.followups.whatsapp == true
-                    ? 'One WhatsApp message from your number, else a text or email'
+                    ? 'One message by text, email or WhatsApp from your number'
                     : 'One text, or an email when they gave only that',
                 icon: 'b-send',
                 square: look.teal,
@@ -182,6 +182,29 @@ class _LeftPageState extends State<LeftPage> {
                       : (on) => _set(PatchStorefrontActionRequest(followupOn: on), on ? 'Follow-ups are on' : 'Follow-ups are off'),
                 ),
               ),
+              if (d.followups.on && d.followups.whatsappReady == true)
+                TkListRow(
+                  title: 'Also follow up on WhatsApp from my number',
+                  sub: !d.followups.whatsappOn
+                      ? 'Off: by text or email only'
+                      : d.followups.whatsappOptIn == true
+                      ? 'Only to buyers who tick the box on your form'
+                      : 'Meta approved the message',
+                  icon: 'b-chat',
+                  square: look.lime,
+                  chevron: false,
+                  titleLines: 2,
+                  trailing: TkSwitch(
+                    label: 'Also follow up on WhatsApp from my number',
+                    on: d.followups.whatsappOn,
+                    onChanged: _busy
+                        ? null
+                        : (on) => _set(
+                            PatchStorefrontActionRequest(followupWhatsapp: on),
+                            on ? 'Follow-ups may go on WhatsApp' : 'Follow-ups go by text or email only',
+                          ),
+                  ),
+                ),
               if (d.followups.on)
                 TkListRow(
                   title: 'Wait before the message',

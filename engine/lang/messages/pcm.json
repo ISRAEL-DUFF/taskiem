@@ -9825,7 +9825,7 @@
       "context": "Draft, not reviewed: WhatsApp, from the business's own number: answer to STOP, or the Stop button, from someone the business followed up after they left an order form (forms-that-sell §6.5, L4)"
     },
     "wa.followups.on": {
-      "text": "Follow-ups don on for *{form}*. Anybody wey type im phone or email comot without to order go get one message after {wait} minutes, with link to finish the order. The form don talk am under their details now. Talk *follow-ups off* to stop am.",
+      "text": "Follow-ups don on for *{form}*. Anybody wey type im phone or email comot without to order go get one message after {wait} minutes, by text, email or WhatsApp, with link to finish the order. The form don talk am under their details now. Talk *follow-ups off* to stop am.",
       "reviewed": false,
       "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups on, done"
     },

@@ -1462,7 +1462,7 @@ paths:
       tags:
       - Storefront
       summary: An order form's follow-ups
-      description: Whether an order form follows up a buyer who typed a phone or an email and left without ordering, and how long it waits first (10 minutes to 24 hours; forms-that-sell §6.3). With follow-ups on, the form says so under the contact and keeps the contact and the product choice of one who leaves; off, it keeps nothing. release_hold sends the follow-ups held after a run of keeps (§6.5). Audited as storefront.followups.
+      description: Whether an order form follows up a buyer who typed a phone or an email and left without ordering, and how long it waits first (10 minutes to 24 hours; forms-that-sell §6.3). With follow-ups on, the form says so under the contact and keeps the contact and the product choice of one who leaves; off, it keeps nothing. release_hold sends the follow-ups held after a run of keeps (§6.5). Follow-ups go by text, email or WhatsApp; followup_whatsapp is the owner's choice for the whole business, "Also follow up on WhatsApp from my number" (§19). Audited as storefront.followups.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -1494,6 +1494,9 @@ paths:
                   description: Minutes after the buyer's last keep
                 release_hold:
                   type: boolean
+                followup_whatsapp:
+                  type: boolean
+                  description: For every order form of the business, follow-ups may also go on WhatsApp from its own number once the template is approved there (on unless turned off); off, they go by text or email only
       responses:
         '200':
           description: The follow-up settings now
@@ -45688,7 +45691,7 @@ components:
             type: string
     FollowupSettings:
       type: object
-      required: ['on', wait_minutes]
+      required: ['on', wait_minutes, whatsapp_on]
       properties:
         'on':
           type: boolean
@@ -45698,12 +45701,18 @@ components:
           type: string
           format: date-time
           description: Set while the form's follow-ups are held after a run of keeps; release_hold sends them
+        whatsapp_ready:
+          type: boolean
+          description: The business's own WhatsApp number's account holds the built-in follow-up template (taskiem_finish_order) approved by Meta with our words, as utility or marketing, so follow-ups may go on WhatsApp (forms that sell L4); absent otherwise
+        whatsapp_on:
+          type: boolean
+          description: The owner's choice for the whole business, "Also follow up on WhatsApp from my number" (on unless turned off; followup_whatsapp in the PATCH)
         whatsapp:
           type: boolean
-          description: A follow-up may go on WhatsApp, by the deployment's approved template from the business's own number (forms that sell L4); absent when it goes by text or email only
+          description: A follow-up may go on WhatsApp, by the approved template from the business's own number (whatsapp_ready and whatsapp_on); absent when it goes by text or email only
         whatsapp_opt_in:
           type: boolean
-          description: The WhatsApp template is a marketing one, so only a buyer who ticks the box on the form is followed up on WhatsApp
+          description: Meta filed the template as marketing in the business's account, so only a buyer who ticks the box on the form is followed up on WhatsApp
     FormLeft:
       type: object
       required: [action_id, label, followups, week, left]
@@ -64919,7 +64928,7 @@ components:
           description: The template's id in Meta's account once submitted.
         meta_category:
           type: string
-          description: The category Meta gave the template in this account (utility, marketing or authentication), which may differ from the one it was submitted in; absent until Meta lists it. A template whose category decides who may get it (the follow-up of a form left half-filled) is sent only when Meta's category is the one the deployment names.
+          description: The category Meta gave the template in this account (utility, marketing or authentication), which may differ from the one it was submitted in; absent until Meta lists it. A template whose category decides who may get it (the follow-up of a form left half-filled, taskiem_finish_order) goes by it, utility to every buyer the form told, marketing only to buyers who ticked the form's box, nothing else at all.
         matches:
           type: boolean
           description: Whether the body and buttons Meta holds are the library's; absent until Meta lists them. A follow-up template whose words are not ours is never sent.

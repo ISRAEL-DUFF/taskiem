@@ -11140,7 +11140,7 @@
       "context": "WhatsApp, from the business's own number: answer to STOP, or the Stop button, from someone the business followed up after they left an order form (forms-that-sell §6.5, L4)"
     },
     "wa.followups.on": {
-      "text": "Follow-ups are on for *{form}*. Someone who types their phone or email and leaves without ordering gets one message after {wait} minutes, with a link to finish the order. The form now says so under their details. Say *follow-ups off* to stop.",
+      "text": "Follow-ups are on for *{form}*. Someone who types their phone or email and leaves without ordering gets one message after {wait} minutes, by text, email or WhatsApp, with a link to finish the order. The form now says so under their details. Say *follow-ups off* to stop.",
       "reviewed": true,
       "context": "Chat words (api/chat_followups.go): follow-ups on, done"
     },

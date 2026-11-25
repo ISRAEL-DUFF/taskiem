@@ -116,7 +116,8 @@ test("a buyer who left is followed up, and the owner sees it masked", async ({ p
   await check(page, "Left without ordering, off");
   await on.click();
   await expect(on).toBeChecked();
-  await expect(page.getByText(/They get one text/)).toBeVisible();
+  await expect(page.getByText(/They get one message 30 minutes after they leave, by text/)).toBeVisible();
+  await expect(page.getByText(/connect your own WhatsApp number/)).toBeVisible();
   await expect(page.getByLabel("Wait before the message")).toHaveValue("30");
   await check(page, "Left without ordering, on");
 
@@ -180,10 +181,12 @@ test("a buyer who left is followed up, and the owner sees it masked", async ({ p
   await check(page, "messages stopped");
 });
 
-// Forms that sell L4 (§6.4): a business with its own WhatsApp number, on a
-// deployment that names the follow-up's template: the owner is told a
-// follow-up goes there, the buyer's form says WhatsApp and STOP, and each
-// row says which channel its follow-up used.
+// Forms that sell L4 (§6.4, §19): follow-ups go by text, email or
+// WhatsApp, and nothing in the deployment switches WhatsApp on. A business
+// with its own WhatsApp number whose account holds the built-in template
+// approved: the owner is told a follow-up may go there and may turn it
+// off, the buyer's form says WhatsApp and STOP, and each row says which
+// channel its follow-up used.
 test("follow-ups on WhatsApp from the business's own number", async ({ page }) => {
   test.setTimeout(120_000);
   const { slug, tenant, action, ref } = await seller(page);
@@ -197,9 +200,18 @@ test("follow-ups on WhatsApp from the business's own number", async ({ page }) =
   await ok(page.request.patch(`/v1/storefront/actions/${action}`, { headers: H, data: { followup_on: true } }));
 
   await page.goto(`/storefront/left/${action}`);
-  await expect(page.getByText(/They get one WhatsApp message from your number 30 minutes after they leave/)).toBeVisible();
+  await expect(page.getByText(/They get one message 30 minutes after they leave, by text, email or WhatsApp: on WhatsApp from your number/)).toBeVisible();
   await expect(page.getByText(/On WhatsApp, reply STOP to stop these messages/)).toBeVisible();
+  const waSwitch = page.getByRole("switch", { name: "Also follow up on WhatsApp from my number" });
+  await expect(waSwitch).toBeChecked();
   await check(page, "Left without ordering, on WhatsApp");
+  // The owner turns WhatsApp off, and on again.
+  await waSwitch.click();
+  await expect(page.getByText("Off: follow-ups go by text or email only.")).toBeVisible();
+  await expect(waSwitch).not.toBeChecked();
+  await check(page, "Left without ordering, WhatsApp off");
+  await waSwitch.click();
+  await expect(waSwitch).toBeChecked();
 
   // The buyer's form says WhatsApp and STOP.
   const form = `http://${slug}.e2e.test:${PUBLIC_PORT}/a/${ref}`;

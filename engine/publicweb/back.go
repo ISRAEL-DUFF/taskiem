@@ -171,7 +171,7 @@ func (s *Server) serveKeep(w http.ResponseWriter, r *http.Request, site Site, fo
 	// this host would draw them now.
 	if _, _, named := s.followupWords(p, p.Model.Card.Language); named && v.Get("named") == "wa" {
 		k.Choice.WhatsAppNamed = true
-		if s.WAFollowups == "marketing" && v.Get("wa") == "1" {
+		if p.FollowupWhatsApp == "marketing" && v.Get("wa") == "1" {
 			k.Choice.WhatsApp = true // the buyer asked for WhatsApp (L4)
 		}
 	}

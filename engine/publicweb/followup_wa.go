@@ -8,11 +8,14 @@ import (
 )
 
 // WhatsApp follow-ups on the public host (docs/spec/forms-that-sell.md
-// §6.2, §6.4, L4). The consent line names WhatsApp only where a follow-up
-// may go there: the deployment runs WhatsApp and names the template, and
-// the business's own number's account holds it approved, in the category
-// the deployment names, with our words (DBStorefronts). A marketing template reaches only a buyer who ticks the
-// box offered under the line, and the keep says so. The template's
+// §6.2, §6.4, L4). Follow-ups go by text, email or WhatsApp; the consent
+// line names WhatsApp only where a follow-up may go there: the business's
+// own number's account holds the built-in template approved with our
+// words, and the owner lets follow-ups go there (DBStorefronts). The
+// category Meta gave it there decides the words: utility, the line names
+// WhatsApp; marketing, the line stays text or email and a box asks, and
+// only a buyer who ticks it is reached there (the keep says so); nothing
+// else is WhatsApp. The template's
 // Finish my order button opens <form host>/back/<token>, a fixed address
 // Meta approves, which leads to the link on the storefront's own
 // address: drawn there, it uses nothing up (GET claims nothing).
@@ -23,13 +26,13 @@ import (
 // follow-up goes there only on a promise the form made.
 func (s *Server) followupWords(p StorefrontPage, l string) (consent, optIn string, named bool) {
 	c, tag := lang.Default(), lang.Tag(l)
-	switch {
-	case s.WAFollowups == "" || !p.FollowupWhatsApp:
-		return c.Text(tag, "form.followup.consent"), "", false
-	case s.WAFollowups == "marketing":
+	switch p.FollowupWhatsApp {
+	case "utility":
+		return c.Text(tag, "form.followup.consent_whatsapp"), "", true
+	case "marketing":
 		return c.Text(tag, "form.followup.consent"), c.Text(tag, "form.followup.whatsapp_optin"), true
 	}
-	return c.Text(tag, "form.followup.consent_whatsapp"), "", true
+	return c.Text(tag, "form.followup.consent"), "", false
 }
 
 // serveBackOnFormHost leads a follow-up's link opened on the form host

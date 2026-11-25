@@ -9557,7 +9557,7 @@
       "context": "Draft, not reviewed: WhatsApp, from the business's own number: answer to STOP, or the Stop button, from someone the business followed up after they left an order form (forms-that-sell §6.5, L4)"
     },
     "wa.followups.on": {
-      "text": "An kunna bibiya don *{form}*. Wanda ya rubuta lambar wayarsa ko imel ya tafi ba tare da oda ba zai sami saƙo ɗaya bayan mintuna {wait}, tare da hanyar gama oda. Fom ɗin yanzu yana faɗin haka ƙarƙashin bayanansu. Ka ce *follow-ups off* don dakatarwa.",
+      "text": "An kunna bibiya don *{form}*. Wanda ya rubuta lambar wayarsa ko imel ya tafi ba tare da oda ba zai sami saƙo ɗaya bayan mintuna {wait}, ta saƙon tes, imel ko WhatsApp, tare da hanyar gama oda. Fom ɗin yanzu yana faɗin haka ƙarƙashin bayanansu. Ka ce *follow-ups off* don dakatarwa.",
       "reviewed": false,
       "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups on, done"
     },

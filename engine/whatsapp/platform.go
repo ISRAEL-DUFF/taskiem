@@ -58,11 +58,6 @@ type Config struct {
 	// Hosts are the deployment's addresses the templates' url buttons
 	// open (the web app and the public form host), set by the process.
 	Hosts Hosts
-	// Templates are the deployment's own templates beside the library,
-	// each named by its configuration: the follow-up of a form left
-	// half-filled (TASKIEM_WA_FOLLOWUP_TEMPLATE, FollowupTemplateFromEnv).
-	// They are submitted, tracked and sent as the library's are.
-	Templates []Template
 }
 
 // ConfigFromEnv reads the platform number's settings; nil when
@@ -320,7 +315,7 @@ func (p *Platform) SendTemplate(ctx context.Context, tenant uuid.UUID, number st
 			return "", ErrTemplateBlocked
 		}
 	}
-	id, err := p.Client.SendTemplate(ctx, number, t, t.LanguageOr(p.Config.Language), vars, payloads)
+	id, err := p.Client.SendTemplate(ctx, number, t, p.Config.Language, vars, payloads)
 	if err == nil && metered {
 		if merr := p.Meter.Record(ctx, tenant, t); merr != nil && p.Logger != nil {
 			p.Logger.Error("whatsapp: counting a template", "template", t.Name, "err", merr)

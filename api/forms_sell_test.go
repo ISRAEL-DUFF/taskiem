@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/time/rate"
 
+	"github.com/israel-duff/taskiem/api"
 	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -41,8 +42,6 @@ type sellWorld struct {
 	*dispatchWorld
 	ada  *client
 	host http.Handler
-	// waFollowups is the public host's WhatsApp follow-up category (L4).
-	waFollowups string
 }
 
 func newSellWorld(t *testing.T) *sellWorld {
@@ -78,6 +77,13 @@ func newSellWorld(t *testing.T) *sellWorld {
 	}
 	w.forms.ShopDomain = "shops.test"
 	w.orders.FormSent = w.forms.OrderSent
+	if w.srv.WhatsApp != nil {
+		// As serve wires it: follow-ups may go on WhatsApp from a
+		// business's own number, switched by nothing in the environment
+		// (forms-that-sell L4); the fake lists the templates in our words.
+		w.forms.FollowupChat = api.WAFollowups(w.srv.WhatsApp)
+		w.graph.Hosts = w.srv.WhatsApp.Client.Hosts
+	}
 	w.newHost(t)
 	return w
 }
@@ -88,17 +94,13 @@ func (w *sellWorld) newHost(t *testing.T) {
 	pp := w.env.DB.PublicPool(t, 2)
 	formKey, _ := storefront.FormKey(bytes.Repeat([]byte{4}, 32))
 	keys := w.forms.Keys
-	stores := publicweb.DBStorefronts(pp)
-	if w.waFollowups != "" {
-		stores = publicweb.DBStorefronts(pp, publicweb.WAFollowup{Name: followName, Language: "en", Category: w.waFollowups})
-	}
-	host := &publicweb.Server{Lookup: publicweb.DBLookup(pp), Origins: publicweb.DBOrigins(pp), Storefronts: stores,
+	host := &publicweb.Server{Lookup: publicweb.DBLookup(pp), Origins: publicweb.DBOrigins(pp), Storefronts: publicweb.DBStorefronts(pp),
 		Submit: publicweb.DBSubmit(pp), OrderStatus: publicweb.DBOrderStatus(pp), Forms: publicweb.DBForms(pp), Reach: publicweb.DBReach(pp),
 		FormHost: reachFormHost, FormKeys: &keys, FormKey: formKey, InboxKey: w.key, PreviewDomain: "shops.test", Logger: slog.New(slog.DiscardHandler),
 		Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour), Submissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
 		FormSubmissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
 		// Forms left half-filled (L3): keeps and follow-ups' links.
-		Keeps: publicweb.DBKeeps(pp), FormKeeps: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour), WAFollowups: w.waFollowups}
+		Keeps: publicweb.DBKeeps(pp), FormKeeps: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}
 	w.host = host.Handler()
 }
 

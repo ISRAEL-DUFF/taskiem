@@ -11,16 +11,28 @@ import (
 	"github.com/israel-duff/taskiem/engine/forms"
 )
 
-// fakeChat is a FollowupChat that records what it was asked to send.
+// fakeChat is a FollowupChat that records what it was asked to send;
+// optIn says Meta filed the template as marketing in the account.
 type fakeChat struct {
 	optIn bool
 	can   bool
 	sent  []forms.FollowupMessage
 }
 
-func (f *fakeChat) OptIn() bool { return f.optIn }
+// category is what the account holds: "" when it cannot carry it.
+func category(can, marketing bool) string {
+	switch {
+	case !can:
+		return ""
+	case marketing:
+		return "marketing"
+	}
+	return "utility"
+}
 
-func (f *fakeChat) Ready(context.Context, uuid.UUID) (bool, error) { return f.can, nil }
+func (f *fakeChat) Ready(context.Context, uuid.UUID) (string, error) {
+	return category(f.can, f.optIn), nil
+}
 
 func (f *fakeChat) Send(_ context.Context, m forms.FollowupMessage) (string, error) {
 	if !f.can {
@@ -142,7 +154,7 @@ func TestFormLeftFollowedUpOnWhatsApp(t *testing.T) {
 		t.Fatalf("not asked: %s %d", ch, len(chat.sent))
 	}
 	leave("08035556666", forms.Choice{WhatsApp: true})
-	if ch, _, _ := rec("08035556666"); ch != "whatsapp" || len(chat.sent) != 2 {
+	if ch, _, _ := rec("08035556666"); ch != "whatsapp" || len(chat.sent) != 2 || !chat.sent[1].Asked || chat.sent[0].Asked {
 		t.Fatalf("asked: %s %d", ch, len(chat.sent))
 	}
 
@@ -164,5 +176,25 @@ func TestFormLeftFollowedUpOnWhatsApp(t *testing.T) {
 	leave("08035556666", forms.Choice{WhatsApp: true})
 	if _, out, _ := rec("08035556666"); out != "stopped" || len(chat.sent) != 2 {
 		t.Fatalf("stopped: %s %d", out, len(chat.sent))
+	}
+}
+
+// The consent follows the category Meta gave the template in the
+// business's account (the founder, 25 November 2026): utility, the form
+// told the buyer; marketing, only a buyer who asked; any other category,
+// or none, never WhatsApp.
+func TestChatConsented(t *testing.T) {
+	for _, c := range []struct {
+		category string
+		asked    bool
+		want     bool
+	}{
+		{"utility", false, true}, {"utility", true, true},
+		{"marketing", false, false}, {"marketing", true, true},
+		{"authentication", true, false}, {"", true, false}, {"UTILITY", true, false},
+	} {
+		if got := forms.ChatConsented(c.category, c.asked); got != c.want {
+			t.Errorf("%q asked %v: %v", c.category, c.asked, got)
+		}
 	}
 }

@@ -24,9 +24,9 @@ type scriptChat struct {
 	send  func(m forms.FollowupMessage) (string, error)
 }
 
-func (c *scriptChat) OptIn() bool { return c.optIn }
-
-func (c *scriptChat) Ready(context.Context, uuid.UUID) (bool, error) { return c.ready, nil }
+func (c *scriptChat) Ready(context.Context, uuid.UUID) (string, error) {
+	return category(c.ready, c.optIn), nil
+}
 
 func (c *scriptChat) Send(_ context.Context, m forms.FollowupMessage) (string, error) {
 	c.sends++
@@ -37,8 +37,7 @@ func (c *scriptChat) Send(_ context.Context, m forms.FollowupMessage) (string, e
 // unclear whether the template went.
 type timeoutChat struct{ sends int }
 
-func (c *timeoutChat) OptIn() bool                                    { return false }
-func (c *timeoutChat) Ready(context.Context, uuid.UUID) (bool, error) { return true, nil }
+func (c *timeoutChat) Ready(context.Context, uuid.UUID) (string, error) { return "utility", nil }
 func (c *timeoutChat) Send(context.Context, forms.FollowupMessage) (string, error) {
 	c.sends++
 	return "", errors.New("Post graph.facebook.com: context deadline exceeded")

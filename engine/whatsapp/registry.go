@@ -104,7 +104,7 @@ func (p *Platform) TemplateUsable(ctx context.Context, t Template) error {
 	}
 	var status string
 	err := p.registry(ctx, func(q querier) error {
-		err := q.QueryRow(ctx, `SELECT status FROM whatsapp_templates WHERE waba_id = $1 AND name = $2 AND language = $3`, p.WABA, t.Name, t.LanguageOr(p.Config.Language)).Scan(&status)
+		err := q.QueryRow(ctx, `SELECT status FROM whatsapp_templates WHERE waba_id = $1 AND name = $2 AND language = $3`, p.WABA, t.Name, p.Config.Language).Scan(&status)
 		if errors.Is(err, pgx.ErrNoRows) {
 			status = TemplateNotSubmitted
 			return nil
@@ -183,7 +183,7 @@ func (p *Platform) TemplateStatuses(ctx context.Context) ([]TemplateStatus, erro
 	lib := p.Library()
 	out := make([]TemplateStatus, 0, len(lib))
 	for _, t := range lib {
-		out = append(out, TemplateStatus{Name: t.Name, Category: Category(t), Language: t.LanguageOr(p.Config.Language), Status: TemplateNotSubmitted, Purpose: t.Purpose})
+		out = append(out, TemplateStatus{Name: t.Name, Category: Category(t), Language: p.Config.Language, Status: TemplateNotSubmitted, Purpose: t.Purpose})
 	}
 	if p.WABA == "" {
 		return out, nil
@@ -290,7 +290,7 @@ func (p *Platform) SubmitTemplate(ctx context.Context, name string) (TemplateSta
 	if p.WABA == "" {
 		return TemplateStatus{}, ErrNoWABA
 	}
-	def, err := t.Submission(t.LanguageOr(p.Config.Language), p.Client.Hosts)
+	def, err := t.Submission(p.Config.Language, p.Client.Hosts)
 	if err != nil {
 		return TemplateStatus{}, err
 	}
@@ -309,7 +309,7 @@ func (p *Platform) SubmitTemplate(ctx context.Context, name string) (TemplateSta
 		if category != "" {
 			meta = &metaView{category: category, matches: true}
 		}
-		return p.record(ctx, q, t.Name, t.LanguageOr(p.Config.Language), id, st, "", true, meta)
+		return p.record(ctx, q, t.Name, p.Config.Language, id, st, "", true, meta)
 	}); err != nil {
 		return TemplateStatus{}, err
 	}
@@ -347,7 +347,7 @@ func (p *Platform) CheckTemplates(ctx context.Context) ([]TemplateStatus, error)
 	}
 	err = p.registry(ctx, func(q querier) error {
 		for _, t := range p.Library() {
-			language := t.LanguageOr(p.Config.Language)
+			language := p.Config.Language
 			m, ok := byName[t.Name+"\x00"+language]
 			if !ok {
 				if err := p.record(ctx, q, t.Name, language, "", TemplateNotSubmitted, "", false, &metaView{}); err != nil {
@@ -388,8 +388,7 @@ type TemplateStatusUpdate struct {
 // taskiem_wa_waba_tenant). Events for templates not in the library, in
 // another language, or for an unknown account are ignored.
 func (p *Platform) ApplyTemplateStatus(ctx context.Context, u TemplateStatusUpdate) error {
-	t, ok := p.TemplateNamed(u.Name)
-	if !ok || u.WABA == "" || u.Language != t.LanguageOr(p.Config.Language) {
+	if _, ok := TemplateNamed(u.Name); !ok || u.WABA == "" || u.Language != p.Config.Language {
 		return nil
 	}
 	st, ok := StatusFromMeta(u.Event)
@@ -416,6 +415,9 @@ func (p *Platform) ApplyTemplateStatus(ctx context.Context, u TemplateStatusUpda
 		if q.WABA != u.WABA {
 			return nil
 		}
+	}
+	if _, ok := q.TemplateNamed(u.Name); !ok {
+		return nil // an own number's template, on the shared number's account
 	}
 	return q.registry(ctx, func(qq querier) error {
 		return q.record(ctx, qq, u.Name, u.Language, u.MetaID, st, u.Reason, false, nil)
@@ -655,19 +657,24 @@ func ComponentsMatch(t Template, lang string, hosts Hosts, comps []MetaComponent
 	return body && buttons == (len(want) > 0)
 }
 
-// TemplateReady reports whether this own number's account holds a
-// template as Meta approved it in the category the library names, with
-// the library's body and buttons (CheckTemplates records both): what a
-// template whose category decides who may get it (the follow-up of a
-// form left half-filled) needs before it is sent, or promised.
-func (p *Platform) TemplateReady(ctx context.Context, t Template) (bool, error) {
+// TemplateCategory is the category Meta gave a template in this own
+// number's account ("utility", "marketing"), where Meta holds it approved
+// with the library's body and buttons (CheckTemplates records both); ""
+// where it does not, or on the shared number. A template whose category
+// decides who may get it (the follow-up of a form left half-filled) is
+// sent, or promised, only on this answer.
+func (p *Platform) TemplateCategory(ctx context.Context, t Template) (string, error) {
 	if !p.Own() || p.WABA == "" {
-		return false, nil
+		return "", nil
 	}
-	var ok bool
+	var category string
 	err := p.registry(ctx, func(q querier) error {
-		return q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM whatsapp_templates WHERE waba_id = $1 AND name = $2 AND language = $3 AND status = 'approved'
-			AND lower(meta_category) = $4 AND meta_matches)`, p.WABA, t.Name, t.LanguageOr(p.Config.Language), Category(t)).Scan(&ok)
+		err := q.QueryRow(ctx, `SELECT lower(meta_category) FROM whatsapp_templates WHERE waba_id = $1 AND name = $2 AND language = $3 AND status = 'approved'
+			AND meta_category IS NOT NULL AND meta_matches`, p.WABA, t.Name, p.Config.Language).Scan(&category)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
 	})
-	return ok, err
+	return category, err
 }

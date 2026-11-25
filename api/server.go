@@ -325,10 +325,6 @@ type Server struct {
 	// (TASKIEM_WA_UPDATE_CHAT_TEMPLATE); until then the link goes only in
 	// messages inside the window (docs/spec/taskiem-for-everyone.md §12).
 	UpdateChatTemplate bool
-	// FollowupTemplate is the template a follow-up of a form left
-	// half-filled goes by on WhatsApp from a business's own number
-	// (TASKIEM_WA_FOLLOWUP_TEMPLATE); nil: none (forms-that-sell L4).
-	FollowupTemplate *whatsapp.Template
 	// Riders are the businesses' own riders (dispatch D1); nil: none.
 	Riders *riders.Riders
 	// Dispatch is their deliveries (D2 to D5); nil: none. ProofStore, when

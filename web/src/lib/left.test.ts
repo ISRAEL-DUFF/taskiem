@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { WAITS, MIN_WAIT, MAX_WAIT, CONSENT_LINE, CONSENT_LINE_WHATSAPP, choiceWords, consentWords, contactWords, followupWords, rowStatus, waitWords, weekLine, type LeftRow } from "./left";
+import { WAITS, MIN_WAIT, MAX_WAIT, CONSENT_LINE, CONSENT_LINE_WHATSAPP, choiceWords, consentWords, contactWords, followupWords, rowStatus, waitWords, weekLine, whatsappWords, type LeftRow } from "./left";
 
 const row = (over: Partial<LeftRow> = {}): LeftRow => ({
   id: "r1",
@@ -48,12 +48,19 @@ describe("forms left half-filled", () => {
 describe("follow-ups on WhatsApp (L4)", () => {
   const base = { on: true, wait_minutes: 30 };
   it("says how the follow-up goes and what the form says", () => {
-    expect(followupWords(base)).toContain("one text");
-    expect(followupWords({ ...base, whatsapp: true })).toContain("one WhatsApp message from your number 30 minutes after");
+    // Follow-ups go by text, email or WhatsApp: WhatsApp is one channel, never the feature.
+    expect(followupWords(base)).toContain("by text (or by email");
+    expect(followupWords({ ...base, whatsapp: true })).toContain("one message 30 minutes after they leave, by text, email or WhatsApp: on WhatsApp from your number");
     expect(followupWords({ ...base, whatsapp: true, whatsapp_opt_in: true })).toContain("when they tick the box");
     expect(consentWords(base)).toBe(`“${CONSENT_LINE}”`);
     expect(consentWords({ ...base, whatsapp: true })).toBe(`“${CONSENT_LINE_WHATSAPP}”`);
     expect(consentWords({ ...base, whatsapp: true, whatsapp_opt_in: true })).toContain("Send that message on WhatsApp instead");
+  });
+  it("says the owner's WhatsApp choice, and how to get it", () => {
+    expect(whatsappWords(base)).toContain("connect your own WhatsApp number");
+    expect(whatsappWords({ ...base, whatsapp_ready: true, whatsapp_on: false })).toBe("Off: follow-ups go by text or email only.");
+    expect(whatsappWords({ ...base, whatsapp_ready: true, whatsapp_on: true, whatsapp: true })).toContain("go on WhatsApp from your number");
+    expect(whatsappWords({ ...base, whatsapp_ready: true, whatsapp_on: true, whatsapp: true, whatsapp_opt_in: true })).toContain("tick the box");
   });
   it("keeps the words the server draws", () => {
     // Read from disk, not imported: the image's web stage has no engine/.

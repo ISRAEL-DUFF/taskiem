@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
@@ -33,26 +32,23 @@ func waStatus(pnid, id, status string) []byte {
 
 // Forms that sell L4, done when (docs/spec/forms-that-sell.md §11): a
 // buyer on a business with its own WhatsApp number is followed up on
-// WhatsApp with Finish my order, by the approved template only. On the
-// way: with no own number the consent line and the follow-up are L3's; the
-// form says WhatsApp and STOP once there is one; the button opens the
-// link on the form host, which leads to the storefront's page that uses
-// nothing up; the owner sees which channel each follow-up used; the
-// template's Stop and a typed STOP stop the business's follow-ups; a
-// WhatsApp send reported failed is texted instead; and a marketing
-// template asks the buyer first.
+// WhatsApp with Finish my order, by the approved template only. Follow-ups
+// go by text, email or WhatsApp, and nothing in the deployment's
+// environment switches WhatsApp on (the founder, 25 November 2026): the
+// world here is wired as serve wires it, with no follow-up setting. On
+// the way: with no own number the consent line and the follow-up are
+// L3's; with the built-in template approved in the business's own account
+// the form says WhatsApp and STOP; not approved there, a text; the owner
+// turning WhatsApp off, a text; the button opens the link on the form
+// host, which leads to the storefront's page that uses nothing up; the
+// owner sees which channel each follow-up used; the template's Stop and a
+// typed STOP stop the business's follow-ups; a WhatsApp send reported
+// failed is texted instead; and where Meta files the template as
+// marketing, the form asks the buyer first.
 func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 	w := newSellWorld(t)
 	ada := w.ada
 	ctx := context.Background()
-	tpl := whatsapp.FollowupTemplate(followName, "", "utility")
-	w.graph.Extra = []whatsapp.Template{tpl}
-	w.graph.Hosts = w.srv.WhatsApp.Client.Hosts
-	w.srv.WhatsApp.Config.Templates = []whatsapp.Template{tpl}
-	w.srv.WhatsApp.Forget()
-	w.srv.FollowupTemplate = &tpl
-	w.forms.FollowupChat = api.WAFollowups(w.srv.WhatsApp, tpl)
-	w.waFollowups = "utility"
 	id, slug := w.sellerForm(t)
 	ada.must(200, "PATCH", "/v1/storefront/actions/"+id, map[string]any{"followup_on": true})
 	// toOwn delivers a message to the business's own number.
@@ -87,14 +83,14 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 		w.followUps(t)
 	}
 
-	// The template named, but no own number: the form says text or email,
-	// the owner sees no WhatsApp, the buyer gets a text (as L3).
+	// No own number: the form says text or email, the owner sees no
+	// WhatsApp, the buyer gets a text (as L3).
 	w.newHost(t)
 	page := w.at(t, sellStoreAt, "/a/"+slug, nil).Body.String()
 	if !strings.Contains(page, consentL) || strings.Contains(page, "WhatsApp or by text") {
 		t.Fatal("the consent line without an own number")
 	}
-	if f := ada.must(200, "GET", "/v1/storefront/actions/"+id+"/left", nil)["followups"].(map[string]any); f["whatsapp"] != nil {
+	if f := ada.must(200, "GET", "/v1/storefront/actions/"+id+"/left", nil)["followups"].(map[string]any); f["whatsapp"] != nil || f["whatsapp_ready"] != nil || f["whatsapp_on"] != true {
 		t.Fatalf("whatsapp without an own number: %v", f)
 	}
 	const textBuyer = "+2348035550001"
@@ -103,20 +99,40 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 		t.Fatalf("by text: %d sms, %d WhatsApp", n, len(w.graph.Sent(textBuyer)))
 	}
 
-	// The business connects its own number.
+	// The business connects its own number. Its account holds the
+	// built-in template, not yet approved: no WhatsApp yet, a text.
+	const waba = "300000000000001"
+	w.graph.StrictTemplates(waba)
+	w.graph.SetTemplateStatus(waba, followName, "PENDING", "")
 	w.graph.AddNumber(pnA, tokA, "+234 800 000 0001")
-	ada.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "own_app": false})
-	// Its account's registry has the follow-up's template, as Meta lists it.
-	listed := false
-	for _, x := range ada.must(200, "GET", "/v1/whatsapp/number/templates", nil)["templates"].([]any) {
-		tm := x.(map[string]any)
-		listed = listed || (tm["name"] == followName && tm["status"] == "approved" && tm["category"] == "utility" && tm["meta_category"] == "utility" && tm["matches"] == true)
+	ada.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": waba, "access_token": tokA, "own_app": false})
+	ada.must(200, "POST", "/v1/whatsapp/number/templates/check", nil)
+	if tm := templateOf(t, ada, followName); tm["status"] != "pending" {
+		t.Fatalf("the template before Meta approves it: %v", tm)
 	}
-	if !listed {
-		t.Fatal("the follow-up's template is not in the number's registry")
+	if f := ada.must(200, "GET", "/v1/storefront/actions/"+id+"/left", nil)["followups"].(map[string]any); f["whatsapp"] != nil || f["whatsapp_ready"] != nil {
+		t.Fatalf("whatsapp before the template is approved: %v", f)
+	}
+	w.newHost(t)
+	page = w.at(t, sellStoreAt, "/a/"+slug, nil).Body.String()
+	if !strings.Contains(page, consentL) || strings.Contains(page, "data-keep-wa") {
+		t.Fatal("the consent line before the template is approved")
+	}
+	const pendingBuyer = "+2348035550002"
+	keep(page, url.Values{"contact": {"0803 555 0002"}, "pkg": {"1"}})
+	if _, n := w.smsText(t); n != 2 || len(w.graph.Sent(pendingBuyer)) != 0 {
+		t.Fatalf("not approved, by text: %d sms, %d WhatsApp", n, len(w.graph.Sent(pendingBuyer)))
+	}
+
+	// Meta approves it in the account: its registry has the template, as
+	// Meta lists it, and the owner's follow-ups may go on WhatsApp.
+	w.graph.SetTemplateStatus(waba, followName, "APPROVED", "")
+	ada.must(200, "POST", "/v1/whatsapp/number/templates/check", nil)
+	if tm := templateOf(t, ada, followName); tm["status"] != "approved" || tm["category"] != "utility" || tm["meta_category"] != "utility" || tm["matches"] != true {
+		t.Fatalf("the follow-up's template in the number's registry: %v", tm)
 	}
 	f := ada.must(200, "GET", "/v1/storefront/actions/"+id+"/left", nil)["followups"].(map[string]any)
-	if f["whatsapp"] != true || f["whatsapp_opt_in"] != nil {
+	if f["whatsapp"] != true || f["whatsapp_ready"] != true || f["whatsapp_on"] != true || f["whatsapp_opt_in"] != nil {
 		t.Fatalf("the owner's settings: %v", f)
 	}
 	// The form says WhatsApp and STOP now.
@@ -141,7 +157,7 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 		m.Text != "[Ada Stores] You started an order for Smart Ear Cleaner (2 items, ₦45,000) and did not finish. Tap Finish my order to finish it, or Stop to get no more messages like this." {
 		t.Fatalf("the WhatsApp message: %+v", m)
 	}
-	if _, n := w.smsText(t); n != 1 {
+	if _, n := w.smsText(t); n != 2 {
 		t.Fatalf("a text beside WhatsApp: %d", n)
 	}
 	token := m.URLParams[0]
@@ -207,7 +223,7 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 		w.post(t, w.wa, body, "X-Hub-Signature-256", whatsapp.Sign(waSecret, body))
 	}
 	text, n := w.smsText(t)
-	if n != 2 || !strings.Contains(text, "Smart Ear Cleaner (1 item, N25,000)") || !strings.Contains(text, "https://ada-stores.shops.test/back/") {
+	if n != 3 || !strings.Contains(text, "Smart Ear Cleaner (1 item, N25,000)") || !strings.Contains(text, "https://ada-stores.shops.test/back/") {
 		t.Fatalf("the text after the failure: %d %q", n, text)
 	}
 	// A typed STOP from that number: followed up, no thread of theirs, so
@@ -219,24 +235,43 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 		t.Fatalf("stops: %d %v", stops, err)
 	}
 
-	// A marketing template: the form asks, and only a buyer who ticks the
-	// box is followed up on WhatsApp. (The deployment says marketing once
-	// Meta files it so: the account still holds it as utility, so first
-	// nothing promises WhatsApp, L4's review.)
-	mkt := whatsapp.FollowupTemplate(followName, "", "marketing")
-	w.forms.FollowupChat = api.WAFollowups(w.srv.WhatsApp, mkt)
-	w.srv.FollowupTemplate = &mkt
-	w.waFollowups = "marketing"
-	if f := ada.must(200, "GET", "/v1/storefront/actions/"+id+"/left", nil)["followups"].(map[string]any); f["whatsapp"] != nil {
-		t.Fatalf("WhatsApp in another category than Meta's: %v", f)
+	// The owner turns WhatsApp off ("Also follow up on WhatsApp from my
+	// number"): the form says text or email again, and a buyer is texted.
+	f = ada.must(200, "PATCH", "/v1/storefront/actions/"+id, map[string]any{"followup_whatsapp": false})["followups"].(map[string]any)
+	if f["whatsapp"] != nil || f["whatsapp_ready"] != true || f["whatsapp_on"] != false || f["on"] != true {
+		t.Fatalf("WhatsApp turned off: %v", f)
 	}
 	w.newHost(t)
-	if page := w.at(t, sellStoreAt, "/a/"+slug, nil).Body.String(); strings.Contains(page, optInWA) || strings.Contains(page, "data-keep-wa") {
-		t.Fatal("the form offers WhatsApp in another category than Meta's")
+	page = w.at(t, sellStoreAt, "/a/"+slug, nil).Body.String()
+	if !strings.Contains(page, consentL) || strings.Contains(page, "data-keep-wa") {
+		t.Fatal("the consent line with WhatsApp turned off")
 	}
-	w.graph.SetTemplateMeta("300000000000001", followName, "MARKETING", nil)
+	const offBuyer = "+2348035552323"
+	keep(page, url.Values{"contact": {"08035552323"}, "pkg": {"1"}})
+	if _, n := w.smsText(t); n != 4 || len(w.graph.Sent(offBuyer)) != 0 {
+		t.Fatalf("WhatsApp off, by text: %d sms, %d WhatsApp", n, len(w.graph.Sent(offBuyer)))
+	}
+	// Turned off after a form named WhatsApp: that buyer is texted too.
+	ada.must(200, "PATCH", "/v1/storefront/actions/"+id, map[string]any{"followup_whatsapp": true})
+	w.newHost(t)
+	page = w.at(t, sellStoreAt, "/a/"+slug, nil).Body.String()
+	if !strings.Contains(page, consentWA) {
+		t.Fatal("WhatsApp back on")
+	}
+	ada.must(200, "PATCH", "/v1/storefront/actions/"+id, map[string]any{"followup_whatsapp": false})
+	const offLater = "+2348035552424"
+	keep(page, url.Values{"contact": {"08035552424"}, "pkg": {"1"}})
+	if _, n := w.smsText(t); n != 5 || len(w.graph.Sent(offLater)) != 0 {
+		t.Fatalf("WhatsApp off since the form was drawn: %d sms, %d WhatsApp", n, len(w.graph.Sent(offLater)))
+	}
+	ada.must(200, "PATCH", "/v1/storefront/actions/"+id, map[string]any{"followup_whatsapp": true})
+
+	// Meta files the template as marketing in the account: the consent
+	// follows Meta's category, so the form asks, and only a buyer who
+	// ticks the box is followed up on WhatsApp.
+	w.graph.SetTemplateMeta(waba, followName, "MARKETING", nil)
 	ada.must(200, "POST", "/v1/whatsapp/number/templates/check", nil)
-	if f := ada.must(200, "GET", "/v1/storefront/actions/"+id+"/left", nil)["followups"].(map[string]any); f["whatsapp_opt_in"] != true {
+	if f := ada.must(200, "GET", "/v1/storefront/actions/"+id+"/left", nil)["followups"].(map[string]any); f["whatsapp_opt_in"] != true || f["whatsapp"] != true {
 		t.Fatalf("opt-in: %v", f)
 	}
 	w.newHost(t)
@@ -251,7 +286,7 @@ func TestFormLeftOnWhatsAppEndToEnd(t *testing.T) {
 	if len(w.graph.Sent(notAsked)) != 0 || len(w.graph.Sent(asked)) != 1 {
 		t.Fatalf("opt-in: not asked %d, asked %d", len(w.graph.Sent(notAsked)), len(w.graph.Sent(asked)))
 	}
-	if _, n := w.smsText(t); n != 3 {
+	if _, n := w.smsText(t); n != 6 {
 		t.Fatalf("the one not asked texted: %d", n)
 	}
 }

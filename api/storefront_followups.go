@@ -16,7 +16,6 @@ import (
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/storefront"
-	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Forms left half-filled, the owner's side (docs/spec/forms-that-sell.md
@@ -33,29 +32,41 @@ type followupSettings struct {
 	On          bool       `json:"on"`
 	WaitMinutes int        `json:"wait_minutes"`
 	HeldAt      *time.Time `json:"held_at,omitempty"`
-	// WhatsApp: a follow-up may go on WhatsApp, by the deployment's
-	// template from the business's own number (L4); WhatsAppOptIn: only to
-	// a buyer who asks for it on the form (a marketing template).
+	// Follow-ups go by text, email or WhatsApp (L4). WhatsAppReady: the
+	// business's own number's account holds the follow-up's template
+	// approved with our words, in a category the form can ask consent for
+	// (utility or marketing), so the owner may let follow-ups go there.
+	// WhatsAppOn is the owner's choice, "Also follow up on WhatsApp from
+	// my number", for all the business's order forms (on unless turned
+	// off). WhatsApp: both, so a follow-up may go on WhatsApp;
+	// WhatsAppOptIn: only to a buyer who asks for it on the form (Meta
+	// filed the template as marketing).
+	WhatsAppReady bool `json:"whatsapp_ready,omitempty"`
+	WhatsAppOn    bool `json:"whatsapp_on"`
 	WhatsApp      bool `json:"whatsapp,omitempty"`
 	WhatsAppOptIn bool `json:"whatsapp_opt_in,omitempty"`
 }
 
-// followupChannels says whether the business's follow-ups may go on
-// WhatsApp: the deployment runs WhatsApp and names the template, and the
-// business's own number's account holds it approved, in the category the
-// deployment names, with our words (as the public host's form says, and
-// as WAFollowups sends).
+// followupChannels says whether and how the business's follow-ups may go
+// on WhatsApp (followupWA): as the public host's form says, and as
+// WAFollowups sends. Nothing when the deployment runs no WhatsApp at all,
+// where no own number sends.
 func (s *Server) followupChannels(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st *followupSettings) error {
-	if s.FollowupTemplate == nil || s.Forms == nil || s.WhatsApp == nil {
-		return nil
+	language := "en"
+	if s.WhatsApp != nil {
+		language = s.WhatsApp.Config.Language
 	}
-	t := *s.FollowupTemplate
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM whatsapp_numbers n JOIN whatsapp_templates w ON w.waba_id = n.waba_id AND w.tenant_id = n.tenant_id
-		WHERE n.tenant_id = $1 AND n.status = 'active' AND w.name = $2 AND w.language = $3 AND w.status = 'approved' AND lower(w.meta_category) = $4 AND w.meta_matches)`,
-		tenant, t.Name, t.LanguageOr(s.WhatsApp.Config.Language), whatsapp.Category(t)).Scan(&st.WhatsApp); err != nil {
+	category, on, err := followupWA(ctx, tx, tenant, language)
+	if err != nil {
 		return err
 	}
-	st.WhatsAppOptIn = st.WhatsApp && s.FollowupTemplate.OptIn()
+	st.WhatsAppOn = on
+	if s.Forms == nil || s.WhatsApp == nil {
+		return nil
+	}
+	st.WhatsAppReady = category != ""
+	st.WhatsApp = st.WhatsAppReady && on
+	st.WhatsAppOptIn = st.WhatsApp && category == "marketing"
 	return nil
 }
 
@@ -168,6 +179,9 @@ func (s *Server) getFormLeft(w http.ResponseWriter, r *http.Request) {
 type patchActionIn struct {
 	FollowupOn   *bool `json:"followup_on"`
 	FollowupWait *int  `json:"followup_wait"`
+	// FollowupWhatsApp is the owner's choice for the whole business:
+	// follow-ups may also go on WhatsApp from its own number (L4).
+	FollowupWhatsApp *bool `json:"followup_whatsapp"`
 	// ReleaseHold sends the follow-ups held after a run of keeps.
 	ReleaseHold bool `json:"release_hold"`
 }
@@ -201,6 +215,11 @@ func (s *Server) patchStorefrontAction(w http.ResponseWriter, r *http.Request) {
 			id, in.FollowupOn, in.FollowupWait, in.ReleaseHold); err != nil {
 			return err
 		}
+		if in.FollowupWhatsApp != nil {
+			if _, err := tx.Exec(ctx, `UPDATE storefronts SET followup_whatsapp = $1, updated_at = now() WHERE tenant_id = $2`, *in.FollowupWhatsApp, principalFrom(ctx).TenantID); err != nil {
+				return err
+			}
+		}
 		var err error
 		if _, _, out, err = orderAction(ctx, tx, id); err != nil {
 			return err
@@ -208,7 +227,11 @@ func (s *Server) patchStorefrontAction(w http.ResponseWriter, r *http.Request) {
 		if err := s.followupChannels(ctx, tx, principalFrom(ctx).TenantID, &out); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "storefront.followups", id.String(), map[string]any{"on": out.On, "wait_minutes": out.WaitMinutes, "released": in.ReleaseHold})
+		detail := map[string]any{"on": out.On, "wait_minutes": out.WaitMinutes, "released": in.ReleaseHold}
+		if in.FollowupWhatsApp != nil {
+			detail["whatsapp"] = out.WhatsAppOn
+		}
+		return auditTx(r, tx, "storefront.followups", id.String(), detail)
 	}); err != nil {
 		s.fail(w, r, err)
 		return

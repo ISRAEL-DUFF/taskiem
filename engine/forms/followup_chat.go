@@ -15,8 +15,11 @@ import (
 // phone is unproven (0039 point 3): it is never matched to a linked chat,
 // and WhatsApp reaches it only by the approved "finish your order"
 // template from the business's own number, never by a free-form message,
-// whatever its window. FollowupChat is nil until the deployment names
-// that template, and then a phone is reached as in L3: a text. The caps,
+// whatever its window, and only where the business's own number's
+// account holds that template approved; otherwise a phone is reached as
+// in L3: a text. Nothing in the deployment's environment switches it (the
+// founder, 25 November 2026); FollowupChat is nil only where the
+// deployment runs no WhatsApp at all. The caps,
 // the hold and STOP are the record's, whatever the channel: they are
 // taken before the channel is chosen (followUpTx).
 //
@@ -28,19 +31,33 @@ import (
 
 // chatReady says whether a record's follow-up may go on WhatsApp: the
 // form the buyer saw named WhatsApp (Choice.WhatsAppNamed: the public
-// host says which line it drew), the buyer asked for it where the
-// template is a marketing one, and the business's account holds the
-// template ready. A chat that cannot tell is a no: the text goes.
+// host says which line it drew), and the business's account holds the
+// template ready in a category whose consent the buyer gave: utility, or
+// marketing where the buyer ticked the box asking for it. Any other
+// category, and a chat that cannot tell, is a no: the text goes.
 func (s *Service) chatReady(ctx context.Context, x dueRow) bool {
-	if s.FollowupChat == nil || !x.choice.WhatsAppNamed || s.FollowupChat.OptIn() && !x.choice.WhatsApp {
+	if s.FollowupChat == nil || !x.choice.WhatsAppNamed {
 		return false
 	}
-	ok, err := s.FollowupChat.Ready(ctx, x.tenant)
+	category, err := s.FollowupChat.Ready(ctx, x.tenant)
 	if err != nil {
 		s.log().Warn("forms: whether a follow-up may go on WhatsApp", "tenant", x.tenant, "err", err)
 		return false
 	}
-	return ok
+	return ChatConsented(category, x.choice.WhatsApp)
+}
+
+// ChatConsented says whether a follow-up may go on WhatsApp by a
+// template Meta filed in category: utility, to a buyer the form told;
+// marketing, only to one who asked for it (asked); nothing else.
+func ChatConsented(category string, asked bool) bool {
+	switch category {
+	case "utility":
+		return true
+	case "marketing":
+		return asked
+	}
+	return false
 }
 
 // claimChat marks a record followed up on WhatsApp, sending, with its
@@ -55,7 +72,7 @@ func (s *Service) claimChat(ctx context.Context, tx pgx.Tx, x dueRow, m *Followu
 	if _, err := tx.Exec(ctx, `SELECT taskiem_form_left_wa_sending($1, $2)`, x.tenant, x.id); err != nil {
 		return false, err
 	}
-	m.Token, m.Link = token, s.backLink(ctx, tx, x.tenant, token)
+	m.Token, m.Link, m.Asked = token, s.backLink(ctx, tx, x.tenant, token), x.choice.WhatsApp
 	m.Key = "followup:" + x.id.String()
 	return true, nil
 }

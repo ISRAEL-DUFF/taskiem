@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -73,24 +72,13 @@ type Graph struct {
 	tplSeq    int
 	// SubmitStatus is the status a submission answers (PENDING unless set).
 	SubmitStatus string
-	// Extra are a deployment's own templates beside the library
-	// (whatsapp.Config.Templates), which the fake holds as it holds the
-	// library's.
-	Extra []whatsapp.Template
 	// Hosts are the deployment's addresses, for the url buttons of the
 	// templates the fake lists as Meta holds them (their components).
 	Hosts whatsapp.Hosts
 }
 
-// named finds a template in the library or Extra.
-func (g *Graph) named(name string) (whatsapp.Template, bool) {
-	for _, t := range g.Extra {
-		if t.Name == name {
-			return t, true
-		}
-	}
-	return whatsapp.TemplateNamed(name)
-}
+// named finds a template in the library.
+func (g *Graph) named(name string) (whatsapp.Template, bool) { return whatsapp.TemplateNamed(name) }
 
 // fakeTemplate is a template as the fake account holds it.
 type fakeTemplate struct {
@@ -300,7 +288,7 @@ func (g *Graph) serveTemplates(w http.ResponseWriter, r *http.Request, waba stri
 	switch r.Method {
 	case http.MethodGet:
 		if !g.strict[waba] {
-			for _, tpl := range append(slices.Clip(whatsapp.AllTemplates), g.Extra...) {
+			for _, tpl := range whatsapp.AllTemplates {
 				if _, ok := acct[tpl.Name]; !ok {
 					g.tplSeq++
 					acct[tpl.Name] = fakeTemplate{ID: fmt.Sprintf("%d", 900000000000000+g.tplSeq), Language: "en", Status: "APPROVED", Category: tpl.Category}

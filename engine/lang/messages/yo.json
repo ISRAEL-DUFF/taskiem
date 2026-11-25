@@ -9558,7 +9558,7 @@
       "context": "Draft, not reviewed: WhatsApp, from the business's own number: answer to STOP, or the Stop button, from someone the business followed up after they left an order form (forms-that-sell §6.5, L4)"
     },
     "wa.followups.on": {
-      "text": "A ti tan ìtẹ̀lé fún *{form}*. Ẹni tí ó bá kọ fóònù tàbí ímeèlì rẹ̀ tí ó sì kúrò láì ra yóò gba ìfiránṣẹ́ kan lẹ́yìn ìṣẹ́jú {wait}, pẹ̀lú ìjápọ̀ láti parí ọjà náà. Fọ́ọ̀mù náà ti sọ bẹ́ẹ̀ lábẹ́ àlàyé wọn báyìí. Sọ *follow-ups off* láti dá a dúró.",
+      "text": "A ti tan ìtẹ̀lé fún *{form}*. Ẹni tí ó bá kọ fóònù tàbí ímeèlì rẹ̀ tí ó sì kúrò láì ra yóò gba ìfiránṣẹ́ kan lẹ́yìn ìṣẹ́jú {wait}, nípa àtẹ̀jíṣẹ́, ímeèlì tàbí WhatsApp, pẹ̀lú ìjápọ̀ láti parí ọjà náà. Fọ́ọ̀mù náà ti sọ bẹ́ẹ̀ lábẹ́ àlàyé wọn báyìí. Sọ *follow-ups off* láti dá a dúró.",
       "reviewed": false,
       "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups on, done"
     },

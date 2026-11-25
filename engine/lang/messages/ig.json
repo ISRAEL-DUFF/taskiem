@@ -9556,7 +9556,7 @@
       "context": "Draft, not reviewed: WhatsApp, from the business's own number: answer to STOP, or the Stop button, from someone the business followed up after they left an order form (forms-that-sell §6.5, L4)"
     },
     "wa.followups.on": {
-      "text": "Agbanyere nsoro maka *{form}*. Onye dere nọmba ekwentị ma ọ bụ email ya wee pụọ n'ịtụghị ahịa ga-enweta otu ozi mgbe nkeji {wait} gachara, ya na njikọ iji mezue ịtụ ahịa ahụ. Fọm ahụ na-ekwu nke a ugbu a n'okpuru nkọwa ha. Kwuo *follow-ups off* iji kwụsị.",
+      "text": "Agbanyere nsoro maka *{form}*. Onye dere nọmba ekwentị ma ọ bụ email ya wee pụọ n'ịtụghị ahịa ga-enweta otu ozi mgbe nkeji {wait} gachara, site na ozi ederede, email ma ọ bụ WhatsApp, ya na njikọ iji mezue ịtụ ahịa ahụ. Fọm ahụ na-ekwu nke a ugbu a n'okpuru nkọwa ha. Kwuo *follow-ups off* iji kwụsị.",
       "reviewed": false,
       "context": "Draft, not reviewed: Chat words (api/chat_followups.go): follow-ups on, done"
     },

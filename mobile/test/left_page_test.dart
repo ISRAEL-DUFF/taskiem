@@ -18,10 +18,17 @@ import 'guidelines.dart';
 import 'looks.dart';
 import 'support.dart';
 
-Map<String, dynamic> _left({bool on = true, bool held = false, bool whatsapp = false}) => {
+Map<String, dynamic> _left({bool on = true, bool held = false, bool whatsapp = false, bool waOn = true}) => {
   'action_id': 'A1',
   'label': 'Order the ear cleaner',
-  'followups': {'on': on, 'wait_minutes': 30, if (held) 'held_at': '2026-11-25T09:00:00Z', if (whatsapp) 'whatsapp': true},
+  'followups': {
+    'on': on,
+    'wait_minutes': 30,
+    if (held) 'held_at': '2026-11-25T09:00:00Z',
+    if (whatsapp) 'whatsapp_ready': true,
+    'whatsapp_on': waOn,
+    if (whatsapp && waOn) 'whatsapp': true,
+  },
   'week': {'left': 3, 'followed': 2, 'came_back': 1},
   'left': [
     {
@@ -79,16 +86,18 @@ void main() {
     final f = Fixture('chats');
     final sent = <String>[];
     var on = true;
+    var waOn = true;
     http.Response ok(Object b) => http.Response(jsonEncode(b), 200, headers: {'content-type': 'application/json'});
     final auth = f.auth(
       also: (req) async {
-        if (req.url.path == '/v1/storefront/actions/A1/left') return ok(_left(on: on, held: held, whatsapp: whatsapp));
+        if (req.url.path == '/v1/storefront/actions/A1/left') return ok(_left(on: on, held: held, whatsapp: whatsapp, waOn: waOn));
         if (req.url.path == '/v1/storefront/actions/A1' && req.method == 'PATCH') {
           sent.add('PATCH ${req.body}');
           final b = jsonDecode(req.body) as Map<String, dynamic>;
           if (b['followup_on'] == false) on = false;
           if (b['release_hold'] == true) held = false;
-          return ok({'followups': _left(on: on)['followups']});
+          if (b['followup_whatsapp'] is bool) waOn = b['followup_whatsapp'] as bool;
+          return ok({'followups': _left(on: on, whatsapp: whatsapp, waOn: waOn)['followups']});
         }
         return null;
       },
@@ -117,13 +126,21 @@ void main() {
   });
 
   testWidgets('follow-ups on WhatsApp: each row says how it was followed up (L4)', (t) async {
-    await open(t, whatsapp: true);
-    expect(find.text('One WhatsApp message from your number, else a text or email'), findsOneWidget);
+    final sent = await open(t, whatsapp: true);
+    expect(find.text('One message by text, email or WhatsApp from your number'), findsOneWidget);
+    expect(find.text('Also follow up on WhatsApp from my number'), findsOneWidget);
     expect(find.text('On WhatsApp'), findsOneWidget);
     expect(find.textContaining('Followed up on WhatsApp'), findsOneWidget);
     expect(find.textContaining('Followed up by text'), findsOneWidget);
     expect(find.textContaining('Followed up by email'), findsOneWidget);
     await looks(t, 'left-without-ordering-whatsapp');
+    await t.pump(const Duration(seconds: 5));
+    // The owner turns WhatsApp off for the business: texts and emails only.
+    await t.tap(find.bySemanticsLabel('Also follow up on WhatsApp from my number'));
+    await settle(t);
+    expect(sent, contains('PATCH {"followup_whatsapp":false}'));
+    expect(find.text('Off: by text or email only'), findsOneWidget);
+    expect(find.text('One text, or an email when they gave only that'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
   });
 

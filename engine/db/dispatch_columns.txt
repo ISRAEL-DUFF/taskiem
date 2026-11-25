@@ -1816,3 +1816,4 @@ form_left_wa_early.created_at
 whatsapp_templates.status
 whatsapp_templates.meta_category
 whatsapp_templates.meta_matches
+storefronts.followup_whatsapp

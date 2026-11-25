@@ -37,28 +37,29 @@ type StorefrontPage struct {
 	// Followups are the order forms that follow up a form left
 	// half-filled, by action id (forms-that-sell §6).
 	Followups map[uuid.UUID]bool
-	// FollowupWhatsApp: the business's own WhatsApp number's account
-	// holds the deployment's follow-up template approved, in its category,
-	// with our words, so a follow-up may go there (L4).
-	FollowupWhatsApp bool
+	// FollowupWhatsApp is the category Meta gave the follow-up's template
+	// (taskiem_finish_order) in the business's own WhatsApp number's
+	// account, where it is approved with our words and the owner lets
+	// follow-ups go there: "utility" or "marketing"; "" when a follow-up
+	// never goes on WhatsApp (L4).
+	FollowupWhatsApp string
 }
 
 // Storefronts reads a business's storefront's page; ok is false when it
 // is not served (a draft, an inactive tenant).
 type Storefronts func(ctx context.Context, tenant, id uuid.UUID) (page StorefrontPage, ok bool, err error)
 
-// WAFollowup is the deployment's follow-up template as the public host
-// asks after it in a business's account (forms-that-sell L4): its name,
-// language and category.
-type WAFollowup struct {
-	Name, Language, Category string
-}
-
 // DBStorefronts reads pages with taskiem_public_storefront and
 // taskiem_public_storefront_catalogue, and how many are left with
-// taskiem_product_left: the copy holds no count. With the follow-up's
-// template (wa), whether a follow-up may go on WhatsApp; without, never.
-func DBStorefronts(pool *pgxpool.Pool, wa ...WAFollowup) Storefronts {
+// taskiem_product_left: the copy holds no count. For a page with order
+// forms that follow up, it reads whether and how a follow-up may go on
+// WhatsApp (taskiem_public_form_followup_whatsapp), in waLanguage, the
+// deployment's WhatsApp template language ("en" when not given).
+func DBStorefronts(pool *pgxpool.Pool, waLanguage ...string) Storefronts {
+	language := "en"
+	if len(waLanguage) > 0 && waLanguage[0] != "" {
+		language = waLanguage[0]
+	}
 	return func(ctx context.Context, tenant, id uuid.UUID) (StorefrontPage, bool, error) {
 		var p StorefrontPage
 		var version int
@@ -104,10 +105,13 @@ func DBStorefronts(pool *pgxpool.Pool, wa ...WAFollowup) Storefronts {
 			}
 			p.Followups[a] = true
 		}
-		if len(follow) > 0 && len(wa) > 0 {
-			if err := pool.QueryRow(ctx, `SELECT taskiem_public_form_followup_whatsapp($1, $2, $3, $4)`, id, wa[0].Name, wa[0].Language, wa[0].Category).
-				Scan(&p.FollowupWhatsApp); err != nil {
+		if len(follow) > 0 {
+			var category *string
+			if err := pool.QueryRow(ctx, `SELECT taskiem_public_form_followup_whatsapp($1, $2)`, id, language).Scan(&category); err != nil {
 				return StorefrontPage{}, false, err
+			}
+			if category != nil {
+				p.FollowupWhatsApp = *category
 			}
 		}
 		// Each other front's list, its table read once.

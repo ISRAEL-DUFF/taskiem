@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
@@ -44,28 +43,12 @@ type waFollowWorld struct {
 func newWAFollowWorld(t *testing.T) *waFollowWorld {
 	t.Helper()
 	w := &waFollowWorld{sellWorld: newSellWorld(t)}
-	w.useTemplate(t, "utility")
-	w.graph.Hosts = w.srv.WhatsApp.Client.Hosts
 	w.id, w.slug = w.sellerForm(t)
 	w.ada.must(200, "PATCH", "/v1/storefront/actions/"+w.id, map[string]any{"followup_on": true})
 	w.graph.AddNumber(pnA, tokA, "+234 800 000 0001")
 	w.ada.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": followWABA, "access_token": tokA, "own_app": false})
 	w.newHost(t)
 	return w
-}
-
-// useTemplate names the follow-up's template in a category, on the api
-// and the public host.
-func (w *waFollowWorld) useTemplate(t *testing.T, category string) {
-	t.Helper()
-	tpl := whatsapp.FollowupTemplate(followName, "", category)
-	w.graph.Extra = []whatsapp.Template{tpl}
-	w.srv.WhatsApp.Config.Templates = []whatsapp.Template{tpl}
-	w.srv.WhatsApp.Forget()
-	w.srv.FollowupTemplate = &tpl
-	w.forms.FollowupChat = api.WAFollowups(w.srv.WhatsApp, tpl)
-	w.waFollowups = category
-	w.newHost(t)
 }
 
 // check asks Meta for the account's templates now.
@@ -124,8 +107,10 @@ func (w *waFollowWorld) status(t *testing.T, hook, secret, pnid, id string, code
 // back to a text, in the same pass and once, when its answer is a clear
 // no: WhatsApp refusing the send, the template paused, rejected or not
 // approved in the business's account since the form was drawn, a
-// marketing template held back past the plan's allowance, and Meta
-// filing the template in another category than the deployment names.
+// marketing template held back past the plan's allowance, Meta filing
+// the template as marketing since the form was drawn (the consent the
+// form asked no longer covers it), in a category that is neither utility
+// nor marketing, or holding other words.
 func TestReviewL4WhatsAppFallsBackToText(t *testing.T) {
 	w := newWAFollowWorld(t)
 	ctx := context.Background()
@@ -175,26 +160,45 @@ func TestReviewL4WhatsAppFallsBackToText(t *testing.T) {
 		w.check()
 	}
 
-	// Meta filed it as marketing while the deployment says utility: the
-	// owner and the form say text or email, and a text goes.
+	// Meta filed it as marketing after the form told the buyer it may
+	// write on WhatsApp: the consent follows Meta's category, so that
+	// buyer, who ticked no box, gets a text.
+	page = w.form(t)
+	if !strings.Contains(page, consentWA) {
+		t.Fatal("the utility line")
+	}
 	w.graph.SetTemplateMeta(followWABA, followName, "MARKETING", nil)
 	w.check()
 	tm := templateOf(t, w.ada, followName)
 	if tm["meta_category"] != "marketing" || tm["category"] != "utility" {
 		t.Fatalf("the owner's list: %v", tm)
 	}
-	if f := w.ada.must(200, "GET", "/v1/storefront/actions/"+w.id+"/left", nil)["followups"].(map[string]any); f["whatsapp"] != nil {
+	if f := w.ada.must(200, "GET", "/v1/storefront/actions/"+w.id+"/left", nil)["followups"].(map[string]any); f["whatsapp_opt_in"] != true {
+		t.Fatalf("marketing asks first: %v", f)
+	}
+	w.leave(t, page, "08035558001", nil)
+	want("+2348035558001", "… 8001")
+	// The form drawn now asks with the box, its line text or email.
+	w.newHost(t)
+	if page = w.form(t); strings.Contains(page, consentWA) || !strings.Contains(page, optInWA) {
+		t.Fatal("the form under a marketing template")
+	}
+
+	// A category that is neither (Meta's authentication, or one Taskiem
+	// does not know): no WhatsApp; the form names it not, and a keep
+	// saying it was drawn naming WhatsApp is not taken as said.
+	w.graph.SetTemplateMeta(followWABA, followName, "AUTHENTICATION", nil)
+	w.check()
+	if f := w.ada.must(200, "GET", "/v1/storefront/actions/"+w.id+"/left", nil)["followups"].(map[string]any); f["whatsapp"] != nil || f["whatsapp_ready"] != nil {
 		t.Fatalf("WhatsApp in another category: %v", f)
 	}
 	w.newHost(t)
 	page = w.form(t)
-	if strings.Contains(page, consentWA) || strings.Contains(page, "data-keep-wa") {
+	if strings.Contains(page, consentWA) || strings.Contains(page, optInWA) || strings.Contains(page, "data-keep-wa") {
 		t.Fatal("the form promises WhatsApp in another category")
 	}
-	// A keep saying it was drawn naming WhatsApp all the same: the host
-	// draws no such line now, so it is not taken as said.
-	w.leave(t, page, "08035558001", url.Values{"named": {"wa"}})
-	want("+2348035558001", "… 8001")
+	w.leave(t, page, "08035558002", url.Values{"named": {"wa"}, "wa": {"1"}})
+	want("+2348035558002", "… 8002")
 
 	// Its words not ours (another body): not ready either.
 	w.graph.SetTemplateMeta(followWABA, followName, "UTILITY", []whatsapp.MetaComponent{{Type: "BODY", Text: "Buy more {{1}} {{2}}"}})
@@ -210,8 +214,8 @@ func TestReviewL4WhatsAppFallsBackToText(t *testing.T) {
 	// A marketing template held back past the plan's WhatsApp allowance
 	// (ErrTemplateBlocked): the buyer who asked gets a text.
 	w.graph.SetTemplateMeta(followWABA, followName, "MARKETING", []whatsapp.MetaComponent{}) // our words again
-	w.useTemplate(t, "marketing")
 	w.check()
+	w.newHost(t)
 	if tm := templateOf(t, w.ada, followName); tm["meta_category"] != "marketing" || tm["matches"] != true {
 		t.Fatalf("marketing: %v", tm)
 	}

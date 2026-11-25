@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { get, patch } from "../api";
 import { ErrorBox, Field, Items, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
-import { WAITS, choiceWords, consentWords, contactWords, followupWords, rowStatus, waitWords, type FormLeft, type FollowupSettings } from "../lib/left";
+import { WAITS, choiceWords, consentWords, contactWords, followupWords, rowStatus, waitWords, whatsappWords, type FormLeft, type FollowupSettings } from "../lib/left";
 import { StorefrontTabs } from "./Storefront";
 
 /** Left without ordering (forms that sell §6.6): an order form's
@@ -10,14 +10,14 @@ export function StorefrontLeft() {
   const { id = "" } = useParams();
   const left = useLoad(() => get<FormLeft>(`/v1/storefront/actions/${encodeURIComponent(id)}/left`), [id]);
   const act = useAction();
-  const set = (body: { followup_on?: boolean; followup_wait?: number; release_hold?: boolean }, done: string) =>
+  const set = (body: { followup_on?: boolean; followup_wait?: number; release_hold?: boolean; followup_whatsapp?: boolean }, done: string) =>
     void act.run(() => patch<{ followups: FollowupSettings }>(`/v1/storefront/actions/${encodeURIComponent(id)}`, body), done).then((ok) => ok && left.reload());
   const d = left.data;
   return (
     <>
       <PageHeader
         title="Left without ordering"
-        description="People who typed their phone or email into your order form and left without sending it. Taskiem keeps only how to reach them and what they chose, for 7 days, and sends them one message with a link to finish."
+        description="People who typed their phone or email into your order form and left without sending it. Taskiem keeps only how to reach them and what they chose, for 7 days, and sends them one message, by text, email or WhatsApp, with a link to finish."
       />
       <StorefrontTabs />
       <ErrorBox error={left.error} />
@@ -61,6 +61,21 @@ export function StorefrontLeft() {
                     ))}
                   </select>
                 </Field>
+                {d.followups.whatsapp_ready && (
+                  <label className="sf-toggle" data-testid="followups-whatsapp">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={!!d.followups.whatsapp_on}
+                      disabled={act.busy}
+                      onChange={(e) =>
+                        set({ followup_whatsapp: e.target.checked }, e.target.checked ? "Follow-ups may go on WhatsApp" : "Follow-ups go by text or email only")
+                      }
+                    />{" "}
+                    Also follow up on WhatsApp from my number
+                  </label>
+                )}
+                <p className="hint">{whatsappWords(d.followups)}</p>
                 <p className="hint">Your form says, under their phone and email: {consentWords(d.followups)}</p>
               </>
             )}

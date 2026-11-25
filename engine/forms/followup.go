@@ -21,9 +21,9 @@ import (
 // api role counts it as left and, within the caps, sends one message
 // about the order the buyer started, by the channel they gave, with a
 // link that restores their choice. A typed phone is reached by SMS
-// whatever it matches (0039 point 3): never a linked chat. WhatsApp by an
-// approved template on the business's own number is L4's, through
-// FollowupChat; until then it is nil and a phone gets a text.
+// whatever it matches (0039 point 3): never a linked chat, or on WhatsApp
+// by the approved template from the business's own number (L4, through
+// FollowupChat), where its account holds that template.
 
 // The caps (§6.5; starting figures).
 const (
@@ -56,6 +56,9 @@ type FollowupMessage struct {
 	// Token is the restore link's token (the end of Link), for a chat
 	// template whose button opens the link under a fixed address.
 	Token string
+	// Asked: the buyer ticked the form's box asking for WhatsApp, as a
+	// marketing template needs (Choice.WhatsApp).
+	Asked bool
 }
 
 // FollowupChat reaches a typed phone in a chat app: on WhatsApp, by an
@@ -69,13 +72,13 @@ type FollowupMessage struct {
 // failure WhatsApp reports later, by the message's id (ref), sends the
 // text then (FollowupFailed).
 type FollowupChat interface {
-	// OptIn: the template is a marketing one, so it reaches only a buyer
-	// who asked for WhatsApp on the form (Choice.WhatsApp).
-	OptIn() bool
-	// Ready: the business has an own number whose account holds the
-	// template approved, in the category the deployment names, with our
-	// words.
-	Ready(ctx context.Context, tenant uuid.UUID) (bool, error)
+	// Ready says whether and how the business's follow-ups may go on
+	// WhatsApp: the category Meta gave the template in its own number's
+	// account, where Meta holds it approved with our words and the owner
+	// lets follow-ups go there ("utility"; "marketing", which reaches only
+	// a buyer who asked for WhatsApp on the form, Choice.WhatsApp); ""
+	// when they may not.
+	Ready(ctx context.Context, tenant uuid.UUID) (string, error)
 	// Send sends the template; ref is the message's id.
 	Send(ctx context.Context, m FollowupMessage) (ref string, err error)
 }
