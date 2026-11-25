@@ -50,6 +50,8 @@ A business that sells one product on its own website shows just that order form,
 
 The frame posts to the verified sites only: `storefront:height` with its height as it changes (a package chosen, a size for each item shown), and once an order is sent `storefront:submitted` with the form (`action`, its address) and the order's `reference`, never the buyer's name, number or anything typed. A form of the Forms page that now sells ([forms](forms.md#a-form-that-sells)) keeps its own address: `/embed/f/<id>` sends the frame to the order form's.
 
+A framed order form that **follows up a buyer who left** ([storefronts](storefronts.md#following-up-a-buyer-who-left)) sends its keep from inside the frame to its own address (`/embed/…/a/<form>/keep`), never to the website; the website's address is kept with it only when it is one of the business's verified sites, for the owner's list. The follow-up's link opens the order form at the storefront's own address: a website's page that frames it is not known (browsers send its origin only).
+
 ## On the public host
 
 `/embed/` pages are served with `Content-Security-Policy: … frame-ancestors <the verified origins>`, read through `taskiem_public_embed_origins`, the public role's second function, and cached for 30 seconds. They are sent without `X-Frame-Options`, which cannot name origins.

@@ -364,6 +364,12 @@ function AlertCard({
         return can("invoice.manage")
           ? { words: "Match it", go: () => onSheet("match", from()) }
           : undefined;
+      case "left":
+        // People who left an order form today (forms that sell §6.6).
+        return {
+          words: "See who left",
+          go: () => nav(`/storefront/left/${encodeURIComponent(a.id ?? "")}`),
+        };
       case "page":
         // A page's figure above zero (pages §9): the page itself.
         return {

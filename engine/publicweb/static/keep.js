@@ -59,8 +59,8 @@
     var text = body.toString();
     if (text === last) return;
     last = text;
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(url, new window.Blob([text], { type: "application/x-www-form-urlencoded" }));
+    if (window.navigator.sendBeacon) {
+      window.navigator.sendBeacon(url, new window.Blob([text], { type: "application/x-www-form-urlencoded" }));
     } else if (window.fetch) {
       window.fetch(url, { method: "POST", body: body, keepalive: true, credentials: "omit" });
     }

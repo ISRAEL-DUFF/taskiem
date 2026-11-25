@@ -246,7 +246,7 @@ func (s *Server) serveBack(w http.ResponseWriter, r *http.Request, site Site, to
 			return
 		}
 		if loc, found := restoreURL(p, got); ok && found {
-			http.Redirect(w, r, loc, http.StatusSeeOther)
+			http.Redirect(w, r, loc, http.StatusSeeOther) //nolint:gosec // a path on this page, the form found in its published model; the query is the choice the server kept
 			return
 		}
 		d.Message = "This link has been used already or is more than 7 days old. You can still order from " + business + "'s page."

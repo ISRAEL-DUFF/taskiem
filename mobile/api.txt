@@ -515,3 +515,7 @@ getPayrollPayslip
 sendPayrollPayslipLink
 getMyPayslips
 getMyPayslip
+
+# Forms left half-filled: who left an order form, its follow-ups (forms-that-sell §6.6, L3)
+getStorefrontActionLeft
+patchStorefrontAction

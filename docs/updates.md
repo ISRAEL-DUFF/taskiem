@@ -58,6 +58,8 @@ The AI builder uses this step whenever a goal messages someone outside the busin
 
 Each business sees only its own contacts, with phones masked. Erasing a person's personal data erases their contact.
 
+The one message to a buyer who left an order form half-filled ([storefronts](storefronts.md#following-up-a-buyer-who-left)) is not an update: it goes by text (or email) whatever the number matches, never to a chat app, and its own link's **Stop these messages** stops that business's follow-ups to the number. Texts come from a sender name, so a reply cannot be read; when an inbound route exists (or WhatsApp follow-ups, L4) its STOP calls the same stop (`forms.Service.StopContact`).
+
 ## For operators
 
 You need these settings:

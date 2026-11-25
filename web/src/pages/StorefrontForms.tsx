@@ -222,6 +222,12 @@ export function FormCard({
           <ActionEmbedCode actionId={action.id} label={info.title.toLowerCase()} />
         </div>
       )}
+      {kind === "order" && action.id && (
+        // Forms left half-filled (forms that sell §6.6): its follow-ups and who left it.
+        <p className="hint">
+          <Link to={`/storefront/left/${action.id}`}>Left without ordering</Link>: follow up people who type their phone and leave.
+        </p>
+      )}
       {showSetup && (
         <div className="sf-setup">
           <p style={{ margin: "0 0 8px" }}>

@@ -231,7 +231,8 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
               Open it
             </a>
           )}{" "}
-          <Link to="/storefront/fronts">Change its packages under Fronts</Link>.
+          <Link to="/storefront/fronts">Change its packages under Fronts</Link>.{" "}
+          {f.sells_as && <Link to={`/storefront/left/${f.sells_as}`}>Left without ordering</Link>}
           {sold?.warnings.map((w) => (
             <p key={w} className="hint">
               {w}
