@@ -964,3 +964,5 @@ body{font-size:16.5px}
 .pclose h2{font-weight:700;font-size:clamp(26px,3vw,40px);letter-spacing:-.03em;color:var(--white);max-width:20ch}
 .pclose .cta-row{display:flex;flex-wrap:wrap;gap:12px}
 .phero h1 em,.hero h1 em{font-style:normal;color:var(--lime)}
+/* inner pages on narrow screens: the words first, the picture under them */
+@media (max-width:1020px){.phero .hero-panel{grid-template-columns:minmax(0,1fr)}.phero .pvis{order:9}}
