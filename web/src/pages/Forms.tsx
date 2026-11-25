@@ -180,7 +180,7 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
         <h2 id={headingId} className="grow" style={{ margin: 0 }}>
           {f.title || f.workflow}
         </h2>
-        <Badge value={f.status} />
+        <Badge value={f.sells_as ? "selling" : f.status} />
       </div>
       <dl className="kv">
         <dt>Workflow</dt>
@@ -242,17 +242,17 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
       {f.status === "suspended" && <div className="error">Taskiem's operators suspended this form. Contact support to have it looked at.</div>}
       <ErrorBox error={act.error} />
       <div className="toolbar">
-        {publish && f.status !== "live" && (
+        {publish && !f.sells_as && f.status !== "live" && (
           <button disabled={act.busy} onClick={() => void setStatus("live")}>
             {f.status === "closed" ? "Reopen" : "Resume"}
           </button>
         )}
-        {publish && f.status === "live" && (
+        {publish && !f.sells_as && f.status === "live" && (
           <button disabled={act.busy} onClick={() => void setStatus("paused")}>
             Pause
           </button>
         )}
-        {publish && f.status !== "closed" && (
+        {publish && !f.sells_as && f.status !== "closed" && (
           <button disabled={act.busy} onClick={() => confirm(`Close "${f.title}"? People see its closed message until it is reopened.`) && void setStatus("closed")}>
             Close
           </button>
@@ -280,6 +280,7 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
         <SellSheet
           title="Sell something with this form"
           formId={f.id}
+          workflowId={f.workflow_id}
           defaultLabel={(f.title || "Order now").slice(0, 40)}
           onClose={() => setSelling(false)}
           onDone={(s) => {

@@ -202,6 +202,11 @@ func (s *Server) patchForm(w http.ResponseWriter, r *http.Request) {
 		if cur.Status == "suspended" {
 			return fmt.Errorf("%w: this form was suspended by Taskiem's operators", errConflict)
 		}
+		// A form that sells is the storefront's order form now: its
+		// address leads there, and it is opened and closed there.
+		if cur.SellsAs != nil && req.Status != nil && *req.Status != cur.Status {
+			return fmt.Errorf("%w: this form sells on your page now: turn its order form on or off under Fronts", errConflict)
+		}
 		clear := func(c string) bool { return slices.Contains(req.Clear, c) }
 		if _, err := tx.Exec(r.Context(), `UPDATE form_endpoints SET status = COALESCE($2, status),
 			opens_at = CASE WHEN $7 THEN NULL ELSE COALESCE($3, opens_at) END, closes_at = CASE WHEN $8 THEN NULL ELSE COALESCE($4, closes_at) END,
