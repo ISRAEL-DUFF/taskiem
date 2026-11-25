@@ -109,7 +109,7 @@ void main() {
     expect(find.textContaining('They stopped your messages'), findsOneWidget);
     expect(find.text('Came back'), findsWidgets);
     expect(find.text('30 minutes'), findsOneWidget);
-    await looks(t, 'left_without_ordering');
+    await looks(t, 'left-without-ordering');
     await t.tap(find.bySemanticsLabel(RegExp('^Follow up people who leave')).last);
     await settle(t);
     expect(sent.single, contains('"followup_on":false'));
@@ -120,7 +120,7 @@ void main() {
   testWidgets('follow-ups held, released', (t) async {
     final sent = await open(t, mode: TkMode.dark, held: true);
     expect(find.text('Follow-ups held'), findsOneWidget);
-    await looks(t, 'left_without_ordering_held');
+    await looks(t, 'left-without-ordering-held');
     await t.tap(find.text('Release follow-ups'));
     await settle(t);
     expect(sent.single, contains('"release_hold":true'));

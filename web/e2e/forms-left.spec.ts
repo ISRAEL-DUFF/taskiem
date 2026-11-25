@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type APIResponse, type Page } from "@playwright/test";
 import { axe, describe } from "./a11y";
 
 // Forms that sell L3 (docs/spec/forms-that-sell.md §6, §11): an owner turns
@@ -43,7 +43,7 @@ async function check(page: Page, where: string) {
   expect(found, found.join("\n")).toEqual([]);
 }
 
-async function ok(r: Promise<import("@playwright/test").APIResponse>) {
+async function ok(r: Promise<APIResponse>) {
   const res = await r;
   expect(res.ok(), await res.text()).toBeTruthy();
   return res.json() as Promise<Record<string, unknown>>;
@@ -70,7 +70,8 @@ async function seller(page: Page): Promise<{ slug: string; tenant: string; actio
   await ok(page.request.put("/v1/storefront/actions/order", { headers: H, data: { enabled: false, payment: "after_accept", options: opts } }));
   await publish(page, tenant);
   const fronts = (await ok(page.request.get("/v1/storefront/fronts", { headers: H }))).fronts as { id: string; slug: string }[];
-  const home = fronts.find((f) => f.slug === "")!.id;
+  const home = fronts.find((f) => f.slug === "")?.id ?? "";
+  expect(home).not.toBe("");
   const packs = [
     { qty: 1, price_kobo: 2500000 },
     { qty: 2, price_kobo: 4500000 },
