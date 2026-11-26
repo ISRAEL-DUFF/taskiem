@@ -1664,7 +1664,7 @@ func (s *Server) searchGroups(w http.ResponseWriter, r *http.Request) {
 		}
 		cur := before
 		for round := 0; round < peopleSearchRounds; round++ {
-			sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen" + `,
+			sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen, x.edited_at, x.edits" + `,
 				k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1), x.group_id
 				FROM group_messages x LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
 				WHERE k.hidden_at IS NULL AND x.deleted_at IS NULL AND x.sealed IS NOT NULL
@@ -1742,7 +1742,7 @@ func (s *Server) starredGroups(w http.ResponseWriter, r *http.Request) {
 	out := []groupFound{}
 	more := false
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen" + `,
+		sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen, x.edited_at, x.edits" + `,
 			k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1), x.group_id
 			FROM group_marks k JOIN group_messages x ON x.group_id = k.group_id AND x.id = k.message_id
 			WHERE k.person_id = $1 AND k.starred_at IS NOT NULL AND k.hidden_at IS NULL AND x.deleted_at IS NULL`
