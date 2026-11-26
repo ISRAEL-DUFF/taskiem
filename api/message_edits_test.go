@@ -80,7 +80,14 @@ func TestEditLinkMessage(t *testing.T) {
 	if m["body"] != "Rice is ₦44,000 a bag" || m["edits"] != float64(1) || m["edited_at"] == nil {
 		t.Fatalf("edited: %v", m)
 	}
+	// Who sent it goes with our copy only, for the menu's Edit; never the other business's.
+	if m["sender"] == nil || m["sender"] == "" {
+		t.Errorf("our copy has no sender: %v", m)
+	}
 	theirs := buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any)
+	if b := theirs[len(theirs)-1].(map[string]any); b["sender"] != nil {
+		t.Errorf("the buyer's copy names our member: %v", b)
+	}
 	if b := theirs[len(theirs)-1].(map[string]any); b["id"] != id || b["body"] != "Rice is ₦44,000 a bag" || b["edited_at"] == nil || b["edits"] != float64(1) {
 		t.Fatalf("the buyer's copy: %v", b)
 	}

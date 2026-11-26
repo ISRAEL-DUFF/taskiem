@@ -473,7 +473,7 @@ Each part also adds:
 - **`acted_at` is set only where an order is read from a customer's message.** In business chats Taskiem never acts on a message sent to the other side: a "@Taskiem" is never sent, and its note is not editable (a kind other than text). Menu answers are in the Taskiem chat, not these. `chat_pay_quotes` names messages on WhatsApp, Telegram and Slack, not chat messages, so nothing reads it here.
 - **Mentions:** a business chat's edit may name its `@` businesses (`mentions`); left out, those still named in the words are kept; any `#` tag is refused (422). A group's `mentions` are member ids, as when sending.
 - **A customer chat's replaced link picture** stays in the business's storage until the customer's files go (erasure), as it is sealed with the old preview; business-to-business ones are removed.
-- **Edit is offered on any of our business's messages** on the web and in the app, as clients do not know which member sent one; the server refuses another member's (`not_yours`).
+- **Edit is offered to a message's own sender only.** Business and customer chats' messages carry `sender` (who of the business sent it) on the sending business's copy only, never the other business's; the web and the app compare it with the signed-in person and keep Edit off a colleague's or a workflow's message (the server refuses those too, `not_yours`).
 - **Only the app's business chats have an outbox** (K5). Elsewhere in the app, as on the web, an edit is made online: the bubble shows it at once and goes back, with a toast, when refused.
 - **The earlier wordings' route has no screen yet**; the audit log shows `link.message.edit` with the history's id.
 - **No testing manual was found in the repository** (as for §1 and §2); its checks are not added.

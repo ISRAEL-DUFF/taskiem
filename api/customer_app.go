@@ -374,7 +374,7 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 		return customerMessageView{}, false, errCustomerErased
 	}
 	person := *chat.person
-	out := customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: in.Text, SenderName: in.SenderName, Delivery: "delivered",
+	out := customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: in.Text, SenderName: in.SenderName, Sender: in.SenderID, Delivery: "delivered",
 		Card: in.Card, Offer: in.Offer}
 	if in.Card != nil {
 		out.Kind = "card"

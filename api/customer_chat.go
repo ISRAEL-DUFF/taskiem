@@ -420,6 +420,9 @@ type customerMessageView struct {
 	Kind       string    `json:"kind"`
 	Body       string    `json:"body"`
 	SenderName string    `json:"sender_name,omitempty"`
+	// Sender is who of the business sent a reply (a member's user id), so
+	// the menu offers Edit to its sender alone.
+	Sender string `json:"sender,omitempty"`
 	SentAs     string    `json:"sent_as,omitempty"`
 	// A reply's way to the customer: sending, sent, delivered, read or
 	// failed (with WhatsApp's reason).
@@ -716,7 +719,8 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		lines := t.lineOfRow()
-		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer, conversation_id, preview, edited_at, edits FROM customer_messages
+		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer, conversation_id, preview, edited_at, edits,
+			CASE WHEN mine THEN COALESCE(sender_id, '') ELSE '' END FROM customer_messages
 			WHERE tenant_id = $1 AND conversation_id = ANY ($2)`
 		args := []any{p.TenantID, t.ids()}
 		if b, err := uuid.Parse(r.URL.Query().Get("before")); err == nil {
@@ -737,7 +741,7 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 			var x rawMsg
 			var conv uuid.UUID
 			err := r.Scan(&x.v.ID, &x.v.Mine, &x.v.Kind, &x.body, &x.v.SenderName, &x.v.SentAs, &x.v.Delivery, &x.v.Failure, &x.v.ReadAt, &x.v.CreatedAt,
-				&x.v.Card, &x.att, &x.v.Offer, &conv, &x.pv, &x.v.EditedAt, &x.v.Edits)
+				&x.v.Card, &x.att, &x.v.Offer, &conv, &x.pv, &x.v.EditedAt, &x.v.Edits, &x.v.Sender)
 			x.v.Line = lines[conv]
 			return x, err
 		})
@@ -1056,9 +1060,10 @@ func (s *Server) customerRepeat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	var m customerMessageView
 	var body, att, pv []byte
 	err := tx.QueryRow(ctx, `SELECT m.id, m.mine, m.kind, m.body, m.sender_name, COALESCE(m.sent_as, ''), COALESCE(m.delivery, ''), COALESCE(m.failure, ''), m.read_at, m.created_at,
-		m.card, m.attachment, m.offer, c.line, m.preview, m.edited_at, m.edits FROM customer_messages m JOIN customer_conversations c ON c.tenant_id = m.tenant_id AND c.id = m.conversation_id
+		m.card, m.attachment, m.offer, c.line, m.preview, m.edited_at, m.edits,
+		CASE WHEN m.mine THEN COALESCE(m.sender_id, '') ELSE '' END FROM customer_messages m JOIN customer_conversations c ON c.tenant_id = m.tenant_id AND c.id = m.conversation_id
 		WHERE m.tenant_id = $1 AND m.conversation_id = ANY ($2) AND m.client_id = $3 ORDER BY m.created_at LIMIT 1`, tenant, chats, clientID).
-		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &att, &m.Offer, &m.Line, &pv, &m.EditedAt, &m.Edits)
+		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &att, &m.Offer, &m.Line, &pv, &m.EditedAt, &m.Edits, &m.Sender)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -1176,7 +1181,7 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 	// Written before it goes: the thread moves to the business's number
 	// now if it changed, and a second send of the same client_id finds
 	// this one rather than going again.
-	out := customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, SenderName: in.SenderName, SentAs: sentAs, Delivery: "sending", Line: lineWhatsApp}
+	out := customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, SenderName: in.SenderName, Sender: in.SenderID, SentAs: sentAs, Delivery: "sending", Line: lineWhatsApp}
 	err = db.InTenantTx(context.WithoutCancel(ctx), s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		// The same client_id sent at the same moment on the other line:
 		// the first kept answers.

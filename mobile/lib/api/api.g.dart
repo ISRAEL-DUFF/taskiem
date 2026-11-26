@@ -3808,7 +3808,7 @@ class LinkConversation {
 }
 
 class LinkMessage {
-  const LinkMessage({this.asked, this.attachment, this.batch, this.body, this.card, required this.createdAt, this.editedAt, this.edits, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.payment, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
+  const LinkMessage({this.asked, this.attachment, this.batch, this.body, this.card, required this.createdAt, this.editedAt, this.edits, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.payment, this.preview, this.reactions, this.readAt, this.reply, this.sender, this.senderName, this.starred});
 
   /// On a taskiem note, the words asked of Taskiem
   final String? asked;
@@ -3844,6 +3844,9 @@ class LinkMessage {
   /// On theirs, when we read it; on ours, when they did
   final DateTime? readAt;
   final LinkMessageReply? reply;
+  /// Who of this business sent it (a member's user id, or a workflow or key),
+  /// on this side's own messages only; Edit is offered to that member alone
+  final String? sender;
   /// The first name of the member who wrote it
   final String? senderName;
   /// You starred it
@@ -3869,6 +3872,7 @@ class LinkMessage {
         reactions: j['reactions'] == null ? null : (j['reactions'] as List).map((e) => LinkReaction.fromJson(e as Map<String, dynamic>)).toList(),
         readAt: j['read_at'] == null ? null : DateTime.parse(j['read_at'] as String),
         reply: j['reply'] == null ? null : LinkMessageReply.fromJson(j['reply'] as Map<String, dynamic>),
+        sender: j['sender'] == null ? null : j['sender'] as String,
         senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
         starred: j['starred'] == null ? null : j['starred'] as bool,
       );
@@ -3893,6 +3897,7 @@ class LinkMessage {
         'reactions': ?reactions?.map((e) => e.toJson()).toList(),
         'read_at': ?readAt?.toUtc().toIso8601String(),
         'reply': ?reply?.toJson(),
+        'sender': ?sender,
         'sender_name': ?senderName,
         'starred': ?starred,
       };
@@ -5898,7 +5903,7 @@ class CustomerCard {
 }
 
 class CustomerMessage {
-  const CustomerMessage({this.attachment, required this.body, this.card, required this.createdAt, this.delivery, this.editedAt, this.edits, this.failure, required this.id, required this.kind, this.line, required this.mine, this.offer, this.preview, this.readAt, this.senderName, this.sentAs});
+  const CustomerMessage({this.attachment, required this.body, this.card, required this.createdAt, this.delivery, this.editedAt, this.edits, this.failure, required this.id, required this.kind, this.line, required this.mine, this.offer, this.preview, this.readAt, this.sender, this.senderName, this.sentAs});
 
   final ChatAttachment? attachment;
   final String body;
@@ -5924,6 +5929,9 @@ class CustomerMessage {
   final bool? offer;
   final LinkPreview? preview;
   final Object? readAt;
+  /// Who of the business sent a reply (a member's user id); Edit is offered to
+  /// that member alone
+  final String? sender;
   final String? senderName;
   final String? sentAs;
 
@@ -5943,6 +5951,7 @@ class CustomerMessage {
         offer: j['offer'] == null ? null : j['offer'] as bool,
         preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
         readAt: j['read_at'],
+        sender: j['sender'] == null ? null : j['sender'] as String,
         senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
         sentAs: j['sent_as'] == null ? null : j['sent_as'] as String,
       );
@@ -5963,6 +5972,7 @@ class CustomerMessage {
         'offer': ?offer,
         'preview': ?preview?.toJson(),
         'read_at': ?readAt,
+        'sender': ?sender,
         'sender_name': ?senderName,
         'sent_as': ?sentAs,
       };

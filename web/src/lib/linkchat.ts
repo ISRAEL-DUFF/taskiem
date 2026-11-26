@@ -120,6 +120,8 @@ export interface LinkMessage {
   /** On a taskiem note, the words asked of Taskiem. */
   asked?: string;
   sender_name?: string;
+  /** Who of this business sent it (our own messages only): Edit is theirs alone. */
+  sender?: string;
   card?: DocCard;
   attachment?: Attachment;
   forwarded?: boolean;

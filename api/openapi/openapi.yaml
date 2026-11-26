@@ -57026,6 +57026,9 @@ components:
           type: string
         sender_name:
           type: string
+        sender:
+          type: string
+          description: Who of the business sent a reply (a member's user id); Edit is offered to that member alone
         card:
           $ref: '#/components/schemas/CustomerCard'
         preview:
@@ -57335,6 +57338,9 @@ components:
         sender_name:
           type: string
           description: The first name of the member who wrote it
+        sender:
+          type: string
+          description: Who of this business sent it (a member's user id, or a workflow or key), on this side's own messages only; Edit is offered to that member alone
         card:
           $ref: '#/components/schemas/LinkDocCard'
         attachment:

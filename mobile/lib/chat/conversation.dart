@@ -1430,6 +1430,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
               kind: m.kind,
               createdAt: m.createdAt,
               now: _d.chats.now(),
+              sender: m.sender,
+              me: _d.chats.auth.me?.user?.id,
               forwarded: m.forwarded == true,
               money: m.payment != null || m.batch != null,
               tags: [for (final t in m.mentions ?? const <LinkMention>[]) t.kind],

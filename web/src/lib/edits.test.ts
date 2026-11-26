@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../api";
-import { canEdit, editBlock, editRefusal, editTarget, lastEditable, refusedForTime } from "./edits";
+import { canEdit, editBlock, editRefusal, editTarget, lastEditable, refusedForTime, setEditor } from "./edits";
 
 // The rules the menu shows Edit by (chat-previews-and-editing.md §3.1).
 const now = Date.parse("2026-11-26T12:00:00Z");
@@ -36,6 +36,20 @@ describe("Edit in the menu", () => {
     expect(editBlock(msg({ deleted: true }), now)).toBe("deleted");
     expect(editBlock(msg({ line: "whatsapp" }), now)).toBe("elsewhere");
     expect(editBlock(msg({ local: "sending" }), now)).toBe("not_yours");
+  });
+
+  it("is offered on our business's messages to their sender only, not a colleague", () => {
+    setEditor("u-ada");
+    try {
+      expect(canEdit(msg({ sender: "u-ada" }), now)).toBe(true);
+      expect(editBlock(msg({ sender: "u-bola" }), now)).toBe("not_yours");
+      expect(editBlock(msg({ sender: "workflow:r1" }), now)).toBe("not_yours");
+      // The up arrow skips a colleague's last message for the person's own.
+      const list = [msg({ id: "a", sender: "u-ada" }), msg({ id: "b", sender: "u-bola" })];
+      expect(lastEditable(list, now)?.id).toBe("a");
+    } finally {
+      setEditor("");
+    }
   });
 
   it("edits a file's caption, which may be emptied", () => {

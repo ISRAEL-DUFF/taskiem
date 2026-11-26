@@ -27,10 +27,13 @@ String? editBlock({
   String? fileKind,
   String? line,
   bool local = false,
+  String? sender,
+  String? me,
 }) {
   if (deleted) return 'deleted';
   if (card || (kind != 'text' && kind != 'media')) return 'card';
-  if (!mine || local) return 'not_yours';
+  // In a business's chats Edit is its sender's alone, not a colleague's.
+  if (!mine || local || (sender != null && sender.isNotEmpty && me != null && me.isNotEmpty && sender != me)) return 'not_yours';
   if (money || tags.any(_moneyTags.contains)) return 'money';
   if (tags.contains('saved')) return 'card';
   if (fileKind == 'voice') return 'voice';

@@ -1078,8 +1078,9 @@ func (s *Server) customerMessageByID(ctx context.Context, tx pgx.Tx, tenant, id 
 	var m customerMessageView
 	var body, att, pv []byte
 	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at,
-		card, attachment, offer, preview, edited_at, edits FROM customer_messages WHERE tenant_id = $1 AND id = $2`, tenant, id).
-		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &att, &m.Offer, &pv, &m.EditedAt, &m.Edits)
+		card, attachment, offer, preview, edited_at, edits,
+		CASE WHEN mine THEN COALESCE(sender_id, '') ELSE '' END FROM customer_messages WHERE tenant_id = $1 AND id = $2`, tenant, id).
+		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &att, &m.Offer, &pv, &m.EditedAt, &m.Edits, &m.Sender)
 	if err != nil {
 		return m, err
 	}

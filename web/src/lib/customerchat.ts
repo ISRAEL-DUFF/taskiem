@@ -62,6 +62,8 @@ export interface CustomerMessage {
   /** A photo being sent: this device's own copy. */
   localPreview?: string;
   sender_name?: string;
+  /** Who of the business sent a reply: Edit is theirs alone. */
+  sender?: string;
   sent_as?: "text" | "template";
   /** A reply's way to the customer, as WhatsApp reports it. */
   delivery?: "sending" | "sent" | "delivered" | "read" | "failed";

@@ -133,6 +133,15 @@ void main() {
     expect(block(line: 'whatsapp'), 'elsewhere');
   });
 
+  test('in a business chat, Edit is its sender\'s alone, not a colleague\'s', () {
+    final now = DateTime.utc(2026, 11, 26, 12);
+    String? block(String? sender) => editBlock(mine: true, kind: 'text', createdAt: now.subtract(const Duration(minutes: 5)), now: now, sender: sender, me: 'u-ada');
+    expect(block('u-ada'), isNull);
+    expect(block(null), isNull, reason: 'a chat without senders (a person\'s own) keeps mine');
+    expect(block('u-bola'), 'not_yours');
+    expect(block('workflow:r1'), 'not_yours');
+  });
+
   testWidgets('Edit is in the menu only where it is allowed', (t) async {
     await open(t);
     await hold(t, 'Rice is 45,000 a bag');

@@ -766,7 +766,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
     final auth = widget.data.chats.auth;
     final items = saveAsItems(context, auth, words: words, filePath: file ? '/v1/customer-chats/${widget.data.id}/files/${m.id}' : '', fileName: a?.name ?? 'File', fileType: a?.type ?? '', business: true, from: _from(m));
     if (!x.local &&
-        editBlock(mine: m.mine, kind: m.kind, createdAt: m.createdAt, now: DateTime.now(), card: m.card != null, fileKind: a?.kind) == null &&
+        editBlock(mine: m.mine, kind: m.kind, createdAt: m.createdAt, now: DateTime.now(), card: m.card != null, fileKind: a?.kind, sender: m.sender, me: auth.me?.user?.id) == null &&
         m.offer != true) {
       items.insert(items.isEmpty ? 0 : 1, MenuItem('pencil', 'Edit', () {
         setState(() => _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: a != null));

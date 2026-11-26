@@ -233,6 +233,10 @@ type Message struct {
 	// Asked is what was asked of Taskiem, on a note of kind taskiem.
 	Asked      string      `json:"asked,omitempty"`
 	SenderName string      `json:"sender_name,omitempty"`
+	// Sender is who of this business sent it (a member's user id, or a
+	// workflow or key), on this side's own messages only: the menu offers
+	// Edit to its sender alone, as the server allows.
+	Sender string `json:"sender,omitempty"`
 	Card       *DocCard    `json:"card,omitempty"`
 	Attachment *Attachment `json:"attachment,omitempty"`
 	Forwarded  bool        `json:"forwarded,omitempty"`
@@ -275,7 +279,8 @@ type Conversation struct {
 }
 
 const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, COALESCE(m.asked, ''), m.sender_name, m.card, m.attachment, m.forwarded, m.preview, m.mentions, m.read_at, m.created_at,
-	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment, m.payment_id, m.batch_id, m.edited_at, m.edits`
+	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment, m.payment_id, m.batch_id, m.edited_at, m.edits,
+	CASE WHEN m.mine THEN COALESCE(m.sender_id, '') ELSE '' END`
 
 const messageFrom = ` FROM link_messages m LEFT JOIN link_messages q ON q.tenant_id = m.tenant_id AND q.pair_id = m.reply_to`
 
@@ -286,7 +291,7 @@ func scanMessage(r pgx.Row) (Message, error) {
 	var qMine *bool
 	var qKind, qBody *string
 	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.Asked, &m.SenderName, &card, &att, &m.Forwarded, &prev, &ments, &m.ReadAt, &m.CreatedAt,
-		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt, &m.Payment, &m.Batch, &m.EditedAt, &m.Edits); err != nil {
+		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt, &m.Payment, &m.Batch, &m.EditedAt, &m.Edits, &m.Sender); err != nil {
 		return m, err
 	}
 	if card != nil {

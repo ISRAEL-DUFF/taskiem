@@ -39,17 +39,28 @@ export type Editable = {
   mentions?: unknown[];
   offer?: boolean;
   line?: string;
+  /** Who of the business sent it (business and customer chats): only they may edit it. */
+  sender?: string;
   /** Still waiting to send (the outbox): changed there, not here. */
   local?: unknown;
 };
 
 const MONEY_TAGS = new Set(["item", "service", "invoice", "bill", "order", "purchase"]);
 
+/** The signed-in person's user id, set when /v1/me loads (auth.tsx). */
+let editor = "";
+export function setEditor(id: string) {
+  editor = id;
+}
+
+/** Whether m was sent by someone else of this business. */
+const someoneElses = (m: Editable) => !!m.sender && !!editor && m.sender !== editor;
+
 /** Why the person may not edit m now, or undefined when they may. */
 export function editBlock(m: Editable, now = Date.now()): EditReason | undefined {
   if (m.deleted) return "deleted";
   if (m.card || m.offer || (m.kind !== "text" && m.kind !== "media")) return "card";
-  if (!m.mine || m.local) return "not_yours";
+  if (!m.mine || m.local || someoneElses(m)) return "not_yours";
   if (m.payment || m.batch) return "money";
   for (const t of m.mentions ?? []) {
     const k = (t as { kind?: unknown } | null)?.kind;
@@ -80,7 +91,7 @@ export function lastEditable(
   list: readonly Editable[] | undefined,
   now = Date.now(),
 ): EditTarget | undefined {
-  const mine = (list ?? []).filter((m) => m.mine && !m.local);
+  const mine = (list ?? []).filter((m) => m.mine && !m.local && !someoneElses(m));
   const m = mine[mine.length - 1];
   return m && canEdit(m, now) ? editTarget(m) : undefined;
 }
