@@ -42,7 +42,8 @@ import { useThread } from "../lib/useThread";
 import { EmptyState, ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
 import { CustomerInvoiceCard } from "./PayByTransfer";
-import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
+import { BubbleShell, CopyItem, EditedMark, EditItem, PopItem, Ticks } from "./BubbleShell";
+import { canEdit, editTarget, lastEditable, saveEdit } from "../lib/edits";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
 import { LinkCard, LinkedWords, type PreviewChoice } from "./ChatLinks";
@@ -602,6 +603,10 @@ export function PersonChatPage() {
       }
     })();
   const composer = useComposer<never>({
+    // Editing a sent message (chat-previews-and-editing.md §3.2).
+    onEdit: (t, text) =>
+      void saveEdit({ url: `${base}/messages/${t.id}`, t, text, set: setMessages, keepWords: (w) => composer.keepWords(w) }),
+    lastEditable: () => lastEditable(messages),
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
     // Saved things (saved objects S1): a text's words into the box; the
@@ -793,6 +798,7 @@ export function PersonChatPage() {
                   actions: (
                     <>
                       {words && <CopyItem text={words} />}
+                      {canEdit(m) && <EditItem onClick={() => (close(), composer.startEdit(editTarget(m)))} />}
                       {words && <SaveAsItem text={words} onSave={saveAs.fromWords} close={close} label={file ? "Save the words as…" : "Save as…"} />}
                       {file && (
                         <PopItem icon="note" disabled={saveAs.fileBusy} onClick={() => (close(), saveAs.fromFile(personFileURL(id, m.id), file.name ?? "File", file.type))}>
@@ -806,6 +812,7 @@ export function PersonChatPage() {
               })()}
               after={
                 <span className={inline ? "stamp inline" : "stamp"}>
+                  <EditedMark at={m.edited_at} />
                   <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
                     {clock(m.created_at)}
                   </time>
@@ -863,7 +870,7 @@ export function PersonChatPage() {
               {caption && (
                 <span className="text">
                   <LinkedWords text={caption} />
-                  {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
+                  {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}${m.edited_at ? " edited" : ""}`} aria-hidden="true" />}
                 </span>
               )}
               {warn && (

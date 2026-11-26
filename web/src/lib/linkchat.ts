@@ -128,6 +128,10 @@ export interface LinkMessage {
   reply?: Quote;
   read_at?: string;
   created_at: string;
+  /** When its sender last changed its words ("Edited"), and how many times
+   * (chat-previews-and-editing.md §3). */
+  edited_at?: string | null;
+  edits?: number;
   /** The people's emoji on it, from both businesses (see Reaction). */
   reactions?: Reaction[];
   /** You starred it (a star is yours alone). */

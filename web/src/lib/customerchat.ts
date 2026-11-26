@@ -69,6 +69,10 @@ export interface CustomerMessage {
   failure?: string;
   read_at: string | null;
   created_at: string;
+  /** When its sender last changed its words ("Edited"), and how many times
+   * (chat-previews-and-editing.md §3). */
+  edited_at?: string | null;
+  edits?: number;
   /** Shown before the server answers. */
   local?: boolean;
   /** Where it went: on WhatsApp or in the app (§11). */

@@ -93,6 +93,10 @@ export interface GroupMessage {
   warn_transfer?: boolean;
   warn?: boolean;
   created_at: string;
+  /** When its sender last changed its words ("Edited"), and how many times
+   * (chat-previews-and-editing.md §3). */
+  edited_at?: string | null;
+  edits?: number;
   /** Ours, still on its way (not from the server). */
   local?: boolean;
   localPreview?: string;

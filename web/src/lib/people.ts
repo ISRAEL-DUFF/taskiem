@@ -245,6 +245,10 @@ export interface PeopleMessage {
   warn?: boolean;
   read_at: string | null;
   created_at: string;
+  /** When its sender last changed its words ("Edited"), and how many times
+   * (chat-previews-and-editing.md §3). */
+  edited_at?: string | null;
+  edits?: number;
   /** Ours, still on its way (not from the server). */
   local?: boolean;
   /** A photo on its way: this device's own copy, to show meanwhile. */

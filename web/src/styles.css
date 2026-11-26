@@ -1967,6 +1967,12 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .bubble .stamp.inline { position: absolute; right: 9px; bottom: 5px; margin: 0; }
 .bubble .stamp-gap { display: inline-block; width: 52px; height: 1px; }
 .bubble .stamp-gap.mine { width: 74px; }
+.bubble .stamp-gap.edited { width: 96px; }
+.bubble .stamp-gap.mine.edited { width: 118px; }
+.bubble .stamp .edited { font-style: italic; }
+.composer-editing { align-items: flex-start; }
+.composer-editing .quote strong { display: block; color: var(--accent); font-weight: 600; }
+.composer-editing .was { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bubble-chevron { position: absolute; top: 2px; right: 3px; width: 26px; height: 26px; min-height: 26px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--chat-in) 85%, transparent); color: var(--muted); z-index: 1; opacity: 0; cursor: pointer; }
 .bubble.mine .bubble-chevron { background: color-mix(in srgb, var(--chat-out) 85%, transparent); color: var(--chat-out-meta); }
 .bubble-chevron svg { width: 18px; height: 18px; }

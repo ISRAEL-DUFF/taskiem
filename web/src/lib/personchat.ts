@@ -119,6 +119,10 @@ export interface PersonMessage {
   warn_transfer?: boolean;
   read_at: string | null;
   created_at: string;
+  /** When its sender last changed its words ("Edited"), and how many times
+   * (chat-previews-and-editing.md §3). */
+  edited_at?: string | null;
+  edits?: number;
   /** Shown before the server answers. */
   local?: boolean;
   /** Could not be sent: why. */

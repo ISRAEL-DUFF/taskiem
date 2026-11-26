@@ -92,7 +92,9 @@ import { LinkCard as LinkPreviewCard } from "./ChatLinks";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
 import { ChatSearchPanel } from "./ChatSearch";
-import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
+import { BubbleShell, CopyItem, EditedMark, EditItem, PopItem, Ticks } from "./BubbleShell";
+import { canEdit, editTarget, lastEditable, saveEdit } from "../lib/edits";
+import type { EditTarget } from "./ChatComposer";
 import { ReadMore, useFold } from "./ReadMore";
 import { useChatLive } from "./ChatLive";
 import {
@@ -644,6 +646,7 @@ function Bubble({
   onSaveAs,
   onSavePhoto,
   onHide,
+  onEdit,
   onJump,
   flash = false,
   first = true,
@@ -675,6 +678,8 @@ function Bubble({
    * given where the conversation fetches it. */
   onSavePhoto?: (url: string) => void;
   onHide?: (m: LinkMessage) => void;
+  /** Edits one of ours (its words into the box). */
+  onEdit?: (m: LinkMessage) => void;
   /** Goes to the message a quote quotes. */
   onJump?: (id: string) => void;
   /** Shown for a moment after a jump lands on it. */
@@ -785,6 +790,7 @@ function Bubble({
                     </PopItem>
                   )}
                   {!card && m.body && <CopyItem text={m.body} />}
+                  {onEdit && canEdit(m) && <EditItem onClick={() => (close(), onEdit(m))} />}
                   {!card && m.body && onSaveAs && <SaveAsItem text={m.body} onSave={onSaveAs} close={close} />}
                   {photo && onSavePhoto && (
                     <PhotoAccountItems
@@ -861,6 +867,7 @@ function Bubble({
                 <Icon name="star" />
               </span>
             )}
+            <EditedMark at={m.edited_at} />
             <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
               {clock(m.created_at)}
             </time>
@@ -1002,7 +1009,7 @@ function Bubble({
               {fold.folded && <ReadMore onClick={fold.more} />}
               {inline && (
                 <span
-                  className={`stamp-gap${m.mine ? " mine" : ""}`}
+                  className={`stamp-gap${m.mine ? " mine" : ""}${m.edited_at ? " edited" : ""}`}
                   aria-hidden="true"
                 />
               )}
@@ -1204,6 +1211,7 @@ export function ConversationPane({
   const { can } = useAuth();
   const write = can("chat.trade") && conv.state === "active";
   const [messages, setMessages] = useState<LinkMessage[]>();
+  const editRef = useRef<(t: EditTarget, text: string) => void>(undefined);
   // Stars being saved: a copy of a message read before the star was saved
   // (the live stream's look after a read mark, a refresh on its way) must
   // not take the star back off. Held until the server's copy agrees, and
@@ -1399,6 +1407,8 @@ export function ConversationPane({
   // the rest named as tags, each shared as a card with the message.
   const savedTexts = useSavedPicks("share");
   const c = useComposer<LinkMessage>({
+    onEdit: (t, text) => editRef.current?.(t, text),
+    lastEditable: () => (write ? lastEditable(messages) : undefined),
     draftKey: conv.link,
     rules: BUSINESS_FILES,
     enabled: write,
@@ -1480,6 +1490,17 @@ export function ConversationPane({
   const searchButton = useRef<HTMLButtonElement>(null);
   const act = useAction();
   const path = `/v1/link-chats/${conv.link}`;
+  // An edit saved (chat-previews-and-editing.md §3.2).
+  editRef.current = (t, text) =>
+    void saveEdit({
+      url: `${path}/messages/${t.id}`,
+      t,
+      text,
+      set: setMessages,
+      unwrap: (r) => (r as { message: LinkMessage }).message,
+      keepWords: c.keepWords,
+      reload: () => onChanged(),
+    });
   // The thread's scrolling, as WhatsApp Web's: older messages load as the
   // reader nears the top; the view follows new messages only while the
   // reader is at the bottom; "N unread messages" marks where they begin;
@@ -2081,6 +2102,7 @@ export function ConversationPane({
                   : undefined
               }
               onHide={can("chat.trade") ? hide : undefined}
+              onEdit={write && !m.local ? (x) => c.startEdit(editTarget(x)) : undefined}
               onReact={write && !m.local ? react : undefined}
               onStar={m.local ? undefined : star}
               onInfo={m.local ? undefined : setInfo}

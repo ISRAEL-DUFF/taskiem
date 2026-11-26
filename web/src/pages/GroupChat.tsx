@@ -45,7 +45,8 @@ import { AT_FIND_WORDS, atFindState, FIND_PAGES, TypingGate, typingWords, type A
 import { useThread } from "../lib/useThread";
 import { ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView } from "./AppCards";
-import { BubbleShell, CopyItem, PopItem } from "./BubbleShell";
+import { BubbleShell, CopyItem, EditedMark, EditItem, PopItem } from "./BubbleShell";
+import { canEdit, editTarget, lastEditable, saveEdit } from "../lib/edits";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
 import { LinkCard, LinkedWords, type PreviewChoice } from "./ChatLinks";
@@ -364,6 +365,10 @@ export function GroupChatPage() {
       }
     })();
   const composer = useComposer<GroupMessage>({
+    // Editing a sent message (chat-previews-and-editing.md §3.2).
+    onEdit: (t, text) =>
+      void saveEdit({ url: `${base}/messages/${t.id}`, t, text, set: setMessages, keepWords: (w) => composer.keepWords(w) }),
+    lastEditable: () => (g?.left ? undefined : lastEditable(messages)),
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
     sources: {
@@ -573,6 +578,7 @@ export function GroupChatPage() {
                 onStar={() => void star(m)}
                 onPaid={(paid) => void markPaid(m, paid)}
                 onSheet={(k) => setSheet({ k, m })}
+                onEdit={!g?.left && canEdit(m) ? () => composer.startEdit(editTarget(m)) : undefined}
                 fileURL={groupFileURL(id, m.id)}
                 previewURL={`/v1/me/groups/${encodeURIComponent(id)}/previews/${encodeURIComponent(m.id)}`}
               />
@@ -658,6 +664,7 @@ function GroupBubble({
   onStar,
   onPaid,
   onSheet,
+  onEdit,
   fileURL,
   previewURL,
   onSaveAs,
@@ -681,6 +688,8 @@ function GroupBubble({
   onStar: () => void;
   onPaid: (paid: boolean) => void;
   onSheet: (k: "forward" | "card" | "delete" | "info" | "reactions") => void;
+  /** Edits it (one of ours, while it may be). */
+  onEdit?: () => void;
   fileURL: string;
   /** Its link card's picture, the group's own copy. */
   previewURL: string;
@@ -737,6 +746,7 @@ function GroupBubble({
                     </PopItem>
                   )}
                   {!card && m.body && <CopyItem text={m.body} />}
+                  {onEdit && <EditItem onClick={() => (close(), onEdit())} />}
                   {!card && m.body && <SaveAsItem text={m.body} onSave={onSaveAs} close={close} />}
                   {m.attachment?.kind === "photo" && <PhotoAccountItems url={fileURL} message={m.id} close={close} saveAccount={onSavePhoto} />}
                   {card?.type !== "split" && card?.type !== "basket" && (
@@ -769,6 +779,7 @@ function GroupBubble({
                 <Icon name="star" />
               </span>
             )}
+            <EditedMark at={m.edited_at} />
             <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
               {clock(m.created_at)}
             </time>
@@ -831,7 +842,7 @@ function GroupBubble({
               </span>
             ),
           )}
-          {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
+          {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}${m.edited_at ? " edited" : ""}`} aria-hidden="true" />}
         </span>
       )}
       {warnTransfer && (
