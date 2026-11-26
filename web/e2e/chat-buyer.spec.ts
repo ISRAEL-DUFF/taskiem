@@ -368,7 +368,7 @@ test("a buyer that keeps no stock yet is told first, and starts keeping it from 
   expect(await buyer.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("without leave to send orders, their shop is to look around, and the card's Order is the prices page", async ({ browser }) => {
+test("without leave to send orders, their shop is to look around", async ({ browser }) => {
   test.setTimeout(120_000);
   const { buyer, link, name } = await linked(browser, { width: 390, height: 844 });
   await trade(buyer, link, name);
@@ -381,32 +381,39 @@ test("without leave to send orders, their shop is to look around, and the card's
   await buyer.goto(`/chat?with=${link}`);
   const pane = buyer.getByTestId("chat-pane");
   await expect(pane.getByRole("button", { name: "Open tools" })).toBeVisible();
-  await expect(pane.getByTestId("chat-order")).toHaveCount(0);
+  // They sell to us: their shop is in the head, to look around.
+  await expect(pane.getByTestId("chat-order")).toBeVisible();
   await pane.getByRole("button", { name: "Open tools" }).click();
   const panel = buyer.getByRole("region", { name: "Tools" });
   await expect(panel.getByRole("button", { name: /^Your orders/ })).toBeVisible();
-  // Their shop, to look around (business-chat-tools.md §3): no bag, no
-  // steppers, nothing to send; no offer to make.
+  // Their shop, to look around (business-chat-tools.md §3): no bag, no +,
+  // nothing to send; no offer to make.
   await expect(panel.getByRole("button", { name: /^Make an offer/ })).toHaveCount(0);
   await panel.getByRole("button", { name: /^Their shop From/ }).click();
-  const shop = buyer.getByTestId("order-sheet");
-  await expect(shop.getByRole("heading", { name: `${name}'s shop` })).toBeVisible();
-  await expect(shop.getByTestId("order-row").first()).toBeVisible();
-  await expect(shop.getByRole("button", { name: /^One more/ })).toHaveCount(0);
-  await expect(shop.getByTestId("order-bag")).toHaveCount(0);
+  const shop = buyer.getByTestId("shop");
+  await expect(shop).toContainText(`You can look around. Placing orders with ${name} is for those on your team who may.`);
+  await expect(shop.getByTestId("shop-item-p1")).toBeVisible();
+  await expect(shop.getByRole("button", { name: /^Add .* to the bag/ })).toHaveCount(0);
+  await expect(shop.getByTestId("shop-bag-button")).toHaveCount(0);
   await axeBoth(buyer, "their shop, to look around");
+  // Its List: the Order sheet, to look around.
+  await shop.getByRole("button", { name: "List view: their prices as a list" }).click();
+  const list = buyer.getByTestId("order-sheet");
+  await expect(list.getByRole("heading", { name: `${name}'s shop` })).toBeVisible();
+  await expect(list.getByRole("button", { name: /^One more/ })).toHaveCount(0);
+  await expect(list.getByTestId("order-bag")).toHaveCount(0);
 });
 
-/** Order with a supplier: the head's Order on a computer, the Order tool on
- * a phone (the boards draw no Order in a phone's head). */
+/** Order with a supplier, from the plain list: their shop (the head's Their
+ * shop on a computer, the tools' Their shop on a phone), then its List. */
 async function openOrder(page: Page) {
   const pane = page.getByTestId("chat-pane");
   if ((page.viewportSize()?.width ?? 1440) >= 861) {
     await expect(pane.getByTestId("chat-order")).toBeVisible();
     await pane.getByTestId("chat-order").click();
-    return;
+  } else {
+    await pane.getByRole("button", { name: "Open tools" }).click();
+    await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Their shop/ }).first().click();
   }
-  await expect(pane.getByTestId("chat-order")).toBeHidden();
-  await pane.getByRole("button", { name: "Open tools" }).click();
-  await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Their shop/ }).first().click();
+  await page.getByTestId("shop").getByRole("button", { name: "List view: their prices as a list" }).click();
 }

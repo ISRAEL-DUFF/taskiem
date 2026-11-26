@@ -496,6 +496,56 @@ agreed (the shop, an item, the bag, light and dark).
   account: drawn, not built, as the server sends one photo and keeps none
   of these yet.
 
+### The business shop
+
+Settled with the founder, 26 November 2026: a business that buys from a
+linked supplier window shops them as a person shops a storefront, from the
+business conversation, in the same screens (the app's `lib/chat/shop.dart`
+with `lib/chat/business_shop.dart`; the web's `pages/Shop.tsx` ShopFrame
+with `pages/BusinessShop.tsx`). What differs from the person's shop:
+
+- **The ways in.** Their shop (the store icon) in the conversation's head,
+  wherever they sell to us (their price list for the link, else their
+  storefront, has items); the tools' Their shop; a product card's Order
+  (their shop at that item). Your orders' New order, an alert's Reorder,
+  "@" and a reorder keep the plain list (the Order sheet).
+- **Their prices.** The supplier's prices for this link: the price list
+  they give it, else their storefront's ("Your prices", "Their storefront
+  prices" under the name), the same source as the Order sheet. A business
+  sees only the list its supplier gives that link (GET
+  `/v1/supplier-prices?link=`); photos are read through the link.
+- **Quantities.** + from nothing goes to their minimum (− under it takes
+  it off). An item shows its price a unit ("₦45,000 a bag") and its
+  **quantity prices** as rows ("2 to 9 bags · ₦45,000 each", "10 to 49
+  bags · ₦40,000 each"), the one the bag reaches marked Your price, and
+  "At least 2 bags an order". A product sold in sizes is ordered in the
+  Order sheet's sizes grid on its page (a box each, how many), its sizes
+  counted together for the minimum and the quantity prices ("50 pairs
+  across sizes get the 50-pair price"); its foot is View bag.
+- **The bag.** Each line at the price its quantity reaches ("quantity
+  price"); a product's sizes under its minimum are said, and stop it.
+  **Review order** opens the Order sheet's own review: which supplier they
+  are, how each line is treated (what a business buys §6), a note, Make an
+  offer, Place order or Ask for a quote. Placed, it is a purchase order at
+  their prices (its card in the conversation, as from the Order sheet), the
+  bag empties and the shop closes back to the conversation. Not a
+  storefront order.
+- **List.** The head's list button opens the Order sheet (the plain list,
+  for a fast reorder) on the same bag: what it changes is the shop's bag.
+- **Who may order.** Only those who may place purchase orders (the Order
+  sheet's own check: table.edit and storefront.manage) have a bag and +;
+  others look around ("You can look around…"), their List the Order
+  sheet's look around. A link that does not carry orders refuses the order
+  as the Order sheet's does (business areas: `orders` on both sides).
+- **Ask about this** begins its question in the conversation's box. Share
+  is offered only where their offer is their storefront (a price list is
+  theirs to us alone).
+- **Kept.** The bag while the app or the page is open, one a link. The
+  hearts and what was looked at on the phone (Prefs) or in the browser
+  (`lib/shopkept.ts`), by the business we act for and the supplier
+  (`business:<our tenant>:<their business>`), forgotten on signing out as
+  the person's are. The server keeps neither.
+
 ## Settings
 
 Settings is one list on the ground (`lib/screens/signed_in.dart`):

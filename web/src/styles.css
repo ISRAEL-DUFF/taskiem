@@ -2388,7 +2388,7 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 
 /* Explore: a screen of its own over the chats, with a back arrow, a search box and cards. */
 /* Dots over a photo stay white in both themes. */
-:root { --on-photo: #ffffff; }
+:root { --on-photo: #ffffff; --on-photo-warn: #b54708; --on-photo-danger: #b42318; }
 .explore { position: fixed; inset: 0; z-index: 85; display: flex; flex-direction: column; background: var(--bg); }
 .explore-bar { display: flex; align-items: center; gap: 8px; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left)); background: var(--panel); border-bottom: 1px solid var(--border); }
 .explore-bar h2 { margin: 0; font-size: 18px; }

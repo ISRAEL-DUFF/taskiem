@@ -436,7 +436,7 @@ function ShopGrid({
                 <div className="shop-card-foot">
                   <span className="shop-price">{price}</span>
                   {!sold && shop.open && (sized ? (
-                    <button type="button" className="shop-add" aria-label={`Choose a size of ${it.name}${n ? ` (${n} in the bag)` : ""}`} onClick={() => onOpen(it.id)}>
+                    <button type="button" className="shop-add" aria-label={`Choose a size of ${it.name}${n ? `: ${n} in the bag` : ""}`} onClick={() => onOpen(it.id)}>
                       {n > 0 && <span>{n}</span>}
                       <Icon name="plus" />
                     </button>

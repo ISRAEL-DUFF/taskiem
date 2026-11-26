@@ -186,6 +186,7 @@ Built in the app's own look from the start (`mobile-app-look.md`, Stock and supp
 | Put many on Things we have? | `chat/treat_line.dart` `askTrackMany` | A `track_ask` answer | One row each, or Just record them | [fine] |
 | Line marks | `chat/treat_line.dart` `LineMark` | Lines of an order to a supplier and of a bill | To stock or Things we have pill, the label; none on a bill line not matched to its order line | [fine] |
 | Their price list and their shop (changes) | `chat/order_sheet.dart` `OrderSheet` | Order from a supplier's chat, a link | Each bag line asked unless remembered | [fine] |
+| A supplier's shop (business shop) | `chat/business_shop.dart` `BusinessShop` in `chat/shop.dart` `ShopScreen` | A business conversation's head, the tools' Their shop, a product card's Order | Their prices as photos, quantity prices, sizes grid, the bag to the Order sheet's review, List | [done 26 Nov] the person's shop's screens; see mobile-app-look.md, The business shop |
 | An order to a supplier (changes) | `chat/purchases_page.dart` `PurchasePage` | Supplies › an order | Confirm it (a supplier's draft), How each is treated, On Things we have | [fine] |
 | Their quote in a chat (changes) | `chat/purchase_view.dart` `PurchaseView` | A supplier's quote in Taskiem's chat | Confirm their quote with the question on each line | [fine] |
 | What you buy from them | `chat/supplier_items.dart` `SupplierItemsPage`, `_ItemSheet` | Supplies › Suppliers › a supplier | Each item remembered, changed or forgotten | [fine] |
