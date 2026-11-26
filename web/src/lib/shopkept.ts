@@ -4,7 +4,7 @@
 // Storage that cannot be read or written (a private window, blocked site
 // data) leaves them for while the page is open.
 
-import type { ShopItem, ShopSize } from "./personchat";
+import { sizeWords, type BasketLine, type ShopItem, type ShopSize, type TheirShop } from "./personchat";
 
 const SAVED = "taskiem-shop-saved";
 const RECENT = "taskiem-shop-recent";
@@ -110,4 +110,30 @@ export function shownItems(items: ShopItem[], filter: string, words: string, sav
     if (!q) return true;
     return `${it.name} ${it.description ?? ""} ${it.category ?? ""}`.toLowerCase().includes(q);
   });
+}
+
+/**
+ * The shop read again over a bag kept while the page was open: a line it no
+ * longer sells, or has sold out, leaves the bag; none stays above how few
+ * are left; each takes the shop's own name and price now. `changed` says
+ * whether something left or was cut (a price alone is not said).
+ */
+export function keepTo(lines: BasketLine[], shop: Pick<TheirShop, "items">): { lines: BasketLine[]; changed: boolean } {
+  let changed = false;
+  const out: BasketLine[] = [];
+  for (const l of lines) {
+    const it = shop.items.find((i) => i.id === l.item_id || i.sizes?.some((z) => z.id === l.item_id));
+    const z = it?.sizes?.find((x) => x.id === l.item_id);
+    const price = z ? (z.price_kobo ?? it?.price_kobo) : it?.price_kobo;
+    const available = !!it && it.available && (!z || z.available);
+    if (!it || !available || price === undefined) {
+      changed = true;
+      continue;
+    }
+    const left = z ? z.few_left : it.few_left;
+    const quantity = left && l.quantity > left ? left : l.quantity;
+    if (quantity !== l.quantity) changed = true;
+    out.push({ item_id: l.item_id, name: z ? `${it.name} (${sizeWords(z.variant)})` : it.name, price_kobo: price, quantity });
+  }
+  return { lines: out, changed };
 }

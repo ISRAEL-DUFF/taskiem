@@ -858,6 +858,8 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
    business's items to browse, over the person's chat. Under the sheets
    (the checkout, sharing: .tk-veil at 60), over the tab bar. */
 .shop { position: fixed; inset: 0; z-index: 55; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
+.shop:focus { outline: none; }
+.shop-bag-note { position: fixed; left: 12px; right: 12px; top: calc(70px + env(safe-area-inset-top)); z-index: 57; max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 10px; }
 .shop .chat-head { padding-top: calc(8px + env(safe-area-inset-top)); }
 .shop-head .chat-head-main h2 { font-weight: 700; }
 .shop-head-heart.on svg { color: var(--danger); fill: currentColor; }
@@ -941,6 +943,7 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .shop-bag-lines .grow { display: flex; flex-direction: column; min-width: 0; }
 .shop-bag-lines .hint { font-size: 12.5px; }
 .shop-bag-total { display: flex; align-items: center; margin: 12px 0 0; padding: 14px 16px; border-radius: 18px; background: var(--panel); font-weight: 700; }
+.shop-bag-total .grow { flex: 1; }
 .shop-bag-total strong { font-size: 16px; font-variant-numeric: tabular-nums; }
 /* Lime only on pine: in the dark, pine's places take lime. */
 :root[data-theme="dark"] .shop-add, :root[data-theme="dark"] .shop-stepper.on, :root[data-theme="dark"] .shop-bag-bar, :root[data-theme="dark"] .shop-bag-count { background: var(--brand-dark); color: var(--brand-dark-text); }

@@ -175,6 +175,19 @@ void main() {
     await drain(t);
   });
 
+  testWidgets('a bag kept while the app ran: what is no longer for sale leaves it, none above how few are left, said', (t) async {
+    phone(t);
+    ShopBag.of('c1')
+      ..set('gone', 2)
+      ..set('i5', 1)
+      ..set('i2', 5)
+      ..set('i6', 1);
+    await openShopScreen(t, shopApi());
+    expect(ShopBag.of('c1').lines, {'i2': 2, 'i6': 1}, reason: 'gone and sold out removed; Fried rice to the 2 left');
+    expect(find.text('Your bag changed: something in it is no longer for sale, or fewer are left'), findsOneWidget);
+    await drain(t);
+  });
+
   testWidgets('the shop, an item and the bag look as drawn, light and dark; pressable; large text cuts nothing off', (t) async {
     phone(t, 1000);
     final api = shopApi();

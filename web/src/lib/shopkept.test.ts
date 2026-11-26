@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShopItem } from "./personchat";
-import { categories, forgetShop, fromPrice, pricesDiffer, recentItems, RECENT_KEPT, savedItems, shownItems, soldOut, toggleSaved, viewedItem } from "./shopkept";
+import { categories, forgetShop, keepTo, fromPrice, pricesDiffer, recentItems, RECENT_KEPT, savedItems, shownItems, soldOut, toggleSaved, viewedItem } from "./shopkept";
 
 const store = new Map<string, string>();
 beforeEach(() => {
@@ -85,5 +85,32 @@ describe("the shop's items", () => {
     expect(shownItems(items, "saved", "", ["i2"]).map((i) => i.id)).toEqual(["i2"]);
     expect(shownItems(items, "all", "pounded", []).map((i) => i.id)).toEqual(["i2"]);
     expect(shownItems(items, "all", "pizza", [])).toEqual([]);
+  });
+});
+
+describe("a bag kept while the page was open", () => {
+  it("drops what is gone or sold out, cuts to how few are left, takes the prices now", () => {
+    const shop = { items: [jollof, egusi, chapman, { ...zobo, few_left: 2 }] };
+    const { lines, changed } = keepTo(
+      [
+        { item_id: "s", name: "Jollof rice & chicken (Small)", price_kobo: 250000, quantity: 1 },
+        { item_id: "b", name: "Jollof rice & chicken (Big)", price_kobo: 600000, quantity: 1 },
+        { item_id: "i3", name: "Chapman", price_kobo: 150000, quantity: 1 },
+        { item_id: "gone", name: "Old thing", price_kobo: 100, quantity: 1 },
+        { item_id: "i4", name: "Zobo", price_kobo: 80000, quantity: 5 },
+        { item_id: "i2", name: "Egusi soup", price_kobo: 600000, quantity: 1 },
+      ],
+      shop,
+    );
+    expect(changed).toBe(true);
+    expect(lines).toEqual([
+      { item_id: "s", name: "Jollof rice & chicken (Small)", price_kobo: 300000, quantity: 1 },
+      { item_id: "i4", name: "Zobo", price_kobo: 80000, quantity: 2 },
+      { item_id: "i2", name: "Egusi soup", price_kobo: 600000, quantity: 1 },
+    ]);
+  });
+
+  it("says nothing changed when all is still for sale", () => {
+    expect(keepTo([{ item_id: "i2", name: "Egusi soup", price_kobo: 600000, quantity: 1 }], { items: [egusi] }).changed).toBe(false);
   });
 });

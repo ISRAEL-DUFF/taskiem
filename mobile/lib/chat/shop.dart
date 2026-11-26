@@ -70,6 +70,25 @@ class ShopBag extends ChangeNotifier {
     lines.clear();
     notifyListeners();
   }
+
+  /// The shop read again: what it no longer sells, or has sold out, leaves
+  /// the bag, and none stays above how few are left; the bag's prices are
+  /// the shop's own (shopThings). Says whether anything changed.
+  bool keepTo(Map<String, ShopThing> things) {
+    var changed = false;
+    for (final id in [...lines.keys]) {
+      final th = things[id];
+      if (th == null || !th.available) {
+        lines.remove(id);
+        changed = true;
+      } else if (th.left != null && lines[id]! > th.left!) {
+        lines[id] = th.left!;
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
+    return changed;
+  }
 }
 
 /// One thing the bag can hold: an item with no sizes, or one size of one.
@@ -148,6 +167,8 @@ class _ShopScreenState extends State<ShopScreen> {
       final s = await d.api.myChatShop(id: d.id);
       if (!mounted) return;
       setState(() => _shop = s);
+      // Kept while the app ran: what is gone since, out of the bag, said.
+      if (_bag.keepTo(shopThings(s)) && mounted) showTkToast(context, 'Your bag changed: something in it is no longer for sale, or fewer are left');
       final start = s.items.where((i) => i.id == widget.item).firstOrNull;
       if (start != null) await _open(start);
     } on Object catch (e) {

@@ -7,14 +7,14 @@
 // ShopSheet, pickup or delivery). The bag stays while the page is open; the
 // hearts and what was looked at are kept in this browser (lib/shopkept.ts).
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { get } from "../api";
 import { Icon } from "../icons";
 import { KitEmpty, KitLoading } from "../kit";
 import { changeBasket, sizeWords, type BasketLine, type ShopItem, type TheirShop } from "../lib/personchat";
-import { categories, fromPrice, pricesDiffer, recentItems, savedItems, shownItems, soldOut, toggleSaved, viewedItem } from "../lib/shopkept";
+import { categories, fromPrice, keepTo, pricesDiffer, recentItems, savedItems, shownItems, soldOut, toggleSaved, viewedItem } from "../lib/shopkept";
 import { formatPrice } from "../lib/storefront";
-import { ErrorBox, useLoad } from "../ui";
+import { ErrorBox, useFocusTrap, useLoad } from "../ui";
 import { ChatAvatar } from "./ChatAvatar";
 
 // --- the bag: one a chat, while the page is open ---
@@ -87,17 +87,26 @@ export function ShopView({
   const [filter, setFilter] = useState("all");
   const [words, setWords] = useState("");
 
-  // Esc goes back a view, then closes.
+  // Over the chat as a dialog: Tab stays in the shop, focus starts on it
+  // (not the search, which would bring up a phone's keyboard) and goes back
+  // after; Esc goes back a view, then closes. A sheet over the shop (the
+  // checkout, sharing) holds the keys while it is open.
+  const box = useRef<HTMLElement>(null);
+  useLayoutEffect(() => box.current?.focus({ preventScroll: true }), []);
+  useFocusTrap(box, true, () => (view.at === "grid" ? onClose() : setView({ at: "grid" })), () => !document.documentElement.classList.contains("tk-sheet-open"));
+
+  // The bag kept while the page was open, against the shop read now: what
+  // is no longer for sale leaves it, and that is said.
+  const [bagNote, setBagNote] = useState("");
+  const kept = useRef(false);
   useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      // A sheet over the shop (the checkout, sharing) hears its own Esc.
-      if (e.key !== "Escape" || e.defaultPrevented || document.documentElement.classList.contains("tk-sheet-open")) return;
-      e.preventDefault();
-      setView((v) => (v.at === "grid" ? (onClose(), v) : { at: "grid" }));
-    };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, [onClose]);
+    if (!s || kept.current) return;
+    kept.current = true;
+    const was = bags.get(chat) ?? [];
+    const k = keepTo(was, s);
+    if (JSON.stringify(k.lines) !== JSON.stringify(was)) setBag(chat, k.lines);
+    if (k.changed) setBagNote("Your bag changed: something in it is no longer for sale, or fewer are left.");
+  }, [s, chat]);
 
   const heart = (id: string) => setSaved(toggleSaved(businessId, id));
   const open = (id: string) => {
@@ -116,7 +125,15 @@ export function ShopView({
   }, [s, view, byId, businessId, recent]);
 
   return (
-    <section className="shop" role="dialog" aria-modal="true" aria-label={`${business}'s shop`} data-testid="shop">
+    <section ref={box} tabIndex={-1} className="shop" role="dialog" aria-modal="true" aria-label={`${business}'s shop`} data-testid="shop">
+      {bagNote && (
+        <p className="notice shop-bag-note" role="status">
+          <span className="grow">{bagNote}</span>
+          <button type="button" className="small" onClick={() => setBagNote("")}>
+            OK
+          </button>
+        </p>
+      )}
       {item && s ? (
         <ShopItemView
           shop={s}
@@ -523,7 +540,7 @@ function ShopItemView({
               </button>
             </span>
             <button type="button" className="tk-cta shop-add-bag" disabled={sold || !line} onClick={add} data-testid="shop-add">
-              {sold ? "Sold out" : !line ? "Choose a size" : `Add to bag${price !== undefined ? ` · ${formatPrice(price * n)}` : ""}`}
+              {sold ? "Sold out" : !line ? (sizes.length ? "Choose a size" : "Ask them its price") : `Add to bag${price !== undefined ? ` · ${formatPrice(price * n)}` : ""}`}
             </button>
           </>
         )}
