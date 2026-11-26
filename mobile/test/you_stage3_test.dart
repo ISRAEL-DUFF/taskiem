@@ -14,6 +14,7 @@ import 'package:taskiem/kit/sheet.dart' show TkKitField;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/screens/you.dart';
 import 'package:taskiem/theme/theme.dart';
+import 'package:taskiem/chat/shop.dart' show ShopBag;
 
 import 'my_chats_test.dart' show Api, answer, at, chat, conversation, drain, openChat, phone, press, settle, typeIn;
 import 'guidelines.dart';
@@ -406,8 +407,11 @@ void main() {
     Future<void> toCheck() async {
       await press(t, find.bySemanticsLabel('Chat tools'));
       await press(t, find.text('Their shop'));
-      await press(t, find.bySemanticsLabel('One more Jollof rice'));
-      await press(t, find.text('Review order'));
+      // The shop's screens (shop.dart): into the bag, then its checkout.
+      ShopBag.of('c1').clear();
+      await press(t, find.bySemanticsLabel('Add Jollof rice to the bag'));
+      await press(t, find.bySemanticsLabel('View bag: 1 item · ₦2,500'));
+      await press(t, find.bySemanticsLabel('Check out, ₦2,500'));
     }
 
     await openChat(t, api);

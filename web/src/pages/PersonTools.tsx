@@ -288,6 +288,7 @@ export function ShopSheet({
   business,
   from,
   startItem,
+  basket,
   onShare,
   onClose,
   onPlaced,
@@ -297,15 +298,17 @@ export function ShopSheet({
   from?: DOMRect | null;
   /** A product card's item, put in the basket. */
   startItem?: string;
+  /** The bag filled in the shop (Shop.tsx): the sheet opens at its checkout. */
+  basket?: BasketLine[];
   /** Share a product with someone (people chats, §10.1). */
   onShare?: (it: { id: string; name: string }) => void;
   onClose: () => void;
   onPlaced: (o: DoorOrder) => void;
 }) {
   const shop = useLoad(() => get<TheirShop>(`${base(chat)}/shop`), [chat]);
-  const [lines, setLines] = useState<BasketLine[]>([]);
+  const [lines, setLines] = useState<BasketLine[]>(() => basket ?? []);
   const [sizeOf, setSizeOf] = useState<Record<string, string>>({});
-  const [step, setStep] = useState<"items" | "check" | "done">("items");
+  const [step, setStep] = useState<"items" | "check" | "done">(basket ? "check" : "items");
   const [fulfilment, setFulfilment] = useState<"pickup" | "delivery" | "">("");
   const [zone, setZone] = useState("");
   const [address, setAddress] = useState("");
@@ -410,7 +413,7 @@ export function ShopSheet({
       title={step === "check" ? "Check your order" : step === "done" ? "Order sent" : `${business}'s shop`}
       from={from}
       onClose={onClose}
-      onBack={step === "check" ? () => ((key.current = ""), setStep("items")) : undefined}
+      onBack={step === "check" && !basket ? () => ((key.current = ""), setStep("items")) : undefined}
       footer={footer}
       shut={shut}
       testid="shop-sheet"

@@ -36,6 +36,7 @@ import 'my_chat.dart';
 import 'my_chat_their_tools.dart';
 import 'order_sheet.dart' show BagBar, QtyStepper;
 import 'people_cards.dart' show shareWithPeople;
+import 'shop.dart' show openShop;
 import 'words.dart';
 
 /// The tools button: what a customer can do with the business.
@@ -50,7 +51,7 @@ Future<void> showMyChatTools(BuildContext context, MyChatData d) async {
   }
   switch (pick) {
     case 'shop':
-      await showShopSheet(context, d);
+      await openShop(context, d);
     case 'book':
       await showBookSheet(context, auth: d.auth, link: '', business: d.name, customer: d.base, onBooked: (_) => d.refresh());
     case 'orders':
@@ -144,8 +145,14 @@ Future<void> showShopSheet(BuildContext context, MyChatData d) => showTkSheet<vo
 typedef _Thing = ({String id, String name, int? price, int? left, bool available});
 
 class ShopSheet extends StatefulWidget {
-  const ShopSheet({super.key, required this.d});
+  const ShopSheet({super.key, required this.d, this.bag, this.onPlaced});
   final MyChatData d;
+
+  /// The bag filled in the shop's screens (shop.dart), by item or size id:
+  /// the sheet opens at the checkout with it, and [onPlaced] hears the
+  /// order went (the screens empty the bag and go back to the chat).
+  final Map<String, int>? bag;
+  final VoidCallback? onPlaced;
 
   @override
   State<ShopSheet> createState() => _ShopSheetState();
@@ -154,8 +161,8 @@ class ShopSheet extends StatefulWidget {
 class _ShopSheetState extends State<ShopSheet> with CloseSoon {
   MyChatShopResponse? _shop;
   String? _loadError;
-  final Map<String, int> _bag = {};
-  bool _checkout = false;
+  late final Map<String, int> _bag = {...?widget.bag};
+  late bool _checkout = widget.bag != null;
   String _fulfilment = '';
   String? _zone;
   final _address = TextEditingController();
@@ -298,6 +305,7 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
       }
       if (!mounted) return;
       setState(() => _done = words);
+      widget.onPlaced?.call();
       closeSoon();
     } on Object catch (e) {
       if (mounted) setState(() => (_error = sayFailure(e), _busy = false));
@@ -317,8 +325,8 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
     final count = _count == 1 ? '1 item' : '$_count items';
     return TkAppLook(child: TkSheet(
       title: _checkout ? 'Check your order' : 'Their shop',
-      crumb: _checkout ? 'Their shop' : null,
-      onBack: _checkout ? () => setState(() => _checkout = false) : null,
+      crumb: _checkout && widget.bag == null ? 'Their shop' : null,
+      onBack: _checkout && widget.bag == null ? () => setState(() => _checkout = false) : null,
       lead: _checkout ? null : ChatAvatar(name: d.name, size: 48, letterSize: 16),
       sub: _checkout ? null : '${d.name}’s shop, at their prices',
       overlay: _done == null ? null : TkSavedTick(words: _done!),

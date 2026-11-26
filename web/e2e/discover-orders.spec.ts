@@ -211,10 +211,13 @@ test("a person finds a business in Discover, orders with a saved address, and fi
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
   await page.reload();
   await page.getByTestId("discover-shop").click();
+  // The shop to browse (Shop.tsx); its bag checked out in the sheet.
+  await expect(page.getByTestId("shop")).toBeVisible();
+  await page.getByTestId("shop").getByRole("button", { name: "Add Jollof rice to the bag" }).click();
+  await page.getByTestId("shop-bag-bar").click();
+  await page.getByTestId("shop-checkout").click();
   const sheet = page.getByTestId("shop-sheet");
   await expect(sheet).toBeVisible();
-  await sheet.getByRole("button", { name: "One more Jollof rice" }).click();
-  await sheet.getByTestId("shop-check").click();
   await sheet.getByLabel("Deliver it to me").check();
   await sheet.getByLabel("Where to").selectOption("Yaba");
   await sheet.getByLabel("Your address").fill("12 Herbert Macaulay Way");
@@ -289,8 +292,9 @@ test("a person finds a business in Discover, orders with a saved address, and fi
   await page.getByTestId("discover-search").fill(name);
   await page.getByTestId("discover-result").filter({ hasText: name }).getByRole("link", { name, exact: true }).click();
   await page.getByTestId("discover-shop").click();
-  await page.getByTestId("shop-sheet").getByRole("button", { name: "One more Chapman" }).click();
-  await page.getByTestId("shop-check").click();
+  await page.getByTestId("shop").getByRole("button", { name: "Add Chapman to the bag" }).click();
+  await page.getByTestId("shop-bag-bar").click();
+  await page.getByTestId("shop-checkout").click();
   await page.getByTestId("shop-sheet").getByLabel("Deliver it to me").check();
   await expect(page.getByTestId("shop-saved-addresses").getByRole("radio", { name: /Work/ })).toBeChecked();
   await expect(page.getByTestId("shop-sheet").getByLabel("Your address")).toHaveCount(0);
