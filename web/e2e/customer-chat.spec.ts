@@ -495,19 +495,27 @@ for (const width of [390, 360])
     await expect(page.getByTestId("person-head-line")).toHaveText("Open now, closes at 18:00");
     await expect(page.getByTestId("offers-question")).toHaveCount(0);
 
-    // Their shop: few left, sizes and colours, delivery, and the order once.
+    // Their shop, to browse (Shop.tsx): few left, an item's sizes and
+    // colours, the bag; then delivery, and the order once.
     await page.getByTestId("person-tools-button").click();
     await page.getByTestId("person-tool-shop").click();
-    const shop = page.getByTestId("shop-sheet");
-    await expect(shop.getByText("Only 3 left")).toBeVisible();
+    const browse = page.getByTestId("shop");
+    await expect(browse.getByText("Only 3 left", { exact: true })).toBeVisible();
     await check(page, "their shop", width);
     await page.screenshot({ path: `test-results/person-shop-${width}.png` });
-    await shop.getByRole("button", { name: "One more Jollof rice" }).click();
-    await shop.getByRole("button", { name: "One more Jollof rice" }).click();
-    await shop.getByLabel("Size and colour of Ankara shirt").selectOption("i2a");
-    await expect(shop.getByText("Only 2 left")).toBeVisible();
-    await shop.getByRole("button", { name: "One more Ankara shirt (Blue, M)" }).click();
-    await shop.getByTestId("shop-check").click();
+    await browse.getByRole("button", { name: "Add Jollof rice to the bag" }).click();
+    await browse.getByRole("button", { name: "One more Jollof rice" }).click();
+    await browse.getByRole("button", { name: /^Ankara shirt/ }).click();
+    await browse.getByRole("button", { name: "Blue, M · ₦8,000" }).click();
+    await expect(browse.getByText("Only 2 left")).toBeVisible();
+    await check(page, "an item of their shop", width);
+    await page.screenshot({ path: `test-results/person-shop-item-${width}.png` });
+    await browse.getByTestId("shop-add").click();
+    await browse.getByTestId("shop-bag-button").click();
+    await expect(browse.getByRole("heading", { name: "Your bag" })).toBeVisible();
+    await check(page, "your bag", width);
+    await browse.getByTestId("shop-checkout").click();
+    const shop = page.getByTestId("shop-sheet");
     await shop.getByLabel("Deliver it to me").check();
     await shop.getByLabel("Where to").selectOption("Ikeja");
     await shop.getByLabel("Your address").fill("12 Allen Avenue");
@@ -523,12 +531,14 @@ for (const width of [390, 360])
     await expect(shop.getByTestId("pay-open")).toHaveAttribute("href", "https://pay.example.test/MK-9");
     await shop.getByRole("button", { name: "Back to the chat" }).click();
     await expect(shop).toHaveCount(0);
+    await expect(browse).toHaveCount(0);
 
-    // A product card's Order opens their shop with it in the basket.
+    // A product card's Order opens their shop at it.
     await page.getByTestId("app-card").filter({ hasText: "Jollof rice" }).getByRole("button", { name: /^Order/ }).click();
-    await expect(page.getByTestId("shop-check")).toContainText("1 item");
+    await expect(page.getByTestId("shop").getByRole("heading", { name: "Jollof rice" })).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.getByTestId("shop-sheet")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shop")).toHaveCount(0);
 
     // A booking offer's Book: a free time, then the booking once.
     await page.getByTestId("app-card").filter({ hasText: "Catering tasting" }).getByRole("button", { name: /^Book/ }).click();

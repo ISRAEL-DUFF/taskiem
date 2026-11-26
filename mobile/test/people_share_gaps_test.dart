@@ -104,6 +104,8 @@ void main() {
     await openChat(t, api);
     await press(t, find.bySemanticsLabel('Chat tools'));
     await press(t, find.text('Their shop'));
+    // On the item's own screen (shop.dart).
+    await press(t, find.bySemanticsLabel('Jollof rice, ₦2,500'));
     await press(t, find.bySemanticsLabel('Share Jollof rice with someone'));
     expect(await shareTo(t, api), {'type': 'product', 'business_id': 'b1', 'item_id': 'i1'});
     await drain(t);

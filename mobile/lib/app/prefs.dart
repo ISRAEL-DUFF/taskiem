@@ -49,6 +49,15 @@ class Prefs extends ChangeNotifier {
   /// signing out.
   Map<String, String> payWays = const {};
 
+  /// The shop (docs/spec/mobile-app-look.md, "The shop"): the items the
+  /// person saved with the heart, and the ones they looked at lately
+  /// (newest first, [shopRecentKept] at most), by business. Kept on this
+  /// phone only (the server keeps neither yet); the person's own:
+  /// forgotten on signing out.
+  Map<String, List<String>> shopSaved = const {};
+  Map<String, List<String>> shopRecent = const {};
+  static const shopRecentKept = 12;
+
   /// Done once what is kept has been read.
   Future<void> get ready => _ready.future;
 
@@ -70,6 +79,8 @@ class Prefs extends ChangeNotifier {
       contactsChecked = await keys.read('contacts-checked');
       final ways = jsonDecode(await keys.read('pay-ways') ?? '{}');
       if (ways is Map) payWays = {for (final e in ways.entries) if (e.value is String) '${e.key}': e.value as String};
+      shopSaved = _lists(await keys.read('shop-saved'));
+      shopRecent = _lists(await keys.read('shop-recent'));
     } on Object {
       // The phone's storage not read: the defaults.
     }
@@ -86,8 +97,10 @@ class Prefs extends ChangeNotifier {
     lockAfter = null;
     contactsChecked = null;
     payWays = const {};
+    shopSaved = const {};
+    shopRecent = const {};
     notifyListeners();
-    for (final k in const ['taskiem-seen', 'app-lock', 'app-lock-after', 'contacts-checked', 'pay-ways']) {
+    for (final k in const ['taskiem-seen', 'app-lock', 'app-lock-after', 'contacts-checked', 'pay-ways', 'shop-saved', 'shop-recent']) {
       try {
         await keys.write(k, null);
       } on Object {
@@ -115,6 +128,40 @@ class Prefs extends ChangeNotifier {
     } on Object {
       // Kept only while the app runs.
     }
+  }
+
+  /// The heart on [item] of [business]'s shop: saved, or no longer.
+  Future<void> toggleShopSaved(String business, String item) async {
+    final now = shopSaved[business] ?? const <String>[];
+    shopSaved = {...shopSaved, business: now.contains(item) ? [...now.where((x) => x != item)] : [item, ...now]};
+    notifyListeners();
+    await _keep('shop-saved', shopSaved);
+  }
+
+  /// [item] of [business]'s shop looked at: first of those seen lately.
+  Future<void> viewedShopItem(String business, String item) async {
+    final now = shopRecent[business] ?? const <String>[];
+    if (now.isNotEmpty && now.first == item) return;
+    shopRecent = {...shopRecent, business: [item, ...now.where((x) => x != item)].take(shopRecentKept).toList()};
+    notifyListeners();
+    await _keep('shop-recent', shopRecent);
+  }
+
+  Future<void> _keep(String key, Map<String, List<String>> lists) async {
+    try {
+      await keys.write(key, jsonEncode(lists));
+    } on Object {
+      // Kept only while the app runs.
+    }
+  }
+
+  static Map<String, List<String>> _lists(String? raw) {
+    final j = jsonDecode(raw ?? '{}');
+    if (j is! Map) return const {};
+    return {
+      for (final e in j.entries)
+        if (e.value is List) '${e.key}': [for (final x in e.value as List) if (x is String) x],
+    };
   }
 
   /// A bill paid to [seller] by [way]: that way first next time.

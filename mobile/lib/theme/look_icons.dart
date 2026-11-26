@@ -61,6 +61,9 @@ const tkLookIcons = <String, String>{
   'b-alert': 'M21 12a9 9 0 1 1-18 0a9 9 0 1 1 18 0zM12 7.5v5.5M12 16.5v.5',
   // A shopping bag, and a route (signing up's kinds of business).
   'b-bag': 'M6 8h12l-1 12H7L6 8zM9 8V7a3 3 0 0 1 6 0v1',
+  // The shop's heart: an item saved (filled when it is).
+  'b-heart': 'M12 20s-7.5-4.6-7.5-10.2a4.3 4.3 0 0 1 7.5-2.9a4.3 4.3 0 0 1 7.5 2.9C19.5 15.4 12 20 12 20z',
+  'b-minus': 'M5 12h14',
   'b-route': 'M8 6a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM20 18a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM8 6h7a3.5 3.5 0 0 1 0 7H9a3.5 3.5 0 0 0 0 7h7',
   'pause': 'M7 5h3.5v14H7zM13.5 5H17v14h-3.5z',
   'b-start': 'M6 4v16M6 5h11l-2 4 2 4H6',

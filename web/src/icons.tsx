@@ -98,6 +98,10 @@ const paths: Record<string, string> = {
   grid: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
   store: "M4 20V10l8-6 8 6v10zM9 20v-6h6v6",
   tag: "M20 12l-8 8-9-9V3h8zM7.5 7.5h.01",
+  // The shop (docs/spec/mobile-app-look.md, "The shop"): saved, the bag, shared.
+  heart: "M12 20s-7.5-4.6-7.5-10.2a4.3 4.3 0 0 1 7.5-2.9a4.3 4.3 0 0 1 7.5 2.9C19.5 15.4 12 20 12 20z",
+  bag: "M6 8h12l-1 12H7zM9 8V7a3 3 0 0 1 6 0v1",
+  share: "M12 15V4M8 8l4-4 4 4M5 13v6h14v-6",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {

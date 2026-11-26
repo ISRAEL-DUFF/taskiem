@@ -36,6 +36,7 @@ import {
   type PersonChat,
   whatsappHere,
   type PersonMessage,
+  type BasketLine,
 } from "../lib/personchat";
 import { browserEnv, enableYouPush, pushSupport, serverKey, thisSubscription, youPushOn } from "../lib/push";
 import { useThread } from "../lib/useThread";
@@ -50,6 +51,7 @@ import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
 import { useConfirm } from "./ConfirmSheet";
 import { BookSheet, loadTheirTools, OrdersSheet, PayButton, ShopSheet, TheirRunCard, TheirToolSheet, ToolsMenu, type CustomerTool, type PersonTool } from "./PersonTools";
+import { emptyBag, ShopView } from "./Shop";
 import { toast } from "../toast";
 import { keepTheirRun, keptTheirRuns, withTheirRuns, type KeptTheirRun } from "../lib/theirRuns";
 
@@ -673,6 +675,9 @@ export function PersonChatPage() {
     if (c?.business) keepPhoto(c.business, photo);
   }, [c?.business, photo]);
   const openTool = (key: PersonTool, from?: DOMRect, extra?: { item?: string; service?: string }) => setTool({ key, from, ...extra });
+  // The shop's bag at its checkout, and whether an order went from it.
+  const [checkout, setCheckout] = useState<BasketLine[]>();
+  const placedFromShop = useRef(false);
 
   return (
     // A photo's Pay this account, for a business's people who may pay (the
@@ -684,6 +689,13 @@ export function PersonChatPage() {
         onBack={() => nav("/you")}
         menuLabel="More about this conversation"
         avatar={<ChatAvatar name={name} logo={photo} />}
+        actions={
+          c && (
+            <button type="button" className="icon-button" aria-label="Their shop" onClick={() => setTool({ key: "shop" })} data-testid="person-shop">
+              <Icon name="store" />
+            </button>
+          )
+        }
         title={c?.name ?? "Chat"}
         subtitle={
           c ? (
@@ -960,17 +972,42 @@ export function PersonChatPage() {
         />
       )}
       {c && tool?.key === "shop" && (
-        <ShopSheet
+        // The shop, over the chat (Shop.tsx): to browse, then check out in
+        // the shop's sheet.
+        <ShopView
           chat={id}
           business={c.name}
-          from={tool.from}
+          businessId={c.business || id}
+          logo={photo}
           startItem={tool.item}
+          onClose={() => setTool(undefined)}
+          onAsk={(words) => {
+            setTool(undefined);
+            composer.setText(words);
+          }}
           onShare={(it) => {
             setTool(undefined);
             setSharing({ item: it });
           }}
-          onClose={() => setTool(undefined)}
+          onCheckout={(lines) => setCheckout(lines)}
+        />
+      )}
+      {c && checkout && (
+        <ShopSheet
+          chat={id}
+          business={c.name}
+          basket={checkout}
+          onClose={() => {
+            setCheckout(undefined);
+            // Placed: back to the chat, where the order is.
+            if (placedFromShop.current) {
+              placedFromShop.current = false;
+              setTool(undefined);
+            }
+          }}
           onPlaced={() => {
+            placedFromShop.current = true;
+            emptyBag(id);
             void pull(false);
             loadOrders();
           }}
