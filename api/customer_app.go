@@ -100,7 +100,7 @@ func (f *sentFile) view() *chatAttachment {
 // kind, type and size, and its facts.
 func (f *sentFile) stored() map[string]any {
 	v := f.view()
-	return f.Facts.Map(map[string]any{"kind": v.Kind, "type": v.Type, "size": v.Size})
+	return f.Map(map[string]any{"kind": v.Kind, "type": v.Type, "size": v.Size})
 }
 
 // forwardedFacts are the facts a file keeps when it is sent on: its size
@@ -389,7 +389,7 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 			return out, false, chatFileErr(err)
 		}
 		v := in.File.view()
-		bizFile = in.File.Facts.Map(map[string]any{"kind": v.Kind, "type": v.Type, "size": f.Size, "name": v.Name, "path": f.Path})
+		bizFile = in.File.Map(map[string]any{"kind": v.Kind, "type": v.Type, "size": f.Size, "name": v.Name, "path": f.Path})
 		out.Kind, out.Attachment = "media", v
 	}
 	// The first link's preview, on words only; its picture in our storage.

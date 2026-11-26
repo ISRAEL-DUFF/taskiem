@@ -654,7 +654,7 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 			return nil
 		}
 		a.Name = cutRunes(strings.TrimSpace(a.Name), 120)
-		raw, _ := json.Marshal(a.Facts.Map(map[string]any{"kind": a.Kind, "type": a.Type, "size": a.Size, "name": a.Name, "path": a.Path}))
+		raw, _ := json.Marshal(a.Map(map[string]any{"kind": a.Kind, "type": a.Type, "size": a.Size, "name": a.Name, "path": a.Path}))
 		return raw
 	}
 	l, err := GetTx(ctx, tx, link)

@@ -1,6 +1,6 @@
 # Chats: file previews, link previews and editing a sent message
 
-Date: 26 November 2026 · Branch `claude/taskiem-chat-business-4gjlfs` · Status: **§2 (links) built; §1 and §3 planned**
+Date: 26 November 2026 · Branch `claude/taskiem-chat-business-4gjlfs` · Status: **§2 (links) and §1 (files) built; §3 planned**
 
 Three things people expect from WhatsApp that Taskiem's chats do not do yet:
 
@@ -371,6 +371,41 @@ Each part also adds:
 - This file's "As built" sections.
 
 ## 6. As built
+
+### 6.1 Files (§1), built 26 November 2026
+
+**What people see now.**
+- **A PDF** shows the picture of its first page across its card, its name, and "PDF · 3 pages · 1.2 MB" (a caption under it). While the picture is drawn, or when there is none (a damaged PDF, one that took too long), the card shows the PDF icon; a password-protected one says "Protected PDF".
+  - **Web:** tapping it opens Taskiem's viewer over the chat: the name, who sent it and when in its head; **Open in a new tab**, **Download** and **Close**; the browser's own reader in an `<iframe sandbox>` reading `?view=1`. Escape closes it and gives the focus back to the card. On a phone-width screen it fills the screen. A browser that says it has no PDF reader (`navigator.pdfViewerEnabled === false`) gets the words "This browser cannot show the PDF here" with the tab and the download.
+  - **App:** tapping it opens `PdfViewerScreen` (`lib/chat/file_card.dart`): the name, the sender and the time in its head; the pages drawn by `pdfrx` (swipe, scroll, pinch and double-tap); "Page 2 of 3"; **Share** and **Save**. Back returns to the chat where it was.
+- **Documents** (Word, Excel, PowerPoint, OpenDocument, CSV, text) show their type's icon in its colour (Word blue, Excel green, PowerPoint orange, PDF red, the others grey; the `--doc-*` tokens, `TkTokens.doc*` in the app) and "Excel · 84 KB". The web downloads them; the app opens them in another app on the phone (`open_filex`), or offers the share sheet when none can.
+- **Photos** keep their proportions before they have loaded, a soft colour in their place, when their size is known (photos sent from now on).
+- **Sending:** the web's attach button and the app's Document both take the new types; the file waits for its caption as its card (the type's icon and line). A program, a document with macros by its name (`.docm`, `.xlsm`…), or anything else is refused before upload: "Taskiem can send photos, voice notes, PDFs and Word, Excel, PowerPoint and text documents"; one too large: "This file is larger than 25 MB."
+- **"Media, links and docs"** shows the same cards (a PDF with its picture).
+
+**How it is built.**
+- **The checks** (`engine/media/documents.go`, `chatfile.go` `CheckChatUpload`): the type from the bytes; Office Open XML by the main part in `[Content_Types].xml` (macro-enabled and template types refused, as is any `vbaProject.bin`); OpenDocument by its `mimetype` (a `Basic/` or `Scripts/` part refused); the old Office files by their compound-file streams (`WordDocument`, `Workbook`, `PowerPoint Document`), read with `github.com/richardlehane/mscfb`: macro storages (`Macros`, `_VBA_PROJECT_CUR`, `VBA`, a PowerPoint `VBAInfoContainer`) refused, and password protection found by Word's `fEncrypted`, Excel's `FILEPASS`, an `EncryptedSummary`, or an encrypted new Office file (`EncryptionInfo`/`EncryptedPackage`); a ZIP whose entries add up to more than 100 MB or number more than 2,000 refused, and only small parts ever unpacked (1 MB at most); text and CSV valid UTF-8 with no NUL, and not a script (`#!`). CSV and text are the same bytes: a text file named `.csv` is kept as CSV.
+- **The name** (`ChatFileName`): no path parts, control characters or bidirectional marks, at most 120 characters, and a PDF's or a document's real extension (`invoice.pdf.exe` that is a PDF is "invoice.pdf"; a renamed spreadsheet shows `.xlsx`). A photo's or voice note's name is cleaned but keeps its extension.
+- **The picture** (`engine/media/pdfpreview.go`): `github.com/klippa-app/go-pdfium` in WebAssembly mode, run by `wazero` inside the process; each instance has 256 MB of memory (`WithMemoryLimitPages`), no directory of the server mounted, and 5 seconds (the instance is killed past them, `WithCloseOnContextDone`); two at once, others waiting. The first page is drawn 640 pixels wide (at most 1,280 tall), on white, and encoded as WebP with `github.com/gen2brain/webp` (libwebp translated to Go, no system library), its quality lowered until it is at most 200 KB.
+- **When it is drawn** (`api/file_previews.go`): once, in the background, after a message with a PDF is sent (`drawLater`), for every copy; or the first time `?preview=1` is asked for one that has none (an older PDF), then kept (one at a time per copy). A protected PDF gets `preview: none`; a damaged or too slow one `failed`.
+- **Where it is kept**, beside the file: business to business and a business's copy of a customer chat, in each business's own storage (`chat/preview-….webp`, its place in the attachment as `preview_path`, never shown); people chats and groups, sealed in `people_files` and `group_files` with `kind = 'preview'`; the person's side of a chat with a business, `person_files` with `kind = 'preview'`. Delete for everyone removes it with the file; erasing a customer removes the business's copy with their files.
+- **The facts** `pages`, `protected`, `preview`, `w`, `h` and `doc` are in each copy's attachment (`media.Facts`, embedded in `links.Attachment` and `chatAttachment`; OpenAPI `ChatAttachment` and the link message's attachment). Setting them changes the message (`updated_at` / `changed_at`), so the live streams and the app's sync carry `preview: ready`.
+- **The routes:** `?preview=1` and `?view=1` on `GET /v1/link-chats/{link}/files/{id}`, `/v1/me/people/{id}/files/{message}`, `/v1/me/groups/{id}/files/{message}`, `/v1/me/chats/{id}/files/{message}` and `/v1/customer-chats/{id}/files/{message}`, each with its file's own permission check. `?view=1` answers a PDF only, inline, with `Content-Security-Policy: sandbox; default-src 'none'; frame-ancestors 'self'`, `X-Content-Type-Options: nosniff`, `Cross-Origin-Resource-Policy: same-origin` and `X-Frame-Options: SAMEORIGIN`; anything else stays a download.
+- **Storage:** the private bucket's allowed types gain `image/webp` and the document types.
+- **WhatsApp, Telegram and Slack:** a document a member sends to a linked business from there (`api/chat_direct.go`) goes through the same check. A customer's document from WhatsApp is still shown as the word "File", as before: no file from a customer's WhatsApp is kept today.
+- **The app:** `pdfrx` 3.0.0 (MIT; PDFium through FFI, so no R8 rules) and `open_filex` 5.0.0 (BSD-3-Clause), whose storage permissions are removed from the app's manifest (it opens only the app's own copy). The picture is fetched with `?preview=1` and kept with the chat's media (K1). The viewer reads the kept copy from memory (`PdfViewer.data`), so no copy is written; a document is written to the app's own temporary folder for the other app.
+- **Migration** `00780_file_previews.sql`.
+
+**Where this differs from §1, and why.**
+- **The picture's height** is capped at twice its width, so a very tall page does not make a huge picture; the bubble shows its top.
+- **A protected PDF** has `preview: none` (no picture can be made), not `failed`.
+- **People chats draw the picture for each person's copy separately** (each sealed under its owner's key), from the sender's bytes in the background; an older one is drawn by whoever asks first, for their own copy only. A group's one copy may be drawn by any member who sees the message (a new policy, `member_preview_insert`).
+- **App Save:** the phone's "save where you choose" (`file_selector` `getSaveLocation`) where the phone offers it; on phones that do not (Android, iPhone), Save opens the share sheet, whose "Save to Files" or "Save to device" keeps it.
+- **The web viewer:** "Open in a new tab" is always in its head, not only where the frame fails, as a page cannot reliably tell that a frame's PDF did not draw.
+- **The dependency upgrade:** go-pdfium needs `wazero` 1.12 (was 1.9). wazero 1.10 and later refuse a module compiled by another runtime, which the vendored QuickJS fork did, so `third_party/qjs` now compiles the module in each runtime from the shared cache (FORK.md, item 5).
+- **No testing manual was found in the repository** (as for §2); its checks are not added.
+
+**Tests.** Go: `engine/media/documents_test.go` (each type by its bytes; macros, protected `.docx`, `.doc` and `.xls`, zip bombs by size and by count, a renamed executable, Latin-1 CSV, a NUL, HTML; the name), `engine/media/pdfpreview_test.go` (pages and size, protected, damaged, the time limit, two at once), `api/file_previews_test.go` (business to business, people chats and groups: the picture on each side, refused outside the chat, `?view=1` and its headers, a Word file always downloaded, an older PDF drawn when asked, a protected one, delete for everyone), the PDF in `TestCustomerDoor`, `engine/db` `TestFilePreviewsMigrationUpDownUp`. Web: `src/lib/chatfiles.test.ts`, `e2e/chat-files.spec.ts`. App: `test/file_card_test.dart`, with pictures in light and dark, and `test/files_test.dart`.
 
 ### 6.2 Links (§2), built 26 November 2026
 

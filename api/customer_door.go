@@ -962,7 +962,7 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 			return out, false, chatFileErr(err)
 		}
 		tenant = c.Business
-		bizFile = f.Facts.Map(map[string]any{"kind": out.Attachment.Kind, "type": f.Type, "size": bf.Size, "name": f.Name, "path": bf.Path})
+		bizFile = f.Map(map[string]any{"kind": out.Attachment.Kind, "type": f.Type, "size": bf.Size, "name": f.Name, "path": bf.Path})
 	}
 	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		c, err := personChatTx(ctx, tx, person, chatID)

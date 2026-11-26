@@ -172,7 +172,7 @@ func drawFirstPage(inst pdfium.Pdfium, data []byte) (PDFPreview, error) {
 		return PDFPreview{}, fmt.Errorf("%w: %w", ErrPDFPreview, err)
 	}
 	defer page.Cleanup()
-	img := page.Result.Image
+	img := page.Result.RenderedImage
 	if img == nil || img.Bounds().Empty() {
 		return PDFPreview{}, fmt.Errorf("%w: an empty page", ErrPDFPreview)
 	}

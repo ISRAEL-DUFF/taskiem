@@ -258,6 +258,15 @@ All settled by the founder on 17 November 2026; decision [0069](../decisions/006
 
 Questions 2, 10 and 11 of the first draft fell away with B (push carries the words as the person's setting says; no backup step; the web works without a phone).
 
+## Files in people chats and groups: previews and documents
+
+Built 26 November 2026; the whole of it is in [chat previews and editing](chat-previews-and-editing.md) §1 and §6.1.
+
+- **Documents are accepted**: Word, Excel, PowerPoint, OpenDocument, CSV and text, up to 25 MB, read from their own bytes and refused with macros, a password or a zip bomb, as in every chat. Their name is cleaned and shows their real extension.
+- **A PDF's first page** is drawn by the server once the message is sent, and kept as the file is: a sealed file of each copy, `people_files` with `kind = 'preview'` (each person's copy sealed under their key), `group_files` with `kind = 'preview'` (the group's one copy). It is read through `GET …/files/{message}?preview=1`. A PDF sent before this is drawn the first time someone in the chat asks for its picture (in a group, any member who sees it).
+- **What is known about a file** (`pages`, `protected`, `preview`, `w`, `h`, `doc`) is in each copy's `attachment`, next to its kind, type and size, as those already are.
+- **Delete for everyone** removes the picture with the file.
+
 ## Link previews in people chats and groups
 
 Built 26 November 2026; the whole of it is in [chat previews and editing](chat-previews-and-editing.md) §2 and §6.2.
