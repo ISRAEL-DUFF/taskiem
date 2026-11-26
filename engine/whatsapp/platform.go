@@ -204,6 +204,10 @@ type Message struct {
 	// message), with Text as its body; the other channels show its rows
 	// as buttons.
 	List *List
+	// ReplyTo is the id of the conversation's message a text answers
+	// (WhatsApp's context.message_id), shown quoted where the channel can;
+	// text only, inside the window.
+	ReplyTo string
 	// Columns is how many buttons go to a row where a channel lays its
 	// buttons out in rows (Telegram: two for the topics menu, chat-menus
 	// §9); 0 or 1 is one to a row.
@@ -282,7 +286,7 @@ func (p *Platform) send(ctx context.Context, number string, m Message) (string, 
 		case len(m.Buttons) > 0:
 			id, err = p.Client.SendButtons(ctx, number, m.Text, m.Buttons)
 		default:
-			id, err = p.Client.SendText(ctx, number, m.Text)
+			id, err = p.Client.SendTextReply(ctx, number, m.Text, m.ReplyTo)
 		}
 		if !errors.Is(err, ErrWindowClosed) || m.Template == nil {
 			return id, err

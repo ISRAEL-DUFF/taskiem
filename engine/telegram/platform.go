@@ -11,6 +11,8 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -131,6 +133,28 @@ func (p *Platform) send(ctx context.Context, addr string, m whatsapp.Message) (s
 		return "", err
 	}
 	return formatID(id), nil
+}
+
+// Edit changes a message sent to a tg: address (its id, as Send answered
+// it) to m.Text in place: its words, or a photo's caption when it has none
+// (docs/spec/chat-previews-and-editing.md §3.3). Its buttons are not kept.
+func (p *Platform) Edit(ctx context.Context, addr, id string, m whatsapp.Message) error {
+	chat, ok := ParseAddress(addr)
+	if !ok {
+		return errors.New("telegram: not a Telegram address")
+	}
+	msg, err := strconv.ParseInt(id, 10, 64)
+	if err != nil || msg <= 0 {
+		return errors.New("telegram: not a Telegram message id")
+	}
+	if err := p.Client.EditMessageText(ctx, chat, msg, m.Text); err != nil {
+		var ae *APIError
+		if errors.As(err, &ae) && strings.Contains(ae.Description, "no text in the message") {
+			return p.Client.EditMessageCaption(ctx, chat, msg, m.Text)
+		}
+		return err
+	}
+	return nil
 }
 
 var callbackIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)

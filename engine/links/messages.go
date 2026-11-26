@@ -248,6 +248,10 @@ type Message struct {
 	// is about (docs/spec/chat-pay-people.md "After"), shown as it stands.
 	Payment *uuid.UUID `json:"payment,omitempty"`
 	Batch   *uuid.UUID `json:"batch,omitempty"`
+	// EditedAt is when its sender last changed its words ("Edited"), and
+	// Edits how many times: an edit names the count it saw (EditTx).
+	EditedAt *time.Time `json:"edited_at,omitempty"`
+	Edits    int        `json:"edits"`
 }
 
 // Conversation is one linked business's conversation, as the list shows
@@ -271,7 +275,7 @@ type Conversation struct {
 }
 
 const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, COALESCE(m.asked, ''), m.sender_name, m.card, m.attachment, m.forwarded, m.preview, m.mentions, m.read_at, m.created_at,
-	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment, m.payment_id, m.batch_id`
+	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment, m.payment_id, m.batch_id, m.edited_at, m.edits`
 
 const messageFrom = ` FROM link_messages m LEFT JOIN link_messages q ON q.tenant_id = m.tenant_id AND q.pair_id = m.reply_to`
 
@@ -282,7 +286,7 @@ func scanMessage(r pgx.Row) (Message, error) {
 	var qMine *bool
 	var qKind, qBody *string
 	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.Asked, &m.SenderName, &card, &att, &m.Forwarded, &prev, &ments, &m.ReadAt, &m.CreatedAt,
-		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt, &m.Payment, &m.Batch); err != nil {
+		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt, &m.Payment, &m.Batch, &m.EditedAt, &m.Edits); err != nil {
 		return m, err
 	}
 	if card != nil {
