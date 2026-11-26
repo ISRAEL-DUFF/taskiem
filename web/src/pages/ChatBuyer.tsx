@@ -72,6 +72,9 @@ export interface OrderStart {
   category?: string;
   /** Make an offer, from its tile: the review asks our price. */
   offer?: boolean;
+  /** Straight to the review with [qty] (the shop's bag checked out,
+   * BusinessShop.tsx): back closes the sheet, to the bag. */
+  review?: boolean;
 }
 
 /** An order from a supplier's price list: pick, review, place (or ask them
@@ -133,6 +136,7 @@ export function OrderSheet({
   browse = false,
   onClose,
   onPlaced,
+  onQty,
 }: {
   link: string;
   business: string;
@@ -143,6 +147,8 @@ export function OrderSheet({
   browse?: boolean;
   onClose: () => void;
   onPlaced?: (words: string) => void;
+  /** The bag changed (opened from the shop, whose bag it is too). */
+  onQty?: (qty: Record<string, number>) => void;
 }) {
   const { can } = useAuth();
   const prices = useLoad(
@@ -201,6 +207,11 @@ export function OrderSheet({
   const [qty, setQty] = useState<Record<string, number>>(
     () => start?.qty ?? {},
   );
+  // A change the person makes, told to the shop the sheet was opened from.
+  const changeQty = (next: Record<string, number>) => {
+    setQty(next);
+    onQty?.(next);
+  };
   const [seeded, setSeeded] = useState(false);
   if (!seeded && list && links.data && (start?.itemId || start?.last)) {
     if (start.last)
@@ -211,7 +222,9 @@ export function OrderSheet({
       setQty({ ...qty, [it.item_id]: Math.max(1, it.min_quantity) });
     setSeeded(true);
   }
-  const [step, setStep] = useState<"pick" | "review">("pick");
+  const [step, setStep] = useState<"pick" | "review">(
+    start?.review ? "review" : "pick",
+  );
   const [search, setSearch] = useState("");
   const [chip, setChip] = useState<string | undefined>(
     start?.category ? categoryTag(start.category) : undefined,
@@ -456,7 +469,13 @@ export function OrderSheet({
       }
       from={from}
       onClose={onClose}
-      onBack={step === "review" ? () => setStep("pick") : undefined}
+      onBack={
+        step !== "review"
+          ? undefined
+          : start?.review
+            ? onClose
+            : () => setStep("pick")
+      }
       shut={shut}
       testid="order-sheet"
       lead={
@@ -573,7 +592,7 @@ export function OrderSheet({
             type="button"
             className="tk-chip-btn"
             onClick={() =>
-              setQty(
+              changeQty(
                 reorderQty(
                   last.data as Purchase,
                   links.data?.item_links ?? [],
@@ -723,7 +742,7 @@ export function OrderSheet({
                               aria-label={`One fewer ${it.name}`}
                               disabled={n === 0}
                               onClick={() =>
-                                setQty({
+                                changeQty({
                                   ...qty,
                                   [it.item_id]: stepQty(n, it.min_quantity, -1),
                                 })
@@ -737,7 +756,7 @@ export function OrderSheet({
                               aria-label={`One more ${it.name}`}
                               disabled={!it.available}
                               onClick={() =>
-                                setQty({
+                                changeQty({
                                   ...qty,
                                   [it.item_id]: stepQty(n, it.min_quantity, 1),
                                 })
@@ -751,7 +770,7 @@ export function OrderSheet({
                           <SizesQty
                             product={it}
                             qty={qty}
-                            onQty={(id, n) => setQty({ ...qty, [id]: n })}
+                            onQty={(id, n) => changeQty({ ...qty, [id]: n })}
                           />
                         )}
                       </li>
@@ -1512,7 +1531,7 @@ export function BillView({
 
 /** A product's sizes and colours to order by: a box each (how many), those
  * off sale greyed; its minimum and quantity prices count them together. */
-function SizesQty({
+export function SizesQty({
   product,
   qty,
   onQty,

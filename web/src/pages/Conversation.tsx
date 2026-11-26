@@ -105,6 +105,8 @@ import {
   type LinkRole,
 } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
+import { BusinessShop } from "./BusinessShop";
+import { ShareToPerson } from "./People";
 import { PayDiaryState } from "./PayDiary";
 import { FileCard } from "./ChatFiles";
 import { frameOf } from "../lib/chatfiles";
@@ -1237,6 +1239,9 @@ export function ConversationPane({
   const [infoOpen, setInfoOpen] = useState(false);
   // Invoice them, from the tools (business-chat-tools.md §3).
   const [invoicing, setInvoicing] = useState(false);
+  // Their shop (BusinessShop.tsx), over the conversation; at an item a card named.
+  const [shopAt, setShopAt] = useState<{ item?: string }>();
+  const [sharing, setSharing] = useState<{ id: string; name: string }>();
   const navigate = useNavigate();
   const openOrder = useRef<(start: OrderStart) => void>(() => {});
   const logo = conv.logo ? logoSrc(conv.business) : undefined;
@@ -1334,16 +1339,19 @@ export function ConversationPane({
     priced.data?.whose === "theirs" &&
     can("table.edit") &&
     can("storefront.manage");
+  // They sell to us (a price list or their storefront): their shop applies.
+  const sells =
+    chatTools &&
+    priced.data?.whose === "theirs" &&
+    (priced.data?.items.length ?? 0) > 0;
   const liveNow: Live = {
     photos: ownPhotos.data,
     items: priced.data?.items ?? [],
     whose: priced.data?.whose ?? "",
     stock: ownStock.data ?? [],
     link: conv.link,
-    // Without leave to order, Order is the prices page, as before.
-    onOrder: supplies
-      ? (itemId, from) => c.openTool("order", from, { order: { itemId } })
-      : undefined,
+    // Their shop, at the item (to look around without leave to order).
+    onOrder: sells ? (itemId) => setShopAt({ item: itemId }) : undefined,
   };
   const openDoc = (card: DocCard, from: DOMRect) =>
     c.openTool(card.doc === "purchase" ? "purchases" : "bills", from, {
@@ -1466,6 +1474,7 @@ export function ConversationPane({
     diaryWhere: conv.link,
     extras: chatTools ? businessTiles : undefined,
     onDiary: () => afterDiary.current(),
+    onShop: chatTools ? () => setShopAt({}) : undefined,
     scope: chatTools
       ? { link: conv.link, name: conv.name, supplies: !!supplies }
       : undefined,
@@ -1978,16 +1987,19 @@ export function ConversationPane({
         }
         actions={
           <>
-            {supplies && write && (
+            {sells && (
               <button
                 type="button"
-                className="tk-head-order"
+                className="icon-button"
+                aria-label="Their shop"
                 data-testid="chat-order"
-                onClick={(e) =>
-                  c.openTool("order", e.currentTarget.getBoundingClientRect())
-                }
+                onClick={() => {
+                  setInfoOpen(false);
+                  setSearchOpen(false);
+                  setShopAt({});
+                }}
               >
-                Order
+                <Icon name="store" />
               </button>
             )}
             <button
@@ -2139,6 +2151,30 @@ export function ConversationPane({
             }}
           />
         </Sheet>
+      )}
+      {shopAt && (
+        <BusinessShop
+          link={conv.link}
+          business={conv.name}
+          businessId={conv.business}
+          logo={logo}
+          supplies={!!supplies}
+          startItem={shopAt.item}
+          onClose={() => setShopAt(undefined)}
+          onAsk={(words) => {
+            setShopAt(undefined);
+            c.setText(words);
+          }}
+          onShare={(it) => setSharing(it)}
+          onPlaced={() => afterDiary.current()}
+        />
+      )}
+      {sharing && (
+        <ShareToPerson
+          card={{ type: "product", business_id: conv.business, item_id: sharing.id }}
+          what={sharing.name}
+          onClose={() => setSharing(undefined)}
+        />
       )}
       <PayListBar />
       {write ? (
