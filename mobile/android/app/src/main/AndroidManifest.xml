@@ -30,7 +30,13 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove"/>
+    <!-- Android's back gesture (predictive back, Android 13 and later): the
+         app's screens follow the finger and slide out when it is done
+         (lib/kit/mobile.dart TkRoute); at the chats' root, the phone shows
+         its own way home. -->
     <application
+        android:enableOnBackInvokedCallback="true"
+        tools:targetApi="33"
         android:label="Taskiem"
         android:name=".TaskiemApplication"
         android:icon="@mipmap/ic_launcher"

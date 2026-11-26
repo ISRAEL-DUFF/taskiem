@@ -51,6 +51,7 @@ render and compare.
 | A form filled from a photo (read on the phone, never sent) | `PhotoReadButton` + `readPhotoFromPhone`; a chat's photo `readChatPhoto` (`chat/photo_text.dart`), each giving a `PhotoReading` (its words, maybe ''); when the phone found nothing, `PhotoAI` (once per screen) says whether "Read it with AI" is offered: `PhotoAICallout` under the button in a sheet, `PhotoAI.offer` from a menu, then `readPhotoWithAI`; a chat photo's menu items `photoAccountItems` (`chat/save_as.dart`); tests swap `photoText` and `pickPhotoToRead` |
 | People to pay collected from messages | `PayListBar(auth:)` (`chat/pay_collect.dart`) above a chat's box; `addReadingToList` for Add to the list; a chat photo's `photoAccountItems(from:)` and `PayChip(from:)` take the message as `MessageFrom` |
 | A menu of actions | `pickAction` |
+| Holding messages in a chat (WhatsApp's selection) | `MessageSelection(actsOf:, onDelete:, onForward:)` with `HeldActs` per message, the head in `SelectionHead`, the thread in `SelectionScope` and `ThreadView(selection:)` (`chat/menu.dart`); tests use `heldActions` and `chooseHeld` (`test/support.dart`) |
 | "Are you sure?" | `askSure(danger: true)` |
 | Text that is several lines of facts | `TkLines` |
 
@@ -90,6 +91,11 @@ theme has.
   the words (`BubbleFrame(inline: false)`).
 - **A chip stretched to the full width**: no `alignment:` on a chip's
   `Container`.
+- **The thread builds only what is near the view** (`ThreadView`, a lazy
+  list as WhatsApp's): a test looking for a message far from where the
+  chat opens moves to it first (`seeInThread` in `test/support.dart`).
+  What a chat reads besides its messages (tags, services, tools) waits
+  for the slide in (`afterSlideIn`, `kit/mobile.dart`).
 - **A sheet in the wrong look**: open sheets inside the app's look
   (`TkAppLook`); a screen pushed above it keeps it.
 - **A stand-in server that does not answer** shows "Something went wrong"

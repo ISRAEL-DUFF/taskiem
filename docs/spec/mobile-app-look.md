@@ -408,6 +408,27 @@ web's pictures (the parity test still builds and drives them).
   pills; a voice note with a lime play button and bars that fill as it
   plays; three dots in a bubble while they type. Replying: the line on a
   card with a round ×.
+- **Holding a message** (the founder, 25 November 2026: "as WhatsApp on a
+  phone"; the old menu's card of actions lay over the reactions on a long
+  message). A message held is selected: its row tinted across the thread
+  (`TkLook.chatPicked`), the head turned into the selection's bar: ✕ and
+  how many, then Reply, Star, Delete and Forward as plain icons and ⋮ for
+  the rest (Copy, Edit, Message info, Save as…, a photo's reading, Who
+  reacted). The reactions float on their own just over the one held (under
+  it with no room above), kept on the screen over a message taller than
+  it, and follow it as the thread moves; "+" opens every emoji in their
+  place. A tap on another message adds it or takes it away; with several,
+  only Star, Delete, Forward and Copy (their words in order), and Delete
+  for everyone only when each may be. Back, ✕, the last one let go or
+  anything done ends it. Built from `MessageSelection`, `SelectionHead`
+  and `SelectionScope` (`lib/chat/menu.dart`) with `ThreadView(selection:)`.
+- **The thread** is a list built lazily, as WhatsApp's (the founder, 25
+  November 2026: it flickered as it opened): anchored where it opens (the
+  newest at the bottom, the first unread 40 px under the top, a message
+  looked for in the middle), placed in its first frame, only what is near
+  the view built; older pages land above and new messages below without
+  moving the view, followed only at the bottom. A thread shorter than the
+  screen stands at its top, as the web's.
 - **The chats list.** "Chats" large with the business under it; ⋯ and + (Find
   a business, which no longer floats over the rows) round in the head. The
   search on a card; All, Unread, Starred, Archived as the switch.

@@ -617,7 +617,7 @@ void main() {
     // file deleted, the words read with from photo.
     reader.words = 'Chidi Okafor 0123456789 GTBank';
     final before = fetched;
-    await t.tap(find.text('Save the account'));
+    await chooseHeld(t, 'Save the account');
     await settle(t);
     await settle(t);
     expect(fetched, before + 1);

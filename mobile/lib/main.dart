@@ -857,18 +857,18 @@ class _OpenState extends State<_Open> {
     onOpenLink: (link) {
       // "Open" on a save's toast: Taskiem's conversation, in this one's place.
       if (link == 'taskiem') {
-        Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+        Navigator.of(context).pushReplacement(TkRoute<void>(
+          // In this one's place at once; Back slides it out as any chat.
           transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
           pageBuilder: (_, _, _) => _OpenTaskiem(chats: widget.chats),
         ));
         return;
       }
       final c = widget.chats.conversations.where((c) => c.link == link).firstOrNull;
       if (c == null) return;
-      Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+      Navigator.of(context).pushReplacement(TkRoute<void>(
+        // In this one's place at once; Back slides it out as any chat.
         transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
         pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c, notify: widget.notify),
       ));
     },
@@ -898,14 +898,14 @@ class _OpenTaskiemState extends State<_OpenTaskiem> {
   Widget build(BuildContext context) => TaskiemScreen(
     data: _data,
     openTool: widget.openTool,
-    onOpenCustomer: (id) => Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+    onOpenCustomer: (id) => Navigator.of(context).pushReplacement(TkRoute<void>(
+      // In this one's place at once; Back slides it out as any chat.
       transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
       pageBuilder: (_, _, _) => _OpenCustomer(chats: widget.chats, id: id),
     )),
-    onOpenLink: (c) => Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+    onOpenLink: (c) => Navigator.of(context).pushReplacement(TkRoute<void>(
+      // In this one's place at once; Back slides it out as any chat.
       transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
       pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c),
     )),
   );

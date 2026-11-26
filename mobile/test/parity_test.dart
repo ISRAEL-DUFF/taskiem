@@ -330,6 +330,15 @@ final screens = <String, Screen>{
       await t.tap(find.bySemanticsLabel('Run it'));
       await _loaded(t);
       final all = find.bySemanticsLabel('See all of Open tickets');
+      // Built as the thread comes near it, then read (large text: further
+      // up from the end).
+      final thread = t.state<ThreadViewState<TaskiemLine>>(find.byType(ThreadView<TaskiemLine>));
+      thread.scroll.jumpTo(thread.scroll.position.maxScrollExtent);
+      await _loaded(t);
+      for (var i = 0; i < 40 && all.evaluate().isEmpty; i++) {
+        thread.scroll.jumpTo(thread.scroll.position.pixels - 300);
+        await _loaded(t);
+      }
       await t.ensureVisible(all);
       await t.pumpAndSettle();
       await t.tap(all);

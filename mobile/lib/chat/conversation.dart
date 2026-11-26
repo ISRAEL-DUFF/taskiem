@@ -18,7 +18,7 @@ import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
-import '../kit/mobile.dart' show tkInitials;
+import '../kit/mobile.dart' show afterSlideIn, tkInitials;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
@@ -356,11 +356,13 @@ class ConversationData extends ChangeNotifier {
     }
   }
 
+  /// What the box's tags offer (the screen asks once it has slid in).
+  void openExtras() => unawaited(_tagSources());
+
   /// Opens at [focus], or at the newest page; then follows it.
   Future<void> open() async {
     if (focus == null) _restore();
     chats.openOutboxes.add(conv.link);
-    unawaited(_tagSources());
     if (focus != null) {
       try {
         await openAt(focus!);
@@ -949,7 +951,17 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _words = _text.text;
     _text.addListener(_typed);
     if (widget.data.messages == null) widget.data.open();
-    // Their services, for Book (ChatTools.tsx useLinkServices).
+    // The rest once it has slid in: the slide has the phone to itself.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) afterSlideIn(context, _extras);
+    });
+  }
+
+  /// What the screen reads besides the messages: the tags' sources, and
+  /// their services, for Book (ChatTools.tsx useLinkServices).
+  void _extras() {
+    if (!mounted) return;
+    widget.data.openExtras();
     if (widget.data.chats.chatTools) {
       linkServices(widget.data.chats.auth.transport, widget.data.conv.link).then((s) {
         if (mounted) setState(() => _services = s);

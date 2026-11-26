@@ -513,8 +513,10 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   Timer? _rest;
   bool _loadingOlder = false;
 
-  /// Messages arrived with this build (until its frame is drawn).
+  /// Messages arrived with this build (until its frame is drawn), and
+  /// whether the view follows them to the bottom as it is laid out.
   bool _arrived = false;
+  bool _follows = false;
 
   /// How tall a day chip is, as last measured.
   double _chipHeight = 26;
@@ -678,19 +680,22 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     final arrived = items.where((m) => of.at(m).isAfter(prev)).toList();
     if (arrived.isEmpty) return;
     final stick = _atNewest;
-    // With nothing after the messages, one arriving at the bottom is
-    // followed in the layout itself ([_wanted]); with Taskiem's cards
-    // after them, the newest is brought into sight here instead.
-    final held = _atEnd && _keep && widget.tail == null;
+    final mine = arrived.any(of.mine);
+    // With nothing after the messages, one arriving while the reader is at
+    // the newest (or one they sent) is followed in the layout itself, in
+    // the frame it is drawn ([_wanted]); with Taskiem's cards after them,
+    // the newest is brought into sight here instead, the cards below it.
+    _follows = (stick || mine) && widget.tail == null;
     _arrived = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final followed = _follows;
       _arrived = false;
+      _follows = false;
       if (!mounted || !scroll.hasClients) return;
-      if (stick || arrived.any(of.mine)) {
+      if (stick || mine) {
         // The newest message in view, not what follows it (Taskiem's
-        // cards): an answer is never left out of sight. Kept at the very
-        // end already: it stays there.
-        if (!(held && _atEnd)) _toNewest();
+        // cards): an answer is never left out of sight.
+        if (!followed) _toNewest();
         _newCount = 0;
       } else {
         _newCount += arrived.where((m) => !of.mine(m)).length;
@@ -894,7 +899,7 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     // What is below grew (a message, a picture loaded, the typing dots);
     // a message with Taskiem's cards after it is brought into sight by
     // [_follow] instead, the cards left below it.
-    if (grew && _keep && _atEnd && !dragging && !(_arrived && widget.tail != null)) return max;
+    if (grew && !dragging && (_follows || (_keep && _atEnd && !(_arrived && widget.tail != null)))) return max;
     return null;
   }
 
@@ -1018,7 +1023,15 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
             child: Semantics(
               label: 'Chat history',
               liveRegion: true,
-              child: CustomScrollView(
+              // What is in it changed size (a message, a card, a picture
+              // loaded): the round button and the day chip told again,
+              // once it is laid out.
+              child: NotificationListener<ScrollMetricsNotification>(
+                onNotification: (_) {
+                  _onScroll();
+                  return false;
+                },
+                child: CustomScrollView(
                 controller: scroll,
                 center: _center,
                 // What is in view and a screen's height round it.
@@ -1045,6 +1058,7 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
                     ),
                   ),
                 ],
+              ),
               ),
             ),
           ),
@@ -1195,6 +1209,8 @@ class _PickRow extends StatelessWidget {
       void flip() => selection.toggle(id);
       return Semantics(
         selected: picking ? on : null,
+        // While selecting, the row is pressed to add it or take it away.
+        label: picking ? (on ? 'Selected. Tap to take it away' : 'Tap to add it') : null,
         onTap: picking ? flip : null,
         child: GestureDetector(
           behavior: picking ? HitTestBehavior.opaque : HitTestBehavior.deferToChild,

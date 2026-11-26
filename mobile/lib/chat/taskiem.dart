@@ -67,7 +67,7 @@ import 'tools_panel.dart';
 import 'words.dart';
 import 'save_as.dart' show saveFromWords, saveNamed;
 import 'saved_files.dart' show attachSavedFile;
-import '../kit/mobile.dart' show TkRoute;
+import '../kit/mobile.dart' show TkRoute, afterSlideIn;
 import '../school/school_chasing.dart' show DebtorsPage;
 import '../school/school_clearance.dart' show ClearancePage;
 import '../school/school_money.dart' show PaymentsPage;
@@ -334,7 +334,6 @@ class TaskiemData extends ChangeNotifier {
   Future<void> open() async {
     _restore();
     unawaited(loadCards());
-    unawaited(loadTags());
     try {
       final out = await api.taskiemHistory();
       hasOlder = out.messages.length >= _page;
@@ -822,8 +821,16 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     if (widget.data.messages == null) widget.data.open();
     // The business's own tools, read now: the tools button shows for them
     // even with the built-in tools off.
-    unawaited(_tools.loadMade().then((_) => _openGiven()));
-    unawaited(_tools.loadPages());
+    // The rest once it has slid in: the slide has the phone to itself.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      afterSlideIn(context, () {
+        if (!mounted) return;
+        unawaited(widget.data.loadTags());
+        unawaited(_tools.loadMade().then((_) => _openGiven()));
+        unawaited(_tools.loadPages());
+      });
+    });
     _runs.addListener(_runsChanged);
     // The menus' catalogue, read now, so a menu is drawn whole at once.
     unawaited(catalogueOf(widget.data.chats.auth).then((_) {}, onError: (Object _) {}));

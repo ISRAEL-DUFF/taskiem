@@ -378,7 +378,9 @@ void main() {
     await settle(t);
     await snap(t, 'photo-chat');
     // The photo's bubble: the last from the customer (its time in it).
-    await t.longPress(find.text('14:10').last);
+    final times = find.text('14:10');
+    final lowest = [for (var i = 0; i < times.evaluate().length; i++) times.at(i)]..sort((a, b) => t.getCenter(a).dy.compareTo(t.getCenter(b).dy));
+    await t.longPress(lowest.last);
     await settle(t);
     expect(heldActions(t), containsAll(['Save as…', 'Save the account']));
     await snap(t, 'photo-chat-menu');

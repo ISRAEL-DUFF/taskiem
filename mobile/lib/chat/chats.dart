@@ -18,7 +18,7 @@ import '../app/store.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
-import '../kit/mobile.dart' show TkChips, TkHeadButton, TkPanel;
+import '../kit/mobile.dart' show TkChips, TkCoveredBuilder, TkHeadButton, TkPanel;
 import '../kit/tap_area.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
@@ -651,9 +651,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
       child: TkAppLook(
         child: ColoredBox(
         color: TkLook.of(context).ground,
-        child: ListenableBuilder(
+        // Not rebuilt under a chat sliding in or out over it.
+        child: TkCoveredBuilder(
           listenable: widget.data,
-          builder: (context, _) {
+          builder: (context) {
             final d = widget.data;
             final archived = _filter == ChatFilter.archived;
             final query = _query;
