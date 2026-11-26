@@ -17,6 +17,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/people"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/push"
@@ -247,7 +248,7 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 		c, _ := openGroupSealed(key, group, m.id, m.sealed)
 		v.Body, v.Card, v.Location, v.Preview = c.Body, c.Card, c.Location, c.Preview
 		if m.attach != nil {
-			a := &chatAttachment{Name: c.Name}
+			a := &chatAttachment{Name: c.Name, Facts: media.FactsOf(m.attach)}
 			a.Kind, _ = m.attach["kind"].(string)
 			a.Type, _ = m.attach["type"].(string)
 			if n, ok := m.attach["size"].(float64); ok {
@@ -432,6 +433,8 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 	var again *groupMessage
 	var owed *groupPush
 	var held error
+	// The group a PDF's picture is kept in, once the send committed.
+	var drawIn uuid.UUID
 	err := s.peopleTx(ctx, me, func(tx pgx.Tx) error {
 		out, again, owed, held = groupMessage{}, nil, nil, nil
 		g, err := groupTx(ctx, tx, me, groupID, true)
@@ -548,8 +551,8 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 		var attach map[string]any
 		if d.file != nil {
 			content.Name = d.file.Name
-			a := d.file.view()
-			attach = map[string]any{"kind": a.Kind, "type": a.Type, "size": a.Size}
+			attach = d.file.stored()
+			drawIn = g.ID
 		}
 		var cardType *string
 		if d.card != nil {
@@ -646,6 +649,9 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 	}
 	if owed != nil {
 		s.queueGroupPush(ctx, me, *owed)
+	}
+	if d.file != nil && drawIn != uuid.Nil {
+		s.drawLater(ctx, d.file.Type, d.file.Data, s.groupPDFCopy(me, drawIn, out.ID))
 	}
 	return out, true, nil
 }
@@ -860,6 +866,7 @@ func (s *Server) groupFile(w http.ResponseWriter, r *http.Request) {
 	}
 	var data []byte
 	var ctype, name, kind string
+	var group, msg uuid.UUID
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		g, err := groupTx(ctx, tx, person, chi.URLParam(r, "id"), false)
 		if err != nil {
@@ -871,6 +878,9 @@ func (s *Server) groupFile(w http.ResponseWriter, r *http.Request) {
 		}
 		if m.deletedAt != nil || m.attach == nil {
 			return errDoorNone
+		}
+		if group, msg = g.ID, m.id; wantsPreview(r) {
+			return nil
 		}
 		var sealed []byte
 		if err := tx.QueryRow(ctx, `SELECT sealed, type FROM group_files WHERE group_id = $1 AND message_id = $2 AND kind = 'file'`, g.ID, m.id).Scan(&sealed, &ctype); err != nil {
@@ -892,7 +902,11 @@ func (s *Server) groupFile(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
-	serveChatFile(w, data, ctype, name, kind)
+	if wantsPreview(r) {
+		s.servePDFPreview(w, r, s.groupPDFCopy(person, group, msg), s.personFail)
+		return
+	}
+	serveChatFileFor(w, r, data, ctype, name, kind)
 }
 
 // groupMessages is GET /v1/me/groups/{id}/messages?before=&starred=1: a
@@ -1806,7 +1820,7 @@ func (s *Server) groupDraftOf(ctx context.Context, person, group, msg uuid.UUID)
 			if err != nil {
 				return err
 			}
-			d.file = &sentFile{Type: ctype, Name: v.Name, Data: data}
+			d.file = &sentFile{Type: ctype, Name: v.Name, Data: data, Facts: forwardedFacts(m.attach)}
 		}
 		return nil
 	})

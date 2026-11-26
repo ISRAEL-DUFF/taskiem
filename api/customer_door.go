@@ -962,7 +962,7 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 			return out, false, chatFileErr(err)
 		}
 		tenant = c.Business
-		bizFile = map[string]any{"kind": out.Attachment.Kind, "type": bf.Type, "size": bf.Size, "name": f.Name, "path": bf.Path}
+		bizFile = f.Facts.Map(map[string]any{"kind": out.Attachment.Kind, "type": f.Type, "size": bf.Size, "name": f.Name, "path": bf.Path})
 	}
 	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		c, err := personChatTx(ctx, tx, person, chatID)
@@ -1052,6 +1052,9 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 			}
 		}
 		return out, false, err
+	}
+	if f != nil {
+		s.drawLater(ctx, f.Type, f.Data, s.personPDFCopy(person, out.ID, nil), s.customerPDFCopy(tenant, out.ID))
 	}
 	return out, true, nil
 }
@@ -1149,14 +1152,18 @@ func (s *Server) personFile(w http.ResponseWriter, r *http.Request) {
 	}
 	var data []byte
 	var ctype, name, kind string
+	var chat, msg uuid.UUID
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		c, err := personChatTx(ctx, tx, person, chi.URLParam(r, "id"))
 		if err != nil {
 			return err
 		}
-		msg, err := uuid.Parse(chi.URLParam(r, "message"))
-		if err != nil {
+		if msg, err = uuid.Parse(chi.URLParam(r, "message")); err != nil {
 			return errDoorNone
+		}
+		chat = c.ID
+		if wantsPreview(r) {
+			return nil
 		}
 		return tx.QueryRow(ctx, `SELECT f.data, f.type, f.name, m.attachment->>'kind' FROM person_files f JOIN person_messages m ON m.id = f.message_id AND m.person_id = f.person_id
 			WHERE f.person_id = $1 AND m.conversation_id = $2 AND f.message_id = $3 AND f.kind = 'file'`, person, c.ID, msg).Scan(&data, &ctype, &name, &kind)
@@ -1165,7 +1172,11 @@ func (s *Server) personFile(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
-	serveChatFile(w, data, ctype, name, kind)
+	if wantsPreview(r) {
+		s.servePDFPreview(w, r, s.personPDFCopy(person, msg, &chat), s.personFail)
+		return
+	}
+	serveChatFileFor(w, r, data, ctype, name, kind)
 }
 
 // readPersonChat is POST /v1/me/chats/{id}/read: the person read the

@@ -114,7 +114,13 @@ func CheckChatUpload(data []byte, name string) (ChatUpload, error) {
 	u.Type = TextType(name, u.Type)
 	u.Doc = DocKind(u.Type)
 	if name != "" {
-		u.Name = ChatFileName(name, u.Type)
+		// A file (a PDF or a document) shows its real extension; a photo
+		// or voice note keeps the name it came with, cleaned.
+		named := u.Type
+		if ChatKind(u.Type) != "file" {
+			named = ""
+		}
+		u.Name = ChatFileName(name, named)
 	}
 	return u, nil
 }
@@ -163,7 +169,7 @@ func checkChatUpload(data []byte) (ChatUpload, error) {
 			return ChatUpload{}, err
 		}
 		if doc == "" {
-			return ChatUpload{}, errNotAccepted(sniffed)
+			return ChatUpload{}, errNotAccepted()
 		}
 		return ChatUpload{Type: doc, Data: data}, nil
 	}

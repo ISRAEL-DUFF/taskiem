@@ -11934,7 +11934,7 @@ paths:
       operationId: linkFile
       tags:
       - Links
-      summary: A message's photo, PDF or voice note
+      summary: A message's photo, PDF, document or voice note
       description: This business's own copy, by the message's id, streamed through the API (a photo or voice note inline, a PDF as a download).
       security:
       - sessionCookie: []
@@ -11953,6 +11953,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: preview
+        in: query
+        required: false
+        description: "1: the picture of the file's PDF's first page (a WebP, 640 pixels wide), drawn now for an older PDF that has none; 404 for any other file, or a PDF with no picture"
+        schema:
+          type: string
+          enum: ['1']
+      - name: view
+        in: query
+        required: false
+        description: "1: a PDF to read inside Taskiem's viewer: inline, with Content-Security-Policy sandbox; every other file stays a download"
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The file
@@ -11982,6 +11996,54 @@ paths:
                 type: string
                 format: binary
             audio/mp4:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-powerpoint:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
               schema:
                 type: string
                 format: binary
@@ -13204,6 +13266,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: preview
+        in: query
+        required: false
+        description: "1: the picture of the file's PDF's first page (a WebP, 640 pixels wide), drawn now for an older PDF that has none; 404 for any other file, or a PDF with no picture"
+        schema:
+          type: string
+          enum: ['1']
+      - name: view
+        in: query
+        required: false
+        description: "1: a PDF to read inside Taskiem's viewer: inline, with Content-Security-Policy sandbox; every other file stays a download"
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The file
@@ -13233,6 +13309,54 @@ paths:
                 type: string
                 format: binary
             audio/mp4:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-powerpoint:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
               schema:
                 type: string
                 format: binary
@@ -26218,6 +26342,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: preview
+        in: query
+        required: false
+        description: "1: the picture of the file's PDF's first page (a WebP, 640 pixels wide), drawn now for an older PDF that has none; 404 for any other file, or a PDF with no picture"
+        schema:
+          type: string
+          enum: ['1']
+      - name: view
+        in: query
+        required: false
+        description: "1: a PDF to read inside Taskiem's viewer: inline, with Content-Security-Policy sandbox; every other file stays a download"
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The file
@@ -26247,6 +26385,54 @@ paths:
                 type: string
                 format: binary
             audio/mp4:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-powerpoint:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
               schema:
                 type: string
                 format: binary
@@ -29120,6 +29306,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: preview
+        in: query
+        required: false
+        description: "1: the picture of the file's PDF's first page (a WebP, 640 pixels wide), drawn now for an older PDF that has none; 404 for any other file, or a PDF with no picture"
+        schema:
+          type: string
+          enum: ['1']
+      - name: view
+        in: query
+        required: false
+        description: "1: a PDF to read inside Taskiem's viewer: inline, with Content-Security-Policy sandbox; every other file stays a download"
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The file
@@ -29129,6 +29329,78 @@ paths:
                 type: string
                 format: binary
             application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-powerpoint:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
               schema:
                 type: string
                 format: binary
@@ -30907,6 +31179,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: preview
+        in: query
+        required: false
+        description: "1: the picture of the file's PDF's first page (a WebP, 640 pixels wide), drawn now for an older PDF that has none; 404 for any other file, or a PDF with no picture"
+        schema:
+          type: string
+          enum: ['1']
+      - name: view
+        in: query
+        required: false
+        description: "1: a PDF to read inside Taskiem's viewer: inline, with Content-Security-Policy sandbox; every other file stays a download"
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The file
@@ -30936,6 +31222,54 @@ paths:
                 type: string
                 format: binary
             audio/mp4:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-powerpoint:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
               schema:
                 type: string
                 format: binary
@@ -54430,6 +54764,26 @@ components:
           type: integer
         name:
           type: string
+        pages:
+          type: integer
+          description: A PDF's page count, once its picture is drawn
+        protected:
+          type: boolean
+          description: A password-protected PDF (no page count, no picture)
+        preview:
+          type: string
+          enum: [ready, none, failed]
+          description: "The picture of a PDF's first page, from its file route with ?preview=1 - ready, none (a protected PDF) or failed; missing while it is drawn, and on files sent before pictures were drawn"
+        w:
+          type: integer
+          description: A photo's, or the PDF picture's, width in pixels
+        h:
+          type: integer
+          description: A photo's, or the PDF picture's, height in pixels
+        doc:
+          type: string
+          enum: [word, excel, powerpoint, opendocument, csv, text]
+          description: A document's family, for its icon
     ChatListItem:
       type: object
       additionalProperties: false
@@ -56628,7 +56982,7 @@ components:
           type: object
           additionalProperties: false
           required: [kind, type, size]
-          description: A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id} streams it
+          description: A photo, a PDF, a document or a voice note; GET /v1/link-chats/{link}/files/{id} streams it
           properties:
             kind:
               type: string
@@ -56640,6 +56994,26 @@ components:
               format: int64
             name:
               type: string
+            pages:
+              type: integer
+              description: A PDF's page count, once its picture is drawn
+            protected:
+              type: boolean
+              description: A password-protected PDF (no page count, no picture)
+            preview:
+              type: string
+              enum: [ready, none, failed]
+              description: "The picture of a PDF's first page, from its file route with ?preview=1 - ready, none (a protected PDF) or failed; missing while it is drawn, and on files sent before pictures were drawn"
+            w:
+              type: integer
+              description: A photo's, or the PDF picture's, width in pixels
+            h:
+              type: integer
+              description: A photo's, or the PDF picture's, height in pixels
+            doc:
+              type: string
+              enum: [word, excel, powerpoint, opendocument, csv, text]
+              description: A document's family, for its icon
         forwarded:
           type: boolean
           description: Forwarded from another conversation
@@ -56697,6 +57071,26 @@ components:
                   format: int64
                 name:
                   type: string
+                pages:
+                  type: integer
+                  description: A PDF's page count, once its picture is drawn
+                protected:
+                  type: boolean
+                  description: A password-protected PDF (no page count, no picture)
+                preview:
+                  type: string
+                  enum: [ready, none, failed]
+                  description: "The picture of a PDF's first page, from its file route with ?preview=1 - ready, none (a protected PDF) or failed; missing while it is drawn, and on files sent before pictures were drawn"
+                w:
+                  type: integer
+                  description: A photo's, or the PDF picture's, width in pixels
+                h:
+                  type: integer
+                  description: A photo's, or the PDF picture's, height in pixels
+                doc:
+                  type: string
+                  enum: [word, excel, powerpoint, opendocument, csv, text]
+                  description: A document's family, for its icon
         read_at:
           type: string
           format: date-time

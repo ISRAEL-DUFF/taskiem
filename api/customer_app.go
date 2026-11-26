@@ -79,17 +79,38 @@ type chatAttachment struct {
 	Type string `json:"type"`
 	Size int64  `json:"size"`
 	Name string `json:"name,omitempty"`
+	// A PDF's pages and picture, a photo's size, a document's family
+	// (docs/spec/chat-previews-and-editing.md §1.3).
+	media.Facts
 }
 
 // sentFile is a file sent in an app conversation, scanned and cleaned
-// (media.CheckChatFile), before either copy is stored.
+// (media.CheckChatUpload), before either copy is stored.
 type sentFile struct {
 	Type, Name string
 	Data       []byte
+	media.Facts
 }
 
 func (f *sentFile) view() *chatAttachment {
-	return &chatAttachment{Kind: media.ChatKind(f.Type), Type: f.Type, Size: int64(len(f.Data)), Name: f.Name}
+	return &chatAttachment{Kind: media.ChatKind(f.Type), Type: f.Type, Size: int64(len(f.Data)), Name: f.Name, Facts: f.Facts}
+}
+
+// stored is the file's attachment as a chat keeps it beside its copy:
+// kind, type and size, and its facts.
+func (f *sentFile) stored() map[string]any {
+	v := f.view()
+	return f.Facts.Map(map[string]any{"kind": v.Kind, "type": v.Type, "size": v.Size})
+}
+
+// forwardedFacts are the facts a file keeps when it is sent on: its size
+// and family, never its picture, which the new copy draws again.
+func forwardedFacts(attach map[string]any) media.Facts {
+	f := media.FactsOf(attach)
+	if f.Preview != "" {
+		return media.Facts{Doc: f.Doc}
+	}
+	return media.Facts{W: f.W, H: f.H, Doc: f.Doc}
 }
 
 // CustomerAnswer is a business's message to a person in the app, told to
@@ -236,8 +257,9 @@ func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage)
 	}
 	fileID := uuid.Must(uuid.NewV7())
 	if m.personFile != nil {
-		v := m.personFile.view()
-		personAtt, _ = json.Marshal(map[string]any{"kind": v.Kind, "type": v.Type, "size": v.Size, "name": v.Name, "file": fileID})
+		stored := m.personFile.stored()
+		stored["name"], stored["file"] = m.personFile.Name, fileID
+		personAtt, _ = json.Marshal(stored)
 	}
 	var card, bizCard []byte
 	if m.card != nil {
@@ -367,7 +389,7 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 			return out, false, chatFileErr(err)
 		}
 		v := in.File.view()
-		bizFile = map[string]any{"kind": v.Kind, "type": f.Type, "size": f.Size, "name": v.Name, "path": f.Path}
+		bizFile = in.File.Facts.Map(map[string]any{"kind": v.Kind, "type": v.Type, "size": f.Size, "name": v.Name, "path": f.Path})
 		out.Kind, out.Attachment = "media", v
 	}
 	// The first link's preview, on words only; its picture in our storage.
@@ -449,6 +471,9 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 		s.tellAnswered(context.WithoutCancel(ctx), chatlinks.Answer{Tenant: tenant, Conversation: conv, Person: person,
 			Words: answerWords(out), FromPerson: !strings.HasPrefix(in.SenderID, "system:"), Offer: in.Offer})
 	}
+	if in.File != nil {
+		s.drawLater(ctx, in.File.Type, in.File.Data, s.customerPDFCopy(tenant, out.ID), s.personPDFCopy(person, out.ID, nil))
+	}
 	return out, true, nil
 }
 
@@ -494,6 +519,12 @@ func chatFileErr(err error) error {
 				msg = msg[j+2:]
 			}
 		}
+		switch {
+		case strings.HasPrefix(msg, "larger than "):
+			return customerSendErr{http.StatusBadRequest, "This file is " + msg + "."}
+		case strings.HasPrefix(msg, "Taskiem can send"):
+			return customerSendErr{http.StatusBadRequest, msg + "."}
+		}
 		return customerSendErr{http.StatusBadRequest, "This file cannot be sent: " + msg + "."}
 	}
 	return err
@@ -522,18 +553,11 @@ func (s *Server) readChatFile(w http.ResponseWriter, r *http.Request) (*sentFile
 	if err := s.Media.ScanChatFile(r.Context(), data); err != nil {
 		return nil, chatFileErr(err)
 	}
-	ctype, clean, err := media.CheckChatFile(data)
+	u, err := media.CheckChatUpload(data, hdr.Filename)
 	if err != nil {
 		return nil, chatFileErr(err)
 	}
-	name := hdr.Filename
-	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
-		name = name[i+1:]
-	}
-	if r := []rune(name); len(r) > 200 {
-		name = string(r[:200])
-	}
-	return &sentFile{Type: ctype, Name: name, Data: clean}, nil
+	return &sentFile{Type: u.Type, Name: u.Name, Data: u.Data, Facts: u.Facts}, nil
 }
 
 // --- the business's routes for the app line ---
@@ -857,6 +881,31 @@ func (s *Server) sendCustomerFile(w http.ResponseWriter, r *http.Request) {
 // business's own copy of an app message's file.
 func (s *Server) customerFile(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
+	if wantsPreview(r) {
+		// The same check as the file's: the thread is the business's.
+		var msg uuid.UUID
+		err := s.tx(r, func(tx pgx.Tx) error {
+			t, err := s.customerThreadIn(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
+			if err != nil {
+				return err
+			}
+			if msg, err = uuid.Parse(chi.URLParam(r, "message")); err != nil {
+				return pgx.ErrNoRows
+			}
+			var ok bool
+			if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM customer_messages WHERE tenant_id = $1 AND conversation_id = ANY ($2) AND id = $3)`,
+				p.TenantID, t.ids(), msg).Scan(&ok); err != nil || !ok {
+				return pgx.ErrNoRows
+			}
+			return nil
+		})
+		if err != nil {
+			s.customerChatFail(w, r, err)
+			return
+		}
+		s.servePDFPreview(w, r, s.customerPDFCopy(p.TenantID, msg), s.customerChatFail)
+		return
+	}
 	var path, ctype, name, kind string
 	err := s.tx(r, func(tx pgx.Tx) error {
 		t, err := s.customerThreadIn(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
@@ -892,7 +941,7 @@ func (s *Server) customerFile(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	serveChatFile(w, data, ctype, name, kind)
+	serveChatFileFor(w, r, data, ctype, name, kind)
 }
 
 // serveChatFile writes a conversation's file: shown in the page for a
@@ -1052,11 +1101,12 @@ func (s *Server) openAttachment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		Type string          `json:"type"`
 		Size int64           `json:"size"`
 		Name json.RawMessage `json:"name"`
+		media.Facts
 	}
 	if err := json.Unmarshal(raw, &a); err != nil {
 		return nil, err
 	}
-	out := &chatAttachment{Kind: a.Kind, Type: a.Type, Size: a.Size}
+	out := &chatAttachment{Kind: a.Kind, Type: a.Type, Size: a.Size, Facts: a.Facts}
 	if len(a.Name) > 0 && string(a.Name) != "null" {
 		var err error
 		if out.Name, err = s.openCustomerText(ctx, tx, tenant, a.Name); err != nil {

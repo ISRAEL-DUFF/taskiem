@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/saved"
 )
 
@@ -94,15 +95,21 @@ const (
 	DocBill     = "bill"
 )
 
-// Attachment is a photo, a PDF or a voice note sent with a message, in
-// this side's own storage: each business keeps its own copy.
+// Attachment is a photo, a PDF, a document or a voice note sent with a
+// message, in this side's own storage: each business keeps its own copy.
 type Attachment struct {
 	Kind string `json:"kind"` // photo, file or voice
 	Type string `json:"type"`
 	Size int64  `json:"size"`
 	Name string `json:"name,omitempty"`
+	// The file's facts: a PDF's pages and picture, a photo's size, a
+	// document's family (docs/spec/chat-previews-and-editing.md §1.3).
+	media.Facts
 	// Path is where this side's copy is stored; never shown.
 	Path string `json:"-"`
+	// PreviewPath is where this side keeps the picture of a PDF's first
+	// page; never shown (GET …/files/{id}?preview=1 answers it).
+	PreviewPath string `json:"-"`
 }
 
 // Preview is a link's preview in a message: the page's host, title and
@@ -647,7 +654,7 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 			return nil
 		}
 		a.Name = cutRunes(strings.TrimSpace(a.Name), 120)
-		raw, _ := json.Marshal(map[string]any{"kind": a.Kind, "type": a.Type, "size": a.Size, "name": a.Name, "path": a.Path})
+		raw, _ := json.Marshal(a.Facts.Map(map[string]any{"kind": a.Kind, "type": a.Type, "size": a.Size, "name": a.Name, "path": a.Path}))
 		return raw
 	}
 	l, err := GetTx(ctx, tx, link)
@@ -953,13 +960,32 @@ func AttachmentTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID) 
 	}
 	var a struct {
 		Attachment
-		Path string `json:"path"`
+		Path        string `json:"path"`
+		PreviewPath string `json:"preview_path"`
 	}
 	if err := json.Unmarshal(raw, &a); err != nil {
 		return Attachment{}, err
 	}
-	a.Attachment.Path = a.Path
+	a.Attachment.Path, a.Attachment.PreviewPath = a.Path, a.PreviewPath
 	return a.Attachment, nil
+}
+
+// SetFileFactsTx keeps what was learnt of this side's copy of a message's
+// file once it was looked at after sending (a PDF's pages and picture),
+// and where its picture is, so the message reads as changed in the live
+// stream and the app's sync. A message hidden for this side is left.
+func SetFileFactsTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID, f media.Facts, previewPath string) error {
+	set := f.Map(nil)
+	if previewPath != "" {
+		set["preview_path"] = previewPath
+	}
+	raw, err := json.Marshal(set)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `UPDATE link_messages SET attachment = attachment || $4::jsonb
+		WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3 AND attachment IS NOT NULL AND hidden_at IS NULL`, tenant, link, pair, raw)
+	return err
 }
 
 // PreviewImageTx is where this side keeps the picture of a message's link

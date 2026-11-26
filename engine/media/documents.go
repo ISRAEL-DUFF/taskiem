@@ -105,7 +105,7 @@ func checkDocument(data []byte) (string, error) {
 		}
 		// A script is a program, whatever its name.
 		if bytes.HasPrefix(bytes.TrimPrefix(data, []byte("\xEF\xBB\xBF")), []byte("#!")) {
-			return "", errNotAccepted("script")
+			return "", errNotAccepted()
 		}
 		return TypeText, nil
 	}
@@ -395,7 +395,8 @@ func extsOf(ctype string) []string {
 	return nil
 }
 
-// errNotAccepted is the refusal of a file of a kind not on the list.
-func errNotAccepted(sniffed string) error {
-	return fmt.Errorf("%w: a %s file; Taskiem can send photos, voice notes, PDFs and Word, Excel, PowerPoint and text documents", ErrFile, sniffed)
+// errNotAccepted is the refusal of a file of a kind not on the list, in
+// the words the person reads.
+func errNotAccepted() error {
+	return fmt.Errorf("%w: Taskiem can send photos, voice notes, PDFs and Word, Excel, PowerPoint and text documents", ErrFile)
 }

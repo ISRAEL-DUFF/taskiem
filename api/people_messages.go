@@ -14,6 +14,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/peoplesafety"
 	"github.com/israel-duff/taskiem/engine/push"
@@ -118,7 +119,7 @@ func (m peopleRow) view(key []byte, owner uuid.UUID) (peopleMessage, peopleSeale
 	}
 	out.Body, out.Card, out.Location, out.Preview = v.Body, v.Card, v.Location, v.Preview
 	if m.attach != nil {
-		a := &chatAttachment{Name: v.Name}
+		a := &chatAttachment{Name: v.Name, Facts: media.FactsOf(m.attach)}
 		a.Kind, _ = m.attach["kind"].(string)
 		a.Type, _ = m.attach["type"].(string)
 		if n, ok := m.attach["size"].(float64); ok {
@@ -227,9 +228,11 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 	var owed *peoplePush
 	var acceptedFrom *uuid.UUID
 	var held error
+	// Whose copies of a PDF get its picture, once the send committed.
+	var drawFor []uuid.UUID
 	keys := s.keys()
 	err := s.peopleTx(ctx, me, func(tx pgx.Tx) error {
-		out, again, owed, acceptedFrom, held = peopleMessage{}, nil, nil, nil, nil
+		out, again, owed, acceptedFrom, held, drawFor = peopleMessage{}, nil, nil, nil, nil, nil
 		c, err := peopleCopyTx(ctx, tx, me, chatID, true)
 		if err != nil {
 			return err
@@ -422,8 +425,8 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 		var attach map[string]any
 		if d.file != nil {
 			content.Name = d.file.Name
-			a := d.file.view()
-			attach = map[string]any{"kind": a.Kind, "type": a.Type, "size": a.Size}
+			attach = d.file.stored()
+			drawFor = []uuid.UUID{me}
 		}
 		var cardType *string
 		if d.card != nil {
@@ -460,6 +463,9 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 			}
 			if err := insertPeopleMessage(ctx, tx, peerKey, peer, pcID, c.Conversation, id, false, d, content, attach, cardType, warn); err != nil {
 				return err
+			}
+			if drawFor != nil {
+				drawFor = append(drawFor, peer)
 			}
 			if _, err := tx.Exec(ctx, `UPDATE people_messages SET delivered_at = now() WHERE person_id = $1 AND id = $2`, me, id); err != nil {
 				return err
@@ -513,6 +519,13 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 	}
 	if owed != nil {
 		s.pushPeople(ctx, *owed)
+	}
+	if d.file != nil {
+		copies := make([]pdfCopy, 0, len(drawFor))
+		for _, who := range drawFor {
+			copies = append(copies, s.peoplePDFCopy(who, out.ID, nil))
+		}
+		s.drawLater(ctx, d.file.Type, d.file.Data, copies...)
 	}
 	return out, true, nil
 }
@@ -787,14 +800,17 @@ func (s *Server) peopleFile(w http.ResponseWriter, r *http.Request) {
 	}
 	var data []byte
 	var ctype, name, kind string
+	var chat, msg uuid.UUID
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), false)
 		if err != nil {
 			return err
 		}
-		msg, err := uuid.Parse(chi.URLParam(r, "message"))
-		if err != nil {
+		if msg, err = uuid.Parse(chi.URLParam(r, "message")); err != nil {
 			return errDoorNone
+		}
+		if chat = c.ID; wantsPreview(r) {
+			return nil
 		}
 		var sealedFile, sealedMsg []byte
 		if err := tx.QueryRow(ctx, `SELECT f.sealed, f.type, m.sealed, m.attachment->>'kind' FROM people_files f
@@ -817,7 +833,11 @@ func (s *Server) peopleFile(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
-	serveChatFile(w, data, ctype, name, kind)
+	if wantsPreview(r) {
+		s.servePDFPreview(w, r, s.peoplePDFCopy(person, msg, &chat), s.personFail)
+		return
+	}
+	serveChatFileFor(w, r, data, ctype, name, kind)
 }
 
 // peopleMessages is GET /v1/me/people/{id}/messages?before=&starred=1: a
@@ -1256,7 +1276,7 @@ func (s *Server) peopleDraftOf(ctx context.Context, person, chat, msg uuid.UUID)
 			if err != nil {
 				return err
 			}
-			d.file = &sentFile{Type: ctype, Name: v.Name, Data: data}
+			d.file = &sentFile{Type: ctype, Name: v.Name, Data: data, Facts: forwardedFacts(m.attach)}
 		}
 		return nil
 	})

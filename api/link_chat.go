@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime"
 	"net/http"
 	"slices"
 	"strconv"
@@ -1185,17 +1184,20 @@ func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
+	// Checked and named as every chat's files are (§1.2); each side keeps
+	// its own copy.
+	checked, err := media.CheckChatUpload(data, hdr.Filename)
+	if err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	}
 	mine, err := s.Media.PutChatFile(ctx, p.TenantID, data)
 	if err != nil {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
-	name := hdr.Filename
-	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
-		name = name[i+1:]
-	}
 	att := func(f media.File) *links.Attachment {
-		return &links.Attachment{Kind: media.ChatKind(f.Type), Type: f.Type, Size: f.Size, Name: name, Path: f.Path}
+		return linkAttachment(f, checked)
 	}
 	// The other side's copy, made once the door is entered; removed with
 	// ours if the message is not sent after all.
@@ -1224,7 +1226,28 @@ func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
+	s.drawLinkLater(ctx, p.TenantID, other, link, m.PairID, checked.Type, data)
 	writeJSON(w, http.StatusCreated, linkMessageOut{Message: m})
+}
+
+// linkAttachment is a business's copy of a file as its message keeps it:
+// the type, name and facts the checks found, its own copy's place.
+func linkAttachment(f media.File, checked media.ChatUpload) *links.Attachment {
+	ctype := checked.Type
+	if ctype == "" {
+		ctype = f.Type
+	}
+	return &links.Attachment{Kind: media.ChatKind(ctype), Type: ctype, Size: f.Size, Name: checked.Name, Facts: checked.Facts, Path: f.Path}
+}
+
+// drawLinkLater draws a just-sent PDF's picture for both businesses'
+// copies, each kept in its own storage.
+func (s *Server) drawLinkLater(ctx context.Context, ours, theirs, link, pair uuid.UUID, ctype string, data []byte) {
+	copies := []pdfCopy{s.linkPDFCopy(ours, link, pair)}
+	if theirs != uuid.Nil {
+		copies = append(copies, s.linkPDFCopy(theirs, link, pair))
+	}
+	s.drawLater(ctx, ctype, data, copies...)
 }
 
 // dropChatFile removes a copy of a file whose message was not sent.
@@ -1262,6 +1285,12 @@ func (s *Server) linkFile(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
+	if wantsPreview(r) {
+		s.servePDFPreview(w, r, s.linkPDFCopy(p.TenantID, link, pair), func(w http.ResponseWriter, r *http.Request, err error) {
+			s.fail(w, r, linkMessageErr(err))
+		})
+		return
+	}
 	data, ctype, err := s.Media.GetFile(r.Context(), p.TenantID, a.Path)
 	if err != nil {
 		s.fail(w, r, err)
@@ -1270,23 +1299,11 @@ func (s *Server) linkFile(w http.ResponseWriter, r *http.Request) {
 	if a.Type != "" {
 		ctype = a.Type
 	}
-	w.Header().Set("Content-Type", ctype)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
 	// An attachment's bytes never change, but its message can be deleted:
-	// kept a day, so a deleted one does not linger in a browser's cache
-	// (the phone keeps its own copy, and wipes it with the message).
-	w.Header().Set("Cache-Control", "private, max-age=86400")
-	disp := "inline"
-	if a.Kind == "file" {
-		disp = "attachment"
-	}
-	if a.Name != "" {
-		w.Header().Set("Content-Disposition", mime.FormatMediaType(disp, map[string]string{"filename": a.Name}))
-	} else {
-		w.Header().Set("Content-Disposition", disp)
-	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	_, _ = w.Write(data)
+	// kept a day (serveChatFile), so a deleted one does not linger in a
+	// browser's cache (the phone keeps its own copy, and wipes it with the
+	// message). A file is downloaded, a PDF read inside Taskiem with ?view=1.
+	serveChatFileFor(w, r, data, ctype, a.Name, a.Kind)
 }
 
 // linkPreviewImage is GET /v1/link-chats/{link}/previews/{id}: this
@@ -1456,7 +1473,11 @@ func (s *Server) forwardLinkMessage(w http.ResponseWriter, r *http.Request) {
 					return nil, err
 				}
 				kept = append(kept, func() { s.dropChatFile(ctx, t, f.Path) })
-				return &links.Attachment{Kind: file.Kind, Type: f.Type, Size: f.Size, Name: file.Name, Path: f.Path}, nil
+				facts := file.Facts
+				if facts.Preview != "" {
+					facts = media.Facts{Doc: facts.Doc}
+				}
+				return &links.Attachment{Kind: file.Kind, Type: file.Type, Size: f.Size, Name: file.Name, Facts: facts, Path: f.Path}, nil
 			}
 			var err error
 			if o.Ours, err = att(ctx, p.TenantID); err != nil {

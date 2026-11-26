@@ -415,15 +415,17 @@ func (s *Server) eraseChatFiles(ctx context.Context, tenant uuid.UUID, subjects 
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		const theirs = `FROM customer_conversations c WHERE m.tenant_id = $1 AND c.tenant_id = $1 AND c.id = m.conversation_id
 			AND c.subject_id = ANY ($2) AND m.attachment ? 'path'`
-		rows, err := tx.Query(ctx, `SELECT m.attachment ->> 'path' FROM customer_messages m, customer_conversations c
-			WHERE m.tenant_id = $1 AND c.tenant_id = $1 AND c.id = m.conversation_id AND c.subject_id = ANY ($2) AND m.attachment ? 'path'`, tenant, subjects)
+		// The file, and the picture of a PDF's first page beside it.
+		rows, err := tx.Query(ctx, `SELECT p FROM customer_messages m, customer_conversations c,
+			LATERAL (VALUES (m.attachment ->> 'path'), (m.attachment ->> 'preview_path')) AS v(p)
+			WHERE m.tenant_id = $1 AND c.tenant_id = $1 AND c.id = m.conversation_id AND c.subject_id = ANY ($2) AND m.attachment ? 'path' AND p IS NOT NULL`, tenant, subjects)
 		if err != nil {
 			return err
 		}
 		if paths, err = pgx.CollectRows(rows, pgx.RowTo[string]); err != nil {
 			return err
 		}
-		if _, err = tx.Exec(ctx, `UPDATE customer_messages m SET attachment = (m.attachment - 'path' - 'name') || '{"erased": true}'::jsonb `+theirs, tenant, subjects); err != nil {
+		if _, err = tx.Exec(ctx, `UPDATE customer_messages m SET attachment = (m.attachment - 'path' - 'name' - 'preview_path' - 'preview') || '{"erased": true}'::jsonb `+theirs, tenant, subjects); err != nil {
 			return err
 		}
 		// The pictures of their messages' link previews go too, and the
