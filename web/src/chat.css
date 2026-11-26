@@ -853,3 +853,99 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .search-group .item { width: 100%; text-align: left; }
 .search-more { display: flex; justify-content: center; padding: 8px 0 0; }
 .search-hint { margin: 8px 4px; }
+
+/* The shop (pages/Shop.tsx; docs/spec/mobile-app-look.md, "The shop"): a
+   business's items to browse, over the person's chat. Under the sheets
+   (the checkout, sharing: .tk-veil at 60), over the tab bar. */
+.shop { position: fixed; inset: 0; z-index: 55; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
+.shop .chat-head { padding-top: calc(8px + env(safe-area-inset-top)); }
+.shop-head .chat-head-main h2 { font-weight: 700; }
+.shop-head-heart.on svg { color: var(--danger); fill: currentColor; }
+.shop-bag-button { position: relative; }
+.shop-bag-count { position: absolute; top: 0; right: -2px; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px; background: var(--brand); color: #ffffff; font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; }
+.shop-bag-who { margin-left: auto; padding-right: 8px; }
+.shop-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 96px; width: 100%; max-width: 960px; margin: 0 auto; }
+.shop-search { position: relative; display: block; color: var(--muted); }
+.shop .shop-search input { min-height: 44px; border-radius: 14px; padding: 0 12px 0 40px; font-size: 15px; }
+.shop-search svg { position: absolute; left: 13px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); pointer-events: none; }
+.tk-chips.shop-chips { padding: 12px 0 4px; }
+.shop-closed { margin: 8px 2px 0; }
+.shop-h { margin: 14px 2px 8px; font-size: 16px; font-weight: 700; }
+.shop-strip { list-style: none; margin: 0; padding: 0 0 4px; display: flex; gap: 10px; overflow-x: auto; }
+.shop-strip li { flex: none; width: 64px; }
+.shop-strip.big li { width: 110px; }
+.shop-strip button { display: block; align-items: stretch; width: 100%; padding: 0; border: 0; background: transparent; box-shadow: none; text-align: left; color: var(--text); cursor: pointer; }
+.shop-strip-name { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shop-photo { position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: var(--tint); }
+.shop-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shop-photo.tone-2 { background: color-mix(in srgb, var(--info) 22%, var(--panel)); }
+.shop-photo.tone-3 { background: color-mix(in srgb, var(--warn) 22%, var(--panel)); }
+.shop-photo.tone-4 { background: color-mix(in srgb, var(--ok) 22%, var(--panel)); }
+.shop-photo.tone-5 { background: color-mix(in srgb, var(--danger) 16%, var(--panel)); }
+.shop-letter::before { content: attr(data-letter); font-weight: 700; color: color-mix(in srgb, var(--text) 55%, transparent); font-size: clamp(18px, 9vw, 52px); }
+.shop-grid { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 10px; }
+.shop-card { position: relative; display: flex; flex-direction: column; padding: 6px; border-radius: 18px; background: var(--panel); }
+.shop-card.sold .shop-photo, .shop-card.sold .shop-card-name, .shop-card.sold .shop-price { opacity: 0.55; }
+.shop-card-open { position: relative; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; padding: 0; border: 0; background: transparent; box-shadow: none; text-align: left; color: var(--text); cursor: pointer; }
+.shop-card-name { display: block; text-align: left; margin: 8px 6px 0; font-size: 14px; font-weight: 600; line-height: 1.3; height: 2.6em; overflow: hidden; overflow-wrap: anywhere; }
+.shop-mark { position: absolute; left: 14px; top: 14px; pointer-events: none; padding: 3px 8px; border-radius: 999px; background: var(--on-photo); color: var(--tint-warn-text); font-size: 11px; font-weight: 700; }
+.shop-mark.danger { color: var(--danger); }
+.shop-heart { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; min-height: 0; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; box-shadow: none; background: color-mix(in srgb, var(--on-photo) 92%, transparent); color: #0e1a14; cursor: pointer; }
+.shop-heart svg, .shop-over svg { width: 17px; height: 17px; }
+.shop-heart.on svg, .shop-heart-big.on svg { color: var(--danger); fill: currentColor; }
+.shop-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 40px; padding: 6px 2px 2px 6px; }
+.shop-price { font-weight: 700; font-size: 15.5px; font-variant-numeric: tabular-nums; }
+.shop-add { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 34px; height: 34px; min-height: 34px; padding: 0 10px; border: 0; border-radius: 17px; box-shadow: none; background: var(--brand); color: #ffffff; font-weight: 700; cursor: pointer; }
+.shop-add svg, .shop-stepper svg { width: 16px; height: 16px; }
+.shop-stepper { display: inline-flex; align-items: center; gap: 6px; padding: 4px; border-radius: 999px; background: var(--tk-soft); }
+.shop-stepper > span { min-width: 22px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.shop-stepper button { width: 30px; height: 30px; min-height: 0; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; box-shadow: none; background: var(--panel); color: var(--text); cursor: pointer; }
+.shop-stepper button:disabled { opacity: 0.4; cursor: not-allowed; }
+.shop-stepper.on { background: var(--brand); color: #ffffff; }
+.shop-stepper.on button { width: 26px; height: 26px; background: rgba(255, 255, 255, 0.16); color: #ffffff; }
+.shop-bag-bar { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 56; max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px; border: 0; border-radius: 18px; background: var(--brand); color: #ffffff; box-shadow: var(--shadow-lg); font-size: 14.5px; font-weight: 600; cursor: pointer; }
+.shop-bag-bar svg { width: 20px; height: 20px; flex: none; }
+.shop-bag-bar strong { font-weight: 700; }
+.shop-item { padding: 0 0 24px; }
+.shop-hero { position: relative; max-width: 560px; margin: 0 auto; }
+.shop-photo.big { border-radius: 0; }
+.shop-photo.big .shop-letter::before { font-size: clamp(64px, 30vw, 180px); }
+.shop-hero-buttons .grow { flex: 1; }
+.shop-hero-buttons { position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; gap: 10px; align-items: center; }
+.shop-over { width: 40px; height: 40px; min-height: 0; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; box-shadow: none; background: color-mix(in srgb, var(--on-photo) 92%, transparent); color: #0e1a14; cursor: pointer; }
+.shop-hero-buttons .shop-bag-button { width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--on-photo) 92%, transparent); color: #0e1a14; }
+.shop-item-sheet { position: relative; max-width: 560px; margin: -22px auto 0; padding: 18px 16px 0; border-radius: 24px 24px 0 0; background: var(--bg); }
+.shop-eyebrow { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--muted); }
+.shop-item-name { margin: 4px 0 0; font-size: 24px; line-height: 1.2; letter-spacing: -0.4px; }
+.shop-item-price { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 0 0; }
+.shop-item-price strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+.shop-pill.warn { background: var(--tint-warn); color: var(--tint-warn-text); }
+.shop-pill.danger { color: var(--danger); }
+.shop-item-about { margin: 10px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--muted); }
+.tk-chips.shop-sizes { padding: 16px 0 0; flex-wrap: wrap; }
+.tk-chips.shop-sizes button:disabled { opacity: 0.45; text-decoration: line-through; cursor: not-allowed; }
+.shop-item-actions { display: flex; gap: 10px; margin-top: 14px; }
+.shop-card-button { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 10px 12px; border: 0; border-radius: 14px; box-shadow: none; background: var(--panel); color: var(--text); font-weight: 600; font-size: 14px; text-align: left; cursor: pointer; }
+.shop-card-button svg { width: 19px; height: 19px; flex: none; }
+.shop-body > .shop-card-button { margin-top: 14px; width: 100%; }
+.shop-added { margin: 14px 0 0; font-size: 14px; }
+.shop-foot { display: flex; align-items: center; gap: 12px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--panel); }
+.shop-foot .shop-stepper button { width: 34px; height: 34px; }
+.shop-foot .tk-cta { flex: 1; min-height: 50px; font-size: 15px; }
+.shop-foot > .hint { margin: 0; }
+.shop-bag-lines { list-style: none; margin: 0; padding: 0 10px; border-radius: 18px; background: var(--panel); }
+.shop-bag-lines li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.shop-bag-lines li:last-child { border-bottom: 0; }
+.shop-bag-lines .shop-photo { width: 60px; flex: none; border-radius: 12px; }
+.shop-bag-lines .shop-letter::before { font-size: 22px; }
+.shop-bag-lines .grow { display: flex; flex-direction: column; min-width: 0; }
+.shop-bag-lines .hint { font-size: 12.5px; }
+.shop-bag-total { display: flex; align-items: center; margin: 12px 0 0; padding: 14px 16px; border-radius: 18px; background: var(--panel); font-weight: 700; }
+.shop-bag-total strong { font-size: 16px; font-variant-numeric: tabular-nums; }
+/* Lime only on pine: in the dark, pine's places take lime. */
+:root[data-theme="dark"] .shop-add, :root[data-theme="dark"] .shop-stepper.on, :root[data-theme="dark"] .shop-bag-bar, :root[data-theme="dark"] .shop-bag-count { background: var(--brand-dark); color: var(--brand-dark-text); }
+:root[data-theme="dark"] .shop-stepper.on button { background: rgba(14, 26, 20, 0.14); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] .shop-add, :root[data-theme="system"] .shop-stepper.on, :root[data-theme="system"] .shop-bag-bar, :root[data-theme="system"] .shop-bag-count { background: var(--brand-dark); color: var(--brand-dark-text); }
+  :root[data-theme="system"] .shop-stepper.on button { background: rgba(14, 26, 20, 0.14); color: var(--brand-dark-text); }
+}

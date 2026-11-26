@@ -419,7 +419,7 @@ test("a product shared live, a business from Discover, and a 'Your share' card m
   await live.getByTestId("people-card-order").click();
   expect((await started).postDataJSON()).toEqual({ business_id: tenant, from: "shared" });
   await expect(bola.page).toHaveURL(/\/you\/chats\/[0-9a-f-]{36}$/);
-  await expect(bola.page.getByTestId("shop-sheet")).toBeVisible();
+  await expect(bola.page.getByTestId("shop")).toBeVisible();
   await bola.page.goto(withAda);
 
   // A business shared from Discover: pick the chat, and it is sent.

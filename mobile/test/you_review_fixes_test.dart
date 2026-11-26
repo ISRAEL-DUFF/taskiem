@@ -24,6 +24,7 @@ import 'package:taskiem/kit/kit.dart' show TkErrorBox;
 import 'package:taskiem/kit/sheet.dart' show TkKitField;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
+import 'package:taskiem/chat/shop.dart' show ShopBag;
 
 import 'my_chats_test.dart' show Api, answer, at, chat, conversation, drain, openChat, phone, press, settle, typeIn;
 import 'support.dart' show loadFonts;
@@ -366,6 +367,8 @@ void main() {
   });
 
   group('the check step', () {
+    // The bag lasts while the app runs: each test from an empty one.
+    setUp(() => ShopBag.of('c1').clear());
     Api shop({List<Map<String, dynamic>>? saved, Future<Object?>? late}) {
       final api = conversation(c: chat(offers: 'no', ask: false));
       api.routes['GET /v1/me/chats/c1/shop'] = (_) => {
@@ -391,8 +394,10 @@ void main() {
     Future<void> toCheck(WidgetTester t) async {
       await press(t, find.bySemanticsLabel('Chat tools'));
       await press(t, find.text('Their shop'));
-      await press(t, find.bySemanticsLabel('One more Jollof rice'));
-      await press(t, find.text('Review order'));
+      // The shop's screens (shop.dart): into the bag, then its checkout.
+      await press(t, find.bySemanticsLabel('Add Jollof rice to the bag'));
+      await press(t, find.bySemanticsLabel('View bag: 1 item · ₦2,500'));
+      await press(t, find.bySemanticsLabel('Check out, ₦2,500'));
     }
 
     testWidgets('a typed address saved: named Home, its zone as its area, kept to 200', (t) async {

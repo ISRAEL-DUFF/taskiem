@@ -434,6 +434,47 @@ web's pictures (the parity test still builds and drives them).
   under the picture, the fields one under another) in the new colours; the
   documents named in a message (`RefCard`).
 
+### The shop
+
+Settled with the founder, 26 November 2026: a business's items to browse as
+a window is shopped, from a person's chat with it, full screen, on the app
+(`lib/chat/shop.dart`) and the web (`pages/Shop.tsx`) alike. Drawn first and
+agreed (the shop, an item, the bag, light and dark).
+
+- **The ways in.** A Shop button in the chat's head (the store icon, beside
+  ⋯); the tools' Their shop; a product card's See in their shop (on that
+  item); Discover's Shop.
+- **The shop.** The head as the chat's: their face and name, open or not and
+  how you get it ("Open · Delivery and pickup"), the heart (what you saved)
+  and the bag with its count. Search, then chips: All, Saved (with its
+  count) and the business's own categories. Recently viewed, a strip of
+  small photos. The items as photos two across (on a computer, as many as
+  fit): the heart over the photo, Only n left or Sold out (dimmed, nothing
+  to add) as a mark on it, the name in two lines, the price (From the
+  cheapest of its sizes), and + (lime on the app, pine on the web, lime in
+  the dark), turning to − n + once in the bag; an item with sizes opens its
+  own page for the size. The bag's bar floats over the foot: "3 items ·
+  ₦12,500 · View bag".
+- **An item.** Its photo, square and full width, Back, Share and the heart
+  over it; the category and the business small and capitalised, the name,
+  the price and Only n left; its description; its sizes as chips with their
+  prices (sold out ones quiet); Ask about this (back to the chat, "About …:
+  is it still available?" begun in its box, to send or change); Share with
+  a friend; More from the business. At the foot − n + and Add to bag.
+- **The bag.** Each line with its photo, size, price each and line total,
+  − n +; the items' total; how you get it comes next; Have a question?
+  Check out opens the shop's sheet at its checkout (pickup or delivery,
+  zones, saved addresses, as before); placed, the bag empties and the shop
+  closes back to the chat, where the order is.
+- **Kept.** The bag while the app (or the page) is open, one a chat. The
+  hearts and what was looked at on the phone (Prefs `shop-saved`,
+  `shop-recent`) or in the browser (`lib/shopkept.ts`), by business; the
+  person's own, forgotten on signing out. The server keeps neither yet.
+- **Later, with the server.** Several photos an item to swipe (dots under
+  the photo), New and Popular marks, and the hearts kept with the person's
+  account: drawn, not built, as the server sends one photo and keeps none
+  of these yet.
+
 ## Settings
 
 Settings is one list on the ground (`lib/screens/signed_in.dart`):
