@@ -966,6 +966,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _tools.dispose();
     _text.dispose();
     _linkPreview.dispose();
+    _sel.dispose();
     super.dispose();
   }
 
@@ -1365,9 +1366,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
     );
   }
 
-  /// The message whose menu is open, and the one being answered.
-  String? _menuFor;
-
   void _search() {
     final d = widget.data;
     showChatSearch(context, name: d.conv.name, search: d.search, onJump: d.jump, firstOn: d.firstOn, now: d.chats.now);
@@ -1402,9 +1400,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
   /// How far each long message is unfolded, by its id.
   final _taps = <String, int>{};
 
-  /// The menu's "+" chosen: the chevron goes with the card (the web shows
-  /// it only with the card).
-  bool _picking = false;
   LinkMessage? _reply;
 
   /// One of ours being edited (chat-previews-and-editing.md §3.2).
@@ -1449,38 +1444,47 @@ class _ConversationScreenState extends State<ConversationScreen> {
   /// The other conversations a message may go to.
   List<LinkConversation> get _others => _d.chats.conversations.where((c) => c.state == 'active' && c.link != _d.conv.link).toList();
 
+  /// The messages held (WhatsApp's selection, menu.dart).
+  late final _sel = MessageSelection(
+    actsOf: _actsOf,
+    onDelete: (ids) => _hide([for (final id in ids) ?_d.messages?.where((m) => m.id == id).firstOrNull]),
+    onForward: (ids) => _forward([for (final id in ids) ?_d.messages?.where((m) => m.id == id).firstOrNull]),
+  );
+
   /// Conversation.tsx Bubble's menu: what can be done with a message.
-  Future<void> _menu(ThreadMessage x, Rect at) async {
+  HeldActs? _actsOf(String id) {
+    final x = _d.messages == null ? null : _d.thread.where((x) => x.id == id).firstOrNull;
+    if (x == null) return null;
     final m = x.m;
     final card = m.kind == 'card' ? m.card : null;
     final body = m.body ?? '';
     final other = _d.conv.name;
-    final mineEmoji = m.reactions?.where((r) => r.mine == true).firstOrNull?.emoji;
-    final photo = card == null && x.out == null && !m.id.startsWith('local-') && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/');
-    setState(() {
-      _menuFor = m.id;
-      _picking = false;
-    });
-    await showMessageMenu(
-      context,
-      bubble: at,
+    final what = card != null ? cardLine(card, m.mine, other) : previewLine(m, other);
+    // A message waiting to send: its words, and changing them before it goes.
+    if (x.out != null) {
+      if (body.isEmpty && !_canEdit(x)) return null;
+      return HeldActs(
+        what: what,
+        mine: m.mine,
+        words: body,
+        edit: _canEdit(x) ? () => _startEdit(EditDraft(id: m.id, text: body, edits: 0, caption: m.attachment != null)) : null,
+      );
+    }
+    final photo = card == null && !m.id.startsWith('local-') && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/');
+    return HeldActs(
+      what: what,
       mine: m.mine,
-      what: card != null ? cardLine(card, m.mine, other) : previewLine(m, other),
-      mineEmoji: mineEmoji,
-      onReact: _write && x.out == null ? (e) => _d.react(m, e) : null,
-      onPicking: () => setState(() => _picking = true),
-      // A message waiting to send: its words, and changing them before it goes.
-      items: x.out != null
-          ? [
-              if (body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: body)), done: 'Copied'),
-              if (_canEdit(x)) MenuItem('pencil', 'Edit', () => _startEdit(EditDraft(id: m.id, text: body, edits: 0, caption: m.attachment != null))),
-            ]
-          : [
-        MenuItem('info', 'Message info', () => _info(m)),
-        if (_write) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
-        if (card == null && body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: body)), done: 'Copied'),
-        if (_canEdit(x))
-          MenuItem('pencil', 'Edit', () => _startEdit(EditDraft(id: m.id, text: body, edits: m.edits ?? 0, caption: m.attachment != null))),
+      mineEmoji: m.reactions?.where((r) => r.mine == true).firstOrNull?.emoji,
+      onReact: _write ? (e) => _d.react(m, e) : null,
+      info: () => _info(m),
+      reply: _write ? () => setState(() => _reply = m) : null,
+      words: card == null ? body : '',
+      edit: _canEdit(x) ? () => _startEdit(EditDraft(id: m.id, text: body, edits: m.edits ?? 0, caption: m.attachment != null)) : null,
+      forward: card == null && _write && _others.isNotEmpty,
+      star: () => _d.star(m),
+      starred: m.starred == true,
+      delete: card == null && _trades,
+      more: [
         // Save as… (saved objects S1, part 4): the business's for whoever may manage them.
         if (card == null && body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, _d.chats.auth, body, business: true)),
         // A photo (reading account details from photos): read on the phone.
@@ -1492,24 +1496,26 @@ class _ConversationScreenState extends State<ConversationScreen> {
             business: true,
             from: (kind: 'link', chat: _d.conv.link, message: m.id, from: m.mine ? '' : (m.senderName ?? other)),
           ),
-        if (card == null && _write && _others.isNotEmpty) MenuItem('forward', 'Forward', () => _forward(m)),
-        MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => _d.star(m)),
-        if (card == null && _trades) MenuItem('trash', 'Delete for me', () => _hide(m), danger: true, separated: true),
       ],
     );
-    if (mounted) setState(() => _menuFor = null);
   }
 
-  Future<void> _hide(LinkMessage m) async {
+  Future<void> _hide(List<LinkMessage> all) async {
+    if (all.isEmpty) return;
+    final one = all.length == 1;
     final yes = await showTkConfirm(
       context,
-      title: 'Delete this message?',
-      body: 'It goes from your business\'s side. They keep theirs.',
+      title: one ? 'Delete this message?' : 'Delete ${all.length} messages?',
+      body: one ? 'It goes from your business\'s side. They keep theirs.' : 'They go from your business\'s side. They keep theirs.',
       ok: 'Delete for me',
       danger: true,
     );
     if (!yes || !mounted) return;
-    if (await _d.hide(m) && mounted) showTkToast(context, 'Deleted for you');
+    var done = true;
+    for (final m in all) {
+      done = await _d.hide(m) && done;
+    }
+    if (done && mounted) showTkToast(context, 'Deleted for you');
   }
 
   /// Conversation.tsx InfoSheet: when it was sent and read, who reacted.
@@ -1565,7 +1571,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   /// Conversation.tsx ForwardSheet: to up to five linked businesses.
-  Future<void> _forward(LinkMessage m) async {
+  Future<void> _forward(List<LinkMessage> all) async {
+    if (all.isEmpty) return;
     final from = _d.conv;
     final to = _others;
     final picked = <String>[];
@@ -1583,7 +1590,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
               error = null;
             });
             try {
-              await _d.chats.auth.transport.send('POST', '/v1/link-chats/${from.link}/forward', body: {'message': m.id, 'to': picked});
+              for (final m in all) {
+                await _d.chats.auth.transport.send('POST', '/v1/link-chats/${from.link}/forward', body: {'message': m.id, 'to': picked});
+              }
               final words = picked.length == 1 ? (to.where((c) => c.link == picked.first).firstOrNull?.name ?? '1 chat') : '${picked.length} chats';
               if (context.mounted) {
                 Navigator.of(context).pop();
@@ -1603,7 +1612,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('“${previewLine(m, from.name)}”', style: tkHint(t)),
+              Text(all.length == 1 ? '“${previewLine(all.single, from.name)}”' : '${all.length} messages', style: tkHint(t)),
               const SizedBox(height: 12),
               Text('Linked businesses (up to five)', style: tkText(size: 14, color: t.text)),
               const SizedBox(height: 6),
@@ -1681,7 +1690,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   padding: EdgeInsets.only(top: pad.top),
                   child: ListenableBuilder(
                     listenable: Listenable.merge([d, d.chats]),
-                    builder: (context, _) => ChatHeadBar(
+                    builder: (context, _) => SelectionHead(
+                      selection: _sel,
+                      child: ChatHeadBar(
                       onBack: widget.onBack,
                       avatar: ChatAvatar(name: c.name, logo: c.logo ? d.chats.logo(c.business) : null, size: 40, letterSize: 15),
                       title: c.name,
@@ -1691,11 +1702,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       onAvatar: _contact,
                       onMore: _more,
                     ),
+                    ),
                   ),
                 ),
               ),
               Expanded(
-                child: ListenableBuilder(listenable: d, builder: (context, _) => _thread(context, d)),
+                child: SelectionScope(selection: _sel, child: ListenableBuilder(listenable: d, builder: (context, _) => _thread(context, d))),
               ),
               // The people to pay collected from messages (pay_collect.dart).
               PayListBar(auth: d.chats.auth, follow: d.follow),
@@ -1827,6 +1839,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       // Opened afresh (at a message, or back at the newest): placed afresh.
       key: ValueKey(d.epoch),
       items: items,
+      selection: _sel,
       of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
       // Conversation.tsx: a diary line lands, a card arrives (`tk-arrive`).
       arrival: (m) => runs.containsKey(m.id) || member.contains(m.id)
@@ -1879,8 +1892,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             files: d.chats.files,
             onRetry: m.out == null ? null : () => m.out!.editOf != null ? d.sendAsNew(m.out!) : d.retry(m.out!),
             onDiscard: m.out == null ? null : () => d.discard(m.out!),
-            menuOpen: _menuFor == m.id && !_picking,
-            onHold: (at) => _menu(m, at),
+            onHold: (_) => _sel.hold(m.id),
             onReply: _write ? () => setState(() => _reply = m.m) : null,
             onReact: _write ? (e) => d.react(m.m, e) : null,
             taps: _taps[m.id] ?? 0,
@@ -2006,7 +2018,6 @@ class _Bubble extends StatelessWidget {
     this.transfer,
     this.onRetry,
     this.onDiscard,
-    this.menuOpen = false,
     this.onHold,
     this.onReply,
     this.onReact,
@@ -2039,9 +2050,6 @@ class _Bubble extends StatelessWidget {
   /// How often its "Read more" was tapped (a long message folded).
   final int taps;
   final VoidCallback? onMore;
-
-  /// Its menu is open: the chevron shows, as the web's does then.
-  final bool menuOpen;
 
   /// Held: its menu opens by the bubble (on the screen).
   final ValueChanged<Rect>? onHold;
@@ -2325,23 +2333,6 @@ class _Bubble extends StatelessWidget {
                         // `.stamp.inline { position: absolute; right: 9px; bottom: 5px }`
                         // (14 px with reactions under it).
                         if (inline) Positioned(right: 12, bottom: 6, child: stamp),
-                        // `.bubble-chevron`, shown while its menu is open.
-                        if (menuOpen)
-                          Positioned(
-                            top: 1,
-                            right: 2,
-                            child: Container(
-                              width: 22,
-                              height: 22,
-                              decoration: BoxDecoration(
-                                color: cssMix(mine ? t.chatOut : t.chatIn, const Color(0x00000000), 0.85),
-                                shape: BoxShape.circle,
-                                boxShadow: const [BoxShadow(color: Color(0x0A0E0F0C), offset: Offset(0, 1), blurRadius: 2)],
-                              ),
-                              alignment: Alignment.center,
-                              child: TkIcon('down', size: 16, color: meta),
-                            ),
-                          ),
                         // `.tk-cheer`: a good moment's ring, 6 px out.
                         if (cheer) const Positioned(left: -6, top: -6, right: -6, bottom: -6, child: IgnorePointer(child: CheerRing())),
                       ],

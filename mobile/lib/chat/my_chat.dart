@@ -61,7 +61,7 @@ import 'save_as.dart' show saveAsItems, saveNamed;
 import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 import 'words.dart';
 import 'saved_files.dart' show attachSavedFile;
-import 'menu.dart' show MenuItem, showMessageMenu;
+import 'menu.dart' show HeldActs, MessageSelection, SelectionHead, SelectionScope;
 import 'pay_collect.dart' show PayListBar;
 
 
@@ -930,6 +930,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
 
   @override
   void dispose() {
+    _sel.dispose();
     widget.notify?.unshow(this);
     d.onAsk = null;
     _back?.cancel();
@@ -1008,7 +1009,13 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     if (refusedForTime(err) && _text.text.isEmpty) _text.text = words;
   }
 
-  Future<void> _hold(MyLine x, Rect at) async {
+  /// The messages held (WhatsApp's selection, menu.dart).
+  late final _sel = MessageSelection(actsOf: _actsOf);
+
+  /// What may be done with a message held: Copy, Save as… and Edit.
+  HeldActs? _actsOf(String id) {
+    final x = d.messages?.where((x) => x.m.id == id).firstOrNull;
+    if (x == null || x.local) return null;
     final m = x.m;
     final a = m.attachment;
     final words = m.card == null && !(a != null && {'Photo', 'Voice note', 'File', a.name}.contains(m.body)) ? m.body.trim() : '';
@@ -1023,19 +1030,24 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
       from: (kind: 'person', chat: d.id, message: m.id, from: m.mine ? '' : d.name),
     );
     final c = d.chat;
-    if (!x.local &&
-        c != null &&
+    final edit = c != null &&
         !c.blocked &&
         !c.blockedYou &&
-        editBlock(mine: m.mine, kind: m.kind, createdAt: m.createdAt, now: DateTime.now(), card: m.card != null, fileKind: a?.kind, line: m.line) == null) {
-      items.insert(items.isEmpty ? 0 : 1, MenuItem('pencil', 'Edit', () {
-        setState(() => _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: a != null));
-        _text.text = m.body;
-        _text.selection = TextSelection.collapsed(offset: m.body.length);
-      }));
-    }
-    if (items.isEmpty) return;
-    await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
+        editBlock(mine: m.mine, kind: m.kind, createdAt: m.createdAt, now: DateTime.now(), card: m.card != null, fileKind: a?.kind, line: m.line) == null;
+    if (items.isEmpty && !edit) return null;
+    return HeldActs(
+      what: (m.card?.title ?? m.body).split('\n').first,
+      mine: m.mine,
+      words: words,
+      edit: edit
+          ? () {
+              setState(() => _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: a != null));
+              _text.text = m.body;
+              _text.selection = TextSelection.collapsed(offset: m.body.length);
+            }
+          : null,
+      more: [for (final i in items) if (i.label != 'Copy') i],
+    );
   }
 
   (String, VoidCallback)? _cardAction(CustomerCard c) => switch (c.type) {
@@ -1099,7 +1111,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                     color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
-                      child: ChatHeadBar(
+                      child: SelectionHead(selection: _sel, child: ChatHeadBar(
                         onBack: widget.onBack,
                         onMore: c == null ? null : _menu,
                         // Their shop, to browse (shop.dart).
@@ -1124,7 +1136,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                         title: name,
                         typing: c?.typing == true,
                         subtitle: d.offline ? 'Waiting for network…' : (c?.hours?.line ?? 'Business'),
-                      ),
+                      )),
                     ),
                   ),
                   if (c?.lines?.contains('whatsapp') == true) const _OnWhatsApp(),
@@ -1136,7 +1148,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                       onAction: () => setState(() => d.notice = null),
                     ),
                   Expanded(
-                    child: ThreadView<MyLine>(
+                    child: SelectionScope(selection: _sel, child: ThreadView<MyLine>(selection: _sel, 
                       items: list,
                       of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
                       now: now,
@@ -1164,7 +1176,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                           padding: EdgeInsets.only(top: first ? 6 : 0),
                           child: BubbleHold(
                             label: m.mine ? 'Your message' : 'Message from ${d.name}',
-                            onHold: x.local ? null : (at) => _hold(x, at),
+                            onHold: x.local ? null : (_) => _sel.hold(x.m.id),
                             child: DoorBubble(
                             id: m.id,
                             mine: m.mine,
@@ -1198,7 +1210,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                           )),
                         );
                       },
-                    ),
+                    )),
                   ),
                   if (c != null && c.askOffers && c.offers == 'unasked' && canSend)
                     _OffersQuestion(name: name, onAnswer: (yes) => _say(d.put(offers: yes), yes ? 'You’ll get offers from $name' : 'No offers from $name'), onDismiss: () => d.put(offersAsked: true)),

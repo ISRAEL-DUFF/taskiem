@@ -51,7 +51,7 @@ import 'link_preview.dart' show ComposerLinkCard, ComposerPreview;
 import 'thread.dart';
 import 'words.dart';
 import 'saved_files.dart' show attachSavedFile;
-import 'menu.dart' show MenuItem, showMessageMenu;
+import 'menu.dart' show HeldActs, MessageSelection, SelectionHead, SelectionScope;
 import 'pay_collect.dart' show MessageFrom, PayListBar;
 
 // --- words (lib/customerchat.ts) ---
@@ -697,6 +697,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
 
   @override
   void dispose() {
+    _sel.dispose();
     widget.data.removeListener(_rekey);
     _back?.cancel();
     _saved.dispose();
@@ -758,24 +759,34 @@ class _CustomerScreenState extends State<CustomerScreen> {
     return (kind: 'customer', chat: widget.data.id, message: m.id, from: m.mine || c == null ? '' : customerTitle(c));
   }
 
-  Future<void> _hold(CustomerLine x, Rect at) async {
+  /// The messages held (WhatsApp's selection, menu.dart).
+  late final _sel = MessageSelection(actsOf: _actsOf);
+
+  /// What may be done with a message held: Copy, Save as… and Edit.
+  HeldActs? _actsOf(String id) {
+    final x = widget.data.messages?.where((x) => x.id == id).firstOrNull;
+    if (x == null || x.local) return null;
     final m = x.m;
     final a = m.attachment;
     final words = m.card == null && m.kind != 'media' && !(a != null && {'Photo', 'Voice note', 'File', a.name}.contains(m.body)) ? m.body.trim() : '';
     final file = a != null && a.kind != 'voice';
     final auth = widget.data.chats.auth;
     final items = saveAsItems(context, auth, words: words, filePath: file ? '/v1/customer-chats/${widget.data.id}/files/${m.id}' : '', fileName: a?.name ?? 'File', fileType: a?.type ?? '', business: true, from: _from(m));
-    if (!x.local &&
-        editBlock(mine: m.mine, kind: m.kind, createdAt: m.createdAt, now: DateTime.now(), card: m.card != null, fileKind: a?.kind, sender: m.sender, me: auth.me?.user?.id) == null &&
-        m.offer != true) {
-      items.insert(items.isEmpty ? 0 : 1, MenuItem('pencil', 'Edit', () {
-        setState(() => _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: a != null));
-        _text.text = m.body;
-        _text.selection = TextSelection.collapsed(offset: m.body.length);
-      }));
-    }
-    if (items.isEmpty) return;
-    await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
+    final edit = editBlock(mine: m.mine, kind: m.kind, createdAt: m.createdAt, now: DateTime.now(), card: m.card != null, fileKind: a?.kind, sender: m.sender, me: auth.me?.user?.id) == null && m.offer != true;
+    if (items.isEmpty && !edit) return null;
+    return HeldActs(
+      what: (m.card?.title ?? m.body).split('\n').first,
+      mine: m.mine,
+      words: words,
+      edit: edit
+          ? () {
+              setState(() => _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: a != null));
+              _text.text = m.body;
+              _text.selection = TextSelection.collapsed(offset: m.body.length);
+            }
+          : null,
+      more: [for (final i in items) if (i.label != 'Copy') i],
+    );
   }
 
   @override
@@ -831,7 +842,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                     color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
-                      child: ChatHeadBar(
+                      child: SelectionHead(selection: _sel, child: ChatHeadBar(
                         onBack: widget.onBack,
                         // CustomerChat.tsx's menu: Archive, or Unarchive; Mute.
                         onMore: c == null
@@ -892,7 +903,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                             : c == null
                             ? null
                             : [if (c.phone.isNotEmpty && c.phone != c.name) phoneWords(c.phone), owes, both ? 'On WhatsApp and in the app' : (app ? 'Customer in the app' : 'Customer on WhatsApp')].where((s) => s.isNotEmpty).join(' · '),
-                      ),
+                      )),
                     ),
                   ),
                   if (c != null && both) _LineStates(lines: c.lines!),
@@ -904,7 +915,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       builder: (context, box) => Column(
                         children: [
                         Expanded(
-                          child: ThreadView<CustomerLine>(
+                          child: SelectionScope(selection: _sel, child: ThreadView<CustomerLine>(selection: _sel, 
                             items: d.messages,
                             of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
                             now: d.chats.now(),
@@ -936,7 +947,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                   padding: EdgeInsets.only(top: first ? 6 : 0),
                                   child: BubbleHold(
                                     label: m.m.mine ? 'Your message' : 'Message from the customer',
-                                    onHold: m.local ? null : (at) => _hold(m, at),
+                                    onHold: m.local ? null : (_) => _sel.hold(m.id),
                                     child: DoorBubble(
                                     id: m.id,
                                     mine: m.m.mine,
@@ -967,9 +978,9 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                   )),
                                 ));
                               }
-                              return _withPay(m, Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: BubbleHold(label: m.m.mine ? 'Your message' : 'Message from the customer', onHold: m.local ? null : (at) => _hold(m, at), child: _CustomerBubble(x: m, first: first, last: last, line: marked ? line : null))));
+                              return _withPay(m, Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: BubbleHold(label: m.m.mine ? 'Your message' : 'Message from the customer', onHold: m.local ? null : (_) => _sel.hold(m.id), child: _CustomerBubble(x: m, first: first, last: last, line: marked ? line : null))));
                             },
-                          ),
+                          )),
                         ),
                         // CustomerOrders.tsx: the order read from their messages, or
                         // Start an order.

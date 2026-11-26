@@ -71,8 +71,12 @@ void main() {
 
     final thread = t.state<ThreadViewState<ThreadMessage>>(find.byType(ThreadView<ThreadMessage>));
     // Up to just short of the top: the mark is within 200 px.
-    thread.scroll.jumpTo(150);
-    await t.pump();
+    // The list is built lazily: what is above is measured as it comes
+    // near, so the top is found in a few steps, as a finger finds it.
+    for (var i = 0; i < 4; i++) {
+      thread.scroll.jumpTo(thread.scroll.position.minScrollExtent + 150);
+      await t.pump();
+    }
     final fifty = find.textContaining('Message 50', findRichText: true);
     final before = t.getTopLeft(fifty).dy;
     await settle(t);
@@ -81,7 +85,7 @@ void main() {
     expect(t.getTopLeft(fifty).dy, moreOrLessEquals(before, epsilon: 1), reason: 'the reader stays where they were');
     expect(data.hasOlder, isFalse, reason: 'a short page');
 
-    thread.scroll.jumpTo(0);
+    thread.scroll.jumpTo(thread.scroll.position.minScrollExtent);
     await settle(t);
     expect(asked, hasLength(1), reason: 'no more to ask for');
     expect(find.textContaining('Message 40', findRichText: true), findsOneWidget);

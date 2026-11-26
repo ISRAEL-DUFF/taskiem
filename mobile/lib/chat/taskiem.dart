@@ -835,6 +835,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
 
   @override
   void dispose() {
+    _sel.dispose();
     _tools.dispose();
     _runs.dispose();
     widget.data.chats.viewingTaskiem = false;
@@ -868,7 +869,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                   color: t.panel,
                   child: Padding(
                     padding: EdgeInsets.only(top: pad.top),
-                    child: ChatHeadBar(
+                    child: SelectionHead(selection: _sel, child: ChatHeadBar(
                       onBack: widget.onBack,
                       avatar: Container(
                         width: 42,
@@ -880,7 +881,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                       title: 'Taskiem',
                       subtitle: d.offline ? 'Waiting for network…' : (d.chats.auth.me?.tenantName ?? 'Your assistant'),
                       typing: d.busy,
-                    ),
+                    )),
                   ),
                 ),
                 Expanded(child: _thread(context, d)),
@@ -1014,6 +1015,34 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     });
   }
 
+  /// A line's id in the thread.
+  static String _idOf(TaskiemLine x) => x.id == nilId ? '${x.id}-${x.m.createdAt}' : x.id;
+
+  /// The thread's lines as last drawn.
+  List<TaskiemLine>? _held;
+
+  /// The messages held (WhatsApp's selection, menu.dart).
+  late final _sel = MessageSelection(actsOf: _actsOf);
+
+  /// TaskiemChat.tsx: a message's menu holds Copy (not one still going),
+  /// and Save as….
+  HeldActs? _actsOf(String id) {
+    final x = _held?.where((x) => _idOf(x) == id).firstOrNull;
+    if (x == null || x.local || x.m.text.isEmpty) return null;
+    final m = x.m;
+    final auth = widget.data.chats.auth;
+    final first = m.text.split('\n').first;
+    return HeldActs(
+      what: first.length > 60 ? first.substring(0, 60) : first,
+      mine: m.inbound,
+      words: m.text,
+      more: [
+        // Save as… (saved objects S1, part 4): in a business, its saved things for whoever may manage them.
+        MenuItem('note', 'Save as…', () => saveFromWords(context, auth, m.text, business: true)),
+      ],
+    );
+  }
+
   Widget _thread(BuildContext context, TaskiemData d) {
     final t = TkTheme.tokens(context);
     final known = d.known;
@@ -1080,7 +1109,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         break;
       }
     }
-    return NotificationListener<ScrollEndNotification>(
+    return SelectionScope(selection: _sel, child: NotificationListener<ScrollEndNotification>(
       // Seen once the person is at the newest end.
       onNotification: (n) {
         if (n.metrics.maxScrollExtent - n.metrics.pixels <= 80) d.seen();
@@ -1088,8 +1117,9 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       },
       child: ThreadView<TaskiemLine>(
         key: _threadKey,
-        items: list,
-        of: (id: (x) => x.id == nilId ? '${x.id}-${x.m.createdAt}' : x.id, at: (x) => x.m.createdAt, mine: (x) => x.m.inbound),
+        selection: _sel,
+        items: _held = list,
+        of: (id: _idOf, at: (x) => x.m.createdAt, mine: (x) => x.m.inbound),
         arrival: (x) => x.m.kind == 'diary'
             ? TkArrival.diary
             : x.m.kind == 'chart' || (x.run != null && !x.echo && runWordsOf(x.run!) == null)
@@ -1301,11 +1331,12 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
               auth: d.chats.auth,
               now: d.chats.now(),
               onCustomer: widget.onOpenCustomer,
+              onHold: () => _sel.hold(_idOf(x)),
             ),
           );
         },
       ),
-    );
+    ));
   }
 }
 
@@ -1372,7 +1403,11 @@ class _TaskiemBubble extends StatefulWidget {
     this.auth,
     this.now,
     this.onCustomer,
+    this.onHold,
   });
+
+  /// Held: selected (the screen's selection, menu.dart).
+  final VoidCallback? onHold;
 
   /// Every web address in its words opens (signing up: the terms), not
   /// only a connect link or a canvas.
@@ -1530,22 +1565,10 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
       ),
     );
     // TaskiemChat.tsx: a message's menu holds Copy (not one still going).
-    final copyable = !widget.x.local && m.text.isNotEmpty;
+    final copyable = !widget.x.local && m.text.isNotEmpty && widget.onHold != null;
     return BubbleHold(
       label: mine ? 'Your message' : 'Message from Taskiem',
-      onHold: copyable
-          ? (at) => showMessageMenu(
-              context,
-              bubble: at,
-              mine: mine,
-              what: m.text.split('\n').first.length > 60 ? m.text.split('\n').first.substring(0, 60) : m.text.split('\n').first,
-              items: [
-                MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.text)), done: 'Copied'),
-                // Save as… (saved objects S1, part 4): in a business, its saved things for whoever may manage them.
-                if (widget.auth != null) MenuItem('note', 'Save as…', () => saveFromWords(context, widget.auth!, m.text, business: true)),
-              ],
-            )
-          : null,
+      onHold: copyable ? (_) => widget.onHold!() : null,
       child: BubbleFrame(
         mine: mine,
         first: widget.first,

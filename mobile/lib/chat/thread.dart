@@ -9,7 +9,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart' show TapGestureRecognizer;
-import 'package:flutter/rendering.dart' show RenderDecoratedBox;
+import 'package:flutter/rendering.dart' show RenderDecoratedBox, RenderProxyBox, RenderSliver, RenderSliverMultiBoxAdaptor, ScrollCacheExtent;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -21,6 +21,7 @@ import '../kit/tap_area.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'chats.dart' show UnreadCount;
+import 'menu.dart' show MessageSelection;
 import 'words.dart';
 
 /// The chat's wallpaper under [child] (styles.css `--chat-pattern`): the
@@ -356,8 +357,39 @@ const _stickTop = 14.0;
 /// What the thread needs to know of a message.
 typedef ThreadOf<T> = ({String Function(T) id, DateTime Function(T) at, bool Function(T) mine});
 
+/// One row of the thread's list: the top (the errors, the stream's 8 px),
+/// a message (with its day's chip over it when it is the day's first, and
+/// the unread line over the first unread), or the end (Taskiem's cards,
+/// the stream's 8 px under them).
+class _Entry<T> {
+  const _Entry.head() : key = 'head', m = null, prev = null, day = null, chip = null, unread = false;
+  const _Entry.foot() : key = 'foot', m = null, prev = null, day = null, chip = null, unread = false;
+  const _Entry.message(this.key, T this.m, this.prev, String this.day, {this.chip, this.unread = false});
+
+  final String key;
+  final T? m;
+
+  /// The one before it on its day (null for the day's first).
+  final T? prev;
+  final String? day;
+
+  /// The day's chip over it: the day's first message.
+  final String? chip;
+
+  /// The unread line over it.
+  final bool unread;
+}
+
 /// ChatStream.tsx with lib/useThread.ts: the messages by day, where the
 /// unread begin, what follows them (Taskiem's cards), and the scrolling.
+///
+/// Built as WhatsApp's is (the phone feedback of 25 November 2026: the
+/// thread flickered as it opened): a list built lazily, only what is in
+/// view and a little round it, anchored where it opens (the newest message
+/// at the bottom, the first unread, or a message looked for) so the first
+/// frame shows that place with no jump. What comes later never moves the
+/// view: older pages grow above the anchor, newer messages below it, and
+/// the view follows them only while the reader is at the bottom.
 class ThreadView<T> extends StatefulWidget {
   const ThreadView({
     super.key,
@@ -375,6 +407,7 @@ class ThreadView<T> extends StatefulWidget {
     this.detached = false,
     this.onLatest,
     this.arrival,
+    this.selection,
   });
 
   /// How a message arriving while the thread is open comes in: a bubble
@@ -400,7 +433,8 @@ class ThreadView<T> extends StatefulWidget {
   final ThreadOf<T> of;
 
   /// A message, given the one before it on its day (null for the first);
-  /// null to draw nothing (a diary line folded into another).
+  /// null to draw nothing (a diary line folded into another). Asked for
+  /// only as the message comes near the view.
   final Widget? Function(T m, T? prev) render;
   final DateTime now;
   final ({String id, int count})? unread;
@@ -410,20 +444,48 @@ class ThreadView<T> extends StatefulWidget {
   /// After the messages: Taskiem's briefing and alert cards.
   final Widget? tail;
 
+  /// The messages held (WhatsApp's selection): each row tinted across the
+  /// thread while held, and a tap adds or takes one away.
+  final MessageSelection? selection;
+
   @override
   State<ThreadView<T>> createState() => ThreadViewState<T>();
 }
 
+/// How the thread opened: at the newest, the first unread, or a message.
+enum _Open { end, unread, focus }
+
 class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderStateMixin {
-  /// The thread's scrolling (a test scrolls it as the web half does).
-  final scroll = ScrollController();
+  /// The thread's scrolling (a test scrolls it as the web half does). Its
+  /// offsets run from the top of what is loaded ([ScrollPosition.minScrollExtent],
+  /// below zero once there is anything above where it opened) to the
+  /// bottom ([ScrollPosition.maxScrollExtent]).
+  late final ScrollController scroll = _ThreadScroll(this);
   final _viewport = GlobalKey();
+  final _before = GlobalKey();
+  final _center = GlobalKey();
+  final _foot = GlobalKey();
+  final _focusKey = GlobalKey();
   final _unreadKey = GlobalKey();
-  final _endKey = GlobalKey();
-  final _chipKeys = <String, GlobalKey>{};
-  final _groupKeys = <String, GlobalKey>{};
+
+  /// The list's rows, made afresh on each build (only words, no widgets).
+  List<_Entry<T>> _entries = const [];
+  Map<String, int> _index = const {};
+
+  /// Where the list is anchored: the key of the first row below the anchor
+  /// (the rows before it grow upwards from it), or opened at the newest the
+  /// last row above it; kept as rows come and go.
+  String _split = 'foot';
+  int _splitAt = 0;
+
+  /// Where the anchor sits in the view: 1 at its bottom (opened at the
+  /// newest), 0 at its top (the unread), ½ in the middle (a message).
+  double _anchor = 1;
+  _Open _open = _Open.end;
+
+  /// Placed where it opens (in the first layout with messages).
   bool _placed = false;
-  DateTime? _newest;
+
   /// Away from the newest (the round button shows) and how many came
   /// since: their own listener, as the day chip's.
   final _jump = ValueNotifier<({bool away, int count})>((away: false, count: 0));
@@ -438,6 +500,7 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   /// At the very end of the thread (not merely with the newest message in
   /// view), as the reader last left it.
   bool _atEnd = false;
+
   /// The day chip held at the top while scrolling: its own listener, so a
   /// frame of scrolling redraws the chip, not every message.
   final _stuck = ValueNotifier<({String label, double top})?>(null);
@@ -448,12 +511,17 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   final _moving = ValueNotifier<bool>(false);
   Timer? _rest;
   bool _loadingOlder = false;
-  final _focusKey = GlobalKey();
 
-  /// The messages drawn so far: one not among them arrives with motion
-  /// (those there when the thread opened, and older pages, do not).
-  final _known = <String>{};
+  /// How tall a day chip is, as last measured.
+  double _chipHeight = 26;
+
+  /// The messages seen so far, and those that arrived with this build: one
+  /// arriving while the thread is open comes in with motion (those there
+  /// when the thread opened, and older pages, do not).
+  final _seen = <String>{};
+  final _fresh = <String>{};
   bool _seeded = false;
+  DateTime? _newest;
 
   /// `.bubble.flash`: the ring round the message opened at, 1.8 s.
   late final AnimationController _flash = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
@@ -464,18 +532,23 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     super.initState();
     PopIn.openedAt = DateTime.now();
     scroll.addListener(_onScroll);
-    _follow(null);
+    widget.selection?.locate = _bubbleOf;
+    _newest = _newestOf(widget.items);
   }
 
   @override
   void didUpdateWidget(ThreadView<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.selection != widget.selection) {
+      if (oldWidget.selection?.locate == _bubbleOf) oldWidget.selection?.locate = null;
+      widget.selection?.locate = _bubbleOf;
+    }
     _follow(oldWidget.items);
-    _hold();
   }
 
   @override
   void dispose() {
+    if (widget.selection?.locate == _bubbleOf) widget.selection?.locate = null;
     _flash.dispose();
     _stuck.dispose();
     _rest?.cancel();
@@ -484,6 +557,8 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     scroll.dispose();
     super.dispose();
   }
+
+  DateTime? _newestOf(List<T>? items) => items == null || items.isEmpty ? null : widget.of.at(items.last);
 
   void _flashAt(String id) {
     setState(() => _flashId = id);
@@ -494,12 +569,19 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
 
   bool get _atBottom => !scroll.hasClients || scroll.position.maxScrollExtent - scroll.position.pixels <= _nearBottom;
 
-  /// useThread.ts newestEnd: how far down the content the newest message ends.
+  RenderBox? get _view {
+    final v = _viewport.currentContext?.findRenderObject();
+    return v is RenderBox && v.hasSize ? v : null;
+  }
+
+  /// useThread.ts newestEnd: how far down the content the newest message
+  /// ends (the top of what follows it), in the scroll's offsets; null while
+  /// that is not near the view.
   double? _newestEnd() {
-    final box = _endKey.currentContext?.findRenderObject();
-    final view = _viewport.currentContext?.findRenderObject();
-    if (box is! RenderBox || view is! RenderBox || !box.hasSize || !scroll.hasClients) return null;
-    return box.localToGlobal(Offset(0, box.size.height), ancestor: view).dy + scroll.offset;
+    final box = _foot.currentContext?.findRenderObject();
+    final view = _view;
+    if (box is! RenderBox || view == null || !box.attached || !box.hasSize || !scroll.hasClients) return null;
+    return box.localToGlobal(Offset.zero, ancestor: view).dy + scroll.offset;
   }
 
   /// thread.ts atNewest: at the thread's end, or the newest message ending
@@ -516,13 +598,14 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   /// the view's end, a little room under it, when cards follow it; else the
   /// end of the thread.
   void _toNewest() {
+    if (!scroll.hasClients) return;
     final p = scroll.position;
     final end = _newestEnd();
     final height = p.maxScrollExtent + p.viewportDimension;
     if (end == null || height - end <= _nearBottom) {
       scroll.jumpTo(p.maxScrollExtent);
     } else {
-      scroll.jumpTo((end + 16 - p.viewportDimension).clamp(0.0, p.maxScrollExtent));
+      scroll.jumpTo((end + 16 - p.viewportDimension).clamp(p.minScrollExtent, p.maxScrollExtent));
     }
   }
 
@@ -532,39 +615,27 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     final items = widget.items;
     if (!widget.hasOlder || widget.onOlder == null || _loadingOlder || items == null || items.isEmpty || !scroll.hasClients) return;
     // The mark sits under the stream's 8 px padding.
-    if (scroll.position.pixels > 8 + 200) return;
+    if (scroll.position.pixels - scroll.position.minScrollExtent > 8 + 200) return;
     _older();
   }
 
   Future<void> _older() async {
     _loadingOlder = true;
-    final was = scroll.position.maxScrollExtent;
     try {
       await widget.onOlder!();
     } finally {
       _loadingOlder = false;
     }
     if (!mounted) return;
-    // The page drawn above: the reader stays where they were.
+    // The page lands above the anchor and grows upwards: the reader stays
+    // where they were with nothing moved. Still near the top: the next.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !scroll.hasClients) return;
-      final grew = scroll.position.maxScrollExtent - was;
-      if (grew > 0) scroll.jumpTo((scroll.position.pixels + grew).clamp(0.0, scroll.position.maxScrollExtent));
-      _maybeOlder();
-    });
-  }
-
-  /// Kept at the bottom after this frame, if the reader is there.
-  void _hold() {
-    if (!_placed || !_atEnd || !_keep) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !scroll.hasClients || !_atEnd || !_keep) return;
-      final end = scroll.position.maxScrollExtent;
-      if (scroll.offset != end) scroll.jumpTo(end);
+      if (mounted) _maybeOlder();
     });
   }
 
   void _onScroll() {
+    if (!scroll.hasClients) return;
     _maybeOlder();
     final near = _atNewest;
     // Held at the very end only from there: arriving at it, not with the
@@ -590,75 +661,106 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     if (away != _away || (!away && _newCount > 0)) _jump.value = (away: away, count: away ? _newCount : 0);
   }
 
-  /// lib/useThread.ts: opened at the first unread, 40 px under the top
-  /// (clear of the day chip), or at the end; afterwards the thread follows
-  /// new messages only while the reader is at the bottom or when they sent
-  /// them, and counts the others on the round button.
+  /// lib/useThread.ts: afterwards the thread follows new messages only
+  /// while the reader is at the bottom (in the layout itself, so nothing
+  /// jumps: [_ThreadPosition]) or when they sent them, and counts the
+  /// others on the round button.
   void _follow(List<T>? before) {
     final items = widget.items;
-    if (items == null) return;
-    final of = widget.of;
-    final newest = items.isEmpty ? null : of.at(items.last);
-    final stick = _atNewest;
     final prev = _newest;
-    _newest = newest;
+    _newest = _newestOf(items);
+    if (items == null || !_placed || prev == null) return;
+    final of = widget.of;
+    final arrived = items.where((m) => of.at(m).isAfter(prev)).toList();
+    if (arrived.isEmpty) return;
+    final stick = _atNewest;
+    final held = _atEnd && _keep;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !scroll.hasClients) return;
-      if (!_placed) {
-        _placed = true;
-        final view = _viewport.currentContext?.findRenderObject();
-        final at = _unreadKey.currentContext?.findRenderObject();
-        final focus = _focusKey.currentContext?.findRenderObject();
-        var atEnd = false;
-        if (widget.focus != null && focus is RenderBox && view is RenderBox) {
-          // scrollIntoView({ block: "center" }), then the flash.
-          final mid = focus.localToGlobal(Offset(0, focus.size.height / 2), ancestor: view).dy;
-          scroll.jumpTo((scroll.offset + mid - view.size.height / 2).clamp(0.0, scroll.position.maxScrollExtent));
-          _flashAt(widget.focus!);
-        } else if (at is RenderBox && view is RenderBox) {
-          final top = at.localToGlobal(Offset.zero, ancestor: view).dy;
-          scroll.jumpTo((scroll.offset + top - 40).clamp(0.0, scroll.position.maxScrollExtent));
-        } else {
-          scroll.jumpTo(scroll.position.maxScrollExtent);
-          atEnd = true;
-        }
-        _onScroll();
-        // Opened at the end: kept there as what is below arrives.
-        _keep = atEnd;
-        return;
-      }
-      if (prev == null) return;
-      final arrived = items.where((m) => of.at(m).isAfter(prev)).toList();
-      if (arrived.isEmpty) return;
       if (stick || arrived.any(of.mine)) {
         // The newest message in view, not what follows it (Taskiem's
-        // cards): an answer is never left out of sight.
-        _toNewest();
+        // cards): an answer is never left out of sight. Kept at the very
+        // end already: it stays there.
+        if (!(held && _atEnd)) _toNewest();
         _newCount = 0;
       } else {
         _newCount += arrived.where((m) => !of.mine(m)).length;
       }
+      _onScroll();
     });
+  }
+
+  /// The rows of the list built now, each with the index of its row.
+  Iterable<(int, RenderBox)> _shown() sync* {
+    for (final (key, below) in [(_before, false), (_center, true)]) {
+      final s = key.currentContext?.findRenderObject();
+      if (s is! RenderSliverMultiBoxAdaptor) continue;
+      for (var c = s.firstChild; c != null; c = s.childAfter(c)) {
+        final i = s.indexOf(c);
+        final at = below ? _splitAt + i : _splitAt - 1 - i;
+        if (at >= 0 && at < _entries.length) yield (at, c);
+      }
+    }
   }
 
   /// CSS `position: sticky` on `.chat-day` (top 6 px in its day's group):
   /// the chip of the day under the top stays there until its day's end
   /// pushes it up.
   ({String label, double top})? _sticky() {
-    final view = _viewport.currentContext?.findRenderObject();
-    if (view is! RenderBox) return null;
-    ({String label, double top})? out;
-    for (final e in _chipKeys.entries) {
-      final chip = e.value.currentContext?.findRenderObject();
-      final group = _groupKeys[e.key]?.currentContext?.findRenderObject();
-      if (chip is! RenderBox || group is! RenderBox) continue;
-      final natural = chip.localToGlobal(Offset.zero, ancestor: view).dy;
-      final end = group.localToGlobal(Offset(0, group.size.height), ancestor: view).dy;
-      if (end <= 0 || natural >= _stickTop) continue;
-      final top = _stickTop < end - 6 - chip.size.height ? _stickTop : end - 6 - chip.size.height;
-      if (top > natural + 0.01) out = (label: e.key, top: top);
+    final view = _view;
+    if (view == null) return null;
+    // The days' chips built now, where they are, and the row at the top.
+    final chips = <({String label, double top, double row})>[];
+    String? day;
+    for (final (i, box) in _shown()) {
+      final e = _entries[i];
+      if (!box.hasSize || !box.attached) continue;
+      final top = box.localToGlobal(Offset.zero, ancestor: view).dy;
+      if (e.day != null && top <= _stickTop && top + box.size.height > _stickTop) day = e.day;
+      if (e.chip != null) {
+        final chip = _chipIn(box);
+        if (chip != null) {
+          _chipHeight = chip.size.height;
+          chips.add((label: e.chip!, top: chip.localToGlobal(Offset.zero, ancestor: view).dy, row: top));
+        }
+      }
     }
-    return out;
+    if (day == null) return null;
+    final own = chips.where((c) => c.label == day).firstOrNull;
+    if (own != null && own.top >= _stickTop) return null;
+    // Pushed up by the next day's row.
+    final next = chips.where((c) => c.label != day && c.row > _stickTop).fold<double?>(null, (a, c) => a == null || c.row < a ? c.row : a);
+    final top = next == null || _stickTop < next - 6 - _chipHeight ? _stickTop : next - 6 - _chipHeight;
+    if (own != null && top <= own.top + 0.01) return null;
+    return (label: day, top: top);
+  }
+
+  /// The day chip drawn in a row.
+  RenderBox? _chipIn(RenderObject row) {
+    RenderBox? found;
+    void look(RenderObject o) {
+      if (found != null) return;
+      if (o is _RenderDayChipMark) {
+        found = o;
+        return;
+      }
+      o.visitChildren(look);
+    }
+
+    look(row);
+    return found;
+  }
+
+  /// A held message's bubble on the screen, while its row is built.
+  Rect? _bubbleOf(String id, RenderObject? ancestor) {
+    final at = _index['m:$id'];
+    if (at == null) return null;
+    for (final (i, box) in _shown()) {
+      if (i != at) continue;
+      if (!box.attached || !box.hasSize) return null;
+      return heldBubble(box, ancestor: ancestor);
+    }
+    return null;
   }
 
   void _toBottom() {
@@ -666,65 +768,238 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     _newCount = 0;
   }
 
+  /// The rows, by day, as ChatStream.tsx groups them.
+  void _list() {
+    final items = widget.items;
+    final of = widget.of;
+    final out = <_Entry<T>>[const _Entry.head()];
+    if (items != null) {
+      String? day;
+      T? prev;
+      for (final m in items) {
+        final label = dayLabel(of.at(m), widget.now);
+        final first = label != day;
+        if (first) {
+          day = label;
+          prev = null;
+        }
+        final id = of.id(m);
+        out.add(_Entry.message('m:$id', m, prev, label, chip: first ? label : null, unread: widget.unread?.id == id));
+        prev = m;
+      }
+    }
+    out.add(const _Entry.foot());
+    _entries = out;
+    _index = {for (var i = 0; i < out.length; i++) out[i].key: i};
+  }
+
+  /// Where the anchor is now: where it was, or (that row gone) the first
+  /// message after where it was.
+  void _anchorAt() {
+    final items = widget.items;
+    if (!_placed && items != null) {
+      // Placed now, in the first layout with messages: at the message
+      // looked for, the first unread, or the newest.
+      final focus = widget.focus;
+      final unread = widget.unread?.id;
+      if (focus != null && _index.containsKey('m:$focus')) {
+        _open = _Open.focus;
+        _split = 'm:$focus';
+        _anchor = 0.5;
+      } else if (unread != null && _index.containsKey('m:$unread')) {
+        _open = _Open.unread;
+        _split = 'm:$unread';
+        _anchor = 0;
+      } else {
+        _open = _Open.end;
+        // Under the newest there is now: what comes later lands below it.
+        _split = _entries[_entries.length - 2].key;
+        _anchor = 1;
+      }
+    }
+    final at = _index[_split];
+    final above = _open == _Open.end;
+    if (at != null) {
+      _splitAt = above ? at + 1 : at;
+      return;
+    }
+    // The anchor's message gone (sent under its own id, deleted): the
+    // row now where it was.
+    final i = _splitAt.clamp(1, _entries.length - 1);
+    _splitAt = i;
+    _split = _entries[above ? i - 1 : i].key;
+  }
+
+  /// [_ThreadPosition]: what the scroll may reach, from the two halves'
+  /// lengths: from the top of the first row to the end of the last, never
+  /// past them; a thread shorter than the view stands at its top, as the
+  /// web's does.
+  (double, double) _extents(double view, double min, double max) {
+    final b = _before.currentContext?.findRenderObject();
+    final a = _center.currentContext?.findRenderObject();
+    if (b is! RenderSliver || a is! RenderSliver || b.geometry == null || a.geometry == null) return (min, max);
+    final lo = _anchor * view - b.geometry!.scrollExtent;
+    final hi = a.geometry!.scrollExtent + _anchor * view - view;
+    return (lo, hi < lo ? lo : hi);
+  }
+
+  /// [_ThreadPosition]: where the view must be now, in the layout, given
+  /// the ends it is about to take: where it opens, the first time; the
+  /// bottom while the reader is held there.
+  double? _wanted(double min, double max, {required bool dragging, required bool grew}) {
+    if (!_placed) {
+      if (widget.items == null) return null;
+      _placed = true;
+      double want = 0;
+      final row = _center.currentContext?.findRenderObject();
+      final first = row is RenderSliverMultiBoxAdaptor ? row.firstChild : null;
+      // Where [key]'s box is in the anchor's row (the first below it).
+      double? within(GlobalKey key, double Function(RenderBox) at) {
+        final box = key.currentContext?.findRenderObject();
+        if (box is! RenderBox || !box.hasSize || first == null) return null;
+        return box.localToGlobal(Offset(0, at(box)), ancestor: first).dy;
+      }
+
+      switch (_open) {
+        case _Open.end:
+          // The newest message at the bottom of the view, the stream's
+          // 8 px under it; with Taskiem's cards after it, 16 px under it
+          // and the cards below (toNewest). Kept there as what is below
+          // arrives.
+          want = widget.tail == null ? max : 16;
+          _keep = true;
+          _atEnd = true;
+        case _Open.unread:
+          // The unread line 40 px under the top (clear of the day chip).
+          want = (within(_unreadKey, (_) => 0) ?? 8) - 40;
+        case _Open.focus:
+          // scrollIntoView({ block: "center" }): the message's middle at
+          // the view's.
+          want = within(_focusKey, (b) => ((b as _RenderMeasured).measured?.height ?? 0) / 2) ?? 0;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_open == _Open.focus) _flashAt(widget.focus!);
+        _onScroll();
+        // Opened at the end: kept there as what is below arrives.
+        _keep = _open == _Open.end;
+      });
+      return want.clamp(min, max);
+    }
+    // What is below grew (a message, a picture loaded, the typing dots).
+    if (grew && _keep && _atEnd && !dragging) return max;
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = widget.items;
     final of = widget.of;
-    final children = <Widget>[];
-    if (items != null && items.isEmpty && widget.empty != null) {
-      children.add(Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: widget.empty)));
-    } else if (items != null) {
-      String? day;
-      T? prev;
-      final group = <Widget>[];
-      void close() {
-        if (group.isEmpty) return;
-        children.add(
-          KeyedSubtree(
-            key: _groupKeys.putIfAbsent(day!, GlobalKey.new),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: gapped(List.of(group), 2)),
+    if (items != null) {
+      // Arrived since the last build, newer than what was there.
+      final newest = _lastNewest;
+      for (final m in items) {
+        if (_seen.add(of.id(m)) && _seeded && newest != null && !of.at(m).isBefore(newest)) _fresh.add(of.id(m));
+      }
+      _seeded = true;
+      // Only as it arrives: one built later (scrolled to) is simply there.
+      if (_fresh.isNotEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _fresh.clear());
+    }
+    _lastNewest = _newestOf(items);
+    _list();
+    _anchorAt();
+    final sel = widget.selection;
+    sel?.order = [for (final e in _entries) if (e.m != null) of.id(e.m as T)];
+    final picked = TkLook.of(context).chatPicked;
+
+    Widget row(int i) {
+      final e = _entries[i];
+      final key = ValueKey(e.key);
+      if (e.key == 'head') {
+        return KeyedSubtree(
+          key: key,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final e in widget.errors) TkErrorBox(e),
+                if (items != null && items.isEmpty && widget.empty != null)
+                  Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: widget.empty)),
+                // `.chat-top { height: 1px }` while there are older ones,
+                // in the stream's 2 px gaps.
+                if (widget.hasOlder && items != null && items.isNotEmpty) const SizedBox(height: 3),
+              ],
+            ),
           ),
         );
-        group.clear();
       }
-
-      for (final m in items) {
-        final label = dayLabel(of.at(m), widget.now);
-        if (label != day) {
-          close();
-          day = label;
-          prev = null;
-          group.add(
-            Center(
-              child: ListenableBuilder(
-                listenable: Listenable.merge([_stuck, _moving]),
-                builder: (context, chip) => Opacity(opacity: _stuck.value?.label == label && _moving.value ? 0 : 1, child: chip),
-                child: DayChip(label, chipKey: _chipKeys.putIfAbsent(label, GlobalKey.new)),
+      if (e.key == 'foot') {
+        return KeyedSubtree(
+          key: key,
+          child: KeyedSubtree(
+          key: _foot,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (items != null && widget.tail != null) ...[if (items.isNotEmpty) const SizedBox(height: 2), widget.tail!],
+              ],
+            ),
+          ),
+          ),
+        );
+      }
+      final m = e.m as T;
+      final id = of.id(m);
+      final w = widget.render(m, e.prev);
+      final label = e.chip;
+      final first = i == 1;
+      Widget? body;
+      if (w != null) {
+        body = MessageArrive(
+          key: ValueKey('arrive $id'),
+          animate: _fresh.remove(id),
+          mine: of.mine(m),
+          kind: widget.arrival?.call(m) ?? TkArrival.bubble,
+          // Each message drawn once and kept: scrolling moves the pictures.
+          child: RepaintBoundary(child: widget.focus == id ? _Measured(key: _focusKey, child: w) : w),
+        );
+        body = Padding(padding: const EdgeInsets.fromLTRB(10, 2, 10, 0), child: body);
+        if (sel != null) body = _PickRow(selection: sel, id: id, tint: picked, child: body);
+      }
+      return KeyedSubtree(
+        key: key,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (label != null)
+              Padding(
+                padding: EdgeInsets.fromLTRB(10, first ? 0 : 2, 10, 0),
+                child: Center(
+                  child: ListenableBuilder(
+                    listenable: Listenable.merge([_stuck, _moving]),
+                    builder: (context, chip) => Opacity(opacity: _stuck.value?.label == label && _moving.value ? 0 : 1, child: chip),
+                    child: _DayChipMark(child: DayChip(label)),
+                  ),
+                ),
               ),
-            ),
-          );
-        }
-        if (widget.unread?.id == of.id(m)) group.add(UnreadMark(widget.unread!.count, markKey: _unreadKey));
-        final w = widget.render(m, prev);
-        prev = m;
-        final id = of.id(m);
-        final fresh = _known.add(id) && _seeded && !of.at(m).isBefore(_newest ?? of.at(m));
-        // Each message drawn once and kept: scrolling moves the pictures.
-        if (w != null) {
-          group.add(
-            MessageArrive(
-              key: ValueKey('arrive $id'),
-              animate: fresh,
-              mine: of.mine(m),
-              kind: widget.arrival?.call(m) ?? TkArrival.bubble,
-              child: RepaintBoundary(child: widget.focus == id ? KeyedSubtree(key: _focusKey, child: w) : w),
-            ),
-          );
-        }
-      }
-      close();
-      _seeded = true;
+            if (e.unread) Padding(padding: const EdgeInsets.fromLTRB(10, 2, 10, 0), child: UnreadMark(widget.unread!.count, markKey: _unreadKey)),
+            ?body,
+          ],
+        ),
+      );
     }
+
+    int? find(Key key, bool below) {
+      if (key is! ValueKey<String>) return null;
+      final at = _index[key.value];
+      if (at == null) return null;
+      if (below) return at >= _splitAt ? at - _splitAt : null;
+      return at < _splitAt ? _splitAt - 1 - at : null;
+    }
+
     return ThreadFlash(
       id: _flashId,
       ring: _flash,
@@ -736,24 +1011,34 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
             child: Semantics(
               label: 'Chat history',
               liveRegion: true,
-              child: SingleChildScrollView(
+              child: CustomScrollView(
                 controller: scroll,
-                // `.chat-stream`: 8 px 10 px, 2 px between groups.
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final e in widget.errors) TkErrorBox(e),
-                    // `.chat-top { height: 1px }` while there are older ones,
-                    // in the stream's 2 px gaps.
-                    if (widget.hasOlder && children.isNotEmpty) const SizedBox(height: 3),
-                    KeyedSubtree(
-                      key: _endKey,
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: gapped(children, 2)),
+                center: _center,
+                anchor: _anchor,
+                // What is in view and a screen's height round it.
+                scrollCacheExtent: const ScrollCacheExtent.viewport(1),
+                slivers: [
+                  SliverList(
+                    key: _before,
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => row(_splitAt - 1 - i),
+                      childCount: _splitAt,
+                      findChildIndexCallback: (k) => find(k, false),
+                      addRepaintBoundaries: false,
+                      addSemanticIndexes: false,
                     ),
-                    if (items != null && widget.tail != null) ...[if (children.isNotEmpty) const SizedBox(height: 2), widget.tail!],
-                  ],
-                ),
+                  ),
+                  SliverList(
+                    key: _center,
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => row(_splitAt + i),
+                      childCount: _entries.length - _splitAt,
+                      findChildIndexCallback: (k) => find(k, true),
+                      addRepaintBoundaries: false,
+                      addSemanticIndexes: false,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -810,6 +1095,115 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
       ),
     );
   }
+
+  DateTime? _lastNewest;
+}
+
+/// The thread's scrolling, with [_ThreadPosition].
+class _ThreadScroll extends ScrollController {
+  _ThreadScroll(this._thread);
+  final ThreadViewState<dynamic> _thread;
+
+  @override
+  ScrollPosition createScrollPosition(ScrollPhysics physics, ScrollContext context, ScrollPosition? oldPosition) =>
+      _ThreadPosition(_thread, physics: physics, context: context, oldPosition: oldPosition);
+}
+
+/// The thread's place, settled in the layout itself (so a frame never
+/// shows it elsewhere first): where it opens, held at the bottom while the
+/// reader is there, and its ends exactly those of what is loaded.
+class _ThreadPosition extends ScrollPositionWithSingleContext {
+  _ThreadPosition(this._thread, {required super.physics, required super.context, super.oldPosition});
+  final ThreadViewState<dynamic> _thread;
+
+  /// The bottom as last laid out.
+  double? _lastEnd;
+
+  /// A finger on it: not fought.
+  bool get _dragging => activity is DragScrollActivity;
+
+  @override
+  bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
+    final (lo, hi) = _thread._extents(viewportDimension, minScrollExtent, maxScrollExtent);
+    final last = _lastEnd;
+    _lastEnd = hi;
+    var want = _thread._wanted(lo, hi, dragging: _dragging, grew: last != null && (hi - last).abs() > 0.5);
+    // Its ends moved past it (a page gone): back within them, at once
+    // rather than sprung back.
+    if (want == null && !_dragging && (pixels < lo - 0.5 || pixels > hi + 0.5)) want = pixels.clamp(lo, hi);
+    var moved = false;
+    if (want != null && (want - pixels).abs() > 0.5) {
+      correctPixels(want);
+      moved = true;
+    }
+    final ok = super.applyContentDimensions(lo, hi);
+    return ok && !moved;
+  }
+}
+
+/// A box that keeps its size as laid out, to be read in the same layout
+/// (the message a thread opens at, placed before the first frame).
+class _Measured extends SingleChildRenderObjectWidget {
+  const _Measured({super.key, required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderMeasured();
+}
+
+class _RenderMeasured extends RenderProxyBox {
+  Size? measured;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    measured = size;
+  }
+}
+
+/// Marks where a row's day chip is drawn (for the chip held at the top).
+class _DayChipMark extends SingleChildRenderObjectWidget {
+  const _DayChipMark({required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderDayChipMark();
+}
+
+class _RenderDayChipMark extends RenderProxyBox {}
+
+/// A message's row while messages may be held: tinted across the thread
+/// when held; while any are, a tap on it adds or takes it away (what is in
+/// the bubble is not pressed meanwhile).
+class _PickRow extends StatelessWidget {
+  const _PickRow({required this.selection, required this.id, required this.tint, required this.child});
+  final MessageSelection selection;
+  final String id;
+  final Color tint;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: selection,
+    builder: (context, child) {
+      final picking = selection.on;
+      final on = picking && selection.has(id);
+      void flip() => selection.toggle(id);
+      return Semantics(
+        selected: picking ? on : null,
+        onTap: picking ? flip : null,
+        child: GestureDetector(
+          behavior: picking ? HitTestBehavior.opaque : HitTestBehavior.deferToChild,
+          excludeFromSemantics: true,
+          onTap: picking ? flip : null,
+          onLongPress: picking ? flip : null,
+          child: ColoredBox(
+            color: on ? tint : const Color(0x00000000),
+            child: AbsorbPointer(absorbing: picking, child: child),
+          ),
+        ),
+      );
+    },
+    child: child,
+  );
 }
 
 /// A message arriving (chat.css): a bubble slides in from its own side
@@ -1184,19 +1578,8 @@ class _BubbleHoldState extends State<BubbleHold> with SingleTickerProviderStateM
 
   /// The bubble itself, on the screen (not its row).
   Rect _rect() {
-    RenderBox? box;
-    void find(Element e) {
-      final r = e.renderObject;
-      if (r is RenderDecoratedBox && box == null) {
-        box = r;
-        return;
-      }
-      e.visitChildElements(find);
-    }
-
-    (context as Element).visitChildElements(find);
-    final b = box ?? context.findRenderObject()! as RenderBox;
-    return b.localToGlobal(Offset.zero) & b.size;
+    final r = context.findRenderObject()!;
+    return heldBubble(r) ?? ((r as RenderBox).localToGlobal(Offset.zero) & r.size);
   }
 
   @override
@@ -1243,15 +1626,61 @@ class _BubbleHoldState extends State<BubbleHold> with SingleTickerProviderStateM
       ),
     );
     if (widget.onHold == null) return gestures;
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: widget.label,
-      onLongPressHint: 'Options',
-      onLongPress: () => widget.onHold!(_rect()),
-      child: gestures,
+    return _HoldMark(
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: widget.label,
+        onLongPressHint: 'Select',
+        onLongPress: () => widget.onHold!(_rect()),
+        child: gestures,
+      ),
     );
   }
+}
+
+/// Marks a bubble that may be held, for [heldBubble].
+class _HoldMark extends SingleChildRenderObjectWidget {
+  const _HoldMark({required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderHoldMark();
+}
+
+class _RenderHoldMark extends RenderProxyBox {}
+
+/// The bubble that may be held within [row] (a message's row, or the
+/// [BubbleHold] itself), on the screen: the largest box drawn with a
+/// decoration under the mark.
+Rect? heldBubble(RenderObject row, {RenderObject? ancestor}) {
+  RenderObject? mark;
+  void findMark(RenderObject o) {
+    if (mark != null) return;
+    if (o is _RenderHoldMark) {
+      mark = o;
+      return;
+    }
+    o.visitChildren(findMark);
+  }
+
+  findMark(row);
+  // The outermost decorated boxes; the largest is the bubble (not a
+  // sender's face beside it).
+  RenderBox? box;
+  void findBox(RenderObject o) {
+    if (o is RenderDecoratedBox && o.hasSize) {
+      final b = box;
+      if (b == null || o.size.width * o.size.height > b.size.width * b.size.height) box = o;
+      return;
+    }
+    o.visitChildren(findBox);
+  }
+
+  if (mark == null) return null;
+  findBox(mark!);
+  final b = box ?? mark as RenderBox;
+  if (!b.attached || !b.hasSize) return null;
+  return b.localToGlobal(Offset.zero, ancestor: ancestor) & b.size;
 }
 
 /// Owns the tap recognisers of a text's links: made once, kept while the
