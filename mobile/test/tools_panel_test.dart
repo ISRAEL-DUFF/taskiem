@@ -204,6 +204,10 @@ void main() {
             final j = f.json(req.url.path);
             return http.Response(jsonEncode({...j, 'whose': whose}), 200, headers: {'content-type': 'application/json'});
           }
+          if (req.url.path == '/v1/supplier-prices') {
+            final list = {'link': req.url.queryParameters['link'], 'business': 'Bayo Rice Mills', 'name': 'Wholesale', 'items': [{'item_id': 'rice', 'name': 'Ofada rice', 'unit': 'bag', 'price_kobo': 4500000, 'min_quantity': 1, 'available': true}]};
+            return http.Response(jsonEncode({'suppliers': [list]}), 200, headers: {'content-type': 'application/json'});
+          }
           return null;
         },
       ),
@@ -219,19 +223,22 @@ void main() {
     await settle(t);
     await t.tap(find.bySemanticsLabel('Open tools'));
     await settle(t);
-    await t.tap(find.bySemanticsLabel(RegExp('^Their shop')));
+    await t.tap(find.bySemanticsLabel(RegExp('^Their shop, ')));
     await settle(t);
   }
 
-  testWidgets('their shop, from a business that sells to us: to order from', (t) async {
+  testWidgets('their shop, from a business that sells to us: the shop, to order from', (t) async {
     await shop(t, 'theirs');
-    expect(find.text('Order from Bayo Rice Mills'), findsOneWidget);
+    expect(find.textContaining(RegExp('^(Your|Their storefront) prices')), findsOneWidget);
+    expect(find.bySemanticsLabel('Your bag, empty'), findsOneWidget);
+    expect(find.bySemanticsLabel('List view: their prices as a list'), findsOneWidget);
   });
 
-  testWidgets('their shop, from one that does not sell to us: to look around', (t) async {
+  testWidgets('their shop, from one that does not sell to us: the shop, to look around', (t) async {
     await shop(t, 'ours');
-    expect(find.text("Bayo Rice Mills's shop"), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp('^One more ')), findsNothing);
+    expect(find.textContaining('You can look around.'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Your bag')), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('^Add .* to the bag')), findsNothing);
   });
 
   testWidgets('Make one product: two chosen, then its form', (t) async {

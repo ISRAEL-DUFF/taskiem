@@ -371,7 +371,7 @@ class _ShopScreenState extends State<ShopScreen> {
                   subtitle: s == null ? 'Their shop' : s.ways,
                   onBack: () => Navigator.of(context).maybePop(),
                   actions: [
-                    if (list != null) ChatHeadBar.headButton('List view: their prices as a list', TkIcon('b-bars', size: 22, stroke: 2, color: t.text), s == null ? null : () => list(context, _bag)),
+                    if (list != null) ChatHeadBar.headButton('List view: their prices as a list', TkIcon('b-list', size: 22, stroke: 2, color: t.text), s == null ? null : () => list(context, _bag)),
                     ChatHeadBar.headButton(
                       _filter == 'saved' ? 'Show all of the shop' : 'Show what you saved',
                       TkIcon('b-heart', size: 22, stroke: 2, color: _filter == 'saved' ? t.danger : t.text, fill: _filter == 'saved'),
@@ -1046,12 +1046,12 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
     final th = _thing;
     final sold = th == null ? !i.available : !th.available;
     final left = th?.left;
-    final price = th?.price ?? i.priceKobo;
+    final price = grid != null ? i.priceKobo : th?.price ?? i.priceKobo;
     // What one costs as Add to bag would leave the bag: a quantity price
     // reached counts.
     final each = th == null ? price : src.priceIn(th, {..._bag.lines, th.id: _bag.of(th.id) + _n});
     // The product in the bag, its sizes together: the quantity price reached.
-    final have = _sizes.isEmpty ? _bag.of(i.id) : _sizes.fold(0, (a, z) => a + _bag.of(z.id));
+    final have = _sizes.isEmpty ? _bag.of(i.id) + _n : _sizes.fold(0, (a, z) => a + _bag.of(z.id));
     final more = [
       ...widget.shop.items.where((x) => x.id != i.id && (x.category ?? '') == (i.category ?? '') && (i.category ?? '').isNotEmpty),
       ...widget.shop.items.where((x) => x.id != i.id && ((x.category ?? '') != (i.category ?? '') || (i.category ?? '').isEmpty)),

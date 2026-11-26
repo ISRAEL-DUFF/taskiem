@@ -30,7 +30,9 @@ import 'chats.dart';
 import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
 import 'money_sheets.dart' show InvoiceAdd;
+import 'business_shop.dart';
 import 'order_sheet.dart';
+import 'shop.dart' show openShopOf;
 import 'bills_page.dart' show openBill;
 import 'pay_diary.dart' show PayDiaryLine;
 import 'pay_chip.dart' show PayChip, mayHoldAccount, mayPayFromMessages;
@@ -1206,6 +1208,41 @@ class _ConversationScreenState extends State<ConversationScreen> {
     );
   }
 
+  /// Their shop (business_shop.dart): their prices as a shop window, its
+  /// bag checked out in the order sheet's review, the plain list a press
+  /// away; at [item] when a card named one. Ask about this begins its
+  /// question in our box.
+  Future<void> _shop({String? item}) async {
+    final d = widget.data;
+    final c = d.conv;
+    _tools.close();
+    await openShopOf(
+      context,
+      BusinessShop(
+        chats: d.chats,
+        link: c.link,
+        business: c.business,
+        name: c.name,
+        face: () => ChatAvatar(name: c.name, logo: c.logo ? d.chats.logo(c.business) : null, size: 40, letterSize: 15),
+        supplies: _supplies,
+        onAsk: (words) {
+          _text.text = words;
+          _text.selection = TextSelection.collapsed(offset: words.length);
+        },
+        onSent: (_) {
+          unawaited(d.pull().catchError((Object _) {}));
+          for (final t in tools.where((t) => t.key == 'purchases')) {
+            _tools.refresh(t);
+          }
+        },
+      ),
+      item: item,
+    );
+  }
+
+  /// Their shop applies: they sell to us, a price list or their storefront.
+  bool get _sells => widget.data.priceWhose == 'theirs' && widget.data.priceList.isNotEmpty;
+
   /// ChatComposer.tsx's BookSheet: their services, a time, a booking;
   /// its card here after.
   Future<void> _book() async {
@@ -1235,7 +1272,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
     return (
       lead: [
-        (key: 'order', title: 'Their shop', icon: 'plus', line: 'From ${d.conv.name}', onPick: () => _order()),
+        (key: 'order', title: 'Their shop', icon: 'plus', line: 'From ${d.conv.name}', onPick: () => _shop()),
         // Book, after it: their services, shown only when they offer any.
         if (((_services?['services'] as List?) ?? const []).isNotEmpty)
           (key: 'book', title: 'Book', icon: 'calendar', line: bookLine(_services!), onPick: () => _book()),
@@ -1710,7 +1747,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       title: c.name,
                       subtitle: d.offline ? 'Waiting for network…' : d.headLine,
                       typing: d.typingNow,
-                      actions: [ChatHeadBar.headButton('Search this conversation', TkIcon('b-search', size: 22, stroke: 2.2, color: t.text), _search)],
+                      actions: [if (_sells) ChatHeadBar.headButton('Their shop', TkIcon('b-store', size: 22, stroke: 2, color: t.text), _shop), ChatHeadBar.headButton('Search this conversation', TkIcon('b-search', size: 22, stroke: 2.2, color: t.text), _search)],
                       onAvatar: _contact,
                       onMore: _more,
                     ),
@@ -1909,7 +1946,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             onReact: _write ? (e) => d.react(m.m, e) : null,
             taps: _taps[m.id] ?? 0,
             live: d.chats.chatTools ? (items: d.priceList, whose: d.priceWhose, stock: d.stock) : null,
-            onOrder: (id) => _order(OrderStart(itemId: id)),
+            onOrder: (id) => _shop(item: id),
             onOpenLink: widget.onOpenLink,
             cheer: d.cheer == m.id,
             refs: (auth: d.chats.auth, link: d.conv.link),
