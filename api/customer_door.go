@@ -52,8 +52,10 @@ func (s *Server) customerDoorRoutes(r chi.Router) {
 	r.Put("/me/chats/{id}", s.putPersonChat)
 	r.Get("/me/chats/{id}/messages", s.personMessages)
 	r.Post("/me/chats/{id}/messages", s.sendPersonMessage)
+	r.Patch("/me/chats/{id}/messages/{message}", s.editPersonMessage)
 	r.Post("/me/chats/{id}/files", s.sendPersonFile)
 	r.Get("/me/chats/{id}/files/{message}", s.personFile)
+	r.Get("/me/chats/{id}/previews/{message}", s.personPreviewImage)
 	r.Post("/me/chats/{id}/read", s.readPersonChat)
 	r.Post("/me/chats/{id}/typing", s.personTyping)
 	r.Post("/me/chats/{id}/block", s.blockBusiness)
@@ -190,6 +192,9 @@ type personMessage struct {
 	SenderName string          `json:"sender_name,omitempty"`
 	Card       *customerCard   `json:"card,omitempty"`
 	Attachment *chatAttachment `json:"attachment,omitempty"`
+	// Preview is the first link's preview; its picture is at
+	// GET /v1/me/chats/{id}/previews/{message}.
+	Preview *links.Preview `json:"preview,omitempty"`
 	// Offer: marked Offer, with Stop offers under it (§15).
 	Offer bool `json:"offer,omitempty"`
 	// WarnTransfer: the business's message asks for a transfer to an
@@ -201,6 +206,10 @@ type personMessage struct {
 	Line      string     `json:"line"`
 	ReadAt    *time.Time `json:"read_at"`
 	CreatedAt time.Time  `json:"created_at"`
+	// EditedAt is when its sender last changed its words ("Edited"), and
+	// Edits how many times; an edit names the count it saw.
+	EditedAt *time.Time `json:"edited_at,omitempty"`
+	Edits    int        `json:"edits"`
 }
 
 const personChatCols = `c.id, c.tenant_id, c.last_message_at, c.muted, c.archived, c.blocked_at IS NOT NULL, c.business_blocked_at IS NOT NULL, c.offers,
@@ -752,7 +761,7 @@ func (s *Server) personMessages(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		q := `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line FROM person_messages WHERE person_id = $1 AND conversation_id = $2`
+		q := `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line, preview, edited_at, edits FROM person_messages WHERE person_id = $1 AND conversation_id = $2`
 		args := []any{person, c.ID}
 		if b, err := uuid.Parse(r.URL.Query().Get("before")); err == nil {
 			q += ` AND (created_at, id) < (SELECT created_at, id FROM person_messages WHERE person_id = $1 AND id = $3)`
@@ -764,7 +773,7 @@ func (s *Server) personMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (personMessage, error) {
 			var m personMessage
-			if err := r.Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line); err != nil {
+			if err := r.Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line, &m.Preview, &m.EditedAt, &m.Edits); err != nil {
 				return m, err
 			}
 			m.WarnTransfer = !m.Mine && ((m.Kind != "card" && warnTransfer(m.Body)) || savedNamesAccount(m.Card))
@@ -808,6 +817,8 @@ func (s *Server) sendPersonMessage(w http.ResponseWriter, r *http.Request) {
 			Type  string      `json:"type"`
 			Saved *savedShare `json:"saved"`
 		} `json:"card"`
+		// Preview: the card the composer showed ({id}), or false for none.
+		Preview previewChoice `json:"preview"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -826,7 +837,12 @@ func (s *Server) sendPersonMessage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "client_id is up to 80 characters")
 		return
 	}
-	m, fresh, err := s.personSend(r.Context(), person, chi.URLParam(r, "id"), in.Text, in.ClientID, nil, nil)
+	// The first link's preview, only for a chat the person can write in.
+	var pv *madePreview
+	if previewURL(in.Text, s.previewAnyPort) != "" && s.doorMaySend(r.Context(), person, chi.URLParam(r, "id")) {
+		pv = s.previewForSend(r.Context(), principalFrom(r.Context()), "door:"+chi.URLParam(r, "id"), "p:"+person.String(), person.String(), in.Text, in.Preview)
+	}
+	m, fresh, err := s.personSend(r.Context(), person, chi.URLParam(r, "id"), in.Text, in.ClientID, nil, nil, pv)
 	if err != nil {
 		s.personFail(w, r, err)
 		return
@@ -867,7 +883,7 @@ func (s *Server) sendPersonFile(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "client_id is up to 80 characters")
 		return
 	}
-	m, fresh, err := s.personSend(r.Context(), person, chi.URLParam(r, "id"), text, clientID, f, nil)
+	m, fresh, err := s.personSend(r.Context(), person, chi.URLParam(r, "id"), text, clientID, f, nil, nil)
 	if err != nil {
 		s.personFail(w, r, err)
 		return
@@ -885,9 +901,9 @@ func personRepeat(ctx context.Context, tx pgx.Tx, person, conv uuid.UUID, client
 		return nil, nil
 	}
 	var m personMessage
-	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line FROM person_messages
+	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line, preview, edited_at, edits FROM person_messages
 		WHERE person_id = $1 AND conversation_id = $2 AND client_id = $3`, person, conv, clientID).
-		Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line)
+		Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line, &m.Preview, &m.EditedAt, &m.Edits)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -898,8 +914,8 @@ func personRepeat(ctx context.Context, tx pgx.Tx, person, conv uuid.UUID, client
 // personSend writes the person's message (and file, or card) to both
 // copies through the door, in one transaction; fresh is false for a repeat
 // of a client_id.
-func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text, clientID string, f *sentFile, card *customerCard) (personMessage, bool, error) {
-	out := personMessage{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, Line: lineApp}
+func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text, clientID string, f *sentFile, card *customerCard, pv *madePreview) (personMessage, bool, error) {
+	out := personMessage{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, Line: lineApp, Preview: pv.view()}
 	if f != nil {
 		out.Kind, out.Attachment = "media", f.view()
 	}
@@ -908,7 +924,26 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 	}
 	var tenant uuid.UUID
 	var bizFile map[string]any
+	var bizPreview *links.Preview
 	var again *personMessage
+	if pv != nil && pv.img != nil && s.Media != nil {
+		// The business's copy of the link's picture, in its own storage,
+		// as its copy of a file is.
+		var c personChat
+		if err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+			var err error
+			c, err = personChatTx(ctx, tx, person, chatID)
+			return err
+		}); err != nil {
+			return out, false, err
+		}
+		bizPreview = s.keepBusinessPreview(ctx, c.Business, pv)
+		defer func() {
+			if bizPreview != nil {
+				s.dropBusinessImage(ctx, c.Business, bizPreview)
+			}
+		}()
+	}
 	if f != nil {
 		// The business's copy, in its own storage, before the transaction
 		// (which holds the business's audit chain once the door is open);
@@ -932,7 +967,7 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 			return out, false, chatFileErr(err)
 		}
 		tenant = c.Business
-		bizFile = map[string]any{"kind": out.Attachment.Kind, "type": bf.Type, "size": bf.Size, "name": f.Name, "path": bf.Path}
+		bizFile = f.Map(map[string]any{"kind": out.Attachment.Kind, "type": f.Type, "size": bf.Size, "name": f.Name, "path": bf.Path})
 	}
 	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		c, err := personChatTx(ctx, tx, person, chatID)
@@ -985,7 +1020,7 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 		})
 
 		if out.CreatedAt, _, err = s.writeAppMessageTx(ctx, tx, appMessage{id: out.ID, tenant: tenant, thread: thread, subject: subject, person: person,
-			fromPerson: true, kind: out.Kind, text: text, card: card, bizFile: bizFile, personFile: f, clientID: clientID}); err != nil {
+			fromPerson: true, kind: out.Kind, text: text, card: card, bizFile: bizFile, personFile: f, clientID: clientID, preview: pv, bizPreview: bizPreview}); err != nil {
 			return err
 		}
 		// The bell, and the closed reply, each in a savepoint: if either
@@ -1000,6 +1035,9 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 	})
 	if (err != nil || again != nil) && bizFile != nil {
 		s.dropChatFile(ctx, tenant, bizFile["path"].(string))
+	}
+	if err == nil && again == nil {
+		bizPreview = nil // kept with the message
 	}
 	if again != nil {
 		return *again, false, nil
@@ -1019,6 +1057,9 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 			}
 		}
 		return out, false, err
+	}
+	if f != nil {
+		s.drawLater(ctx, f.Type, f.Data, s.personPDFCopy(person, out.ID, nil), s.customerPDFCopy(tenant, out.ID))
 	}
 	return out, true, nil
 }
@@ -1070,7 +1111,7 @@ func (s *Server) sendPersonSaved(w http.ResponseWriter, r *http.Request, person 
 		}
 		return
 	}
-	m, fresh, err := s.personSend(r.Context(), person, chat.ID.String(), c.Title, clientID, nil, &customerCard{Type: "saved", Title: c.Title, Saved: &c})
+	m, fresh, err := s.personSend(r.Context(), person, chat.ID.String(), c.Title, clientID, nil, &customerCard{Type: "saved", Title: c.Title, Saved: &c}, nil)
 	if err != nil {
 		s.personFail(w, r, err)
 		return
@@ -1116,23 +1157,31 @@ func (s *Server) personFile(w http.ResponseWriter, r *http.Request) {
 	}
 	var data []byte
 	var ctype, name, kind string
+	var chat, msg uuid.UUID
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		c, err := personChatTx(ctx, tx, person, chi.URLParam(r, "id"))
 		if err != nil {
 			return err
 		}
-		msg, err := uuid.Parse(chi.URLParam(r, "message"))
-		if err != nil {
+		if msg, err = uuid.Parse(chi.URLParam(r, "message")); err != nil {
 			return errDoorNone
 		}
+		chat = c.ID
+		if wantsPreview(r) {
+			return nil
+		}
 		return tx.QueryRow(ctx, `SELECT f.data, f.type, f.name, m.attachment->>'kind' FROM person_files f JOIN person_messages m ON m.id = f.message_id AND m.person_id = f.person_id
-			WHERE f.person_id = $1 AND m.conversation_id = $2 AND f.message_id = $3`, person, c.ID, msg).Scan(&data, &ctype, &name, &kind)
+			WHERE f.person_id = $1 AND m.conversation_id = $2 AND f.message_id = $3 AND f.kind = 'file'`, person, c.ID, msg).Scan(&data, &ctype, &name, &kind)
 	})
 	if err != nil {
 		s.personFail(w, r, err)
 		return
 	}
-	serveChatFile(w, data, ctype, name, kind)
+	if wantsPreview(r) {
+		s.servePDFPreview(w, r, s.personPDFCopy(person, msg, &chat), s.personFail)
+		return
+	}
+	serveChatFileFor(w, r, data, ctype, name, kind)
 }
 
 // readPersonChat is POST /v1/me/chats/{id}/read: the person read the

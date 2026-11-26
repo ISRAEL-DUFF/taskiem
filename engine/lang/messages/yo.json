@@ -7545,6 +7545,10 @@
       "text": "Ẹni ti n kọwe si awọn iṣowo ti a so pọ fun {org} nikan lo le fi eyi ranṣẹ.",
       "reviewed": false
     },
+    "chat.link.edited": {
+      "text": "✏️ A ti ṣàtúnṣe: {words}",
+      "reviewed": false
+    },
     "chat.link.ask_what": {
       "text": "Kini ẹ fẹ sọ fun *{name}*? Fi *ask {name}* ati ọrọ yin ranṣẹ.",
       "reviewed": false

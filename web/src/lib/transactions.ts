@@ -217,10 +217,22 @@ export function txAmount(m: Pick<Movement, "amount_kobo" | "direction" | "curren
   return `${m.direction === "in" ? "+" : "−"}${amount}`;
 }
 
+/** Taskiem's own references in the money log ("entered:<id>", "sale:<key>",
+ * "posting:<id>"…): keys it keeps to record each movement once, which mean
+ * nothing to a person. A payments account's own reference ("P-1",
+ * "T12345") never has this shape. */
+const INTERNAL_REFERENCE = /^(entered|chat|sale|rider-fee|remittance|posting|delivery|delivery-fee|tnt|payment|payments|purchase|thing-sale|withdraw):/;
+
+/** The reference as a person sees it: "" for one of Taskiem's own. */
+export function shownReference(ref?: string | null): string {
+  return ref && !INTERNAL_REFERENCE.test(ref) ? ref : "";
+}
+
 /** A row's line: "Paystack (main) · P-1 · invoice INV-0104". */
 export function txSub(m: Movement): string {
   const kind = m.description || m.vendor ? kindWords(m.kind) : "";
-  const parts = [kind, whereWords(m.channel), m.reference && m.reference !== m.description ? m.reference : "", m.towards ?? ""].filter(Boolean);
+  const ref = shownReference(m.reference);
+  const parts = [kind, whereWords(m.channel), ref && ref !== m.description ? ref : "", m.towards ?? ""].filter(Boolean);
   return [...new Set(parts)].join(" · ");
 }
 

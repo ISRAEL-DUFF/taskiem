@@ -1,3 +1,4 @@
+import type { LinkPreview } from "./linkchat";
 // People chatting with people (docs/spec/people-chatting.md, decision 0069),
 // stage 5a on the web: what the API answers for You's one Chats list, a
 // chat with a person, requests, finding people, contacts, the privacy
@@ -227,6 +228,8 @@ export interface PeopleMessage {
   mine: boolean;
   kind: "text" | "media" | "card" | "location";
   body: string;
+  /** The first link's card; its picture at the chat's previews route. */
+  preview?: LinkPreview;
   card?: PeopleCard;
   location?: { lat: number; lng: number; label?: string };
   attachment?: PeopleAttachment;
@@ -242,6 +245,10 @@ export interface PeopleMessage {
   warn?: boolean;
   read_at: string | null;
   created_at: string;
+  /** When its sender last changed its words ("Edited"), and how many times
+   * (chat-previews-and-editing.md §3). */
+  edited_at?: string | null;
+  edits?: number;
   /** Ours, still on its way (not from the server). */
   local?: boolean;
   /** A photo on its way: this device's own copy, to show meanwhile. */
@@ -376,6 +383,8 @@ export const photoOf = (p: PersonCard | undefined): string | undefined => p?.pho
 
 /** The address of our own copy of a message's file. */
 export const peopleFileURL = (chat: string, message: string) => `/v1/me/people/${encodeURIComponent(chat)}/files/${encodeURIComponent(message)}`;
+/** The picture of a message's link card, Taskiem's own copy. */
+export const peoplePreviewURL = (chat: string, message: string) => `/v1/me/people/${encodeURIComponent(chat)}/previews/${encodeURIComponent(message)}`;
 
 /** What a message holds, in a line (a reply's quote, the menu's name). */
 export function messageLine(m: Pick<PeopleMessage, "body" | "card" | "attachment" | "deleted" | "location"> | undefined): string {

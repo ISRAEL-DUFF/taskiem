@@ -32,8 +32,8 @@ import '../kit/kit.dart' show TkLink;
 import '../kit/sheet.dart' show TkCta, TkKitField, TkLines;
 import '../theme/look.dart';
 import '../theme/theme.dart';
-import 'settings_more.dart' show factorsOf;
 import 'sign_in.dart' show CodeBoxes;
+import 'you.dart' show ChangeNumberScreen;
 
 /// How many digits a PIN is.
 const pinDigits = 4;
@@ -43,7 +43,7 @@ const pinUses = 'It approves on WhatsApp, and pays small amounts (up to ₦100,0
     'It can pay as soon as it is set. Taskiem never asks for it in a message.';
 
 /// No phone to send a code to, and no passkey on this phone.
-const pinNoWay = 'Add your phone number in Settings first: we send a code to it to check it is you. A passkey works too.';
+const pinNoWay = 'Add your phone number first: we send a code to it to check it is you.';
 
 /// One digit repeated, or a run up or down (1234, 9876, 8901), as the
 /// server refuses.
@@ -80,19 +80,31 @@ String pinWhen(DateTime d, DateTime now) {
   return '$day at ${clock(d)}';
 }
 
+/// A failure that is not the server's answer, in a few words a person can
+/// pass on: what kind of failure it was and its first words, so "could not
+/// be read" says why (an answer the app could not read, the phone's
+/// fingerprint chip refusing). Never the answer itself.
+String whatWentWrong(Object e) {
+  final words = e.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+  final short = words.length > 120 ? '${words.substring(0, 120)}…' : words;
+  return short.isEmpty ? '${e.runtimeType}' : short;
+}
+
 String _say(Object e) => switch (e) {
   ApiError() when e.has('code_wrong') || e.has('locked') || e.status == 429 => codeProblem(e),
   ApiError() => e.message,
   Offline() => 'You’re offline. Try again when you’re back online.',
-  _ => 'Something went wrong. Try again.',
+  _ => 'Something went wrong (${whatWentWrong(e)}). Try again.',
 };
 
-/// How setting the PIN is confirmed here: the passkey on this phone, a
-/// code to the phone, an authenticator code; null when none can.
-String? pinWay(MePin p, {required bool passkey, bool byCode = false}) {
+/// How setting the PIN is confirmed here: a code to the phone first (what
+/// everyone has), else the passkey on this phone ([byPasskey] when the
+/// person chose it), else an authenticator code; null when none can.
+String? pinWay(MePin p, {required bool passkey, bool byPasskey = false}) {
   final ways = p.ways;
-  if (ways.contains('passkey') && passkey && !(byCode && ways.contains('code'))) return 'passkey';
-  if (ways.contains('code')) return 'code';
+  final canPasskey = ways.contains('passkey') && passkey;
+  if (ways.contains('code') && !(byPasskey && canPasskey)) return 'code';
+  if (canPasskey) return 'passkey';
   if (ways.contains('totp')) return 'totp';
   return null;
 }
@@ -126,7 +138,7 @@ class _PinFormState extends State<PinForm> {
   final _totp = TextEditingController();
   String? _problem;
   bool _busy = false;
-  bool _byCode = false;
+  bool _byPasskey = false;
 
   /// Where the code went (masked), once sent.
   String? _sentTo;
@@ -141,7 +153,7 @@ class _PinFormState extends State<PinForm> {
     super.dispose();
   }
 
-  String? get _way => pinWay(widget.pin, passkey: widget.passkey, byCode: _byCode);
+  String? get _way => pinWay(widget.pin, passkey: widget.passkey, byPasskey: _byPasskey);
 
   void _setBusy(bool b) {
     setState(() => _busy = b);
@@ -281,7 +293,9 @@ class _PinFormState extends State<PinForm> {
         TkCta(label: _busy ? (way == 'code' && !sent ? 'Sending…' : 'Saving…') : action, onTap: _busy ? null : (way == 'code' && !sent ? _sendCode : _save)),
         if (sent) Center(child: TkLink(label: 'Send the code again', bold: true, onTap: _busy ? null : _sendCode)),
         if (way == 'passkey' && widget.pin.ways.contains('code'))
-          Center(child: TkLink(label: 'Use a code to my phone instead', bold: true, onTap: _busy ? null : () => setState(() => (_byCode = true, _problem = null)))),
+          Center(child: TkLink(label: 'Use a code to my phone instead', bold: true, onTap: _busy ? null : () => setState(() => (_byPasskey = false, _problem = null)))),
+        if (way == 'code' && !sent && widget.passkey && widget.pin.ways.contains('passkey'))
+          Center(child: TkLink(label: 'Use my passkey instead', bold: true, onTap: _busy ? null : () => setState(() => (_byPasskey = true, _problem = null)))),
         if (way == 'code' && !sent)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -292,16 +306,32 @@ class _PinFormState extends State<PinForm> {
   }
 }
 
-/// No way to confirm a PIN yet: a phone to add (or a passkey).
+/// No way to confirm a PIN yet: a phone to add, right here; [onBack]
+/// once its page is closed, to look again.
 class _NoWay extends StatelessWidget {
-  const _NoWay();
+  const _NoWay({required this.auth, required this.onBack});
+  final Auth auth;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
     final look = TkLook.of(context);
-    return Semantics(
-      liveRegion: true,
-      child: TkCallout(leading: TkSquare('b-phone', color: look.violet), title: 'Add your phone first', sub: pinNoWay, subLines: 4, color: look.violet),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          liveRegion: true,
+          child: TkCallout(leading: TkSquare('b-phone', color: look.violet), title: 'Add your phone first', sub: pinNoWay, subLines: 4, color: look.violet),
+        ),
+        const SizedBox(height: 14),
+        TkCta(
+          label: 'Add my phone',
+          onTap: () async {
+            await tkPush<void>(context, ChangeNumberScreen(auth: auth));
+            onBack();
+          },
+        ),
+      ],
     );
   }
 }
@@ -323,8 +353,9 @@ class _Renew extends StatelessWidget {
   }
 }
 
-/// This phone can confirm with the person's passkey.
-Future<bool> _phonePasskey(Auth auth) async => factorsOf(auth).passkey && await passkeys.available();
+/// This phone can confirm with the person's passkey: not offered in the
+/// app, where a passkey does not work yet; the code to the phone does.
+Future<bool> _phonePasskey(Auth auth) async => false;
 
 /// At sign-up, once the phone is proven: the PIN offered when there is
 /// none (GET /v1/me/pin `set: false`), with Not now. Anything else (one
@@ -380,7 +411,7 @@ class _PinStepScreenState extends State<PinStepScreen> {
       back: false,
       description: '4 digits of your own, for approving on WhatsApp and paying small amounts. You can set it later in Settings.',
       children: [
-        if (way == null) const _NoWay() else PinForm(auth: widget.auth, pin: p, passkey: _passkey, first: true, onSaved: _saved, onBusy: (b) => setState(() => _busy = b)),
+        if (way == null) _NoWay(auth: widget.auth, onBack: _check) else PinForm(auth: widget.auth, pin: p, passkey: _passkey, first: true, onSaved: _saved, onBusy: (b) => setState(() => _busy = b)),
         Center(child: TkLink(label: 'Not now', bold: true, onTap: _busy ? null : widget.onDone)),
       ],
     );
@@ -470,7 +501,7 @@ class _PinScreenState extends State<PinScreen> {
       final way = pinWay(p, passkey: _passkey);
       body = [
         if (p.renew == true) const _Renew(),
-        if (way == null) const _NoWay() else PinForm(auth: widget.auth, pin: p, passkey: _passkey, first: true, onSaved: _saved),
+        if (way == null) _NoWay(auth: widget.auth, onBack: _load) else PinForm(auth: widget.auth, pin: p, passkey: _passkey, first: true, onSaved: _saved),
       ];
     } else {
       final locked = p.lockedUntil != null && p.lockedUntil!.isAfter(now) ? p.lockedUntil : null;
@@ -502,7 +533,7 @@ class _PinScreenState extends State<PinScreen> {
           TkCta(label: 'Change PIN', onTap: () => setState(() => (_changing = true, _error = null))),
           Center(child: TkLink(label: 'Remove my PIN', bold: true, onTap: _busy ? null : _remove)),
         ] else if (way == null)
-          const _NoWay()
+          _NoWay(auth: widget.auth, onBack: _load)
         else
           PinForm(auth: widget.auth, pin: p, passkey: _passkey, first: false, onSaved: _saved, onBusy: (b) => setState(() => _busy = b)),
         if (_changing) Center(child: TkLink(label: 'Cancel', bold: true, onTap: _busy ? null : () => setState(() => (_changing = false, _error = null)))),

@@ -1,0 +1,56 @@
+{
+  "about": "The words of a chat message and the web addresses found in them (docs/spec/chat-previews-and-editing.md §2.2). Read by web/src/lib/linkify.test.ts, mobile/test/linkify_test.dart and engine/linkify: one rule everywhere. shown is how a long one is shown; url is what it opens.",
+  "cases": [
+    { "text": "See https://jumia.com.ng/phones", "links": [{ "text": "https://jumia.com.ng/phones", "url": "https://jumia.com.ng/phones" }] },
+    { "text": "Order here: jumia.com.ng/phones.", "links": [{ "text": "jumia.com.ng/phones", "url": "https://jumia.com.ng/phones" }] },
+    { "text": "Go to www.example.com, then call me", "links": [{ "text": "www.example.com", "url": "https://www.example.com" }] },
+    { "text": "It is at http://example.org!", "links": [{ "text": "http://example.org", "url": "http://example.org" }] },
+    { "text": "Really? https://example.com/a?b=1&c=2#top?", "links": [{ "text": "https://example.com/a?b=1&c=2#top", "url": "https://example.com/a?b=1&c=2#top" }] },
+    { "text": "(see https://example.com/page)", "links": [{ "text": "https://example.com/page", "url": "https://example.com/page" }] },
+    { "text": "The rice https://en.wikipedia.org/wiki/Rice_(food) is good", "links": [{ "text": "https://en.wikipedia.org/wiki/Rice_(food)", "url": "https://en.wikipedia.org/wiki/Rice_(food)" }] },
+    { "text": "(https://en.wikipedia.org/wiki/Rice_(food))", "links": [{ "text": "https://en.wikipedia.org/wiki/Rice_(food)", "url": "https://en.wikipedia.org/wiki/Rice_(food)" }] },
+    { "text": "\"https://example.com/quoted\"", "links": [{ "text": "https://example.com/quoted", "url": "https://example.com/quoted" }] },
+    { "text": "'https://example.com/single';", "links": [{ "text": "https://example.com/single", "url": "https://example.com/single" }] },
+    { "text": "HTTPS://EXAMPLE.COM/Up", "links": [{ "text": "HTTPS://EXAMPLE.COM/Up", "url": "https://EXAMPLE.COM/Up" }] },
+    { "text": "two: a.com.ng and https://b.example.net/x", "links": [{ "text": "a.com.ng", "url": "https://a.com.ng" }, { "text": "https://b.example.net/x", "url": "https://b.example.net/x" }] },
+    { "text": "javascript:alert(1)", "links": [] },
+    { "text": "javascript:https://example.com", "links": [] },
+    { "text": "file:///etc/passwd and intent://example.com/x", "links": [] },
+    { "text": "tel:+2348012345678 or ftp://files.example.com", "links": [] },
+    { "text": "Write to ade@shop.com.ng today", "links": [] },
+    { "text": "mail ade.ng@gmail.com", "links": [] },
+    { "text": "https://user:pass@evil.example.com/login", "links": [] },
+    { "text": "Open file.txt and index.html", "links": [] },
+    { "text": "It costs 1.5kg for ₦2,000.00. End.", "links": [] },
+    { "text": "End of sentence example.com.", "links": [{ "text": "example.com", "url": "https://example.com" }] },
+    { "text": "Ends here https://example.com/a.", "links": [{ "text": "https://example.com/a", "url": "https://example.com/a" }] },
+    { "text": "@Dangote Stores and #Rice, 50 kg", "links": [] },
+    { "text": "localhost:8080 is not one", "links": [] },
+    { "text": "http://localhost:8080/x", "links": [{ "text": "http://localhost:8080/x", "url": "http://localhost:8080/x" }] },
+    { "text": "https://", "links": [] },
+    { "text": "xhttps://example.com", "links": [] },
+    { "text": "Ẹ ka https://jumia.com.ng/ọja", "links": [{ "text": "https://jumia.com.ng/ọja", "url": "https://jumia.com.ng/ọja" }] },
+    { "text": "Line one\nhttps://example.com/two\nLine three", "links": [{ "text": "https://example.com/two", "url": "https://example.com/two" }] },
+    {
+      "text": "Long https://www.jumia.com.ng/catalog/category/electronics/mobile-phones/smart/phones",
+      "links": [
+        {
+          "text": "https://www.jumia.com.ng/catalog/category/electronics/mobile-phones/smart/phones",
+          "url": "https://www.jumia.com.ng/catalog/category/electronics/mobile-phones/smart/phones",
+          "shown": "www.jumia.com.ng/…/phones"
+        }
+      ]
+    },
+    {
+      "text": "https://example.com/a-very-long-single-segment-name-for-a-page",
+      "links": [
+        {
+          "text": "https://example.com/a-very-long-single-segment-name-for-a-page",
+          "url": "https://example.com/a-very-long-single-segment-name-for-a-page",
+          "shown": "example.com/a-very-long-single-…"
+        }
+      ]
+    },
+    { "text": "short https://example.com/a", "links": [{ "text": "https://example.com/a", "url": "https://example.com/a", "shown": "https://example.com/a" }] }
+  ]
+}

@@ -42,14 +42,16 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'chats.dart';
 import 'attachments.dart';
-import 'composer.dart' show Pickers;
+import 'composer.dart' show EditDraft, EditingStrip, Pickers;
+import 'edits.dart';
 import 'customer_app.dart';
 import 'customer_orders.dart' show CustomerOrders;
 import 'door.dart';
+import 'link_preview.dart' show ComposerLinkCard, ComposerPreview;
 import 'thread.dart';
 import 'words.dart';
 import 'saved_files.dart' show attachSavedFile;
-import 'menu.dart' show showMessageMenu;
+import 'menu.dart' show HeldActs, MessageSelection, SelectionHead, SelectionScope;
 import 'pay_collect.dart' show MessageFrom, PayListBar;
 
 // --- words (lib/customerchat.ts) ---
@@ -398,13 +400,33 @@ class CustomerData extends ChangeNotifier {
   ///
   /// To a customer on both lines, [line] chooses where it goes (`whatsapp`,
   /// `app`); left out, the thread's reply line. An offer goes in the app.
-  Future<void> send(String text, {bool offer = false, String? line}) async {
+  /// Edits a reply of ours (chat-previews-and-editing.md §3.2): the new
+  /// words and "Edited" at once, put back if refused; the refusal
+  /// answered, null when saved. On WhatsApp the customer is sent
+  /// "✏️ Edited: …" by the server.
+  Future<Object?> editMessage(CustomerMessage m, String text) async {
+    void put(CustomerMessage x) {
+      messages = mergeCustomer(messages ?? const [], [CustomerLine(x)]);
+      _changed();
+    }
+
+    put(CustomerMessage.fromJson({...m.toJson(), 'body': text, 'edited_at': DateTime.now().toUtc().toIso8601String(), 'edits': (m.edits ?? 0) + 1}));
+    try {
+      put(await api.editCustomerMessage(id: id, message: m.id, body: MessageEdit(text: text, edits: m.edits ?? 0)));
+      return null;
+    } on Object catch (e) {
+      put(m);
+      return e;
+    }
+  }
+
+  Future<void> send(String text, {bool offer = false, String? line, Object? preview}) async {
     final words = text.trim();
     if (words.isEmpty || (offer && offerRefused() != null)) return;
     final on = !both ? null : (offer ? 'app' : line);
     await _reply(
       CustomerMessage(id: '', mine: true, kind: 'text', body: words, offer: offer ? true : null, line: on ?? (both ? chat?.replyLine : null), createdAt: chats.now()),
-      (client) => api.replyCustomer(id: id, body: ReplyCustomerRequest(text: words, clientId: client, offer: offer ? true : null, line: offer ? null : on)),
+      (client) => api.replyCustomer(id: id, body: ReplyCustomerRequest(text: words, clientId: client, offer: offer ? true : null, line: offer ? null : on, preview: offer ? null : preview)),
       words: words,
       line: on,
       same: 'words:${offer ? 'offer:' : ''}${on ?? ''}:$words',
@@ -596,6 +618,11 @@ class CustomerScreen extends StatefulWidget {
 
 class _CustomerScreenState extends State<CustomerScreen> {
   final _text = TextEditingController();
+
+  /// A link typed for the app: its card above the box (WhatsApp draws its
+  /// own); [_appLine] whether the reply goes in the app.
+  late final _linkPreview = ComposerPreview(api: widget.data.chats.auth.api, transport: widget.data.chats.auth.transport, chat: 'customer:${widget.data.id}');
+  bool _appLine = false;
   // Saved texts by @name (saved objects S1): their words into the box.
   late final _saved = savedTextBox(
     text: _text,
@@ -634,6 +661,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
     _text.text = d.chats.draft(_draftKey);
     _text.addListener(_saved.typed);
     _text.addListener(() {
+      _linkPreview.typed(_text.text);
       d.chats.setDraft(_draftKey, _text.text);
       final writing = _text.text.trim().isNotEmpty;
       if (writing) d.typing(line: _on);
@@ -669,6 +697,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
 
   @override
   void dispose() {
+    _sel.dispose();
     widget.data.removeListener(_rekey);
     _back?.cancel();
     _saved.dispose();
@@ -676,11 +705,35 @@ class _CustomerScreenState extends State<CustomerScreen> {
     super.dispose();
   }
 
+  /// One of our replies being edited (chat-previews-and-editing.md §3.2).
+  EditDraft? _editing;
+
+  Future<void> _saveEdit(EditDraft e, String words) async {
+    setState(() => _editing = null);
+    if (words == e.text.trim()) return;
+    final m = widget.data.messages?.where((x) => x.m.id == e.id).firstOrNull?.m;
+    if (m == null) return;
+    final err = await widget.data.editMessage(m, words);
+    if (err == null || !mounted) return;
+    showTkToast(context, editRefusal(err), error: true);
+    if (refusedForTime(err) && _text.text.isEmpty) _text.text = words;
+  }
+
   void _send() {
+    final edit = _editing;
+    if (edit != null) {
+      final words = _text.text.trim();
+      if (words.isEmpty && !edit.caption) return;
+      _text.clear();
+      unawaited(_saveEdit(edit, words));
+      return;
+    }
     final words = _text.text;
     if (words.trim().isEmpty) return;
+    final preview = _appLine ? _linkPreview.choice(words) : null;
+    _linkPreview.reset();
     _text.clear();
-    widget.data.send(words, line: _on);
+    widget.data.send(words, line: _on, preview: preview);
   }
 
   /// A message's menu (saved objects S1): Copy and Save as… on its words,
@@ -706,15 +759,34 @@ class _CustomerScreenState extends State<CustomerScreen> {
     return (kind: 'customer', chat: widget.data.id, message: m.id, from: m.mine || c == null ? '' : customerTitle(c));
   }
 
-  Future<void> _hold(CustomerLine x, Rect at) async {
+  /// The messages held (WhatsApp's selection, menu.dart).
+  late final _sel = MessageSelection(actsOf: _actsOf);
+
+  /// What may be done with a message held: Copy, Save as… and Edit.
+  HeldActs? _actsOf(String id) {
+    final x = widget.data.messages?.where((x) => x.id == id).firstOrNull;
+    if (x == null || x.local) return null;
     final m = x.m;
     final a = m.attachment;
     final words = m.card == null && m.kind != 'media' && !(a != null && {'Photo', 'Voice note', 'File', a.name}.contains(m.body)) ? m.body.trim() : '';
     final file = a != null && a.kind != 'voice';
     final auth = widget.data.chats.auth;
     final items = saveAsItems(context, auth, words: words, filePath: file ? '/v1/customer-chats/${widget.data.id}/files/${m.id}' : '', fileName: a?.name ?? 'File', fileType: a?.type ?? '', business: true, from: _from(m));
-    if (items.isEmpty) return;
-    await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
+    final edit = editBlock(mine: m.mine, kind: m.kind, createdAt: m.createdAt, now: DateTime.now(), card: m.card != null, fileKind: a?.kind, sender: m.sender, me: auth.me?.user?.id) == null && m.offer != true;
+    if (items.isEmpty && !edit) return null;
+    return HeldActs(
+      what: (m.card?.title ?? m.body).split('\n').first,
+      mine: m.mine,
+      words: words,
+      edit: edit
+          ? () {
+              setState(() => _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: a != null));
+              _text.text = m.body;
+              _text.selection = TextSelection.collapsed(offset: m.body.length);
+            }
+          : null,
+      more: [for (final i in items) if (i.label != 'Copy') i],
+    );
   }
 
   @override
@@ -744,6 +816,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
             if (wanted != null && on != wanted && _text.text.trim().isNotEmpty) moved = movedWords(on, wanted);
           }
           _on = on;
+          _appLine = on == 'app' || (on == null && app);
           final onLine = c == null || on == null ? null : lineOf(c, on);
           final note = c == null ? null : (onLine != null ? lineNote(onLine) : replyNote(c));
           final canSend = c != null && d.reaches(on);
@@ -769,7 +842,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                     color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
-                      child: ChatHeadBar(
+                      child: SelectionHead(selection: _sel, child: ChatHeadBar(
                         onBack: widget.onBack,
                         // CustomerChat.tsx's menu: Archive, or Unarchive; Mute.
                         onMore: c == null
@@ -830,7 +903,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                             : c == null
                             ? null
                             : [if (c.phone.isNotEmpty && c.phone != c.name) phoneWords(c.phone), owes, both ? 'On WhatsApp and in the app' : (app ? 'Customer in the app' : 'Customer on WhatsApp')].where((s) => s.isNotEmpty).join(' · '),
-                      ),
+                      )),
                     ),
                   ),
                   if (c != null && both) _LineStates(lines: c.lines!),
@@ -842,7 +915,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       builder: (context, box) => Column(
                         children: [
                         Expanded(
-                          child: ThreadView<CustomerLine>(
+                          child: SelectionScope(selection: _sel, child: ThreadView<CustomerLine>(selection: _sel, 
                             items: d.messages,
                             of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
                             now: d.chats.now(),
@@ -874,7 +947,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                   padding: EdgeInsets.only(top: first ? 6 : 0),
                                   child: BubbleHold(
                                     label: m.m.mine ? 'Your message' : 'Message from the customer',
-                                    onHold: m.local ? null : (at) => _hold(m, at),
+                                    onHold: m.local ? null : (_) => _sel.hold(m.id),
                                     child: DoorBubble(
                                     id: m.id,
                                     mine: m.m.mine,
@@ -891,10 +964,13 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                     attachment: m.m.attachment,
                                     offer: m.m.offer == true,
                                     local: m.file,
+                                    preview: m.m.preview,
+                                    previewPath: '/v1/customer-chats/${Uri.encodeComponent(d.id)}/previews/${Uri.encodeComponent(m.id)}',
                                     stamp: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         if (marked) LineMark(line: line, color: meta),
+                                        ...editedMark(m.m.editedAt, meta),
                                         Text(clock(m.m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
                                         if (m.m.mine) ...[const SizedBox(width: 4), _Delivery(x: m, meta: meta)],
                                       ],
@@ -902,9 +978,9 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                   )),
                                 ));
                               }
-                              return _withPay(m, Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: BubbleHold(label: m.m.mine ? 'Your message' : 'Message from the customer', onHold: m.local ? null : (at) => _hold(m, at), child: _CustomerBubble(x: m, first: first, last: last, line: marked ? line : null))));
+                              return _withPay(m, Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: BubbleHold(label: m.m.mine ? 'Your message' : 'Message from the customer', onHold: m.local ? null : (_) => _sel.hold(m.id), child: _CustomerBubble(x: m, first: first, last: last, line: marked ? line : null))));
                             },
-                          ),
+                          )),
                         ),
                         // CustomerOrders.tsx: the order read from their messages, or
                         // Start an order.
@@ -949,8 +1025,18 @@ class _CustomerScreenState extends State<CustomerScreen> {
                   // The people to pay collected from messages (pay_collect.dart).
                   PayListBar(auth: d.chats.auth, follow: d.follow),
                   if (canSend) _saved.plain(),
+                  if (canSend && _appLine) ComposerLinkCard(preview: _linkPreview),
+                  if (canSend && _editing != null)
+                    EditingStrip(
+                      was: _editing!.text,
+                      onCancel: () {
+                        setState(() => _editing = null);
+                        _text.clear();
+                      },
+                    ),
                   if (canSend)
                     _ReplyBox(
+                      editing: _editing != null,
                       text: _text,
                       onSend: d.busy || tooLong ? null : _send,
                       bottom: pad.bottom,
@@ -997,6 +1083,7 @@ class _CustomerBubble extends StatelessWidget {
           ),
           const SizedBox(width: 4),
         ],
+        ...editedMark(m.editedAt, meta),
         Text(clock(m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
         if (m.mine) ...[const SizedBox(width: 4), _Delivery(x: x, meta: meta)],
       ],
@@ -1008,7 +1095,7 @@ class _CustomerBubble extends StatelessWidget {
       stamp: stamp,
       // A stamp with its line or a template's words is too long to sit over
       // the end of the last line: under the words instead.
-      inline: line == null && !(m.mine && m.sentAs == 'template'),
+      inline: line == null && !(m.mine && m.sentAs == 'template') && m.editedAt == null,
       children: [
         if (m.mine && first && (m.senderName ?? '').isNotEmpty) Text(m.senderName!, style: tkText(size: 12, weight: 600, color: t.tintText)),
         Text.rich(
@@ -1177,8 +1264,11 @@ class _Note extends StatelessWidget {
 
 /// CustomerPane's box: the round box alone, and Send.
 class _ReplyBox extends StatelessWidget {
-  const _ReplyBox({required this.text, required this.onSend, required this.bottom, required this.label, this.hint = 'Reply', this.onMore});
+  const _ReplyBox({required this.text, required this.onSend, required this.bottom, required this.label, this.hint = 'Reply', this.onMore, this.editing = false});
   final TextEditingController text;
+
+  /// A reply of ours being edited: Send is a tick that saves.
+  final bool editing;
   final VoidCallback? onSend;
   final double bottom;
   final String label;
@@ -1254,7 +1344,7 @@ class _ReplyBox extends StatelessWidget {
           TapArea(child: Semantics(
             button: true,
             enabled: ready,
-            label: 'Send',
+            label: editing ? 'Save the edit' : 'Send',
             child: TkPress(
               onTap: ready ? onSend : null,
               child: Container(
@@ -1262,7 +1352,7 @@ class _ReplyBox extends StatelessWidget {
                 height: 46,
                 decoration: BoxDecoration(color: dark ? t.brandDark : t.brand, shape: BoxShape.circle),
                 alignment: Alignment.center,
-                child: TkIcon('arrow-up', size: 22, stroke: 2.4, color: dark ? t.brandDarkText : t.brandDark),
+                child: TkIcon(editing ? 'check' : 'arrow-up', size: 22, stroke: 2.4, color: dark ? t.brandDarkText : t.brandDark),
               ),
             ),
           )),

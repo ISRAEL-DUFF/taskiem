@@ -353,8 +353,32 @@ func TestCustomerDoor(t *testing.T) {
 	if code, e := tolu.postFile(t, "/v1/me/chats/"+id+"/files", "x.pdf", []byte("%PDF-1.4 EICAR"), nil); code != 422 {
 		t.Fatalf("malware: %d %v", code, e)
 	}
-	if code, e := tolu.postFile(t, "/v1/me/chats/"+id+"/files", "x.txt", []byte("plain words"), nil); code != 400 {
-		t.Fatalf("a text file: %d %v", code, e)
+	if code, e := tolu.postFile(t, "/v1/me/chats/"+id+"/files", "x.txt", append([]byte("MZ\x90\x00\x03"), make([]byte, 64)...), nil); code != 400 ||
+		!strings.Contains(e["error"].(string), "Taskiem can send photos, voice notes, PDFs and Word, Excel, PowerPoint and text documents") {
+		t.Fatalf("a program: %d %v", code, e)
+	}
+	// A PDF (chat-previews §1): its first page drawn for both copies, each
+	// kept on its own side, asked for with ?preview=1.
+	pcode, pf := tolu.postFile(t, "/v1/me/chats/"+id+"/files", "menu.pdf", testFile(t, "three.pdf"), nil)
+	if pcode != 201 || pf["attachment"].(map[string]any)["type"] != "application/pdf" {
+		t.Fatalf("a PDF: %d %v", pcode, pf)
+	}
+	w.srv.WaitBackground()
+	for _, c := range []struct {
+		c    *client
+		path string
+	}{{tolu, "/v1/me/chats/" + id}, {owner, "/v1/customer-chats/" + thread}} {
+		if code, hdr, data := c.c.getRaw(t, c.path+"/files/"+pf["id"].(string)+"?preview=1"); code != 200 || hdr.Get("Content-Type") != "image/webp" || len(data) == 0 {
+			t.Fatalf("%s: the PDF's picture: %d %v", c.path, code, hdr)
+		}
+	}
+	pms := tolu.must(200, "GET", "/v1/me/chats/"+id+"/messages", nil)["messages"].([]any)
+	if a := pms[len(pms)-1].(map[string]any)["attachment"].(map[string]any); a["pages"] != float64(3) || a["preview"] != "ready" || a["preview_path"] != nil {
+		t.Fatalf("the person's PDF: %v", a)
+	}
+	bm = owner.must(200, "GET", "/v1/customer-chats/"+thread+"/messages", nil)["messages"].([]any)
+	if a := bm[len(bm)-1].(map[string]any)["attachment"].(map[string]any); a["pages"] != float64(3) || a["preview"] != "ready" || a["preview_path"] != nil {
+		t.Fatalf("the business's PDF: %v", a)
 	}
 	if code, e := owner.postFile(t, "/v1/customer-chats/"+thread+"/files", "menu.png", pngPhoto(t, 60), nil); code != 201 || e["attachment"] == nil {
 		t.Fatalf("the business's photo: %d %v", code, e)

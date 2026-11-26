@@ -7,6 +7,8 @@
   --bg: #f1f4ef;
   --panel: #ffffff;
   --panel-2: #f6f8f4;
+  /* A chat's documents (chat-previews §1.1): each type's colour. */
+  --doc-pdf: #c4321f; --doc-word: #2b579a; --doc-excel: #1d6f42; --doc-powerpoint: #c43e1c; --doc-other: #55615a;
   --chat-wallpaper: #efeae2; --chat-in: #ffffff; --chat-out: #d9fdd3; --chat-out-meta: #4a5a52; --chat-out-danger: #a3231b; --chat-tick-read: #0b66b8; --chat-select: #f0f2f5; --chat-doodle: rgba(14, 26, 20, 0.11); --chat-shadow: rgba(14, 26, 20, 0.14);
 --chat-pattern: url("/chat/wallpaper-light.svg") 0 0 / 400px 400px;
   --text: #0e1a14;
@@ -67,6 +69,7 @@
   --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
   --shadow: none; --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35); --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.5);
   --tint: rgba(200, 241, 105, 0.12); --tint-text: var(--brand-dark); --tint-warn: rgba(253, 176, 34, 0.14); --tint-warn-text: #fdb022;
+  --doc-pdf: #f97066; --doc-word: #8ab4f8; --doc-excel: #6fcf97; --doc-powerpoint: #ff9b7a; --doc-other: #9a9d95;
   --chat-wallpaper: #0e1512; --chat-in: #1f2a26; --chat-out: #0f4a37; --chat-out-meta: #c9d6cf; --chat-out-danger: #ffb4ab; --chat-tick-read: #8fd0ff; --chat-select: #232f2a; --chat-doodle: rgba(255, 255, 255, 0.075); --chat-pattern: url("/chat/wallpaper-dark.svg") 0 0 / 400px 400px; --chat-shadow: rgba(0, 0, 0, 0.35);
   color-scheme: dark;
 }
@@ -85,6 +88,7 @@
     --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
     --shadow: none; --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35); --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.5);
     --tint: rgba(200, 241, 105, 0.12); --tint-text: var(--brand-dark); --tint-warn: rgba(253, 176, 34, 0.14); --tint-warn-text: #fdb022;
+    --doc-pdf: #f97066; --doc-word: #8ab4f8; --doc-excel: #6fcf97; --doc-powerpoint: #ff9b7a; --doc-other: #9a9d95;
     --chat-wallpaper: #0e1512; --chat-in: #1f2a26; --chat-out: #0f4a37; --chat-out-meta: #c9d6cf; --chat-out-danger: #ffb4ab; --chat-tick-read: #8fd0ff; --chat-select: #232f2a; --chat-doodle: rgba(255, 255, 255, 0.075); --chat-pattern: url("/chat/wallpaper-dark.svg") 0 0 / 400px 400px; --chat-shadow: rgba(0, 0, 0, 0.35);
     color-scheme: dark;
   }
@@ -1388,6 +1392,11 @@ th { background: var(--panel-2); }
 .template-card .tool-chip { align-self: flex-start; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
 .recipe-tool ul { margin: 6px 0 0; padding-left: 18px; }
 .notice.ok { background: color-mix(in srgb, var(--ok) 8%, var(--panel)); border-color: color-mix(in srgb, var(--ok) 28%, transparent); }
+/* Add a way to sign in on a new phone (SignInWay.tsx): the reason beside its button. */
+.notice.sign-in-way { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.notice.sign-in-way > svg { flex: none; width: 20px; height: 20px; color: var(--warn); }
+.notice.sign-in-way .grow { flex: 1 1 200px; min-width: 0; }
+.notice.sign-in-way .sub { color: var(--muted); font-size: 0.92em; }
 /* Empty states: the icon larger, on the brand's tint. */
 .empty-icon { width: 56px; height: 56px; border-radius: 16px; background: var(--tint); color: var(--tint-text); }
 .empty-icon svg { width: 26px; height: 26px; }
@@ -1763,16 +1772,69 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .bubble .chat-file { display: flex; align-items: center; gap: 8px; padding: 8px; margin: 2px 0 4px; border-radius: 8px; background: var(--panel-2); color: var(--text); text-decoration: none; }
 .bubble .chat-file svg { width: 22px; height: 22px; flex: none; }
 .bubble .chat-file .name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+/* A PDF or a document (chat-previews §1.1): a PDF's first page across the
+   card, cut to the bubble's width, then the type's icon, the name and its
+   line; a photo keeps its proportions before it has loaded. */
+.bubble .chat-photo img[width] { width: min(100%, 280px); height: auto; background: var(--chat-select); }
+.chat-file.chat-doc { flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden; width: min(100%, 280px); font: inherit; text-align: left; border: 0; cursor: pointer; }
+.chat-file.chat-doc .file-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; min-width: 0; }
+.chat-file.chat-doc .file-words { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.chat-file.chat-doc .name { overflow-wrap: anywhere; font-weight: 600; }
+.chat-file.chat-doc .hint { font-size: 12px; color: var(--muted); }
+.chat-file .file-picture { display: block; background: var(--panel); max-height: 200px; overflow: hidden; border-bottom: 1px solid var(--border); }
+.chat-file .file-picture img { display: block; width: 100%; height: auto; }
+.file-type { display: inline-grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 8px; color: var(--doc-other); background: color-mix(in srgb, currentColor 14%, transparent); }
+.file-type svg { width: 22px; height: 22px; }
+.file-type.file-pdf { color: var(--doc-pdf); }
+.file-type.file-word { color: var(--doc-word); }
+.file-type.file-excel { color: var(--doc-excel); }
+.file-type.file-powerpoint { color: var(--doc-powerpoint); }
+/* Taskiem's PDF viewer, over the chat; the whole screen on a phone. */
+.pdf-viewer-backdrop { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--text) 55%, transparent); display: grid; place-items: center; padding: 24px; }
+.pdf-viewer { display: flex; flex-direction: column; width: min(960px, 100%); height: min(92vh, 1200px); background: var(--panel); color: var(--text); border-radius: var(--radius); box-shadow: var(--shadow-lg); overflow: hidden; }
+.pdf-viewer:focus { outline: none; }
+.pdf-viewer-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.pdf-viewer-title { min-width: 0; flex: 1 1 200px; }
+.pdf-viewer-title h2 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.pdf-viewer-title .hint { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.pdf-viewer-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.pdf-viewer-frame { flex: 1; width: 100%; border: 0; background: var(--panel-2); }
+.pdf-viewer-none { margin: auto; padding: 24px; text-align: center; color: var(--muted); }
+@media (max-width: 600px) {
+  .pdf-viewer-backdrop { padding: 0; }
+  .pdf-viewer { width: 100%; height: 100%; border-radius: 0; }
+}
 
 
 .bubble { touch-action: pan-y; }
 @media (prefers-reduced-motion: no-preference) { .bubble { transition: transform .12s ease-out; } }
 .bubble .forwarded { display: block; font-size: 12px; font-style: italic; color: var(--muted); }
 .bubble .bubble-more { margin-top: 4px; flex-wrap: wrap; }
-.bubble .chat-preview { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; padding: 6px 8px; border-left: 3px solid var(--accent); border-radius: 6px; background: var(--panel-2); color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
-.bubble .chat-preview .host { font-size: 12px; color: var(--muted); }
-.bubble .chat-preview .title { font-weight: 600; }
-.bubble .chat-preview .desc { font-size: 13px; color: var(--muted); }
+/* Links in chats (chat-previews-and-editing.md §2): a web address in the
+   words, in the bubble's link colour; the first link's card at the top of
+   the bubble, its picture across it when wide, or a square on the left
+   when small; the same card above the box while it is typed. */
+.chat-link { color: var(--chat-tick-read); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.link-card { position: relative; display: block; margin: 2px 0 6px; border-radius: 6px; background: var(--panel-2); overflow: hidden; border-left: 3px solid var(--chat-tick-read); }
+.link-card-open { display: flex; align-items: stretch; min-width: 0; color: var(--text); text-decoration: none; }
+.link-card.wide .link-card-open { flex-direction: column; }
+.link-card-pic { flex: none; display: block; width: 76px; height: auto; min-height: 76px; object-fit: cover; background: var(--border); }
+.link-card.wide .link-card-pic { width: 100%; height: auto; min-height: 0; max-height: 240px; }
+.link-card-pic.mark { display: grid; place-items: center; width: 48px; min-height: 0; background: transparent; color: var(--chat-tick-read); }
+.link-card-pic.mark svg { width: 22px; height: 22px; }
+.link-card-words { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 6px 10px 7px; }
+.link-card-title, .link-card-desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.link-card-title { font-weight: 600; font-size: 14px; line-height: 1.3; }
+.link-card-desc { font-size: 13px; line-height: 1.3; color: var(--muted); }
+.link-card-site { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-card-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.link-card-close { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 999px; background: var(--panel); color: var(--text); box-shadow: 0 1px 2px var(--chat-shadow); }
+.link-card-close svg { width: 16px; height: 16px; }
+.composer-link { padding: 6px 10px 0; }
+.composer-link .link-card { margin: 0; background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--chat-tick-read); }
+.composer-link .link-card-words { padding-right: 40px; }
+.composer-link .link-card.wide .link-card-pic { max-height: 120px; object-fit: cover; }
+.composer-link.loading { font-size: 13px; color: var(--muted); }
 .chat-head .typing { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
 .unread-count { background: var(--ok); color: var(--panel); border-radius: 999px; padding: 0 7px; font-size: 12px; font-weight: 600; min-width: 20px; text-align: center; }
 /* A price list's items (business links L4): one per row, its fields below it. */
@@ -1905,6 +1967,12 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .bubble .stamp.inline { position: absolute; right: 9px; bottom: 5px; margin: 0; }
 .bubble .stamp-gap { display: inline-block; width: 52px; height: 1px; }
 .bubble .stamp-gap.mine { width: 74px; }
+.bubble .stamp-gap.edited { width: 96px; }
+.bubble .stamp-gap.mine.edited { width: 118px; }
+.bubble .stamp .edited { font-style: italic; }
+.composer-editing { align-items: flex-start; }
+.composer-editing .quote strong { display: block; color: var(--accent); font-weight: 600; }
+.composer-editing .was { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bubble-chevron { position: absolute; top: 2px; right: 3px; width: 26px; height: 26px; min-height: 26px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--chat-in) 85%, transparent); color: var(--muted); z-index: 1; opacity: 0; cursor: pointer; }
 .bubble.mine .bubble-chevron { background: color-mix(in srgb, var(--chat-out) 85%, transparent); color: var(--chat-out-meta); }
 .bubble-chevron svg { width: 18px; height: 18px; }

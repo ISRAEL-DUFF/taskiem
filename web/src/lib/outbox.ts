@@ -16,6 +16,8 @@ export interface Outgoing {
   /** A photo's preview, a data URL. */
   preview?: string;
   mentions?: unknown[];
+  /** The link's card shown ({id}) or closed (false), as it is sent. */
+  linkPreview?: { id: string } | false;
   state: "sending" | "failed";
   error?: string;
   /** Failed for want of a connection: it goes again when it is back. */

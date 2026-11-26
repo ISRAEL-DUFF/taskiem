@@ -258,6 +258,34 @@ All settled by the founder on 17 November 2026; decision [0069](../decisions/006
 
 Questions 2, 10 and 11 of the first draft fell away with B (push carries the words as the person's setting says; no backup step; the web works without a phone).
 
+## Files in people chats and groups: previews and documents
+
+Built 26 November 2026; the whole of it is in [chat previews and editing](chat-previews-and-editing.md) §1 and §6.1.
+
+- **Documents are accepted**: Word, Excel, PowerPoint, OpenDocument, CSV and text, up to 25 MB, read from their own bytes and refused with macros, a password or a zip bomb, as in every chat. Their name is cleaned and shows their real extension.
+- **A PDF's first page** is drawn by the server once the message is sent, and kept as the file is: a sealed file of each copy, `people_files` with `kind = 'preview'` (each person's copy sealed under their key), `group_files` with `kind = 'preview'` (the group's one copy). It is read through `GET …/files/{message}?preview=1`. A PDF sent before this is drawn the first time someone in the chat asks for its picture (in a group, any member who sees it).
+- **What is known about a file** (`pages`, `protected`, `preview`, `w`, `h`, `doc`) is in each copy's `attachment`, next to its kind, type and size, as those already are.
+- **Delete for everyone** removes the picture with the file.
+
+## Link previews in people chats and groups
+
+Built 26 November 2026; the whole of it is in [chat previews and editing](chat-previews-and-editing.md) §2 and §6.2.
+
+- **Links in the words can be tapped**, on the web and in the app. In the app, holding one offers Open, Copy link and Share.
+- **The first link gets a card** with the page's picture, title, words and site. The server makes it as it seals the words, and nowhere else. The card is sealed with the words (`p` in the sealed message). Its picture, cleaned and at most 800 pixels, is a sealed file of each copy (`people_files`, `group_files`, `kind = 'link_image'`). It is read through `GET /v1/me/people/{id}/previews/{message}` and `GET /v1/me/groups/{id}/previews/{message}`. Nothing about the link is kept unsealed.
+- **What was fetched is remembered per person**, never shared with another person or a business. It counts against the same ten pages a minute as business chats.
+- **While typing**, the card shows above the box (`POST /v1/link-preview`, chat `people:{id}` or `group:{id}`); ✕ sends without it.
+- **Delete for everyone** removes the card and its picture with the words.
+
+## Editing a message in people chats and groups
+
+Built 26 November 2026; the whole of it is in [chat previews and editing](chat-previews-and-editing.md) §3 and §6.3.
+
+- **Your own message, within 30 minutes**: its words, or a file's caption (`PATCH /v1/me/people/{id}/messages/{message}`, `PATCH /v1/me/groups/{id}/messages/{message}`, `{text, edits}`). Not a card, a place, a voice note, a forwarded message or a deleted one; in a group, only while you are in it.
+- **Every copy is sealed again**: both people's copies, each under its owner's key (the other's through the reach, unless they blocked you), or the group's one copy under the group's key. The search tokens are made again from the new words, and the link's card (and its sealed picture) when the first link changed.
+- **A group's @ mentions** can be changed with the words (`mentions`, members now in the group).
+- **Nothing earlier is kept**, as delete for everyone keeps nothing; no audit entry, no push. `edited_at` and `edits` on each copy; the live connection carries the change.
+
 ## As built: stage 5a, server (finding people)
 
 Built on branch `stage5a-finding`, on 093b2f44 (stages 1 to 4, decision 0069 accepted): the server of §5 (finding people and the privacy settings), presence (§13), the automated checks on strangers' messages (§8.4) and their part of deleting an account (§14). The chats between people, requests and person blocks are stream A (`stage5a-chats`, migrations 00471 to 00474). This stream is migration `00475_people_finding.sql` and the package `engine/people`. The web and app screens are later streams.

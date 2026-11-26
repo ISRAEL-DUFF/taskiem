@@ -78,26 +78,98 @@ func processImage(data []byte) ([]rendition, error) {
 			}
 			w = b.Dx()
 		}
-		h := max(1, b.Dy()*w/b.Dx())
-		dst := image.NewRGBA(image.Rect(0, 0, w, h))
-		if !asPNG {
-			draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
-		}
-		draw.CatmullRom.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
-		var buf bytes.Buffer
-		r := rendition{width: w, height: h}
-		if asPNG {
-			r.ctype = "image/png"
-			err = (&png.Encoder{CompressionLevel: png.BestCompression}).Encode(&buf, dst)
-		} else {
-			r.ctype = "image/jpeg"
-			err = jpeg.Encode(&buf, dst, &jpeg.Options{Quality: jpegQuality})
-		}
+		r, err := render(img, w, max(1, b.Dy()*w/b.Dx()), asPNG)
 		if err != nil {
 			return nil, err
 		}
-		r.data = buf.Bytes()
 		out = append(out, r)
+	}
+	return out, nil
+}
+
+// render draws img at w by h pixels and encodes it: a PNG keeping its
+// transparency, or a JPEG on white.
+func render(img image.Image, w, h int, asPNG bool) (rendition, error) {
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+	if !asPNG {
+		draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+	}
+	draw.CatmullRom.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
+	var buf bytes.Buffer
+	r := rendition{width: w, height: h}
+	var err error
+	if asPNG {
+		r.ctype = "image/png"
+		err = (&png.Encoder{CompressionLevel: png.BestCompression}).Encode(&buf, dst)
+	} else {
+		r.ctype = "image/jpeg"
+		err = jpeg.Encode(&buf, dst, &jpeg.Options{Quality: jpegQuality})
+	}
+	r.data = buf.Bytes()
+	return r, err
+}
+
+// MaxLinkImageBytes caps the picture of a link's page fetched for its
+// preview (docs/spec/chat-previews-and-editing.md §2.2).
+const MaxLinkImageBytes = 2 << 20
+
+// LinkImage is a link preview's picture, cleaned as a chat photo is.
+type LinkImage struct {
+	// Big has its largest side at most 800 pixels, Small at most 320
+	// (the same bytes as Big when it is no larger).
+	Big, Small []byte
+	Type       string
+	// Width and Height are Big's.
+	Width, Height int
+}
+
+// CleanLinkImage checks the picture of a link's page (a JPEG, PNG or WebP
+// by its own bytes, at most 2 MB and MaxPixels) and cleans it as a chat
+// photo is: turned upright, its metadata gone, re-encoded with its
+// largest side at 800 and at 320 pixels (never larger than it came).
+func CleanLinkImage(data []byte) (LinkImage, error) {
+	if len(data) > MaxLinkImageBytes {
+		return LinkImage{}, fmt.Errorf("%w: larger than %d MB", ErrImage, MaxLinkImageBytes>>20)
+	}
+	switch sniffed := http.DetectContentType(data); sniffed {
+	case "image/jpeg", "image/png", "image/webp":
+	default:
+		return LinkImage{}, fmt.Errorf("%w: a %s file is not a picture", ErrImage, sniffed)
+	}
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return LinkImage{}, fmt.Errorf("%w: %w", ErrImage, err)
+	}
+	if cfg.Width < 1 || cfg.Height < 1 || cfg.Width*cfg.Height > MaxPixels {
+		return LinkImage{}, fmt.Errorf("%w: %d by %d pixels", ErrImage, cfg.Width, cfg.Height)
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return LinkImage{}, fmt.Errorf("%w: %w", ErrImage, err)
+	}
+	if format == "jpeg" {
+		img = orient(img, jpegOrientation(data))
+	}
+	asPNG := format == "png" && !opaque(img)
+	at := func(side int) (rendition, error) {
+		b := img.Bounds()
+		w, h := b.Dx(), b.Dy()
+		if long := max(w, h); long > side {
+			w, h = max(1, w*side/long), max(1, h*side/long)
+		}
+		return render(img, w, h, asPNG)
+	}
+	big, err := at(800)
+	if err != nil {
+		return LinkImage{}, err
+	}
+	out := LinkImage{Big: big.data, Small: big.data, Type: big.ctype, Width: big.width, Height: big.height}
+	if max(big.width, big.height) > 320 {
+		small, err := at(320)
+		if err != nil {
+			return LinkImage{}, err
+		}
+		out.Small = small.data
 	}
 	return out, nil
 }

@@ -15,6 +15,16 @@ class TkTokens {
   final Color panel;
   /// `--panel-2`
   final Color panel2;
+  /// `--doc-pdf`
+  final Color docPdf;
+  /// `--doc-word`
+  final Color docWord;
+  /// `--doc-excel`
+  final Color docExcel;
+  /// `--doc-powerpoint`
+  final Color docPowerpoint;
+  /// `--doc-other`
+  final Color docOther;
   /// `--chat-wallpaper`
   final Color chatWallpaper;
   /// `--chat-in`
@@ -192,6 +202,11 @@ class TkTokens {
     required this.bg,
     required this.panel,
     required this.panel2,
+    required this.docPdf,
+    required this.docWord,
+    required this.docExcel,
+    required this.docPowerpoint,
+    required this.docOther,
     required this.chatWallpaper,
     required this.chatIn,
     required this.chatOut,
@@ -285,6 +300,11 @@ class TkTokens {
     Color? bg,
     Color? panel,
     Color? panel2,
+    Color? docPdf,
+    Color? docWord,
+    Color? docExcel,
+    Color? docPowerpoint,
+    Color? docOther,
     Color? chatWallpaper,
     Color? chatIn,
     Color? chatOut,
@@ -376,6 +396,11 @@ class TkTokens {
         bg: bg ?? this.bg,
         panel: panel ?? this.panel,
         panel2: panel2 ?? this.panel2,
+        docPdf: docPdf ?? this.docPdf,
+        docWord: docWord ?? this.docWord,
+        docExcel: docExcel ?? this.docExcel,
+        docPowerpoint: docPowerpoint ?? this.docPowerpoint,
+        docOther: docOther ?? this.docOther,
         chatWallpaper: chatWallpaper ?? this.chatWallpaper,
         chatIn: chatIn ?? this.chatIn,
         chatOut: chatOut ?? this.chatOut,
@@ -469,6 +494,11 @@ const tkLight = TkTokens(
   bg: Color(0xFFF1F4EF),
   panel: Color(0xFFFFFFFF),
   panel2: Color(0xFFF6F8F4),
+  docPdf: Color(0xFFC4321F),
+  docWord: Color(0xFF2B579A),
+  docExcel: Color(0xFF1D6F42),
+  docPowerpoint: Color(0xFFC43E1C),
+  docOther: Color(0xFF55615A),
   chatWallpaper: Color(0xFFEFEAE2),
   chatIn: Color(0xFFFFFFFF),
   chatOut: Color(0xFFD9FDD3),
@@ -561,6 +591,11 @@ const tkDark = TkTokens(
   bg: Color(0xFF0D0E0C),
   panel: Color(0xFF151614),
   panel2: Color(0xFF1A1B19),
+  docPdf: Color(0xFFF97066),
+  docWord: Color(0xFF8AB4F8),
+  docExcel: Color(0xFF6FCF97),
+  docPowerpoint: Color(0xFFFF9B7A),
+  docOther: Color(0xFF9A9D95),
   chatWallpaper: Color(0xFF0E1512),
   chatIn: Color(0xFF1F2A26),
   chatOut: Color(0xFF0F4A37),

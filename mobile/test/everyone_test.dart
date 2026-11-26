@@ -36,7 +36,7 @@ Map<String, dynamic> personalMe({List<Map<String, dynamic>> businesses = const [
   'auth_method': 'phone',
   'user': {'id': 'u1', 'name': 'Tolu Ade', 'email': 'person+x@phone.taskiem.invalid', 'email_placeholder': true, 'phone': '+2348031230000'},
   'businesses': businesses,
-  'second_proof': {'required': businesses.isNotEmpty, 'device_proved': false, 'ways': ways ?? {'passkey': false, 'email': true, 'pin': true}},
+  'second_proof': {'required': businesses.isNotEmpty, 'device_proved': false, 'ways': ways ?? {'passkey': false, 'email': true, 'password': true}},
 };
 
 const _business = {'id': 'b1', 'name': 'Mama’s Kitchen', 'kind': 'business', 'locked': true, 'lock': 'second_proof_required'};
@@ -207,7 +207,7 @@ void main() {
     expect(find.text('Switch to a business'), findsOneWidget, reason: 'in a business: the switcher, in ⋯');
   });
 
-  testWidgets('a locked business asks for a second proof (the chat PIN), then opens; a 401 there signs nobody out', (t) async {
+  testWidgets('a locked business asks for a second proof (the password, never the PIN), then opens; a 401 there signs nobody out', (t) async {
     phone(t);
     final server = FakeServer();
     server.answers['GET /v1/me'] = () => _json(personalMe(businesses: [_business, _workflows]));
@@ -215,9 +215,9 @@ void main() {
     var proved = false;
     server.answers['POST /v1/me/switch'] = () => proved
         ? _json({'token': 'tok-b', 'tenant_id': 'b1', 'user_id': 'u1'})
-        : _json({'error': 'Confirm it is you first.', 'second_proof_required': true, 'ways': {'passkey': false, 'email': true, 'pin': true}}, 401);
-    server.answers['POST /v1/auth/second-proof/pin'] = () {
-      if (server.calls.last.body!['pin'] != '4321') return _json({'error': 'That PIN is not right.', 'tries_left': 4}, 401);
+        : _json({'error': 'Confirm it is you first.', 'second_proof_required': true, 'ways': {'passkey': false, 'email': true, 'password': true}}, 401);
+    server.answers['POST /v1/auth/second-proof/password'] = () {
+      if (server.calls.last.body!['password'] != 'my long password') return _json({'error': 'That password is not right.', 'password_wrong': true}, 401);
       proved = true;
       return _json({'device_proved': true});
     };
@@ -239,17 +239,18 @@ void main() {
     await press(t, 'Mama’s Kitchen');
     expect(server.calls.last.body, {'tenant_id': 'b1'});
     expect(find.text('Email me a link'), findsOneWidget);
-    expect(find.text('Your chat PIN'), findsOneWidget);
+    expect(find.text('Your password'), findsOneWidget);
+    expect(find.textContaining('PIN'), findsNothing, reason: 'the PIN pays and approves only');
     await snap(t, 'switcher-proof');
     expect(auth.state, AuthState.signedIn, reason: 'asked for a step, still signed in');
 
-    await typeIn(t, labelled('Your chat PIN'), '1111');
-    await press(t, 'Confirm with my PIN');
-    expect(find.text('That PIN is not right. 4 tries left.'), findsOneWidget);
-    expect(auth.state, AuthState.signedIn, reason: 'a wrong PIN signs nobody out');
+    await typeIn(t, labelled('Your password'), 'not my password');
+    await press(t, 'Confirm with my password');
+    expect(find.text('That password is not right.'), findsOneWidget);
+    expect(auth.state, AuthState.signedIn, reason: 'a wrong password signs nobody out');
 
-    await typeIn(t, labelled('Your chat PIN'), '4321');
-    await press(t, 'Confirm with my PIN');
+    await typeIn(t, labelled('Your password'), 'my long password');
+    await press(t, 'Confirm with my password');
     expect(auth.transport.token, 'tok-b');
   });
 
@@ -463,16 +464,16 @@ void main() {
     expect(ended, 1);
   });
 
-  testWidgets('Change number: no old number, so another proof (the PIN), then only the new number’s code', (t) async {
+  testWidgets('Change number: no old number, so another proof (the password), then only the new number’s code', (t) async {
     phone(t);
     final server = FakeServer();
-    server.answers['GET /v1/me'] = () => _json(personalMe(ways: {'pin': true}));
+    server.answers['GET /v1/me'] = () => _json(personalMe(ways: {'password': true}));
     server.answers['POST /v1/me/phone/start'] = () => _json({'sent_via': 'whatsapp', 'expires_in': 600, 'needs_old_code': true}, 202);
-    server.answers['POST /v1/auth/second-proof/pin'] = () => _json({'device_proved': true});
+    server.answers['POST /v1/auth/second-proof/password'] = () => _json({'device_proved': true});
     server.answers['POST /v1/me/phone/verify'] = () => _json({'error': 'That code has expired.', 'ticket_expired': true}, 401);
     final auth = _auth(server);
     auth.transport.token = 'tok-p';
-    auth.me = Me.fromJson(personalMe(ways: {'pin': true}));
+    auth.me = Me.fromJson(personalMe(ways: {'password': true}));
     auth.state = AuthState.signedIn;
     await t.pumpWidget(TaskiemApp(home: ChangeNumberScreen(auth: auth)));
     await settle(t);
@@ -481,9 +482,9 @@ void main() {
     expect(server.calls.last.body, {'phone': '+447700900123'});
     await press(t, 'No, prove it\'s me another way');
     expect(find.text('Prove it\'s you'), findsOneWidget);
-    await typeIn(t, labelled('Your chat PIN'), '4321');
-    await press(t, 'Confirm with my PIN');
-    expect(server.calls.any((c) => c.path == '/v1/auth/second-proof/pin'), isTrue);
+    await typeIn(t, labelled('Your password'), 'my long password');
+    await press(t, 'Confirm with my password');
+    expect(server.calls.any((c) => c.path == '/v1/auth/second-proof/password'), isTrue);
     expect(find.text('Code sent to your new number'), findsOneWidget);
     expect(find.text('Code sent to your old number'), findsNothing);
     // The code ran out: back to the number, saying so; still signed in.
@@ -538,8 +539,8 @@ void main() {
         {'tenant_id': 'b2', 'tenant': 'Bola Stores', 'roles': ['staff'], 'invited_at': '2026-11-15T10:00:00Z'},
       ],
     });
-    server.answers['POST /v1/me/invitations/b2/accept'] = () => _json({'tenant_id': 'b2', 'roles': ['staff'], 'sign_in': 'second_proof_required', 'ways': {'pin': true}});
-    server.answers['POST /v1/auth/second-proof/pin'] = () => _json({'device_proved': true});
+    server.answers['POST /v1/me/invitations/b2/accept'] = () => _json({'tenant_id': 'b2', 'roles': ['staff'], 'sign_in': 'second_proof_required', 'ways': {'password': true}});
+    server.answers['POST /v1/auth/second-proof/password'] = () => _json({'device_proved': true});
     server.answers['POST /v1/me/switch'] = () => _json({'token': 'tok-b2', 'tenant_id': 'b2', 'user_id': 'u1'});
     final auth = _auth(server);
     auth.transport.token = 'tok-p';
@@ -554,8 +555,8 @@ void main() {
     expect(auth.transport.token, 'tok-p', reason: 'not moved before the proof');
     expect(find.text('Prove it\'s you'), findsWidgets);
     expect(find.textContaining('Before Bola Stores opens'), findsOneWidget);
-    await typeIn(t, labelled('Your chat PIN'), '4321');
-    await press(t, 'Confirm with my PIN');
+    await typeIn(t, labelled('Your password'), 'my long password');
+    await press(t, 'Confirm with my password');
     expect(server.calls.lastWhere((c) => c.path == '/v1/me/switch').body, {'tenant_id': 'b2'});
     expect(auth.transport.token, 'tok-b2');
   });

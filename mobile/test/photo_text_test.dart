@@ -29,7 +29,7 @@ import 'package:taskiem/theme/theme.dart';
 
 import 'guidelines.dart';
 import 'pay_test.dart' show payment;
-import 'support.dart' show Fixture, loadFonts, snap;
+import 'support.dart' show Fixture, loadFonts, snap, chooseHeld, heldActions;
 
 const _json = {'content-type': 'application/json; charset=utf-8'};
 
@@ -378,12 +378,13 @@ void main() {
     await settle(t);
     await snap(t, 'photo-chat');
     // The photo's bubble: the last from the customer (its time in it).
-    await t.longPress(find.text('14:10').last);
+    final times = find.text('14:10');
+    final lowest = [for (var i = 0; i < times.evaluate().length; i++) times.at(i)]..sort((a, b) => t.getCenter(a).dy.compareTo(t.getCenter(b).dy));
+    await t.longPress(lowest.last);
     await settle(t);
-    expect(find.text('Save as…'), findsOneWidget);
-    expect(find.text('Save the account'), findsOneWidget);
+    expect(heldActions(t), containsAll(['Save as…', 'Save the account']));
     await snap(t, 'photo-chat-menu');
-    await t.tap(find.text('Pay this account'));
+    await chooseHeld(t, 'Pay this account');
     await settle(t);
     await settle(t);
     // Fetched as the chat fetches it, put in a file for a moment, read on

@@ -100,6 +100,7 @@ async function attempt(link: string, clientId: string) {
           mentions:
             o.mentions && o.mentions.length > 0 ? o.mentions : undefined,
           client_id: o.clientId,
+          preview: o.linkPreview,
         });
       }
       put(

@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -78,17 +79,38 @@ type chatAttachment struct {
 	Type string `json:"type"`
 	Size int64  `json:"size"`
 	Name string `json:"name,omitempty"`
+	// A PDF's pages and picture, a photo's size, a document's family
+	// (docs/spec/chat-previews-and-editing.md §1.3).
+	media.Facts
 }
 
 // sentFile is a file sent in an app conversation, scanned and cleaned
-// (media.CheckChatFile), before either copy is stored.
+// (media.CheckChatUpload), before either copy is stored.
 type sentFile struct {
 	Type, Name string
 	Data       []byte
+	media.Facts
 }
 
 func (f *sentFile) view() *chatAttachment {
-	return &chatAttachment{Kind: media.ChatKind(f.Type), Type: f.Type, Size: int64(len(f.Data)), Name: f.Name}
+	return &chatAttachment{Kind: media.ChatKind(f.Type), Type: f.Type, Size: int64(len(f.Data)), Name: f.Name, Facts: f.Facts}
+}
+
+// stored is the file's attachment as a chat keeps it beside its copy:
+// kind, type and size, and its facts.
+func (f *sentFile) stored() map[string]any {
+	v := f.view()
+	return f.Map(map[string]any{"kind": v.Kind, "type": v.Type, "size": v.Size})
+}
+
+// forwardedFacts are the facts a file keeps when it is sent on: its size
+// and family, never its picture, which the new copy draws again.
+func forwardedFacts(attach map[string]any) media.Facts {
+	f := media.FactsOf(attach)
+	if f.Preview != "" {
+		return media.Facts{Doc: f.Doc}
+	}
+	return media.Facts{W: f.W, H: f.H, Doc: f.Doc}
 }
 
 // CustomerAnswer is a business's message to a person in the app, told to
@@ -181,6 +203,10 @@ type appMessage struct {
 	// The business's copy of a file (its storage path) and the person's.
 	bizFile    map[string]any
 	personFile *sentFile
+	// preview is the first link's preview; bizPreview the business's copy
+	// of it, its picture in the business's own storage.
+	preview    *madePreview
+	bizPreview *links.Preview
 	offer      bool
 	senderID   string // the business's member, or system:*
 	senderName string
@@ -231,8 +257,9 @@ func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage)
 	}
 	fileID := uuid.Must(uuid.NewV7())
 	if m.personFile != nil {
-		v := m.personFile.view()
-		personAtt, _ = json.Marshal(map[string]any{"kind": v.Kind, "type": v.Type, "size": v.Size, "name": v.Name, "file": fileID})
+		stored := m.personFile.stored()
+		stored["name"], stored["file"] = m.personFile.Name, fileID
+		personAtt, _ = json.Marshal(stored)
 	}
 	var card, bizCard []byte
 	if m.card != nil {
@@ -248,9 +275,22 @@ func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage)
 			bizCard, _ = json.Marshal(customerCard{Type: m.card.Type, Sealed: env})
 		}
 	}
-	if err := tx.QueryRow(ctx, `INSERT INTO customer_messages (id, tenant_id, conversation_id, mine, kind, body, sender_id, sender_name, client_id, delivery, card, attachment, offer)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING created_at`,
-		m.id, m.tenant, m.thread, !m.fromPerson, m.kind, body, senderID, m.senderName, client, delivery, bizCard, bizAtt, m.offer).Scan(&at); err != nil {
+	// The link's preview: the business's sealed as the words are, the
+	// person's in their own row.
+	var bizPreview, personPreview []byte
+	if m.preview != nil {
+		personPreview = links.StoredPreview(m.preview.view())
+		bp := m.bizPreview
+		if bp == nil {
+			bp = &m.preview.Preview
+		}
+		if bizPreview, err = s.sealCustomerPreview(ctx, tx, m.tenant, m.subject, bp); err != nil {
+			return at, conv, err
+		}
+	}
+	if err := tx.QueryRow(ctx, `INSERT INTO customer_messages (id, tenant_id, conversation_id, mine, kind, body, sender_id, sender_name, client_id, delivery, card, attachment, offer, preview)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING created_at`,
+		m.id, m.tenant, m.thread, !m.fromPerson, m.kind, body, senderID, m.senderName, client, delivery, bizCard, bizAtt, m.offer, bizPreview).Scan(&at); err != nil {
 		return at, conv, err
 	}
 	// Made here only when the business writes first: not one of the
@@ -265,10 +305,18 @@ func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage)
 		pclient = &m.clientID
 	}
 	shown := m.senderName
-	if _, err := tx.Exec(ctx, `INSERT INTO person_messages (id, person_id, conversation_id, tenant_id, mine, kind, body, sender_name, card, attachment, offer, client_id, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-		m.id, m.person, conv, m.tenant, m.fromPerson, m.kind, m.text, shown, card, personAtt, m.offer, pclient, at); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO person_messages (id, person_id, conversation_id, tenant_id, mine, kind, body, sender_name, card, attachment, offer, client_id, created_at, preview)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		m.id, m.person, conv, m.tenant, m.fromPerson, m.kind, m.text, shown, card, personAtt, m.offer, pclient, at, personPreview); err != nil {
 		return at, conv, err
+	}
+	if m.preview != nil && m.preview.img != nil {
+		// The person's copy of the link's picture, kept as their files are.
+		img := m.preview.img
+		if _, err := tx.Exec(ctx, `INSERT INTO person_files (id, person_id, tenant_id, message_id, kind, type, size, data) VALUES ($1, $2, $3, $4, 'link_image', $5, $6, $7)`,
+			uuid.Must(uuid.NewV7()), m.person, m.tenant, m.id, img.Type, len(img.Big), img.Big); err != nil {
+			return at, conv, err
+		}
 	}
 	if m.personFile != nil {
 		if _, err := tx.Exec(ctx, `INSERT INTO person_files (id, person_id, tenant_id, message_id, type, size, name, data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -326,7 +374,7 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 		return customerMessageView{}, false, errCustomerErased
 	}
 	person := *chat.person
-	out := customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: in.Text, SenderName: in.SenderName, Delivery: "delivered",
+	out := customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: in.Text, SenderName: in.SenderName, Sender: in.SenderID, Delivery: "delivered",
 		Card: in.Card, Offer: in.Offer}
 	if in.Card != nil {
 		out.Kind = "card"
@@ -341,8 +389,16 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 			return out, false, chatFileErr(err)
 		}
 		v := in.File.view()
-		bizFile = map[string]any{"kind": v.Kind, "type": f.Type, "size": f.Size, "name": v.Name, "path": f.Path}
+		bizFile = in.File.Map(map[string]any{"kind": v.Kind, "type": v.Type, "size": f.Size, "name": v.Name, "path": f.Path})
 		out.Kind, out.Attachment = "media", v
+	}
+	// The first link's preview, on words only; its picture in our storage.
+	var bizPreview *links.Preview
+	if in.Preview != nil && in.File == nil && in.Card == nil {
+		bizPreview = s.keepBusinessPreview(ctx, tenant, in.Preview)
+		out.Preview = in.Preview.view()
+	} else {
+		in.Preview = nil
 	}
 	var again *customerMessageView
 	var name string
@@ -379,7 +435,7 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 		}
 		m := appMessage{id: out.ID, tenant: tenant, thread: chat.ID, subject: subject, person: person, kind: out.Kind, text: in.Text, card: in.Card,
 			bizFile: bizFile, personFile: in.File, offer: in.Offer, senderID: in.SenderID, senderName: in.SenderName, clientID: in.ClientID,
-			system: strings.HasPrefix(in.SenderID, "system:")}
+			system: strings.HasPrefix(in.SenderID, "system:"), preview: in.Preview, bizPreview: bizPreview}
 		if out.CreatedAt, conv, err = s.writeAppMessageTx(ctx, tx, m); err != nil {
 			return err
 		}
@@ -389,6 +445,7 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 		if bizFile != nil {
 			s.dropChatFile(ctx, tenant, bizFile["path"].(string))
 		}
+		s.dropBusinessImage(ctx, tenant, bizPreview)
 		if again != nil {
 			return *again, false, nil
 		}
@@ -413,6 +470,9 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 	if !muted {
 		s.tellAnswered(context.WithoutCancel(ctx), chatlinks.Answer{Tenant: tenant, Conversation: conv, Person: person,
 			Words: answerWords(out), FromPerson: !strings.HasPrefix(in.SenderID, "system:"), Offer: in.Offer})
+	}
+	if in.File != nil {
+		s.drawLater(ctx, in.File.Type, in.File.Data, s.customerPDFCopy(tenant, out.ID), s.personPDFCopy(person, out.ID, nil))
 	}
 	return out, true, nil
 }
@@ -459,6 +519,12 @@ func chatFileErr(err error) error {
 				msg = msg[j+2:]
 			}
 		}
+		switch {
+		case strings.HasPrefix(msg, "larger than "):
+			return customerSendErr{http.StatusBadRequest, "This file is " + msg + "."}
+		case strings.HasPrefix(msg, "Taskiem can send"):
+			return customerSendErr{http.StatusBadRequest, msg + "."}
+		}
 		return customerSendErr{http.StatusBadRequest, "This file cannot be sent: " + msg + "."}
 	}
 	return err
@@ -487,18 +553,11 @@ func (s *Server) readChatFile(w http.ResponseWriter, r *http.Request) (*sentFile
 	if err := s.Media.ScanChatFile(r.Context(), data); err != nil {
 		return nil, chatFileErr(err)
 	}
-	ctype, clean, err := media.CheckChatFile(data)
+	u, err := media.CheckChatUpload(data, hdr.Filename)
 	if err != nil {
 		return nil, chatFileErr(err)
 	}
-	name := hdr.Filename
-	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
-		name = name[i+1:]
-	}
-	if r := []rune(name); len(r) > 200 {
-		name = string(r[:200])
-	}
-	return &sentFile{Type: ctype, Name: name, Data: clean}, nil
+	return &sentFile{Type: u.Type, Name: u.Name, Data: u.Data, Facts: u.Facts}, nil
 }
 
 // --- the business's routes for the app line ---
@@ -509,6 +568,7 @@ func (s *Server) customerAppRoutes(r chi.Router) {
 	r.With(orders, s.tenantWide).Post("/customer-chats/offers", s.broadcastOffer)
 	r.With(orders, s.tenantWide).Post("/customer-chats/{id}/files", s.sendCustomerFile)
 	r.With(orders).Get("/customer-chats/{id}/files/{message}", s.customerFile)
+	r.With(orders).Get("/customer-chats/{id}/previews/{message}", s.customerPreviewImage)
 	r.With(orders, s.tenantWide).Post("/customer-chats/{id}/block", s.blockCustomer)
 	r.With(orders, s.tenantWide).Delete("/customer-chats/{id}/block", s.blockCustomer)
 	r.With(orders).Post("/customer-chats/{id}/typing", s.customerTyping)
@@ -821,6 +881,31 @@ func (s *Server) sendCustomerFile(w http.ResponseWriter, r *http.Request) {
 // business's own copy of an app message's file.
 func (s *Server) customerFile(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
+	if wantsPreview(r) {
+		// The same check as the file's: the thread is the business's.
+		var msg uuid.UUID
+		err := s.tx(r, func(tx pgx.Tx) error {
+			t, err := s.customerThreadIn(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
+			if err != nil {
+				return err
+			}
+			if msg, err = uuid.Parse(chi.URLParam(r, "message")); err != nil {
+				return pgx.ErrNoRows
+			}
+			var ok bool
+			if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM customer_messages WHERE tenant_id = $1 AND conversation_id = ANY ($2) AND id = $3)`,
+				p.TenantID, t.ids(), msg).Scan(&ok); err != nil || !ok {
+				return pgx.ErrNoRows
+			}
+			return nil
+		})
+		if err != nil {
+			s.customerChatFail(w, r, err)
+			return
+		}
+		s.servePDFPreview(w, r, s.customerPDFCopy(p.TenantID, msg), s.customerChatFail)
+		return
+	}
 	var path, ctype, name, kind string
 	err := s.tx(r, func(tx pgx.Tx) error {
 		t, err := s.customerThreadIn(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
@@ -856,7 +941,7 @@ func (s *Server) customerFile(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	serveChatFile(w, data, ctype, name, kind)
+	serveChatFileFor(w, r, data, ctype, name, kind)
 }
 
 // serveChatFile writes a conversation's file: shown in the page for a
@@ -1016,11 +1101,12 @@ func (s *Server) openAttachment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		Type string          `json:"type"`
 		Size int64           `json:"size"`
 		Name json.RawMessage `json:"name"`
+		media.Facts
 	}
 	if err := json.Unmarshal(raw, &a); err != nil {
 		return nil, err
 	}
-	out := &chatAttachment{Kind: a.Kind, Type: a.Type, Size: a.Size}
+	out := &chatAttachment{Kind: a.Kind, Type: a.Type, Size: a.Size, Facts: a.Facts}
 	if len(a.Name) > 0 && string(a.Name) != "null" {
 		var err error
 		if out.Name, err = s.openCustomerText(ctx, tx, tenant, a.Name); err != nil {

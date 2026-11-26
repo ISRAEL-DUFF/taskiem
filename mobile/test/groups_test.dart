@@ -40,7 +40,7 @@ import 'package:taskiem/theme/theme.dart';
 
 import 'looks.dart';
 import 'people_test.dart';
-import 'support.dart' show loadFonts;
+import 'support.dart' show loadFonts, chooseHeld;
 
 /// A group as the server always sends it.
 Map<String, dynamic> grp({
@@ -374,7 +374,8 @@ void main() {
       await openGroup(t, api);
       await t.longPress(find.text('Bring the book'));
       await settle(t);
-      await press(t, find.text('Info'));
+      await chooseHeld(t, 'Info');
+      await settle(t);
       expect(find.text('Read by'), findsOneWidget);
       expect(find.text('Delivered to'), findsOneWidget);
       expect(find.text('Bola Ige'), findsWidgets);
@@ -389,7 +390,8 @@ void main() {
       await openGroup(t, api);
       await t.longPress(find.text('Bring the book'));
       await settle(t);
-      await press(t, find.text('Delete'));
+      await chooseHeld(t, 'Delete');
+      await settle(t);
       expect(find.text('Delete for everyone'), findsOneWidget);
       await press(t, find.text('Delete for everyone'));
       expect(api.sent('DELETE', '/v1/me/groups/g1/messages/m3').single.url.queryParameters['for'], 'everyone');
@@ -414,7 +416,8 @@ void main() {
       await openGroup(t, api);
       await t.longPress(find.text('Hello all'));
       await settle(t);
-      await press(t, find.text('Forward'));
+      await chooseHeld(t, 'Forward');
+      await settle(t);
       expect(find.text('Old group'), findsNothing, reason: 'not a group you left');
       await press(t, find.text('Ada Obi').last);
       await press(t, find.text('Choir'));

@@ -32,6 +32,7 @@ class TkLook {
     required this.line,
     required this.bar,
     required this.on,
+    required this.chatPicked,
   });
 
   /// The page's ground, the cards on it (no border: the ground sets them
@@ -44,6 +45,10 @@ class TkLook {
 
   /// The top card's light, at its top left (dark only; none in light).
   final Color glow;
+
+  /// A held message's row in the chat, tinted across the thread as
+  /// WhatsApp's selection is.
+  final Color chatPicked;
 
   /// Whether this is the look on your own pine bubble in the light.
   bool get onPine => identical(this, tkLookOnPine);
@@ -74,6 +79,7 @@ const tkLookLight = TkLook(
   line: Color(0x12000000),
   bar: Color(0xDBF8F9F7),
   on: Color(0xFF0D3B2E),
+  chatPicked: Color(0x2E13C2A3),
 );
 
 /// The light look on pine (your own bubble in the light): the dark look's
@@ -99,6 +105,7 @@ const tkLookOnPine = TkLook(
   line: Color(0x12000000),
   bar: Color(0xDBF8F9F7),
   on: Color(0xFFC8F169),
+  chatPicked: Color(0x332FE0C0),
 );
 
 const tkLookDark = TkLook(
@@ -120,6 +127,7 @@ const tkLookDark = TkLook(
   line: Color(0x14FFFFFF),
   bar: Color(0xDB121212),
   on: Color(0xFFC8F169),
+  chatPicked: Color(0x332FE0C0),
 );
 
 /// A person's or a business's letters on one of these, chosen by the name,

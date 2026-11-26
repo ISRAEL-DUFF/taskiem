@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/linkify"
 )
 
 // DefaultGraphURL is the Graph API version the channel speaks.
@@ -99,9 +100,20 @@ type Button struct {
 	Title string // at most 20 characters
 }
 
-// SendText sends a free-form message (inside the window only).
+// SendText sends a free-form message (inside the window only). A message
+// with a web address in it asks WhatsApp to draw that page's preview
+// (docs/spec/chat-previews-and-editing.md §2.2), found by the rule every
+// chat shares (engine/linkify).
 func (c *Client) SendText(ctx context.Context, to, body string) (string, error) {
-	return c.send(ctx, to, "text", map[string]any{"body": clip(body, 4096), "preview_url": false})
+	return c.SendTextReply(ctx, to, body, "")
+}
+
+// SendTextReply is SendText as a reply to one of the conversation's
+// messages (its id, context.message_id), which WhatsApp shows quoted; an
+// empty id is a plain text.
+func (c *Client) SendTextReply(ctx context.Context, to, body, replyTo string) (string, error) {
+	body = clip(body, 4096)
+	return c.sendIn(ctx, to, "text", map[string]any{"body": body, "preview_url": linkify.First(body) != ""}, replyTo)
 }
 
 // SendButtons sends text with up to three reply buttons (inside the window
@@ -172,10 +184,19 @@ func (c *Client) SendTemplate(ctx context.Context, to string, t Template, lang s
 }
 
 func (c *Client) send(ctx context.Context, to, kind string, content any) (string, error) {
+	return c.sendIn(ctx, to, kind, content, "")
+}
+
+// sendIn is send, quoting the message replyTo when it is not empty.
+func (c *Client) sendIn(ctx context.Context, to, kind string, content any, replyTo string) (string, error) {
 	if c.PhoneNumberID == "" || c.Token == "" {
 		return "", errors.New("whatsapp: the platform number is not configured")
 	}
-	body, _ := json.Marshal(map[string]any{"messaging_product": "whatsapp", "recipient_type": "individual", "to": to, "type": kind, kind: content})
+	msg := map[string]any{"messaging_product": "whatsapp", "recipient_type": "individual", "to": to, "type": kind, kind: content}
+	if replyTo != "" {
+		msg["context"] = map[string]any{"message_id": replyTo}
+	}
+	body, _ := json.Marshal(msg)
 	hc, err := c.client()
 	if err != nil {
 		return "", err

@@ -75,6 +75,7 @@ void main() {
       final accept = find.bySemanticsLabel('Accept ORD-7');
       final decline = find.bySemanticsLabel('Decline ORD-7');
       final view = find.bySemanticsLabel('View order ORD-7');
+      await seeInThread(t, view);
       await t.ensureVisible(view);
       await t.pumpAndSettle();
       final a = t.getRect(accept), d = t.getRect(decline), v = t.getRect(view);

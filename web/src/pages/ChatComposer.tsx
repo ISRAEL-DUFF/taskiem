@@ -30,6 +30,7 @@ import {
 } from "./Mentions";
 import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { PendingFile } from "./PendingFile";
+import { ComposerLinkCard, useComposerPreview, type PreviewChoice } from "./ChatLinks";
 import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
 import { extrasFor, ToolSheet, ToolsPanel, type ExtraTile } from "./ChatTools";
@@ -57,6 +58,7 @@ type ToolStart = {
 import { useAuth } from "../auth";
 import { categoryTag } from "../lib/tools";
 import { useMediaQuery, usePresence } from "../kit";
+import { CHAT_DOCUMENTS_ACCEPT, CHAT_FILES_REFUSED, chatFileOK } from "../lib/chatfiles";
 
 // The composer of every conversation (a business's and Taskiem's): the box
 // that grows, emoji, a photo (and, where it is taken, a PDF), the camera,
@@ -76,6 +78,9 @@ export type FileRules = {
   max: number;
   maxWords: string;
   types: RegExp;
+  /** Whether a file may be sent, where its type alone does not say (a
+   * document, whose type a browser may not know). */
+  ok?: (f: File) => boolean;
   typesMessage: string;
   /** The clip's menu offers a document. */
   documents: boolean;
@@ -84,13 +89,14 @@ export type FileRules = {
 };
 
 export const BUSINESS_FILES: FileRules = {
-  accept: "image/jpeg,image/png,image/webp,application/pdf",
+  accept: `image/jpeg,image/png,image/webp,${CHAT_DOCUMENTS_ACCEPT}`,
   max: 25 * 1024 * 1024,
   maxWords: "25 MB",
   types: /^(image\/(jpeg|png|webp)|application\/pdf|audio\/)/,
-  typesMessage: "Send a photo (JPEG, PNG or WebP), a PDF or a voice note.",
+  ok: chatFileOK,
+  typesMessage: CHAT_FILES_REFUSED,
   documents: true,
-  dropWords: "Drop a photo or a PDF to send it",
+  dropWords: "Drop a photo or a document to send it",
   manyWords:
     "Only one file can be sent at a time: the first was taken. Send the others after it.",
 };
@@ -118,9 +124,27 @@ export type Sending<R> = {
   held: boolean;
   /** Everything picked with "@", to give back if it is not sent. */
   picked?: Suggestion[];
+  /** The link's card shown ({id}), closed with ✕ (false), or nothing
+   * said: send it as the message's `preview`. */
+  preview?: PreviewChoice;
+};
+
+/** A message of ours being edited (chat-previews-and-editing.md §3.2):
+ * its id, its words, the count of edits it had, and whether its words are
+ * a file's caption (which may be emptied). */
+export type EditTarget = {
+  id: string;
+  text: string;
+  edits: number;
+  caption?: boolean;
 };
 
 export type ComposerOptions<R> = {
+  /** An edit saved with the tick (or Enter): the page sends it. */
+  onEdit?: (t: EditTarget, text: string) => void;
+  /** The person's last message that may be edited now, for the up arrow
+   * in an empty box (as on WhatsApp Web and Slack). */
+  lastEditable?: () => EditTarget | undefined;
   /** Where the unsent words are kept (and shown in the list). */
   draftKey: string;
   sources: Parameters<typeof useMentions>[3];
@@ -161,17 +185,24 @@ export type ComposerOptions<R> = {
   madeTools?: boolean;
   /** One of Your tools started a run (its answer comes to the chat). */
   onToolRun?: (run: string) => void;
+  /** The chat a typed link's card is made for (link:…, people:…,
+   * group:…, door:…, customer:…); none without it. */
+  linkChat?: string;
 };
 
 export function useComposer<R>(o: ComposerOptions<R>) {
   const enabled = o.enabled ?? true;
   const [text, setText] = useState(() => getDraft(o.draftKey));
+  // A link typed: its card above the box (chat-previews-and-editing.md §2.1).
+  const linkPreview = useComposerPreview(text, enabled ? o.linkChat : undefined);
   const textBox = useRef<HTMLTextAreaElement>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [reply, setReply] = useState<R>();
   const [file, setFile] = useState<File>();
+  // A message of ours being edited: the box holds its words.
+  const [editing, setEditing] = useState<EditTarget>();
   const [fileError, setFileError] = useState<unknown>();
   const pick = useRef<HTMLInputElement>(null);
   const snap = useRef<HTMLInputElement>(null);
@@ -179,6 +210,8 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   // An unsent message is kept per conversation.
   useEffect(() => {
     // "/pro" opening the tools is not a message to keep.
+    // An edit's words are not a draft of a new message.
+    if (editing) return;
     setDraft(o.draftKey, o.tools && /^\/\S*$/.test(text) ? "" : text);
     // Only a change of the words is kept: a switch of conversation loads one.
   }, [text]);
@@ -319,7 +352,38 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     ],
     [!!reply, !!file],
   );
+  /** Edit one of our messages: its words in the box, the strip above it. */
+  const startEdit = (t: EditTarget) => {
+    setEditing(t);
+    setReply(undefined);
+    setFile(undefined);
+    setText(t.text);
+    requestAnimationFrame(() => {
+      const box = textBox.current;
+      if (!box) return;
+      box.focus();
+      box.setSelectionRange(box.value.length, box.value.length);
+    });
+  };
+  /** Stop editing (✕, Esc): the box is emptied, nothing is saved. */
+  const stopEdit = () => {
+    setEditing(undefined);
+    setText(getDraft(o.draftKey));
+  };
+  /** Words given back to the box (an edit refused after its time), so they
+   * can be sent as a new message; kept unless something was typed. */
+  const keepWords = (words: string) =>
+    setText((cur) => (cur.trim() === "" ? words : cur));
   const send = (held?: File) => {
+    if (editing && !held) {
+      const body = text.trim();
+      if (!body && !editing.caption) return;
+      setEditing(undefined);
+      setText(getDraft(o.draftKey));
+      if (body !== editing.text.trim()) o.onEdit?.(editing, body);
+      requestAnimationFrame(() => textBox.current?.focus());
+      return;
+    }
     const f = held ?? file;
     const body = held ? "" : text.trim();
     if (!body && !f) return;
@@ -344,11 +408,13 @@ export function useComposer<R>(o: ComposerOptions<R>) {
       picks: mentions.pickedPeople(),
       picked: mentions.picked(),
       held: !!held,
+      preview: f ? undefined : linkPreview.choice(body),
     };
     if (!held) {
       setText("");
       setFile(undefined);
       mentions.reset();
+      linkPreview.reset();
     }
     setReply(undefined);
     o.onSend(s);
@@ -379,10 +445,10 @@ export function useComposer<R>(o: ComposerOptions<R>) {
       }
     }
     if (f.size > o.rules.max) {
-      setFileError(new Error(`${f.name} is larger than ${o.rules.maxWords}.`));
+      setFileError(new Error(`This file is larger than ${o.rules.maxWords}.`));
       return;
     }
-    if (!o.rules.types.test(f.type)) {
+    if (!(o.rules.ok ? o.rules.ok(f) : o.rules.types.test(f.type))) {
       setFileError(new Error(o.rules.typesMessage));
       return;
     }
@@ -401,7 +467,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     const el = pick.current;
     if (!el) return;
     el.accept =
-      what === "photo" ? "image/jpeg,image/png,image/webp" : "application/pdf";
+      what === "photo" ? "image/jpeg,image/png,image/webp" : CHAT_DOCUMENTS_ACCEPT;
     el.click();
   };
   const addEmoji = (c: string) => {
@@ -526,6 +592,11 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     openMade,
     madeReach,
     openMadeWords,
+    linkPreview,
+    editing,
+    startEdit,
+    stopEdit,
+    keepWords,
   };
 }
 
@@ -553,8 +624,30 @@ export function ComposerView<R>({
   const { voice, file, text, reply } = c;
   const toolsP = usePresence(c.toolsShown);
   const roomy = useMediaQuery("(min-width: 600px)");
+  const editing = c.editing;
   return (
     <>
+      {editing && (
+        <div
+          className="composer-reply composer-editing"
+          data-testid={`${prefix}-editing`}
+        >
+          <Icon name="pencil" />
+          <span className="quote">
+            <strong>Editing message</strong>
+            <span className="was">{editing.text}</span>
+          </span>
+          <button
+            type="button"
+            className="icon-button small"
+            onClick={c.stopEdit}
+            title="Cancel the edit"
+          >
+            <Icon name="close" />
+            <span className="sr-only">Cancel the edit</span>
+          </button>
+        </div>
+      )}
       {reply && c.o.replyLine && (
         <div
           className="composer-reply"
@@ -583,6 +676,7 @@ export function ComposerView<R>({
           onRemove={() => c.setFile(undefined)}
         />
       )}
+      {!file && <ComposerLinkCard s={c.linkPreview} />}
       <input
         ref={c.pick}
         type="file"
@@ -848,6 +942,27 @@ export function ComposerView<R>({
                     )?.focus();
                   return;
                 }
+                if (e.key === "Escape" && editing && !c.emojiOpen) {
+                  // Esc cancels an edit; nothing is saved.
+                  e.preventDefault();
+                  c.stopEdit();
+                  return;
+                }
+                if (
+                  e.key === "ArrowUp" &&
+                  !editing &&
+                  !file &&
+                  text === "" &&
+                  c.o.lastEditable
+                ) {
+                  // The up arrow in an empty box edits our last message.
+                  const last = c.o.lastEditable();
+                  if (last) {
+                    e.preventDefault();
+                    c.startEdit(last);
+                    return;
+                  }
+                }
                 if (e.key === "Escape") {
                   // Esc gives up what is being prepared: the panel, a photo
                   // waiting for its caption, then a reply.
@@ -877,7 +992,17 @@ export function ComposerView<R>({
               </button>
             )}
           </div>
-          {!text.trim() && !file && voice.can ? (
+          {editing ? (
+            <button
+              type="submit"
+              className="primary icon-button send-button"
+              data-testid={`${prefix}-save-edit`}
+              disabled={busy || (!text.trim() && !editing.caption)}
+            >
+              <Icon name="check" />
+              <span className="sr-only">Save the edit</span>
+            </button>
+          ) : !text.trim() && !file && voice.can ? (
             <MicButton
               voice={voice}
               onStart={() => c.setFileError(undefined)}

@@ -47,6 +47,7 @@ import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
 import 'chat/scan_start.dart' show scanFromHome;
+import 'screens/sign_in_way.dart' show SignInWayScreen;
 import 'screens/chat_link.dart';
 import 'chat/group_chat.dart' show GroupChatData, GroupChatScreen;
 import 'chat/group_new.dart' show GroupJoinScreen;
@@ -261,6 +262,9 @@ class _RootState extends State<_Root> {
       // A personal session: the person's own side (taskiem-for-everyone §7).
       // Just made an account: Set your PIN, or Not now (when it has none).
       AuthState.signedIn when auth.offerPin => PinStepScreen(key: ValueKey('pin ${auth.session}'), auth: auth, onDone: () => setState(() => auth.offerPin = false)),
+      // New to the apps, in a business, with no way to prove a new phone:
+      // one first, before the business opens (screens/sign_in_way.dart).
+      AuthState.signedIn when !auth.personal && auth.me?.user?.signInWayStep == true => SignInWayScreen(key: ValueKey('way ${auth.session}'), auth: auth, step: true),
       AuthState.signedIn when auth.personal => YouHome(key: ValueKey(auth.session), auth: auth, links: widget.links, notify: widget.notify, prefs: widget.prefs),
       AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links, shortcuts: widget.shortcuts),
     };
@@ -853,18 +857,18 @@ class _OpenState extends State<_Open> {
     onOpenLink: (link) {
       // "Open" on a save's toast: Taskiem's conversation, in this one's place.
       if (link == 'taskiem') {
-        Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+        Navigator.of(context).pushReplacement(TkRoute<void>(
+          // In this one's place at once; Back slides it out as any chat.
           transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
           pageBuilder: (_, _, _) => _OpenTaskiem(chats: widget.chats),
         ));
         return;
       }
       final c = widget.chats.conversations.where((c) => c.link == link).firstOrNull;
       if (c == null) return;
-      Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+      Navigator.of(context).pushReplacement(TkRoute<void>(
+        // In this one's place at once; Back slides it out as any chat.
         transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
         pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c, notify: widget.notify),
       ));
     },
@@ -894,14 +898,14 @@ class _OpenTaskiemState extends State<_OpenTaskiem> {
   Widget build(BuildContext context) => TaskiemScreen(
     data: _data,
     openTool: widget.openTool,
-    onOpenCustomer: (id) => Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+    onOpenCustomer: (id) => Navigator.of(context).pushReplacement(TkRoute<void>(
+      // In this one's place at once; Back slides it out as any chat.
       transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
       pageBuilder: (_, _, _) => _OpenCustomer(chats: widget.chats, id: id),
     )),
-    onOpenLink: (c) => Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+    onOpenLink: (c) => Navigator.of(context).pushReplacement(TkRoute<void>(
+      // In this one's place at once; Back slides it out as any chat.
       transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
       pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c),
     )),
   );

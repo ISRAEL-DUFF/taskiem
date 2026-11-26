@@ -12,7 +12,9 @@ import 'package:taskiem/app/links.dart';
 import 'package:taskiem/chat/approve.dart' show ApproveSheet;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/invoice_match.dart' show InvoiceMatchPage;
+import 'package:taskiem/api/api.g.dart' show Me;
 import 'package:taskiem/chat/today_tab.dart';
+import 'package:taskiem/screens/sign_in_way.dart' show SignInWayScreen;
 import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -117,7 +119,7 @@ void main() {
     ], _now)[11], 500000);
   });
 
-  Future<List<String>> open(WidgetTester t) async {
+  Future<List<String>> open(WidgetTester t, {bool needsWay = false, TkMode mode = TkMode.light}) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 3000);
     t.view.devicePixelRatio = 1;
@@ -219,14 +221,33 @@ void main() {
       ),
       now: () => f.at,
     );
+    if (needsWay) {
+      // No way to sign in on a new phone (screens/sign_in_way.dart).
+      final me = jsonDecode(jsonEncode(chats.auth.me!.toJson())) as Map<String, dynamic>;
+      chats.auth.me = Me.fromJson({...me, 'user': {...(me['user'] as Map<String, dynamic>? ?? const {}), 'needs_sign_in_way': true}});
+    }
     await t.pumpWidget(
       TaskiemApp(
-        mode: TkMode.light,
+        mode: mode,
         home: TodayTab(auth: chats.auth, now: () => _now),
       ),
     );
     await settle(t);
     return asked;
+  }
+
+  for (final mode in TkMode.values) {
+    testWidgets('no way to sign in on a new phone: Today says so first, and its button opens the page to add one, ${mode.name}', (t) async {
+      await open(t, needsWay: true, mode: mode);
+      expect(find.text('Add a way to sign in on a new phone.'), findsOneWidget);
+      expect(find.text('A code to your number isn’t enough on its own if someone gets your SIM.'), findsOneWidget);
+      await snap(t, 'today-sign-in-way-${mode.name}');
+      await t.tap(find.bySemanticsLabel('Add a way to sign in'));
+      await settle(t);
+      expect(find.byType(SignInWayScreen), findsOneWidget);
+      expect(find.text('Add an email'), findsOneWidget);
+      await snap(t, 'sign-in-way-page-${mode.name}');
+    });
   }
 
   testWidgets('the day: money, orders, what needs you, activity, set-up, workflows', (t) async {

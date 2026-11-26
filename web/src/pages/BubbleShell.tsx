@@ -414,6 +414,25 @@ export function CopyItem({ text }: { text: string }) {
   );
 }
 
+/** "Edited" by a message's time, once its sender changed its words. */
+export function EditedMark({ at }: { at?: string | null }) {
+  if (!at) return null;
+  return (
+    <span className="edited" data-testid="chat-edited">
+      Edited
+    </span>
+  );
+}
+
+/** The menu's Edit: the message's words into the box to change. */
+export function EditItem({ onClick }: { onClick: () => void }) {
+  return (
+    <PopItem icon="pencil" onClick={onClick}>
+      Edit
+    </PopItem>
+  );
+}
+
 /** The ticks under a message of ours: two when it is delivered, blue once
  * they have read it. */
 export function Ticks({ read }: { read: boolean }) {

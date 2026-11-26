@@ -3,6 +3,8 @@ import { SavedCardView } from "./SavedCard";
 import { Icon } from "../icons";
 import { Pill } from "../kit";
 import { fileSize } from "../lib/linkchat";
+import { frameOf } from "../lib/chatfiles";
+import { FileCard } from "./ChatFiles";
 import { cardFigure, cardKicker, cardState, deliveryStep, type AppAttachment, type AppCard } from "../lib/personchat";
 
 // What an app conversation carries besides words (docs/spec/taskiem-for-
@@ -61,16 +63,17 @@ export function AppCardView({ card, actions, mine = false, saveTo }: { card: App
 }
 
 /** A message's photo, voice note or file, from `src` (the side's own copy). */
-export function AppAttachmentView({ a, src, who, mine, preview }: { a: AppAttachment; src?: string; who: string; mine: boolean; preview?: string }) {
+export function AppAttachmentView({ a, src, who, mine, preview, at }: { a: AppAttachment; src?: string; who: string; mine: boolean; preview?: string; at?: string }) {
   const name = a.kind === "photo" ? "Photo" : a.kind === "voice" ? "Voice note" : a.name || "File";
   if (!src) {
-    // Still being sent: this device's own copy (a preview, or the name).
+    // Still being sent: this device's own copy (a preview, or the card).
     if (a.kind === "photo" && preview)
       return (
         <span className="chat-photo">
           <img src={preview} alt="Your photo" />
         </span>
       );
+    if (a.kind === "file") return <FileCard a={a} />;
     return (
       <span className="chat-file">
         <Icon name="file" />
@@ -79,18 +82,15 @@ export function AppAttachmentView({ a, src, who, mine, preview }: { a: AppAttach
       </span>
     );
   }
-  if (a.kind === "photo")
+  if (a.kind === "photo") {
+    // At its own proportions before it has loaded (§1.1).
+    const frame = frameOf(a);
     return (
       <a href={src} target="_blank" rel="noopener" className="chat-photo">
-        <img src={src} alt={mine ? "Your photo" : `Photo from ${who}`} loading="lazy" />
+        <img src={src} alt={mine ? "Your photo" : `Photo from ${who}`} loading="lazy" width={frame?.width} height={frame?.height} />
       </a>
     );
+  }
   if (a.kind === "voice") return <audio className="chat-voice" controls preload="none" src={src} aria-label={mine ? "Your voice note" : `Voice note from ${who}`} />;
-  return (
-    <a href={src} download={a.name || true} className="chat-file">
-      <Icon name="file" />
-      <span className="name">{name}</span>
-      <span className="hint">{fileSize(a.size)}</span>
-    </a>
-  );
+  return <FileCard a={a} src={src} who={mine ? "You" : who} at={at} />;
 }

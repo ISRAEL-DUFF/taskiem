@@ -41,6 +41,7 @@ import 'approve.dart' show TkTextBox;
 import 'attachments.dart';
 import 'cards.dart' show CardButton, cardDecoration;
 import 'composer.dart';
+import 'edits.dart';
 import 'door.dart' show doorFileMessage, doorFiles;
 import 'menu.dart';
 import 'my_chat.dart' show OpenMyChat, sayFailure;
@@ -60,6 +61,7 @@ import 'pick_problem.dart';
 import 'save_as.dart' show photoAccountItems, saveFromWords, saveNamed;
 import 'saved_files.dart' show attachSavedFile;
 import 'pay_collect.dart' show PayListBar;
+import 'link_preview.dart' show ComposerPreview, LinkPreviewCard, LinkedText;
 
 /// How often an open chat reads again.
 const _poll = Duration(seconds: 4);
@@ -448,7 +450,7 @@ class PeopleChatData extends ChangeNotifier {
   /// Words, or a file with its caption, answering [reply] when given:
   /// shown at once with a clock, then the server's copy; not sent, the
   /// words come back to the box and the reason is said.
-  Future<void> send(String text, {PickedFile? file, PeopleMessage? reply}) async {
+  Future<void> send(String text, {PickedFile? file, PeopleMessage? reply, Object? preview}) async {
     final words = text.trim();
     if (words.isEmpty && file == null) return;
     // A message ends typing on the server: the next key says it again.
@@ -482,7 +484,7 @@ class PeopleChatData extends ChangeNotifier {
         sent = PeopleMessage.fromJson((j as Map).cast<String, dynamic>());
         unawaited(files.keep(sent.id, Uint8List.fromList(file.bytes)));
       } else {
-        sent = await api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(text: words, clientId: client, replyTo: reply?.id));
+        sent = await api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(text: words, clientId: client, replyTo: reply?.id, preview: preview));
       }
       if (_disposed) return;
       messages = _merge((messages ?? const []).where((m) => m != mine).toList(), [PeopleLine(sent)]);
@@ -588,6 +590,20 @@ class PeopleChatData extends ChangeNotifier {
       toStanding = pointsToStanding(e);
       _changed();
       return false;
+    }
+  }
+
+  /// Edits one of ours (chat-previews-and-editing.md §3.2): the new words
+  /// and "Edited" at once, put back if the server refuses; the refusal is
+  /// answered (null when saved).
+  Future<Object?> edit(PeopleMessage m, String text) async {
+    _replace(PeopleMessage.fromJson({...m.toJson(), 'body': text, 'edited_at': DateTime.now().toUtc().toIso8601String(), 'edits': (m.edits ?? 0) + 1}));
+    try {
+      _replace(await api.editPeopleMessage(id: id, message: m.id, body: MessageEdit(text: text, edits: m.edits ?? 0)));
+      return null;
+    } on Object catch (e) {
+      _replace(m);
+      return e;
     }
   }
 
@@ -781,6 +797,9 @@ class PeopleChatScreen extends StatefulWidget {
 
 class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
   final _text = TextEditingController();
+
+  /// A link typed: its card above the box (chat-previews-and-editing.md §2.1).
+  late final _linkPreview = ComposerPreview(api: widget.data.auth.api, transport: widget.data.auth.transport, chat: 'people:${widget.data.id}');
   // Saved texts by @name (saved objects S1): their words into the box.
   late final _saved = savedTextBox(
     text: _text,
@@ -842,6 +861,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
 
   @override
   void dispose() {
+    _sel.dispose();
     widget.notify?.unshow(this);
     _back?.cancel();
     _life?.dispose();
@@ -849,6 +869,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     // Closed with words in the box: they no longer see "typing…".
     d.stopTyping();
     _text.dispose();
+    _linkPreview.dispose();
     d.dispose();
     super.dispose();
   }
@@ -1023,60 +1044,116 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     await d.send('', file: f, reply: reply);
   }
 
-  Future<void> _hold(PeopleMessage m, Rect at) async {
-    if (m.id.startsWith('local-')) return;
+  /// One of ours being edited (chat-previews-and-editing.md §3.2).
+  EditDraft? _editing;
+
+  void _startEdit(PeopleMessage m) {
+    setState(() {
+      _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: m.attachment != null);
+      _reply = null;
+    });
+    _text.text = m.body;
+    _text.selection = TextSelection.collapsed(offset: m.body.length);
+  }
+
+  Future<void> _saveEdit(EditDraft e, String words) async {
+    setState(() => _editing = null);
+    if (words == e.text.trim()) return;
+    final m = d.messages?.where((x) => x.id == e.id).firstOrNull?.m;
+    if (m == null) return;
+    final err = await d.edit(m, words);
+    if (err == null || !mounted) return;
+    showTkToast(context, editRefusal(err), error: true);
+    if (refusedForTime(err) && _text.text.isEmpty) _text.text = words;
+  }
+
+  /// The messages held (WhatsApp's selection, menu.dart).
+  late final _sel = MessageSelection(actsOf: _actsOf, onDelete: (ids) => _delete(_found(ids)), onForward: (ids) => _forward(_found(ids)));
+
+  List<PeopleMessage> _found(List<String> ids) => [for (final id in ids) ?d.messages?.where((x) => x.id == id).firstOrNull?.m];
+
+  /// What may be done with a message held.
+  HeldActs? _actsOf(String id) {
+    final x = d.messages?.where((x) => x.id == id).firstOrNull;
+    if (x == null || x.local || id.startsWith('local-')) return null;
+    final m = x.m;
     final c = d.chat;
     final write = c != null && !c.gone && !c.blocked && !c.request && c.suspended != true;
-    await showMessageMenu(
-      context,
-      bubble: at,
-      mine: m.mine,
+    final live = m.deleted != true;
+    final edit = write &&
+        editBlock(
+              mine: m.mine,
+              kind: m.kind,
+              createdAt: m.createdAt,
+              now: DateTime.now(),
+              deleted: m.deleted == true,
+              forwarded: m.forwarded == true,
+              card: m.card != null,
+              fileKind: m.attachment?.kind,
+            ) ==
+            null;
+    return HeldActs(
       what: peopleLine(m),
+      mine: m.mine,
       mineEmoji: m.myReaction,
-      onReact: write && m.deleted != true ? (e) => d.react(m, e) : null,
-      items: [
-        if (write && m.deleted != true) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
-        if (m.deleted != true && m.card == null && m.body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.body)), done: 'Copied'),
-        if (m.deleted != true && m.card == null && m.body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, d.auth, m.body)),
+      onReact: write && live ? (e) => d.react(m, e) : null,
+      reply: write && live ? () => setState(() => _reply = m) : null,
+      words: live && m.card == null ? m.body : '',
+      edit: edit ? () => _startEdit(m) : null,
+      forward: live && m.card?.type != 'split',
+      star: live ? () => d.star(m) : null,
+      starred: m.starred == true,
+      delete: true,
+      more: [
+        if (live && m.card == null && m.body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, d.auth, m.body)),
         // A photo (reading account details from photos): read on the phone.
-        if (m.deleted != true && m.card == null && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/'))
+        if (live && m.card == null && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/'))
           ...photoAccountItems(
             context,
             d.auth,
             '${d.base}/files/${Uri.encodeComponent(m.id)}',
             from: (kind: 'person', chat: d.id, message: m.id, from: m.mine ? '' : d.name),
           ),
-        if (m.deleted != true && m.card?.type != 'split') MenuItem('forward', 'Forward', () => _forward(m)),
-        if (m.deleted != true) MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => d.star(m)),
-        MenuItem('trash', 'Delete', () => _delete(m), danger: true, separated: true),
       ],
     );
   }
 
-  Future<void> _forward(PeopleMessage m) async {
-    if (m.forwardedMany == true) {
+  Future<void> _forward(List<PeopleMessage> all) async {
+    if (all.isEmpty) return;
+    final many = all.any((m) => m.forwardedMany == true);
+    if (many) {
       showTkToast(context, 'This message has been forwarded many times. It can go to one chat at a time.');
     }
-    final to = await pickChatsAndGroups(context, d.auth, title: 'Forward to', what: peopleLine(m), max: m.forwardedMany == true ? 1 : 5, exceptChat: d.id);
+    final to = await pickChatsAndGroups(context, d.auth, title: 'Forward to', what: all.length == 1 ? peopleLine(all.single) : '${all.length} messages', max: many ? 1 : 5, exceptChat: d.id);
     if (to == null || (to.chats.isEmpty && to.groups.isEmpty) || !mounted) return;
-    // To people chats alone as before; with a group, the one forward.
-    final words = to.groups.isEmpty ? await d.forward(m, to.chats) : await d.forwardAll(m, to);
-    if (mounted) showTkToast(context, words, error: !words.startsWith('Forwarded'));
+    String? words;
+    for (final m in all) {
+      // To people chats alone as before; with a group, the one forward.
+      final said = to.groups.isEmpty ? await d.forward(m, to.chats) : await d.forwardAll(m, to);
+      if (words == null || !said.startsWith('Forwarded')) words = said;
+      if (!said.startsWith('Forwarded')) break;
+    }
+    if (mounted && words != null) showTkToast(context, words, error: !words.startsWith('Forwarded'));
   }
 
-  Future<void> _delete(PeopleMessage m) async {
-    final everyone = d.canDeleteForEveryone(m);
+  Future<void> _delete(List<PeopleMessage> all) async {
+    if (all.isEmpty) return;
+    // For everyone only when each of them may be.
+    final everyone = all.every(d.canDeleteForEveryone);
     // The app's sheet of actions (groups.dart pickAction), red as deleting.
     final choice = await pickAction(
       context,
-      title: 'Delete this message?',
+      title: all.length == 1 ? 'Delete this message?' : 'Delete ${all.length} messages?',
       // §7: delete for everyone removes their copy, not what they did with
       // it before.
       note: everyone ? deleteForEveryoneNote : null,
       actions: [('me', 'Delete for me', 'b-x', true), if (everyone) ('everyone', 'Delete for everyone', 'b-x-ring', true)],
     );
     if (choice == null || !mounted) return;
-    final ok = await d.delete(m, everyone: choice == 'everyone');
+    var ok = true;
+    for (final m in all) {
+      ok = await d.delete(m, everyone: choice == 'everyone') && ok;
+    }
     _say(ok, choice == 'everyone' ? 'Deleted for everyone' : 'Deleted for you');
   }
 
@@ -1117,7 +1194,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                     color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
-                      child: ChatHeadBar(
+                      child: SelectionHead(selection: _sel, child: ChatHeadBar(
                         onBack: widget.onBack,
                         onMore: c == null ? null : _menu,
                         onAvatar: c == null ? null : _info,
@@ -1127,14 +1204,14 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                         title: name,
                         typing: d.typingNow && !d.offline,
                         subtitle: peopleHeadLine(c, now, offline: d.offline, person: d.person),
-                      ),
+                      )),
                     ),
                   ),
                   if (c != null && c.request) _RequestNote(name: name),
                   Expanded(
                     child: d.missing
                         ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('This chat is no longer here.', textAlign: TextAlign.center, style: tkHint(t))))
-                        : ThreadView<PeopleLine>(
+                        : SelectionScope(selection: _sel, child: ThreadView<PeopleLine>(selection: _sel, 
                             // A jump places the thread again.
                             key: ValueKey('thread ${d.focusRound}'),
                             // Opened at a message: shown once it is read.
@@ -1161,7 +1238,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                                 padding: EdgeInsets.only(top: first ? 6 : 0),
                                 child: BubbleHold(
                                   label: m.mine ? 'Your message' : 'Message from $name',
-                                  onHold: x.local ? null : (at) => _hold(m, at),
+                                  onHold: x.local ? null : (_) => _sel.hold(m.id),
                                   onReply: canSend && !x.local && m.deleted != true ? () => setState(() => _reply = m) : null,
                                   child: PeopleBubble(
                                     line: x,
@@ -1169,6 +1246,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                                     last: last,
                                     other: name,
                                     files: d.files,
+                                    previewPath: '${d.base}/previews/${Uri.encodeComponent(m.id)}',
                                     quote: quoted,
                                     quoteMissing: m.replyTo != null && quoted == null,
                                     readTicks: d.readTicks,
@@ -1186,7 +1264,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                                 ),
                               );
                             },
-                          ),
+                          )),
                   ),
                   if (d.toStanding)
                     _Note(
@@ -1213,11 +1291,20 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                       recorder: widget.recorder,
                       replying: _reply == null ? null : (_reply!.mine ? 'your message: ' : '$name: ') + peopleLine(_reply!),
                       onCancelReply: () => setState(() => _reply = null),
+                      editing: _editing,
+                      onSaveEdit: _saveEdit,
+                      onCancelEdit: () {
+                        setState(() => _editing = null);
+                        _text.clear();
+                      },
                       onTools: _tools,
+                      linkPreview: _linkPreview,
                       onSend: (text, file) {
                         final reply = _reply;
                         setState(() => _reply = null);
-                        d.send(text, file: file, reply: reply);
+                        final preview = file == null ? _linkPreview.choice(text) : null;
+                        _linkPreview.reset();
+                        d.send(text, file: file, reply: reply, preview: preview);
                       },
                     )
                   else
@@ -1272,8 +1359,12 @@ class PeopleBubble extends StatelessWidget {
     this.head,
     this.quoteName,
     this.spans,
+    this.previewPath,
   });
   final PeopleLine line;
+
+  /// Where its link card's picture is (the chat's previews route).
+  final String? previewPath;
 
   /// Over the rest inside the bubble: who wrote it (a group's sender).
   final Widget? head;
@@ -1313,6 +1404,7 @@ class PeopleBubble extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (m.starred == true) ...[Semantics(label: 'Starred', child: TkIcon('star', size: 12, stroke: 2, color: meta)), const SizedBox(width: 3)],
+        ...editedMark(deleted ? null : m.editedAt, meta),
         Text(clock(m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
         if (mine) ...[const SizedBox(width: 4), PeopleTicks(sending: line.local, status: m.status, readTicks: readTicks, meta: meta)],
       ],
@@ -1365,6 +1457,8 @@ class PeopleBubble extends StatelessWidget {
               ?head,
               ?forwarded,
               ?q,
+              // The first link's card, at the top as on WhatsApp.
+              if (m.preview != null && !deleted && !line.local) LinkPreviewCard(preview: m.preview!, transport: files.transport, path: previewPath),
               if (a != null) AttachmentView(m: doorFileMessage(id: m.id, mine: mine, a: a, at: m.createdAt), files: files, other: other, room: room, local: line.file),
               if (place != null)
                 // Opens in the phone's own map app.
@@ -1394,9 +1488,8 @@ class PeopleBubble extends StatelessWidget {
               if (deleted)
                 Text('This message was deleted', style: tkText(size: 15, lineHeight: 23 / 16, color: meta).copyWith(fontStyle: FontStyle.italic))
               else if (words.isNotEmpty)
-                spans == null
-                    ? Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: ink))
-                    : Text.rich(spans!(words, tkText(size: 16, lineHeight: 23 / 16, color: ink))),
+                // Web addresses open in the browser tab; @mentions keep their mark.
+                LinkedText(words, style: tkText(size: 16, lineHeight: 23 / 16, color: ink), plain: spans),
             ],
           );
         },

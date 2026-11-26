@@ -43,9 +43,11 @@ import { useThread } from "../lib/useThread";
 import { EmptyState, ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
 import { CustomerInvoiceCard } from "./PayByTransfer";
-import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
+import { BubbleShell, CopyItem, EditedMark, EditItem, PopItem, Ticks } from "./BubbleShell";
+import { canEdit, editTarget, lastEditable, saveEdit } from "../lib/edits";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
+import { LinkCard, LinkedWords, type PreviewChoice } from "./ChatLinks";
 import { ChatHead } from "./ChatHead";
 import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
@@ -535,7 +537,7 @@ export function PersonChatPage() {
     void post(`${base}/typing`).catch(() => undefined);
   };
 
-  const send = async (text: string, file?: File) => {
+  const send = async (text: string, file?: File, linkPreview?: PreviewChoice) => {
     const client = file ? `${Date.now()}-${++localN}` : clientFor(kept.current, text, () => `${Date.now()}-${++localN}`);
     kept.current = undefined;
     const preview = file ? await asDataURL(file) : undefined;
@@ -560,7 +562,7 @@ export function PersonChatPage() {
         if (text) form.append("text", text);
         form.append("client_id", client);
         out = await upload<PersonMessage>(`${base}/files`, form);
-      } else out = await post<PersonMessage>(`${base}/messages`, { text, client_id: client });
+      } else out = await post<PersonMessage>(`${base}/messages`, { text, client_id: client, preview: linkPreview });
       setMessages((cur) => mergeMessages((cur ?? []).filter((m) => m.id !== mine.id), [out]));
     } catch (e) {
       // Not sent: the words come back to the box, and why is said. When
@@ -603,6 +605,10 @@ export function PersonChatPage() {
       }
     })();
   const composer = useComposer<never>({
+    // Editing a sent message (chat-previews-and-editing.md §3.2).
+    onEdit: (t, text) =>
+      void saveEdit({ url: `${base}/messages/${t.id}`, t, text, set: setMessages, keepWords: (w) => composer.keepWords(w) }),
+    lastEditable: () => lastEditable(messages),
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
     // Saved things (saved objects S1): a text's words into the box; the
@@ -611,9 +617,10 @@ export function PersonChatPage() {
     onType: typing,
     onSend: (s) => {
       setSendError(undefined);
-      void send(s.text, s.file);
+      void send(s.text, s.file, s.preview);
     },
     enabled: !!c && !c.blocked && !c.blocked_you && !erased,
+    linkChat: `door:${id}`,
     // One of their tools opens as the tools menu closes: one sheet in
     // place of another, so the focus stays in it, not the box behind.
     closes: [!!tool || !!their, reporting, !!sharing],
@@ -803,6 +810,7 @@ export function PersonChatPage() {
                   actions: (
                     <>
                       {words && <CopyItem text={words} />}
+                      {canEdit(m) && <EditItem onClick={() => (close(), composer.startEdit(editTarget(m)))} />}
                       {words && <SaveAsItem text={words} onSave={saveAs.fromWords} close={close} label={file ? "Save the words as…" : "Save as…"} />}
                       {file && (
                         <PopItem icon="note" disabled={saveAs.fileBusy} onClick={() => (close(), saveAs.fromFile(personFileURL(id, m.id), file.name ?? "File", file.type))}>
@@ -816,6 +824,7 @@ export function PersonChatPage() {
               })()}
               after={
                 <span className={inline ? "stamp inline" : "stamp"}>
+                  <EditedMark at={m.edited_at} />
                   <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
                     {clock(m.created_at)}
                   </time>
@@ -868,11 +877,12 @@ export function PersonChatPage() {
                   }
                 />
               )}
-              {m.attachment && <AppAttachmentView a={m.attachment} src={m.local ? undefined : personFileURL(id, m.id)} preview={m.localPreview} who={name} mine={m.mine} />}
+              {m.attachment && <AppAttachmentView a={m.attachment} at={m.created_at} src={m.local ? undefined : personFileURL(id, m.id)} preview={m.localPreview} who={name} mine={m.mine} />}
+              {m.preview && !m.local && <LinkCard p={m.preview} src={`/v1/me/chats/${encodeURIComponent(id)}/previews/${encodeURIComponent(m.id)}`} />}
               {caption && (
                 <span className="text">
-                  {caption}
-                  {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
+                  <LinkedWords text={caption} />
+                  {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}${m.edited_at ? " edited" : ""}`} aria-hidden="true" />}
                 </span>
               )}
               {warn && (

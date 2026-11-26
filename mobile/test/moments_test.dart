@@ -129,6 +129,11 @@ void main() {
         'created_at': f.at.add(const Duration(minutes: 1)).toUtc().toIso8601String(),
         'card': {...bill['card'] as Map<String, dynamic>, 'event': 'declared'},
       };
+      // The reader at the bottom: what arrives comes into sight as it is
+      // drawn (the thread builds only what is near the view).
+      final thread = t.state<ThreadViewState<ThreadMessage>>(find.byType(ThreadView<ThreadMessage>));
+      thread.scroll.jumpTo(thread.scroll.position.maxScrollExtent);
+      await t.pump();
       await t.runAsync(d.pull);
       await t.pump();
       expect(rang, ['ding']);

@@ -67,6 +67,7 @@ import { setDraft } from "../lib/drafts";
 import { toast } from "../toast";
 import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
 import { PayChatCard, PayDiaryState } from "./PayDiary";
+import { LinkedWords } from "./ChatLinks";
 
 // The Taskiem conversation on the web (business links L3, §5.5): the
 // person's own conversation with Taskiem, the one they have on WhatsApp,
@@ -115,7 +116,8 @@ function TaskiemText({
         const parts = refParts(p.text, known);
         const words = parts.map((x, j) =>
           !x.ref ? (
-            x.text
+            // Web addresses in its answers open in a new tab, as the app's do.
+            <LinkedWords key={j} text={x.text} />
           ) : x.ref.kind === "order" || x.ref.kind === "customer" ? (
             <Link
               key={j}

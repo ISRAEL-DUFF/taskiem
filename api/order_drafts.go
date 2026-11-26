@@ -418,6 +418,9 @@ func (s *Server) readCustomerOrderNow(ctx context.Context, tenant, chat, message
 			}
 			return err
 		}
+		if err := markActedTx(ctx, tx, tenant, &message); err != nil {
+			return err
+		}
 		return onto(tx, id, read.Said{Lines: said.Lines, Fulfilment: said.Fulfilment, Address: said.Address, When: said.When}, nil)
 	})
 }
@@ -441,7 +444,17 @@ func (s *Server) insertDraftTx(ctx context.Context, tx pgx.Tx, d *draftRow, by s
 	if tag.RowsAffected() == 0 {
 		return errDraftOpen
 	}
-	return nil
+	return markActedTx(ctx, tx, d.tenant, d.message)
+}
+
+// markActedTx marks a customer's message Taskiem read an order from: its
+// words are then kept as they were (an edit is refused, taskiem_acted).
+func markActedTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, message *uuid.UUID) error {
+	if message == nil {
+		return nil
+	}
+	_, err := tx.Exec(ctx, `UPDATE customer_messages SET acted_at = COALESCE(acted_at, now()) WHERE tenant_id = $1 AND id = $2`, tenant, *message)
+	return err
 }
 
 var errDraftOpen = customerSendErr{http.StatusConflict, "this customer already has an order being worked on; finish or drop it first"}

@@ -374,7 +374,7 @@ func (s *Server) groupReportTx(ctx context.Context, tx pgx.Tx, person uuid.UUID,
 		return uuid.Nil, err
 	}
 	rows, err := tx.Query(ctx, `SELECT x.id, x.sender_id, x.kind, x.sealed, x.attachment, x.deleted_at IS NOT NULL, x.created_at, f.type, f.size
-		FROM group_messages x LEFT JOIN group_files f ON f.group_id = x.group_id AND f.message_id = x.id
+		FROM group_messages x LEFT JOIN group_files f ON f.group_id = x.group_id AND f.message_id = x.id AND f.kind = 'file'
 		LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
 		WHERE x.group_id = $2 AND x.kind <> 'event' AND k.hidden_at IS NULL ORDER BY x.created_at DESC, x.id DESC LIMIT 20`, person, g.ID)
 	if err != nil {
@@ -460,7 +460,7 @@ func (s *Server) groupReportTx(ctx context.Context, tx pgx.Tx, person uuid.UUID,
 			continue
 		}
 		var sealed []byte
-		if err := tx.QueryRow(ctx, `SELECT sealed FROM group_files WHERE group_id = $1 AND message_id = $2`, g.ID, f.id).Scan(&sealed); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT sealed FROM group_files WHERE group_id = $1 AND message_id = $2 AND kind = 'file'`, g.ID, f.id).Scan(&sealed); err != nil {
 			return uuid.Nil, err
 		}
 		data, err := peoplechats.Open(key, g.ID, groupFileRow(f.id), sealed)

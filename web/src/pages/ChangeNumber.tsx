@@ -10,7 +10,7 @@ import { CodeField, codeDigits, useCountdown } from "./WayIn";
 // Settings > Phone > Change number (docs/spec/taskiem-for-everyone.md §5.5):
 // a code to the new number, and where this device has not proved itself, a
 // code to the old one too, or another proof (a passkey, an email link, the
-// chat PIN). The account keeps everything.
+// password; never the PIN). The account keeps everything.
 
 interface Started {
   sent_via: string;
@@ -72,7 +72,7 @@ export function ChangeNumber({ onClose }: { onClose: () => void }) {
   if (step === "proof")
     return (
       <ProofStep
-        ways={me?.second_proof?.ways ?? { passkey: false, email: false, pin: false }}
+        ways={me?.second_proof?.ways ?? { passkey: false, email: false, password: false }}
         onClose={() => setStep("old")}
         onProved={async () => {
           setNeedsOld(false);

@@ -20,7 +20,7 @@ import 'looks.dart';
 import 'my_chats_test.dart' show answer, chat, conversation, drain, openChat, phone, press, settle, typeIn;
 import 'saved_accounts_test.dart' show field;
 import 'saved_picks_test.dart' show thing;
-import 'support.dart' show loadFonts;
+import 'support.dart' show loadFonts, chooseHeld, heldActions;
 
 final _png = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
 
@@ -50,7 +50,8 @@ void main() {
     await openChat(t, api);
     await t.longPress(find.text('Or pay to 0123456789 GTBank, Ngozi'));
     await settle(t);
-    await press(t, find.text('Save as…'));
+    await chooseHeld(t, 'Save as…');
+    await settle(t);
     final fields = [for (final e in t.widgetList<EditableText>(find.descendant(of: find.byType(SavedAccountSheet), matching: find.byType(EditableText)))) e.controller.text];
     expect(fields, containsAll(['Ngozi', '0123456789']));
     await drain(t);
@@ -66,8 +67,9 @@ void main() {
     await openChat(t, api);
     await t.longPress(find.text('Menu.pdf'));
     await settle(t);
-    expect(find.text('Save the words as…'), findsOneWidget);
-    await press(t, find.text('Save the file as…'));
+    expect(heldActions(t), contains('Save the words as…'));
+    await chooseHeld(t, 'Save the file as…');
+    await settle(t);
     expect(api.sent('POST', '/v1/me/saved/uploads'), hasLength(1));
     expect(find.byType(SavedFileSheet), findsOneWidget);
     expect(find.text('Menu.pdf · 117 KB'), findsOneWidget);

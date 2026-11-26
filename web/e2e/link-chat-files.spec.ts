@@ -172,7 +172,7 @@ test("a photo with a caption, a PDF and a voice note", async ({ browser }) => {
   });
   await expect(pane.getByTestId("chat-attaching")).toContainText("waybill.pdf");
   await pane.getByRole("button", { name: "Send" }).click();
-  await expect(mine.getByRole("link", { name: /waybill\.pdf/ })).toBeVisible();
+  await expect(mine.getByRole("button", { name: /^Open waybill\.pdf/ })).toBeVisible();
 
   // A voice note: recorded, done, then sent.
   await pane.getByRole("button", { name: "Record a voice note" }).click();
@@ -220,7 +220,7 @@ test("a photo with a caption, a PDF and a voice note", async ({ browser }) => {
   await expect(media).toContainText("Media and files");
   await expect(media.getByTestId("info-media")).toContainText("4");
   await media.getByTestId("info-media").click(); // opens: every picture, voice note and file
-  await expect(media.getByRole("link", { name: /waybill\.pdf/ })).toBeVisible();
+  await expect(media.getByRole("button", { name: /^Open waybill\.pdf/ })).toBeVisible();
   await axeBoth(buyer, "the contact info with its media");
 });
 

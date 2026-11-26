@@ -235,6 +235,22 @@ void main() {
     expect(find.text('Use my passkey or PIN instead'), findsNothing);
   });
 
+  testWidgets('only a passkey on the account: never asked for it; Set my PIN instead', (t) async {
+    phone(t);
+    final api = _Api();
+    api.routes['GET /v1/me/fingerprint'] = (_) => _me([], proofs: ['passkey']);
+    await openSheet(t, api, payment('p5'));
+    await t.tap(find.text('Pay by fingerprint from now on'));
+    await settle(t);
+    expect(find.text('Set your PIN first'), findsOneWidget);
+    expect(find.text('Set my PIN'), findsOneWidget);
+    expect(find.text('Confirm with my passkey'), findsNothing);
+    expect(find.text('Use my passkey instead'), findsNothing);
+    await snap(t, 'fingerprint-set-pin-first');
+    await t.tap(find.text('Not now'));
+    await settle(t);
+  });
+
   testWidgets('no key here: Pay by fingerprint from now on turns it on with the PIN, then Pay uses it', (t) async {
     phone(t);
     final api = _Api();

@@ -252,26 +252,36 @@ void main() {
     await drain(t);
   });
 
-  testWidgets('Change PIN with the passkey sends {pin, passkey}; a code instead is offered', (t) async {
+  testWidgets('Change PIN: a code to the phone; a passkey is never offered in the app', (t) async {
     phone(t);
     final api = you();
     api.routes['GET /v1/me/pin'] = (_) => pin(ways: const ['code', 'passkey']);
-    api.routes['POST /v1/me/step-up/options'] = (_) => {
-      'publicKey': {'challenge': 'ch', 'rpId': 'taskiem.test'},
-    };
+    api.routes['POST /v1/me/pin/code'] = (_) => answer(_sentCode(), 202);
     api.routes['PUT /v1/me/pin'] = (_) => pin(ways: const ['code', 'passkey']);
     await _page(t, api, passkey: true);
     await press(t, find.text('Change PIN'));
-    expect(find.text('Use a code to my phone instead'), findsOneWidget);
+    expect(find.text('Use my passkey instead'), findsNothing);
+    expect(find.bySemanticsLabel('Confirm with your passkey and save'), findsNothing);
     await _pin(t, '4027', '4027');
     await snap(t, 'pin-change');
-    await press(t, find.bySemanticsLabel('Confirm with your passkey and save'));
-    expect(_body(api, 'POST', '/v1/me/step-up/options'), {'operation': 'account.reauth', 'target': 'pin.set'});
-    expect(keys.asked, hasLength(1));
-    final put = _body(api, 'PUT', '/v1/me/pin');
-    expect(put['pin'], '4027');
-    expect((put['passkey'] as Map)['id'], 'k1');
+    await press(t, find.bySemanticsLabel('Send me a code'));
+    await typeIn(t, find.byKey(const ValueKey('pin-code')), '482913');
+    await press(t, find.bySemanticsLabel('Save the new PIN'));
+    expect(_body(api, 'PUT', '/v1/me/pin'), {'pin': '4027', 'code': '482913'});
+    expect(keys.asked, isEmpty);
     expect(find.text('Your new PIN is saved. It can pay now.'), findsOneWidget);
+    await drain(t);
+  });
+
+  testWidgets('only a passkey on the account: Add my phone, not the passkey', (t) async {
+    phone(t);
+    final api = you();
+    api.routes['GET /v1/me/pin'] = (_) => pin(set: false, ways: const ['passkey']);
+    await _page(t, api, passkey: true);
+    expect(find.text('Add your phone first'), findsOneWidget);
+    expect(find.bySemanticsLabel('Add my phone'), findsWidgets);
+    await snap(t, 'pin-add-phone');
+    expect(find.bySemanticsLabel('Confirm with your passkey and save'), findsNothing);
     await drain(t);
   });
 
@@ -285,6 +295,7 @@ void main() {
     await _page(t, api);
     await press(t, find.text('Change PIN'));
     expect(find.text('Use a code to my phone instead'), findsNothing);
+    expect(find.text('Use my passkey instead'), findsNothing);
     await _pin(t, '4027', '4027');
     await press(t, find.bySemanticsLabel('Send me a code'));
     await typeIn(t, find.byKey(const ValueKey('pin-code')), '482913');

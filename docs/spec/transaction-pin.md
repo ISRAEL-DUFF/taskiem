@@ -4,6 +4,13 @@ The founder's decisions of 25 November 2026, numbers 1 and 2. They change
 the PIN of [paying people](chat-pay-people.md) (Settled row 3) and of
 [approvals on WhatsApp](../whatsapp.md#approval-pin).
 
+**The PIN is for paying and approving only.** Later the same day the
+founder decided it is no longer a second proof when signing in on a new
+device: it is set with a code to the same phone, so it proves no more than
+that code. The proofs are a passkey, a link to the email, or the password
+([taskiem-for-everyone.md §5.4](taskiem-for-everyone.md), "As built:
+signing in without the PIN").
+
 ## What was decided
 
 1. **Four digits, one PIN.** The one PIN a person has (`whatsapp_pins`)

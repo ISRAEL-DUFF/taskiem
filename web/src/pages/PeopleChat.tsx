@@ -27,6 +27,7 @@ import {
   mergePeople,
   messageLine,
   peopleFileURL,
+  peoplePreviewURL,
   PEOPLE_TRANSFER_WARNING,
   phoneWords,
   photoOf,
@@ -60,9 +61,11 @@ import type { PersonOrderDetail, PersonOrders } from "../lib/youorders";
 import { EmptyState, ErrorBox, fmtTime, Items, Modal, Row, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView } from "./AppCards";
 import { BasketCardBody } from "./Basket";
-import { BubbleShell, CopyItem, PopItem } from "./BubbleShell";
+import { BubbleShell, CopyItem, EditedMark, EditItem, PopItem } from "./BubbleShell";
+import { canEdit, editTarget, lastEditable, saveEdit } from "../lib/edits";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
+import { LinkCard, LinkedWords, type PreviewChoice } from "./ChatLinks";
 import { ChatHead } from "./ChatHead";
 import { ChatStream } from "./ChatStream";
 import { useConfirm } from "./ConfirmSheet";
@@ -303,7 +306,7 @@ export function PeopleChatPage() {
       .finally(() => (loadingOlder.current = false));
   };
 
-  const send = async (text: string, file?: File, reply?: PeopleMessage) => {
+  const send = async (text: string, file?: File, reply?: PeopleMessage, linkPreview?: PreviewChoice) => {
     setProblem(undefined);
     gate.current.sent();
     const client = file ? `${Date.now()}-${++localN}` : clientFor(kept.current, text, () => `${Date.now()}-${++localN}`);
@@ -332,7 +335,7 @@ export function PeopleChatPage() {
         form.append("client_id", client);
         if (reply) form.append("reply_to", reply.id);
         out = await upload<PeopleMessage>(`${base}/files`, form);
-      } else out = await post<PeopleMessage>(`${base}/messages`, { text, client_id: client, reply_to: reply?.id });
+      } else out = await post<PeopleMessage>(`${base}/messages`, { text, client_id: client, reply_to: reply?.id, preview: linkPreview });
       setMessages((cur) => mergePeople((cur ?? []).filter((m) => m.id !== mine.id), [out]));
       setSendError(undefined);
       // The first message to someone (a request now waiting for them), or
@@ -413,6 +416,10 @@ export function PeopleChatPage() {
       }
     })();
   const composer = useComposer<PeopleMessage>({
+    // Editing a sent message (chat-previews-and-editing.md §3.2).
+    onEdit: (t, text) =>
+      void saveEdit({ url: `${base}/messages/${t.id}`, t, text, set: setMessages, keepWords: (w) => composer.keepWords(w) }),
+    lastEditable: () => (c?.blocked || c?.gone ? undefined : lastEditable(messages)),
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
     // Saved texts (saved objects S1): their words into the box.
@@ -426,9 +433,10 @@ export function PeopleChatPage() {
     },
     onSend: (s) => {
       setSendError(undefined);
-      void send(s.text, s.file, s.reply);
+      void send(s.text, s.file, s.reply, s.preview);
     },
     enabled: !!c && !c.blocked && !c.gone && !c.suspended && !c.request,
+    linkChat: `people:${id}`,
     closes: [!!sheet],
   });
 
@@ -666,6 +674,7 @@ export function PeopleChatPage() {
                             </PopItem>
                           )}
                           {!card && m.body && <CopyItem text={m.body} />}
+                          {!c?.blocked && !c?.gone && canEdit(m) && <EditItem onClick={() => (close(), composer.startEdit(editTarget(m)))} />}
                           {!card && m.body && <SaveAsItem text={m.body} onSave={saveAs.fromWords} close={close} />}
                           {card?.type !== "split" && card?.type !== "basket" && !c?.request && (
                             <PopItem icon="forward" onClick={() => (close(), setSheet({ k: "forward", m }))}>
@@ -692,6 +701,7 @@ export function PeopleChatPage() {
                         <Icon name="star" />
                       </span>
                     )}
+                    <EditedMark at={m.edited_at} />
                     <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
                       {clock(m.created_at)}
                     </time>
@@ -735,12 +745,13 @@ export function PeopleChatPage() {
                   busy={act.busy}
                 />
               )}
-              {m.attachment && !m.deleted && <AppAttachmentView a={m.attachment} src={m.local ? undefined : peopleFileURL(id, m.id)} preview={m.localPreview} who={name} mine={m.mine} />}
+              {m.attachment && !m.deleted && <AppAttachmentView a={m.attachment} at={m.created_at} src={m.local ? undefined : peopleFileURL(id, m.id)} preview={m.localPreview} who={name} mine={m.mine} />}
               {m.location && !m.deleted && <PlaceView place={m.location} />}
+              {m.preview && !m.deleted && !m.local && <LinkCard p={m.preview} src={peoplePreviewURL(id, m.id)} />}
               {caption && (
                 <span className="text">
-                  {caption}
-                  {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
+                  <LinkedWords text={caption} />
+                  {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}${m.edited_at ? " edited" : ""}`} aria-hidden="true" />}
                 </span>
               )}
               {warnTransfer && (

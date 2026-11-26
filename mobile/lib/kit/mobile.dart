@@ -42,12 +42,199 @@ class TkRoute<T> extends PageRouteBuilder<T> {
   /// Only a screen over it moves it aside, not a modal or a sheet.
   @override
   bool canTransitionTo(TransitionRoute<dynamic> nextRoute) => nextRoute is TkRoute;
+
+  /// The [TkRoute]s sliding in or out now: what is under them waits
+  /// ([TkCoveredBuilder]).
+  static final sliding = ValueNotifier<int>(0);
+  bool _sliding = false;
+
+  void _slide(AnimationStatus s) {
+    if (s.isAnimating == _sliding) return;
+    _sliding = s.isAnimating;
+    sliding.value += _sliding ? 1 : -1;
+  }
+
+  @override
+  void install() {
+    super.install();
+    animation!.addStatusListener(_slide);
+  }
+
+  @override
+  void dispose() {
+    animation?.removeStatusListener(_slide);
+    if (_sliding) sliding.value -= 1;
+    _sliding = false;
+    super.dispose();
+  }
+
+  /// Android's back gesture (predictive back): the screen follows the
+  /// finger ([_TkBackGesture]); let go, it slides on out from where it is,
+  /// rather than first jumping back to where it started.
+  @override
+  void handleCommitBackGesture() {
+    final c = controller;
+    if (isCurrent) navigator?.pop();
+    if (c != null && c.isAnimating) {
+      late final AnimationStatusListener done;
+      done = (_) {
+        navigator?.didStopUserGesture();
+        c.removeStatusListener(done);
+      };
+      c.addStatusListener(done);
+    } else {
+      navigator?.didStopUserGesture();
+    }
+  }
+
+  @override
+  Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) =>
+      _TkBackGesture(route: this, child: super.buildTransitions(context, animation, secondaryAnimation, child));
+}
+
+/// Android's predictive back gesture on a [TkRoute] (as Material's
+/// PredictiveBackPageTransitionsBuilder, which the app does not use): the
+/// screen slides with the finger, back in if the gesture is let go, out if
+/// it is done. The Back button and the app's own back arrow pop as before,
+/// with the slide out.
+class _TkBackGesture extends StatefulWidget {
+  const _TkBackGesture({required this.route, required this.child});
+  final TkRoute<dynamic> route;
+  final Widget child;
+
+  @override
+  State<_TkBackGesture> createState() => _TkBackGestureState();
+}
+
+class _TkBackGestureState extends State<_TkBackGesture> with WidgetsBindingObserver {
+  bool _on = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  bool handleStartBackGesture(PredictiveBackEvent backEvent) {
+    final r = widget.route;
+    _on = !backEvent.isButtonEvent && r.isCurrent && r.popGestureEnabled;
+    if (_on) r.handleStartBackGesture(progress: 1 - backEvent.progress);
+    return _on;
+  }
+
+  @override
+  void handleUpdateBackGestureProgress(PredictiveBackEvent backEvent) {
+    if (_on) widget.route.handleUpdateBackGestureProgress(progress: 1 - backEvent.progress);
+  }
+
+  @override
+  void handleCancelBackGesture() {
+    if (_on) widget.route.handleCancelBackGesture();
+    _on = false;
+  }
+
+  @override
+  void handleCommitBackGesture() {
+    if (_on) widget.route.handleCommitBackGesture();
+    _on = false;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// A [ListenableBuilder] for a screen that others slide over (the chats
+/// list under a chat): while one slides over it or back off it, what
+/// changes waits for the slide to end, so the list is not rebuilt under a
+/// chat sliding away (the founder's feedback of 25 November 2026: "going
+/// back doesn't visibly slide out").
+class TkCoveredBuilder extends StatefulWidget {
+  const TkCoveredBuilder({super.key, required this.listenable, required this.builder});
+  final Listenable listenable;
+  final WidgetBuilder builder;
+
+  @override
+  State<TkCoveredBuilder> createState() => _TkCoveredBuilderState();
+}
+
+class _TkCoveredBuilderState extends State<TkCoveredBuilder> {
+  bool _waiting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.listenable.addListener(_changed);
+    TkRoute.sliding.addListener(_moved);
+  }
+
+  @override
+  void didUpdateWidget(TkCoveredBuilder old) {
+    super.didUpdateWidget(old);
+    if (old.listenable != widget.listenable) {
+      old.listenable.removeListener(_changed);
+      widget.listenable.addListener(_changed);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.listenable.removeListener(_changed);
+    TkRoute.sliding.removeListener(_moved);
+    super.dispose();
+  }
+
+  void _changed() {
+    if (TkRoute.sliding.value == 0) {
+      setState(() {});
+    } else {
+      _waiting = true;
+    }
+  }
+
+  void _moved() {
+    if (TkRoute.sliding.value == 0 && _waiting && mounted) {
+      _waiting = false;
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context);
+}
+
+/// Runs [then] once the screen [context] is on has finished sliding in (at
+/// once when it has, or it does not slide): what a chat reads besides its
+/// messages (its tags, services, tools) waits, so the slide itself has the
+/// phone to itself (the founder's feedback of 25 November 2026).
+void afterSlideIn(BuildContext context, VoidCallback then) {
+  final a = ModalRoute.of(context)?.animation;
+  if (a == null || a.status == AnimationStatus.completed) {
+    then();
+    return;
+  }
+  late final AnimationStatusListener done;
+  done = (s) {
+    if (s == AnimationStatus.forward) return;
+    a.removeStatusListener(done);
+    if (s == AnimationStatus.completed) then();
+  };
+  a.addStatusListener(done);
 }
 
 /// [TkRoute]'s motion.
 Widget tkSlide(BuildContext context, Animation<double> a, Animation<double> under, Widget child) {
   if (_still(context)) return child;
-  final inn = CurvedAnimation(parent: a, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+  final route = ModalRoute.of(context);
+  // Following a finger (Android's back gesture): as far as it has gone.
+  final dragged = route?.navigator?.userGestureInProgress ?? false;
+  final inn = dragged ? a : CurvedAnimation(parent: a, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
   final out = CurvedAnimation(parent: under, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
   return SlideTransition(
     position: Tween(begin: const Offset(1, 0), end: Offset.zero).animate(inn),

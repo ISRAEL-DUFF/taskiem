@@ -25,6 +25,7 @@ import '../kit/look.dart' show TkCallout, TkSquare;
 import '../kit/mobile.dart' show TkChips, TkFormGroup, TkListRow, TkSection;
 import '../theme/look.dart' show TkLook;
 import 'approve.dart' show TkTextBox;
+import 'linkify.dart' show findLinks;
 import 'words.dart' show clock;
 
 final _connectPath = RegExp(r'^/c/([A-Za-z0-9_-]{32})$');
@@ -42,20 +43,10 @@ bool isCanvas(Uri u) => _web(u) && _canvasPath.hasMatch(u.path);
 /// workflow's canvas. Other addresses stay words, as the web shows them.
 bool opensFromTaskiem(Uri u) => connectToken(u) != null || isCanvas(u);
 
-/// The web addresses in [text], as the server finds them (chat_history.go
-/// historyURL): a full stop, comma or bracket after one is not part of it.
-List<({int start, int end, Uri uri})> linksIn(String text) {
-  final out = <({int start, int end, Uri uri})>[];
-  for (final m in RegExp(r'https?://[^\s<>"]+').allMatches(text)) {
-    var end = m.end;
-    while (end > m.start && '.,)'.contains(text[end - 1])) {
-      end--;
-    }
-    final u = Uri.tryParse(text.substring(m.start, end));
-    if (u != null && u.host.isNotEmpty) out.add((start: m.start, end: end, uri: u));
-  }
-  return out;
-}
+/// The web addresses in [text], by the rule every chat shares
+/// (linkify.dart; chat-previews-and-editing.md §2.2): a full stop, comma or
+/// bracket after one is not part of it.
+List<({int start, int end, Uri uri})> linksIn(String text) => [for (final l in findLinks(text)) (start: l.start, end: l.end, uri: l.url)];
 
 // --- lib/connections.ts ---
 

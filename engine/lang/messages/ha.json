@@ -7544,6 +7544,10 @@
       "text": "Sai wanda ke rubuta wa kasuwancin da aka haɗa don {org} ne zai iya aika wannan.",
       "reviewed": false
     },
+    "chat.link.edited": {
+      "text": "✏️ An gyara: {words}",
+      "reviewed": false
+    },
     "chat.link.ask_what": {
       "text": "Me kuke so ku faɗa wa *{name}*? Aika *ask {name}* da saƙonku.",
       "reviewed": false

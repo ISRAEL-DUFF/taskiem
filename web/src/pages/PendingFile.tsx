@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../icons";
 import { fileSize } from "../lib/linkchat";
+import { fileLine } from "../lib/chatfiles";
+import { FileTypeIcon } from "./ChatFiles";
 
 /**
  * A file waiting for its caption (WhatsApp Web's preview): the picture
@@ -46,14 +48,20 @@ export function PendingFile({
           className="pending-photo"
         />
       )}
-      {!photo && (
+      {voice && (
         <span className="pending-icon" aria-hidden="true">
-          <Icon name={voice ? "mic" : "file"} />
+          <Icon name="mic" />
         </span>
       )}
+      {/* A PDF or a document: its type's icon and line, as the chat will
+          show it (chat-previews §1.1). */}
+      {!voice && !photo && <FileTypeIcon a={{ type: file.type, name: file.name }} />}
       <span className="quote">
-        {voice ? "Voice note" : photo ? `Photo: ${file.name}` : file.name} ·{" "}
-        {fileSize(file.size)}
+        {voice
+          ? `Voice note · ${fileSize(file.size)}`
+          : photo
+            ? `Photo: ${file.name} · ${fileSize(file.size)}`
+            : `${file.name} · ${fileLine({ kind: "file", type: file.type, name: file.name, size: file.size })}`}
       </span>
       <button type="button" className="small" onClick={onRemove}>
         Remove<span className="sr-only"> the file</span>

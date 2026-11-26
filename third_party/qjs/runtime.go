@@ -27,6 +27,11 @@ var (
 	compiledQJSModule   wazero.CompiledModule
 	cachedRuntimeConfig wazero.RuntimeConfig
 	cachedBytesHash     uint64
+	// cachedQJSBytes is the module compiled into compiledQJSModule: each
+	// runtime compiles it again for itself, from the shared cache (Taskiem
+	// fork: wazero 1.10 and later refuse a module compiled by another
+	// runtime, "signature mismatch").
+	cachedQJSBytes []byte
 	compilationMutex    sync.Mutex
 )
 
@@ -122,6 +127,7 @@ func createGlobalCompiledModule(
 		}
 
 		cachedBytesHash = currentHash
+		cachedQJSBytes = qjsBytes
 	}
 
 	return nil
@@ -197,9 +203,15 @@ func New(options ...Option) (runtime *Runtime, err error) {
 		runtime.memCap = &capAllocator{limit: uint64(option.MaxMemory) &^ 0xffff} //nolint:gosec // positive
 		instCtx = experimental.WithMemoryAllocator(instCtx, runtime.memCap)
 	}
+	// Taskiem fork: compiled by this runtime (from the shared compilation
+	// cache, so it is not compiled twice), as wazero requires.
+	compiled, err := runtime.wrt.CompileModule(option.Context, cachedQJSBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile qjs module: %w", err)
+	}
 	if runtime.module, err = runtime.wrt.InstantiateModule(
 		instCtx,
-		compiledQJSModule,
+		compiled,
 		modConfig,
 	); err != nil {
 		return nil, fmt.Errorf("failed to instantiate module: %w", err)

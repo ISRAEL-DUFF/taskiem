@@ -16,6 +16,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/people"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/push"
@@ -45,6 +47,8 @@ type groupMsgRow struct {
 	// screen: the checks warned of it (B1): shown with the warning to the
 	// members who haven't added its sender.
 	screen     *string
+	editedAt   *time.Time
+	edits      int
 	starredAt  *time.Time
 	myReaction *string
 }
@@ -56,12 +60,13 @@ func groupMsgColsAs(a string) string {
 		a + ".sealed AS " + a + "_sealed, " + a + ".event AS " + a + "_event, " + a + ".attachment AS " + a + "_attach, " +
 		a + ".card_type AS " + a + "_card, " + a + ".reply_to AS " + a + "_reply, COALESCE(" + a + ".forwards, 0) AS " + a + "_forwards, " +
 		a + ".mentions AS " + a + "_mentions, " + a + ".deleted_at AS " + a + "_deleted, " + a + ".paid_at AS " + a + "_paid, " +
-		a + ".paid_by AS " + a + "_paid_by, COALESCE(" + a + ".created_at, 'epoch') AS " + a + "_at, " + a + ".screen AS " + a + "_screen"
+		a + ".paid_by AS " + a + "_paid_by, COALESCE(" + a + ".created_at, 'epoch') AS " + a + "_at, " + a + ".screen AS " + a + "_screen, " +
+		a + ".edited_at AS " + a + "_edited_at, COALESCE(" + a + ".edits, 0) AS " + a + "_edits"
 }
 
 func (m *groupMsgRow) dest() []any {
 	return []any{&m.id, &m.sender, &m.kind, &m.sealed, &m.evRaw, &m.attach, &m.cardType, &m.replyTo, &m.forwards, &m.mentions,
-		&m.deletedAt, &m.paidAt, &m.paidBy, &m.createdAt, &m.screen}
+		&m.deletedAt, &m.paidAt, &m.paidBy, &m.createdAt, &m.screen, &m.editedAt, &m.edits}
 }
 
 func (m *groupMsgRow) decode() {
@@ -76,7 +81,7 @@ func (m *groupMsgRow) decode() {
 // groupMsgSelect reads a group's messages for the person ($1) in a group
 // ($2), with their own star and reaction; never one deleted for them.
 // Row-level security keeps it to their time in the group.
-const groupMsgSelect = `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen" + `,
+const groupMsgSelect = `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen, x.edited_at, x.edits" + `,
 	k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1)
 	FROM group_messages x LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
 	WHERE x.group_id = $2 AND k.hidden_at IS NULL`
@@ -119,8 +124,11 @@ type groupMessage struct {
 	Card       *peopleCard     `json:"card,omitempty"`
 	Location   *peopleLocation `json:"location,omitempty"`
 	Attachment *chatAttachment `json:"attachment,omitempty"`
-	ReplyTo    *uuid.UUID      `json:"reply_to,omitempty"`
-	Forwarded  bool            `json:"forwarded,omitempty"`
+	// Preview is the first link's preview; its picture is at
+	// GET /v1/me/groups/{id}/previews/{message}.
+	Preview   *links.Preview `json:"preview,omitempty"`
+	ReplyTo   *uuid.UUID     `json:"reply_to,omitempty"`
+	Forwarded bool           `json:"forwarded,omitempty"`
 	// ForwardedMany: forwarded five or more times on its way; forwarded on
 	// to one chat at a time.
 	ForwardedMany bool `json:"forwarded_many,omitempty"`
@@ -144,6 +152,10 @@ type groupMessage struct {
 	// met".
 	Warn      bool      `json:"warn,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// EditedAt is when its sender last changed its words ("Edited"), and
+	// Edits how many times; an edit names the count it saw.
+	EditedAt *time.Time `json:"edited_at,omitempty"`
+	Edits    int        `json:"edits"`
 }
 
 // groupEventOut is an event message's what and who.
@@ -211,7 +223,8 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 	}
 	for _, m := range rows {
 		v := groupMessage{ID: m.id, GroupID: group, SenderID: m.sender, Kind: m.kind, ReplyTo: m.replyTo, Forwarded: m.forwards > 0,
-			ForwardedMany: m.forwards >= peopleForwardedMany, Mentions: m.mentions, Starred: m.starredAt != nil, CreatedAt: m.createdAt}
+			ForwardedMany: m.forwards >= peopleForwardedMany, Mentions: m.mentions, Starred: m.starredAt != nil, CreatedAt: m.createdAt,
+			EditedAt: m.editedAt, Edits: m.edits}
 		v.Mine = m.sender != nil && *m.sender == person
 		switch {
 		case m.sender != nil:
@@ -241,9 +254,9 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 		}
 		v.Reactions = reactions[m.id]
 		c, _ := openGroupSealed(key, group, m.id, m.sealed)
-		v.Body, v.Card, v.Location = c.Body, c.Card, c.Location
+		v.Body, v.Card, v.Location, v.Preview = c.Body, c.Card, c.Location, c.Preview
 		if m.attach != nil {
-			a := &chatAttachment{Name: c.Name}
+			a := &chatAttachment{Name: c.Name, Facts: media.FactsOf(m.attach)}
 			a.Kind, _ = m.attach["kind"].(string)
 			a.Type, _ = m.attach["type"].(string)
 			if n, ok := m.attach["size"].(float64); ok {
@@ -428,6 +441,8 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 	var again *groupMessage
 	var owed *groupPush
 	var held error
+	// The group a PDF's picture is kept in, once the send committed.
+	var drawIn uuid.UUID
 	err := s.peopleTx(ctx, me, func(tx pgx.Tx) error {
 		out, again, owed, held = groupMessage{}, nil, nil, nil
 		g, err := groupTx(ctx, tx, me, groupID, true)
@@ -540,12 +555,12 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 			return err
 		}
 		id := uuid.Must(uuid.NewV7())
-		content := peopleSealed{Body: d.body, Card: d.card, Location: d.location}
+		content := peopleSealed{Body: d.body, Card: d.card, Location: d.location, Preview: d.preview.view()}
 		var attach map[string]any
 		if d.file != nil {
 			content.Name = d.file.Name
-			a := d.file.view()
-			attach = map[string]any{"kind": a.Kind, "type": a.Type, "size": a.Size}
+			attach = d.file.stored()
+			drawIn = g.ID
 		}
 		var cardType *string
 		if d.card != nil {
@@ -581,6 +596,18 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 			}
 			if _, err := tx.Exec(ctx, `INSERT INTO group_files (group_id, message_id, type, size, sealed) VALUES ($1, $2, $3, $4, $5)`,
 				g.ID, id, d.file.Type, len(d.file.Data), data); err != nil {
+				return err
+			}
+		}
+		if d.preview != nil && d.preview.img != nil {
+			// The link's picture, sealed under the group's key as a file is.
+			img := d.preview.img
+			data, err := peoplechats.Seal(key, g.ID, groupLinkImageRow(id), img.Big)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO group_files (group_id, message_id, kind, type, size, sealed) VALUES ($1, $2, 'link_image', $3, $4, $5)`,
+				g.ID, id, img.Type, len(img.Big), data); err != nil {
 				return err
 			}
 		}
@@ -630,6 +657,9 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 	}
 	if owed != nil {
 		s.queueGroupPush(ctx, me, *owed)
+	}
+	if d.file != nil && drawIn != uuid.Nil {
+		s.drawLater(ctx, d.file.Type, d.file.Data, s.groupPDFCopy(me, drawIn, out.ID))
 	}
 	return out, true, nil
 }
@@ -719,6 +749,8 @@ func (s *Server) sendGroupMessage(w http.ResponseWriter, r *http.Request) {
 		Location *peopleLocation `json:"location"`
 		Card     *cardRequest    `json:"card"`
 		Mentions []uuid.UUID     `json:"mentions"`
+		// Preview: the card the composer showed ({id}), or false for none.
+		Preview previewChoice `json:"preview"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -765,6 +797,11 @@ func (s *Server) sendGroupMessage(w http.ResponseWriter, r *http.Request) {
 		if d.body == "" {
 			writeErr(w, http.StatusBadRequest, "the message is required (up to 4,000 characters)")
 			return
+		}
+		// The first link's preview, made as the words are sealed, only for
+		// a group the person can write in.
+		if previewURL(d.body, s.previewAnyPort) != "" && s.groupMaySend(r.Context(), person, chi.URLParam(r, "id")) {
+			d.preview = s.previewForSend(r.Context(), principalFrom(r.Context()), "group:"+chi.URLParam(r, "id"), "p:"+person.String(), person.String(), d.body, in.Preview)
 		}
 	}
 	m, fresh, err := s.groupSend(r.Context(), person, chi.URLParam(r, "id"), d, in.Mentions)
@@ -837,6 +874,7 @@ func (s *Server) groupFile(w http.ResponseWriter, r *http.Request) {
 	}
 	var data []byte
 	var ctype, name, kind string
+	var group, msg uuid.UUID
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		g, err := groupTx(ctx, tx, person, chi.URLParam(r, "id"), false)
 		if err != nil {
@@ -849,8 +887,11 @@ func (s *Server) groupFile(w http.ResponseWriter, r *http.Request) {
 		if m.deletedAt != nil || m.attach == nil {
 			return errDoorNone
 		}
+		if group, msg = g.ID, m.id; wantsPreview(r) {
+			return nil
+		}
 		var sealed []byte
-		if err := tx.QueryRow(ctx, `SELECT sealed, type FROM group_files WHERE group_id = $1 AND message_id = $2`, g.ID, m.id).Scan(&sealed, &ctype); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT sealed, type FROM group_files WHERE group_id = $1 AND message_id = $2 AND kind = 'file'`, g.ID, m.id).Scan(&sealed, &ctype); err != nil {
 			return err
 		}
 		key, err := s.keys().GroupKeyTx(ctx, tx, g.ID)
@@ -869,7 +910,11 @@ func (s *Server) groupFile(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
-	serveChatFile(w, data, ctype, name, kind)
+	if wantsPreview(r) {
+		s.servePDFPreview(w, r, s.groupPDFCopy(person, group, msg), s.personFail)
+		return
+	}
+	serveChatFileFor(w, r, data, ctype, name, kind)
 }
 
 // groupMessages is GET /v1/me/groups/{id}/messages?before=&starred=1: a
@@ -1619,7 +1664,7 @@ func (s *Server) searchGroups(w http.ResponseWriter, r *http.Request) {
 		}
 		cur := before
 		for round := 0; round < peopleSearchRounds; round++ {
-			sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen" + `,
+			sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen, x.edited_at, x.edits" + `,
 				k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1), x.group_id
 				FROM group_messages x LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
 				WHERE k.hidden_at IS NULL AND x.deleted_at IS NULL AND x.sealed IS NOT NULL
@@ -1697,7 +1742,7 @@ func (s *Server) starredGroups(w http.ResponseWriter, r *http.Request) {
 	out := []groupFound{}
 	more := false
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen" + `,
+		sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen, x.edited_at, x.edits" + `,
 			k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1), x.group_id
 			FROM group_marks k JOIN group_messages x ON x.group_id = k.group_id AND x.id = k.message_id
 			WHERE k.person_id = $1 AND k.starred_at IS NOT NULL AND k.hidden_at IS NULL AND x.deleted_at IS NULL`
@@ -1776,14 +1821,14 @@ func (s *Server) groupDraftOf(ctx context.Context, person, group, msg uuid.UUID)
 		if m.attach != nil {
 			var sealed []byte
 			var ctype string
-			if err := tx.QueryRow(ctx, `SELECT sealed, type FROM group_files WHERE group_id = $1 AND message_id = $2`, g.ID, m.id).Scan(&sealed, &ctype); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT sealed, type FROM group_files WHERE group_id = $1 AND message_id = $2 AND kind = 'file'`, g.ID, m.id).Scan(&sealed, &ctype); err != nil {
 				return err
 			}
 			data, err := peoplechats.Open(key, g.ID, groupFileRow(m.id), sealed)
 			if err != nil {
 				return err
 			}
-			d.file = &sentFile{Type: ctype, Name: v.Name, Data: data}
+			d.file = &sentFile{Type: ctype, Name: v.Name, Data: data, Facts: forwardedFacts(m.attach)}
 		}
 		return nil
 	})

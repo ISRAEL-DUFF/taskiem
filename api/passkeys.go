@@ -370,6 +370,7 @@ func (s *Server) passkeyRegister(w http.ResponseWriter, r *http.Request) {
 	if len(name) > 64 {
 		name = name[:64]
 	}
+	first := s.firstWayDevice(r)
 	err = s.tx(r, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(r.Context(), `INSERT INTO webauthn_credentials (id, user_id, public_key, alg, sign_count, aaguid, backup_eligible, name)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, cred.ID, p.UserID, cred.PublicKey, cred.Alg, int64(cred.SignCount), cred.AAGUID, cred.BackupEligible, name); err != nil {
@@ -385,6 +386,7 @@ func (s *Server) passkeyRegister(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.proveFirstWay(r.Context(), r, p.UserID, first, "passkey")
 	writeJSON(w, http.StatusCreated, map[string]any{"id": b64.EncodeToString(cred.ID), "name": name, "synced": cred.BackupEligible})
 }
 

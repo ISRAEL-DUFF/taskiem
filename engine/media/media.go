@@ -58,8 +58,11 @@ var (
 var wantBuckets = []bucketInfo{
 	{ID: PublicBucket, Public: true, FileSizeLimit: ptr(int64(MaxImageBytes)), AllowedMIMETypes: []string{"image/jpeg", "image/png"},
 		CacheSeconds: ptr(int64(365 * 24 * 3600))},
-	{ID: PrivateBucket, Public: false, FileSizeLimit: ptr(int64(MaxFileBytes)), AllowedMIMETypes: []string{"image/jpeg", "image/png", "application/pdf",
-		"audio/ogg", "audio/webm", "audio/mpeg", "audio/mp4"},
+	{ID: PrivateBucket, Public: false, FileSizeLimit: ptr(int64(MaxFileBytes)), AllowedMIMETypes: append([]string{"image/jpeg", "image/png", "application/pdf",
+		"audio/ogg", "audio/webm", "audio/mpeg", "audio/mp4",
+		// The pictures of PDFs' first pages, and the documents a chat
+		// accepts (docs/spec/chat-previews-and-editing.md §1).
+		"image/webp"}, DocumentTypes()...),
 		CacheSeconds: ptr(int64(0))},
 }
 
@@ -233,7 +236,8 @@ func (s *Service) ScanChatFile(ctx context.Context, data []byte) error {
 // PutChatFile checks and stores a file sent in a conversation between
 // businesses (business links L3) in the tenant's private bucket: a photo
 // (cleaned as PutImage cleans it), a PDF (refused with scripts or
-// actions), or a voice note (Ogg, WebM, MP3 or MP4 audio, by its
+// actions), a document (Word, Excel, PowerPoint, OpenDocument or text,
+// checked as CheckChatUpload checks it), or a voice note (Ogg, WebM, MP3 or MP4 audio, by its
 // container, with its tags stripped; one with a video track is refused).
 // Each business keeps its own copy, in its own storage. The caller scans
 // it first (ScanChatFile).
@@ -243,7 +247,17 @@ func (s *Service) PutChatFile(ctx context.Context, tenant uuid.UUID, data []byte
 		return File{}, err
 	}
 	if ctype == "" {
-		return s.PutFile(ctx, tenant, data)
+		if len(data) > MaxFileBytes {
+			return File{}, fmt.Errorf("%w: larger than %d MB", ErrFile, MaxFileBytes>>20)
+		}
+		doc, err := checkDocument(data)
+		if err != nil {
+			return File{}, err
+		}
+		if doc == "" {
+			return s.PutFile(ctx, tenant, data)
+		}
+		return s.putPrivate(ctx, tenant, "chat/", extsOf(doc)[0], doc, data)
 	}
 	data = clean
 	if len(data) > MaxVoiceBytes {
@@ -254,7 +268,21 @@ func (s *Service) PutChatFile(ctx context.Context, tenant uuid.UUID, data []byte
 		return File{}, err
 	}
 	ext := map[string]string{"audio/ogg": ".ogg", "audio/webm": ".webm", "audio/mpeg": ".mp3", "audio/mp4": ".m4a"}[ctype]
-	path := "chat/" + uuid.Must(uuid.NewV7()).String() + ext
+	return s.putPrivateWith(ctx, c, "chat/", ext, ctype, data)
+}
+
+// putPrivate stores bytes already checked in the tenant's private bucket,
+// under prefix, a fresh name and ext.
+func (s *Service) putPrivate(ctx context.Context, tenant uuid.UUID, prefix, ext, ctype string, data []byte) (File, error) {
+	c, _, err := s.client(ctx, tenant)
+	if err != nil {
+		return File{}, err
+	}
+	return s.putPrivateWith(ctx, c, prefix, ext, ctype, data)
+}
+
+func (s *Service) putPrivateWith(ctx context.Context, c *storage, prefix, ext, ctype string, data []byte) (File, error) {
+	path := prefix + uuid.Must(uuid.NewV7()).String() + ext
 	o, err := c.put(ctx, PrivateBucket, path, ctype, data)
 	if err != nil {
 		return File{}, err
@@ -264,6 +292,40 @@ func (s *Service) PutChatFile(ctx context.Context, tenant uuid.UUID, data []byte
 		size = int64(len(data))
 	}
 	return File{Path: path, Type: ctype, Size: size}, nil
+}
+
+// PutPDFPreview stores the picture of a PDF's first page (a WebP drawn by
+// PDFRenderer) in the tenant's private bucket, next to the file: each
+// business keeps its own copy, as it keeps the file.
+func (s *Service) PutPDFPreview(ctx context.Context, tenant uuid.UUID, webp []byte) (string, error) {
+	if http.DetectContentType(webp) != "image/webp" {
+		return "", fmt.Errorf("%w: a PDF's picture is a WebP", ErrImage)
+	}
+	f, err := s.putPrivate(ctx, tenant, "chat/preview-", ".webp", "image/webp", webp)
+	return f.Path, err
+}
+
+// PutLinkImage stores a link preview's picture, already cleaned
+// (CleanLinkImage), in the tenant's private bucket: each business keeps
+// its own copy, as it keeps a chat's files, and the picture is shown
+// through the API, never from the page's own site.
+func (s *Service) PutLinkImage(ctx context.Context, tenant uuid.UUID, data []byte, ctype string) (string, error) {
+	if ctype != "image/jpeg" && ctype != "image/png" {
+		return "", fmt.Errorf("%w: a link's picture is a JPEG or a PNG", ErrImage)
+	}
+	c, _, err := s.client(ctx, tenant)
+	if err != nil {
+		return "", err
+	}
+	ext := ".jpg"
+	if ctype == "image/png" {
+		ext = ".png"
+	}
+	path := "chat/link-" + uuid.Must(uuid.NewV7()).String() + ext
+	if _, err := c.put(ctx, PrivateBucket, path, ctype, data); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 // GetFile downloads one of the tenant's private files, for the web app to
@@ -319,6 +381,11 @@ func (s *Service) GetFile(ctx context.Context, tenant uuid.UUID, path string) ([
 	ctype := voiceType(data)
 	if ctype == "" {
 		ctype = http.DetectContentType(data)
+	}
+	if !strings.HasPrefix(ctype, "image/") && ctype != "application/pdf" {
+		if doc, err := checkDocument(data); err == nil && doc != "" {
+			ctype = doc
+		}
 	}
 	return data, ctype, nil
 }

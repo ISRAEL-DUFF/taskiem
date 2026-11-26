@@ -33,7 +33,10 @@ RUN --mount=type=secret,id=extra_ca \
     go mod download
 COPY . .
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/taskiem ./cmd/taskiem
+# nodynamic: the WebP decoder (gen2brain/webp) would otherwise dlopen libwebp
+# through purego, which makes the binary dynamically linked and unable to
+# start in the distroless static image ("exec /taskiem: no such file").
+RUN CGO_ENABLED=0 go build -trimpath -tags nodynamic -ldflags "-s -w -X main.version=${VERSION}" -o /out/taskiem ./cmd/taskiem
 # The container-step supervisor, copied into sandbox Pods by their init container (docs/container-steps.md).
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/taskiem-shim ./cmd/taskiem-shim
 RUN mkdir -p /out/archive /out/anchors

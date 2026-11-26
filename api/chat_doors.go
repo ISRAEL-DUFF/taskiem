@@ -502,6 +502,7 @@ func (s *Server) addEmail(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "a link was sent a moment ago: check your inbox, or try again in a while")
 		return
 	}
+	first := s.firstWayDevice(r)
 	var link string
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var current string
@@ -521,6 +522,9 @@ func (s *Server) addEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.background(r.Context(), "email change", func(ctx context.Context) { s.sendEmailChange(ctx, email, link) })
+	// Once its link is opened, the email proves a new device (§5.4); the
+	// device it was added on, let in without one, is proved now.
+	s.proveFirstWay(r.Context(), r, p.UserID, first, "email")
 	writeJSON(w, http.StatusAccepted, map[string]any{"status": "A link is on its way to " + email + ". Open it to confirm; it works once, for 24 hours."})
 }
 

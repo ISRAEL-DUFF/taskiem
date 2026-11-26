@@ -32,7 +32,7 @@ import '../kit/sheet.dart' show TkKitField, TkLines, showTkSheet;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'sign_in.dart' show CodeBoxes;
-import 'you_pin.dart' show pinDigits;
+import 'you_pin.dart' show PinScreen, pinDigits, whatWentWrong;
 
 /// The PIN's length, as the PIN screen's (you_pin.dart).
 const payPinLength = pinDigits;
@@ -47,7 +47,7 @@ String _say(Object e) => switch (e) {
   Offline() => 'You’re offline. Try again when you’re back online.',
   FingerprintUnavailable() => e.message,
   FingerprintGone() => e.message,
-  _ => 'Something went wrong. Try again.',
+  _ => 'Something went wrong (${whatWentWrong(e)}). Try again.',
 };
 
 /// Opens [FingerprintOnSheet]; true once it is on.
@@ -96,12 +96,11 @@ class _FingerprintOnSheetState extends State<FingerprintOnSheet> {
   Future<void> _load() async {
     try {
       final me = await widget.auth.api.getMeFingerprint();
-      final passkey = me.proofs.contains('passkey') && await passkeys.available();
-      // The PIN first: it is what people type on a phone; then a passkey,
-      // then a code to the phone, then an authenticator.
+      // The PIN first: it is what people type on a phone; then a code to
+      // the phone, then an authenticator. Never a passkey: it does not work
+      // in the app yet, and turning the fingerprint on must not need one.
       final ways = [
         if (me.proofs.contains('pin')) 'pin',
-        if (passkey) 'passkey',
         if (me.proofs.contains('code')) 'code',
         if (me.proofs.contains('totp')) 'totp',
       ];
@@ -178,14 +177,25 @@ class _FingerprintOnSheetState extends State<FingerprintOnSheet> {
         subLines: 4,
         color: look.lime,
       ),
-      if (me != null && _way == null)
+      if (me != null && _way == null) ...[
         TkCallout(
           leading: TkSquare('b-key', color: look.violet),
           title: 'Set your PIN first',
-          sub: 'Turning it on is confirmed with your PIN, your passkey or a code to your phone. Set a PIN in Settings, then come back.',
+          sub: 'Turning it on is confirmed with your 4-digit PIN or a code to your phone.',
           subLines: 4,
           color: look.violet,
         ),
+        Center(
+          child: TkLink(
+            label: 'Set my PIN',
+            bold: true,
+            onTap: () async {
+              await tkPush<void>(context, PinScreen(auth: widget.auth));
+              await _load();
+            },
+          ),
+        ),
+      ],
       if (_way == 'pin')
         TkFormGroup(
           title: 'Confirm it is you',
@@ -242,7 +252,7 @@ class _FingerprintOnSheetState extends State<FingerprintOnSheet> {
     return TkFormSheet(
       title: 'Pay by fingerprint',
       crumb: widget.crumb,
-      action: _busy ? 'Turning on…' : (_way == 'passkey' ? 'Confirm with my passkey' : 'Turn it on'),
+      action: _busy ? 'Turning on…' : 'Turn it on',
       actionIcon: 'fingerprint',
       onAction: !_busy && _ready ? _on : null,
       second: 'Not now',

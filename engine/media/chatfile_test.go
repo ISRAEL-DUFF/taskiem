@@ -33,7 +33,7 @@ func TestCheckChatFile(t *testing.T) {
 	}
 	for name, data := range map[string][]byte{
 		"a PDF with a script": []byte("%PDF-1.4\n1 0 obj << /OpenAction << /JS (app.alert(1)) >> >> endobj"),
-		"words":               []byte("just some words"),
+		"a program":           append([]byte("\x7fELF\x02\x01\x01"), make([]byte, 64)...),
 		"nothing":             nil,
 		"a large photo":       append(append([]byte{}, b.Bytes()...), make([]byte, MaxChatPhotoBytes)...),
 		"a large PDF":         append([]byte("%PDF-1.4\n"), make([]byte, MaxChatFileBytes)...),

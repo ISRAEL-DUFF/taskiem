@@ -1,6 +1,8 @@
 import { createServer as createHttp, type Server as HttpServer } from "node:http";
 import { createServer as createNet, type Server as NetServer } from "node:net";
 import { expect, test, type Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
+import { axe, describe as describeAxe } from "./a11y";
 import { confirmEmail } from "./confirm";
 
 // Taskiem for everyone, stage 1 (docs/spec/taskiem-for-everyone.md §5–§7,
@@ -11,6 +13,7 @@ import { confirmEmail } from "./confirm";
 // listen on the same ports as those specs, so they run one at a time.
 
 test.describe.configure({ mode: "serial" });
+test.use({ bypassCSP: true }); // axe is injected into the page
 
 const H = { "X-Taskiem-Request": "1" };
 const graphPort = 12626;
@@ -175,7 +178,26 @@ test("a new person makes an account with their phone, then starts workflows and 
   await expect(page.getByText("What do you want to start?")).toBeVisible();
   await page.getByTestId("start-workflows").click();
   await page.getByRole("button", { name: "Start workflows" }).click();
+  // A new account with no way to prove a new phone (the PIN is none):
+  // one first, before the workspace opens; it cannot be skipped.
+  const step = page.getByTestId("sign-in-way-step");
+  await expect(step.getByRole("heading", { name: "Add a way to sign in on a new phone" })).toBeVisible();
+  await expect(step).toContainText("A code to your number isn't enough on its own if someone gets your SIM.");
+  await expect(step.getByRole("button", { name: /skip|not now|later/i })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const vs = await axe(page);
+    expect(vs, describeAxe(`the sign-in way step (${scheme})`, vs)).toEqual([]);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/workflows");
+  await expect(step).toBeVisible();
+  await step.getByLabel("New password", { exact: true }).fill("ngozi long password");
+  await step.getByLabel("New password again").fill("ngozi long password");
+  await step.getByRole("button", { name: "Set password" }).click();
   await expect(page).toHaveURL(/\/workflows$/);
+  await expect(page.getByTestId("sign-in-way-step")).toHaveCount(0);
   await expect(page.getByTestId("switcher-top")).toContainText("Ngozi Eze's workflows");
   const me = (await (await page.request.get("/v1/me")).json()) as { tenant_kind: string; areas: Record<string, boolean> };
   expect(me.tenant_kind).toBe("workflows");
@@ -201,6 +223,70 @@ test("a new person makes an account with their phone, then starts workflows and 
   const shop = (await (await page.request.get("/v1/me")).json()) as { tenant_kind: string; areas: Record<string, boolean> };
   expect(shop.tenant_kind).toBe("business");
   expect(shop.areas.storefront).toBe(true);
+});
+
+/** Runs SQL on the e2e database, as confirmEmail does; :'v' is [v]. */
+function sql(text: string, v: string) {
+  const base = process.env.TASKIEM_TEST_DATABASE_URL;
+  if (!base) throw new Error("set TASKIEM_TEST_DATABASE_URL");
+  execFileSync("psql", [base.replace(/\/[^/?]*(\?.*)?$/, "/taskiem_e2e$1"), "-v", "ON_ERROR_STOP=1", "-q", "-v", `v=${v}`], { input: text + "\n", encoding: "utf8" });
+}
+
+test("someone already using Taskiem with no way to sign in on a new phone is reminded on Today and Account until they add an email", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  const n = aNumber();
+  await phoneIn(page, n, { wrongFirst: false });
+  await page.getByLabel("Your name").fill("Tolu Ade");
+  await page.getByLabel("I'm 18 or over").check();
+  await page.getByTestId("way-in-terms").getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("heading", { name: "Hello, Tolu" })).toBeVisible();
+  // An account in use before the change: reminded, not stopped.
+  sql("UPDATE users SET sign_in_way_due = false WHERE id = (SELECT user_id FROM user_phones WHERE number = :'v');", n.e164);
+  await page.getByTestId("start-something").click();
+  await page.getByTestId("start-business").click();
+  await page.getByLabel("Business name").fill("Tolu Prints");
+  await page.getByText("I sell things").click();
+  await page.getByRole("button", { name: "Start the business" }).click();
+  await expect(page).toHaveURL((u) => u.pathname === "/start");
+  await page.goto("/home");
+  const note = page.getByTestId("sign-in-way");
+  await expect(note).toContainText("Add a way to sign in on a new phone.");
+  await expect(note).toContainText("A code to your number isn't enough on its own if someone gets your SIM.");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const vs = await axe(page);
+    expect(vs, describeAxe(`Today with the reminder (${scheme})`, vs)).toEqual([]);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(note.getByRole("link", { name: "Add a way" })).toHaveAttribute("href", "/account#sign-in-way");
+  // On You too, where nothing can be added: its button opens the business at Account.
+  await page.getByTestId("switcher-top").click();
+  await page.getByRole("dialog", { name: "Switch to" }).getByTestId("switch-you").click();
+  await expect(page.getByRole("heading", { name: "Hello, Tolu" })).toBeVisible();
+  await page.getByTestId("sign-in-way").getByRole("button", { name: "Add a way" }).click();
+  await expect(page).toHaveURL(/\/account#sign-in-way$/);
+  await expect(page.getByTestId("sign-in-way")).toBeVisible();
+  const email = `tolu-${Date.now()}@you.test`;
+  const mailed = inbox.length;
+  await page.getByTestId("add-email").getByLabel("Email").fill(email);
+  await page.getByTestId("add-email").getByRole("button", { name: "Send the link" }).click();
+  let link = "";
+  await expect
+    .poll(() => {
+      link = inbox.slice(mailed).filter((x) => x.includes(`To: ${email}`)).map((x) => x.replace(/=\n/g, "").match(/(http\S+\/confirm-email#\S+)/)?.[1]).find(Boolean) ?? "";
+      return link;
+    })
+    .not.toBe("");
+  // Its link, opened: the email is a way, and the reminder goes.
+  await page.goto(link.replace("http://localhost:18080", "").replace(/=3D/g, "="));
+  await expect(page.getByTestId("email-confirmed")).toBeVisible();
+  await page.goto("/home");
+  await expect(page.getByRole("heading", { name: /Tolu/ })).toBeVisible();
+  await expect(page.getByTestId("sign-in-way")).toHaveCount(0);
+  const me = (await (await page.request.get("/v1/me")).json()) as { user: { needs_sign_in_way: boolean } };
+  expect(me.user.needs_sign_in_way).toBe(false);
 });
 
 test("an owner signs in with their phone on a new device, proves it is them, switches, and changes number", async ({ browser }) => {

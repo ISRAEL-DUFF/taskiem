@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/people"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/peoplesafety"
@@ -87,8 +88,10 @@ func (s *Server) peopleChatRoutes(r chi.Router) {
 	r.Post("/me/people/{id}/messages", s.sendPeopleMessage)
 	r.Post("/me/people/{id}/files", s.sendPeopleFile)
 	r.Get("/me/people/{id}/files/{message}", s.peopleFile)
+	r.Get("/me/people/{id}/previews/{message}", s.peoplePreviewImage)
 	r.Put("/me/people/{id}/messages/{message}", s.markPeopleMessage)
 	r.Delete("/me/people/{id}/messages/{message}", s.deletePeopleMessage)
+	r.Patch("/me/people/{id}/messages/{message}", s.editPeopleMessage)
 	r.Post("/me/people/{id}/messages/{message}/paid", s.markSplitPaid)
 	r.Get("/me/people/{id}/messages/{message}/card", s.openPeopleCard)
 	r.Get("/me/payout-account", s.getPayoutAccount)
@@ -100,7 +103,7 @@ func (s *Server) peopleChatRoutes(r chi.Router) {
 // reaches (personalAllowed).
 var peopleChatPersonRoutes = regexp.MustCompile(`^(GET /v1/me/(conversations|live)|(GET|POST) /v1/me/people|GET /v1/me/people/(requests|blocked|search|starred)|POST /v1/me/people/forward|` +
 	`(GET|PUT|DELETE) /v1/me/people/[^/]+|POST /v1/me/people/[^/]+/(accept|decline|block|report|read|typing|messages|files)|DELETE /v1/me/people/[^/]+/block|` +
-	`GET /v1/me/people/[^/]+/(messages|files/[^/]+|messages/[^/]+/card)|(PUT|DELETE) /v1/me/people/[^/]+/messages/[^/]+|POST /v1/me/people/[^/]+/messages/[^/]+/paid|` +
+	`GET /v1/me/people/[^/]+/(messages|files/[^/]+|previews/[^/]+|messages/[^/]+/card)|(PUT|PATCH|DELETE) /v1/me/people/[^/]+/messages/[^/]+|POST /v1/me/people/[^/]+/messages/[^/]+/paid|` +
 	`(GET|PUT|DELETE) /v1/me/payout-account)$`)
 
 // keys seal each person's copy under their own key.
@@ -287,10 +290,16 @@ type peopleSealed struct {
 	Location *peopleLocation `json:"l,omitempty"`
 	// Name is a file's name.
 	Name string `json:"n,omitempty"`
+	// Preview is its first link's preview (the picture's size only; the
+	// picture is a sealed file of kind link_image), sealed with the words.
+	Preview *links.Preview `json:"p,omitempty"`
 }
 
 func messageRow(id uuid.UUID) string { return "m:" + id.String() }
 func fileRow(id uuid.UUID) string    { return "f:" + id.String() }
+
+// linkImageRow seals the picture of a message's link preview.
+func linkImageRow(id uuid.UUID) string { return "li:" + id.String() }
 
 // sealFor seals v for its owner's message id.
 func sealFor(key []byte, owner uuid.UUID, row string, v any) ([]byte, error) {

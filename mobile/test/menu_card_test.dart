@@ -218,7 +218,6 @@ void main() {
     )..load();
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false))));
     await settle(t);
-    expect(find.text("Riders · You chose Your riders, and who's free"), findsOneWidget);
     expect(find.text('What would you like to do?'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Close this menu'));
     await settle(t);
@@ -226,6 +225,10 @@ void main() {
     expect(find.text('Topics · Closed, nothing done'), findsOneWidget);
     expect(closed.keys, ['/v1/taskiem-chat/menus/m1/close']);
     await looks(t, 'taskiem-menu-closed');
+    // The one the server kept as chosen, above: built as the reader goes
+    // there.
+    await seeInThread(t, find.text("Riders · You chose Your riders, and who's free"));
+    expect(find.text("Riders · You chose Your riders, and who's free"), findsOneWidget);
   });
 
   testWidgets('review fixes: a failed menu tries again; a picked row keeps its values; an add row opens the add form', (t) async {

@@ -10790,6 +10790,8 @@ paths:
               additionalProperties: false
               required: [text]
               properties:
+                preview:
+                  $ref: '#/components/schemas/LinkPreviewChoice'
                 text:
                   type: string
                   maxLength: 4000
@@ -11932,7 +11934,7 @@ paths:
       operationId: linkFile
       tags:
       - Links
-      summary: A message's photo, PDF or voice note
+      summary: A message's photo, PDF, document or voice note
       description: This business's own copy, by the message's id, streamed through the API (a photo or voice note inline, a PDF as a download).
       security:
       - sessionCookie: []
@@ -11951,6 +11953,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: preview
+        in: query
+        required: false
+        description: "1: the picture of the file's PDF's first page (a WebP, 640 pixels wide), drawn now for an older PDF that has none; 404 for any other file, or a PDF with no picture"
+        schema:
+          type: string
+          enum: ['1']
+      - name: view
+        in: query
+        required: false
+        description: "1: a PDF to read inside Taskiem's viewer: inline, with Content-Security-Policy sandbox; every other file stays a download"
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The file
@@ -11980,6 +11996,215 @@ paths:
                 type: string
                 format: binary
             audio/mp4:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-powerpoint:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/previews/{id}:
+    get:
+      operationId: linkPreviewImage
+      tags:
+      - Links
+      summary: The picture of a message's link preview
+      description: >-
+        This business's own copy of the picture, by the message's id, streamed through the API: no phone or browser loads it from the page's site.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: size
+        in: query
+        required: false
+        description: small for the picture at 320 pixels on its longest side; else 800
+        schema:
+          type: string
+          enum: [small]
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-preview:
+    post:
+      operationId: previewLink
+      tags:
+      - Links
+      summary: Preview a link being typed
+      description: >-
+        The card of a link typed in a chat's message box (docs/spec/chat-previews-and-editing.md §2.2), for a chat the person can
+        write in: chat is link:<link>, customer:<chat>, people:<chat>, group:<group> or door:<chat> (a person's chat with a business).
+        The same limits and remembered pages as sending. The card, and its picture, are held 30 minutes for the message sent with it
+        (preview: {id}); a picture never sent is never kept.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [url, chat]
+              properties:
+                url:
+                  type: string
+                  maxLength: 4000
+                chat:
+                  type: string
+                  maxLength: 100
+      responses:
+        '200':
+          description: The card
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [id, url, host, title]
+                properties:
+                  id:
+                    type: string
+                    description: "What the message is sent with: preview {id}"
+                  url:
+                    type: string
+                  host:
+                    type: string
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  site:
+                    type: string
+                  taskiem:
+                    type: string
+                    enum: [order, invoice, payment, form, chat, store, link]
+                  image:
+                    type: object
+                    additionalProperties: false
+                    required: [id, w, h]
+                    description: Its picture, at GET /v1/link-preview/{id}/image
+                    properties:
+                      id:
+                        type: string
+                      w:
+                        type: integer
+                      h:
+                        type: integer
+        '204':
+          description: No card for this link (none could be made, or not now)
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-preview/{id}/image:
+    get:
+      operationId: heldLinkPreviewImage
+      tags:
+      - Links
+      summary: The picture of a link being typed
+      description: >-
+        The picture of a card made for your message box, while it is held.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 64
+      - name: size
+        in: query
+        required: false
+        description: small for the picture at 320 pixels on its longest side; else 800
+        schema:
+          type: string
+          enum: [small]
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
               schema:
                 type: string
                 format: binary
@@ -12415,6 +12640,92 @@ paths:
                       $ref: '#/components/schemas/LinkMessage'
                   typing:
                     type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}:
+    patch:
+      operationId: editLinkMessage
+      tags:
+      - Links
+      summary: Edit a message we sent
+      description: 'The words of a text, or a file''s caption, changed by the person who sent it, within 30 minutes of sending (docs/spec/chat-previews-and-editing.md §3). `edits` is the count of edits the message had when the client showed it: behind it, the answer is 409 `{stale: true}` (edited since on another device). Refused with 403 `{not_editable: reason}`: `not_yours`, `too_old`, `card`, `money`, `taskiem_acted`, `deleted`, `forwarded` or `voice`; 422 for words a new message could not have. Every copy changes at once, with its link preview made again when the first link changed; nobody is notified and the chat does not move up the list. By the member who sent it, not others of the business. The earlier wording is kept for this business''s audit log only (GET …/edits), never shown in the chat; the audit entry is `link.message.edit`. The other side''s people told on Telegram or Slack see it changed there; on WhatsApp they are sent "✏️ Edited: …" quoting it. `mentions` (optional) are its @ mentions now; a # tag cannot be added. Refused once the link has ended (409).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkMessageEdit'
+      responses:
+        '200':
+          description: The message as it is now
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}/edits:
+    get:
+      operationId: listLinkMessageEdits
+      tags:
+      - Links
+      summary: A message's earlier wordings
+      description: 'For the audit log: each earlier wording of one of this business''s own messages, who changed it and when, the oldest first. The other business keeps none of them, and the chat never shows them.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: audit.read
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The earlier wordings
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [edits]
+                properties:
+                  edits:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessageEarlier'
         default:
           $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/messages/{id}/hide:
@@ -13041,6 +13352,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: preview
+        in: query
+        required: false
+        description: "1: the picture of the file's PDF's first page (a WebP, 640 pixels wide), drawn now for an older PDF that has none; 404 for any other file, or a PDF with no picture"
+        schema:
+          type: string
+          enum: ['1']
+      - name: view
+        in: query
+        required: false
+        description: "1: a PDF to read inside Taskiem's viewer: inline, with Content-Security-Policy sandbox; every other file stays a download"
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The file
@@ -13070,6 +13395,101 @@ paths:
                 type: string
                 format: binary
             audio/mp4:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-powerpoint:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/previews/{message}:
+    get:
+      operationId: customerPreviewImage
+      tags:
+      - Customers
+      summary: The picture of a message's link preview
+      description: >-
+        The business's own copy of the picture.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: size
+        in: query
+        required: false
+        description: small for the picture at 320 pixels on its longest side; else 800
+        schema:
+          type: string
+          enum: [small]
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
               schema:
                 type: string
                 format: binary
@@ -13346,6 +13766,8 @@ paths:
               type: object
               additionalProperties: false
               properties:
+                preview:
+                  $ref: '#/components/schemas/LinkPreviewChoice'
                 text:
                   type: string
                   maxLength: 2000
@@ -13386,6 +13808,48 @@ paths:
                 $ref: '#/components/schemas/CustomerMessage'
         '201':
           description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/messages/{message}:
+    patch:
+      operationId: editCustomerMessage
+      tags:
+      - Customers
+      summary: Edit a reply you sent to a customer
+      description: 'The words of a text, or a file''s caption, changed by the person who sent it, within 30 minutes of sending (docs/spec/chat-previews-and-editing.md §3). `edits` is the count of edits the message had when the client showed it: behind it, the answer is 409 `{stale: true}` (edited since on another device). Refused with 403 `{not_editable: reason}`: `not_yours`, `too_old`, `card`, `money`, `taskiem_acted`, `deleted`, `forwarded` or `voice`; 422 for words a new message could not have. Every copy changes at once, with its link preview made again when the first link changed; nobody is notified and the chat does not move up the list. By the member who wrote it. The audit entry is `customer_chat.message.edit`. In the app the customer''s copy changes; on WhatsApp, where a message cannot be changed, the customer is sent "✏️ Edited: …". An order''s or Taskiem''s own words, cards and offers are not edited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageEdit'
+      responses:
+        '200':
+          description: The message as it is now
           content:
             application/json:
               schema:
@@ -25586,40 +26050,6 @@ paths:
                 $ref: '#/components/schemas/DeviceProved'
         default:
           $ref: '#/components/responses/Error'
-  /v1/auth/second-proof/pin:
-    post:
-      operationId: secondProofPin
-      tags:
-      - Authentication
-      summary: Prove it is you with your chat PIN
-      description: 'The chat PIN (set on WhatsApp) proves the device this session is on. Wrong PINs are counted as on
-        WhatsApp: five in 15 minutes lock it (429 `locked`); a wrong one answers 401 with `tries_left`. The check and its
-        count are one, so guesses sent side by side cannot pass the lock, and a right PIN while locked is refused. Limited
-        per person and per address. 409 with no PIN set.'
-      security:
-      - sessionCookie: []
-        csrfHeader: []
-      - sessionToken: []
-      - apiKey: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [pin]
-              properties:
-                pin:
-                  type: string
-      responses:
-        '200':
-          description: Proved
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeviceProved'
-        default:
-          $ref: '#/components/responses/Error'
   /v1/auth/second-proof/password:
     post:
       operationId: secondProofPassword
@@ -25627,8 +26057,9 @@ paths:
       - Authentication
       summary: Prove it is you with your password
       description: 'The person''s password proves the device this session is on, where it is one of their `ways`
-        (`password`: set, usable in a business of theirs, on a confirmed email where this server sends email; 409
-        otherwise). Limited as signing in is; 401 for a wrong password.'
+        (`password`: set, usable in a business of theirs, and chosen by the person or on a confirmed email where this
+        server sends email; 409 otherwise). Limited as signing in is; 401 `password_wrong` for a wrong password (the
+        session goes on).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -25931,6 +26362,8 @@ paths:
               type: object
               additionalProperties: false
               properties:
+                preview:
+                  $ref: '#/components/schemas/LinkPreviewChoice'
                 text:
                   type: string
                   maxLength: 4000
@@ -25956,6 +26389,46 @@ paths:
                 $ref: '#/components/schemas/PersonMessage'
         '200':
           description: The message already sent with this client_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/messages/{message}:
+    patch:
+      operationId: editMyChatMessage
+      tags:
+      - You
+      summary: Edit a message you sent to a business
+      description: 'The words of a text, or a file''s caption, changed by the person who sent it, within 30 minutes of sending (docs/spec/chat-previews-and-editing.md §3). `edits` is the count of edits the message had when the client showed it: behind it, the answer is 409 `{stale: true}` (edited since on another device). Refused with 403 `{not_editable: reason}`: `not_yours`, `too_old`, `card`, `money`, `taskiem_acted`, `deleted`, `forwarded` or `voice`; 422 for words a new message could not have. Every copy changes at once, with its link preview made again when the first link changed; nobody is notified and the chat does not move up the list. Your copy and the business''s change; a message the business read an order from keeps its words (`taskiem_acted`), and one sent on WhatsApp cannot be changed here (`elsewhere`).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageEdit'
+      responses:
+        '200':
+          description: The message as it is now
           content:
             application/json:
               schema:
@@ -26037,6 +26510,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: preview
+        in: query
+        required: false
+        description: "1: the picture of the file's PDF's first page (a WebP, 640 pixels wide), drawn now for an older PDF that has none; 404 for any other file, or a PDF with no picture"
+        schema:
+          type: string
+          enum: ['1']
+      - name: view
+        in: query
+        required: false
+        description: "1: a PDF to read inside Taskiem's viewer: inline, with Content-Security-Policy sandbox; every other file stays a download"
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The file
@@ -26066,6 +26553,93 @@ paths:
                 type: string
                 format: binary
             audio/mp4:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-powerpoint:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/previews/{message}:
+    get:
+      operationId: personPreviewImage
+      tags:
+      - You
+      summary: The picture of a message's link preview
+      description: >-
+        Your own copy of the picture, in your chat with a business.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
               schema:
                 type: string
                 format: binary
@@ -28757,6 +29331,8 @@ paths:
               type: object
               additionalProperties: false
               properties:
+                preview:
+                  $ref: '#/components/schemas/LinkPreviewChoice'
                 text:
                   type: string
                   maxLength: 16000
@@ -28898,6 +29474,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: preview
+        in: query
+        required: false
+        description: "1: the picture of the file's PDF's first page (a WebP, 640 pixels wide), drawn now for an older PDF that has none; 404 for any other file, or a PDF with no picture"
+        schema:
+          type: string
+          enum: ['1']
+      - name: view
+        in: query
+        required: false
+        description: "1: a PDF to read inside Taskiem's viewer: inline, with Content-Security-Policy sandbox; every other file stays a download"
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The file
@@ -28907,6 +29497,117 @@ paths:
                 type: string
                 format: binary
             application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-powerpoint:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/previews/{message}:
+    get:
+      operationId: groupPreviewImage
+      tags:
+      - People
+      summary: The picture of a group message's link preview
+      description: >-
+        The group's sealed copy of the picture, opened, for a member who sees the message.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
               schema:
                 type: string
                 format: binary
@@ -28991,6 +29692,45 @@ paths:
       responses:
         '204':
           description: Deleted
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: editGroupMessage
+      tags:
+      - People
+      summary: Edit a message you sent to a group
+      description: 'The words of a text, or a file''s caption, changed by the person who sent it, within 30 minutes of sending (docs/spec/chat-previews-and-editing.md §3). `edits` is the count of edits the message had when the client showed it: behind it, the answer is 409 `{stale: true}` (edited since on another device). Refused with 403 `{not_editable: reason}`: `not_yours`, `too_old`, `card`, `money`, `taskiem_acted`, `deleted`, `forwarded` or `voice`; 422 for words a new message could not have. Every copy changes at once, with its link preview made again when the first link changed; nobody is notified and the chat does not move up the list. While you are in the group. `mentions` (optional) are the members it mentions now, by id (only @ mentions exist in groups). Sealed again under the group''s key; no audit entry is written.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupMessageEdit'
+      responses:
+        '200':
+          description: The message as it is now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMessage'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/groups/{id}/messages/{message}/info:
@@ -30516,6 +31256,8 @@ paths:
               type: object
               additionalProperties: false
               properties:
+                preview:
+                  $ref: '#/components/schemas/LinkPreviewChoice'
                 text:
                   type: string
                   maxLength: 4000
@@ -30644,6 +31386,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: preview
+        in: query
+        required: false
+        description: "1: the picture of the file's PDF's first page (a WebP, 640 pixels wide), drawn now for an older PDF that has none; 404 for any other file, or a PDF with no picture"
+        schema:
+          type: string
+          enum: ['1']
+      - name: view
+        in: query
+        required: false
+        description: "1: a PDF to read inside Taskiem's viewer: inline, with Content-Security-Policy sandbox; every other file stays a download"
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The file
@@ -30673,6 +31429,93 @@ paths:
                 type: string
                 format: binary
             audio/mp4:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-powerpoint:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/previews/{message}:
+    get:
+      operationId: peoplePreviewImage
+      tags:
+      - People
+      summary: The picture of a message's link preview
+      description: >-
+        Your own sealed copy of the picture, opened.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
               schema:
                 type: string
                 format: binary
@@ -30757,6 +31600,45 @@ paths:
       responses:
         '204':
           description: Done
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: editPeopleMessage
+      tags:
+      - People
+      summary: Edit a message you sent
+      description: 'The words of a text, or a file''s caption, changed by the person who sent it, within 30 minutes of sending (docs/spec/chat-previews-and-editing.md §3). `edits` is the count of edits the message had when the client showed it: behind it, the answer is 409 `{stale: true}` (edited since on another device). Refused with 403 `{not_editable: reason}`: `not_yours`, `too_old`, `card`, `money`, `taskiem_acted`, `deleted`, `forwarded` or `voice`; 422 for words a new message could not have. Every copy changes at once, with its link preview made again when the first link changed; nobody is notified and the chat does not move up the list. Both copies are sealed again, each under its owner''s key, and searched by the new words only; no audit entry is written.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageEdit'
+      responses:
+        '200':
+          description: The message as it is now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleMessage'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/people/{id}/messages/{message}/paid:
@@ -33282,7 +34164,11 @@ paths:
       tags:
       - Account
       summary: Change or set the password
-      description: Ends the person's other sessions.
+      description: 'Ends the person''s other sessions. With a password, `current_password`; without one, a passkey or
+        authenticator code. Someone with no factor at all, signed in by a code to their phone or chat within the last
+        minutes, sets their first password with nothing more: it is then a way to prove a new device
+        (docs/spec/taskiem-for-everyone.md §5.4), and the device it was set on, let in without one, counts as proved.
+        A single sign-on account gets none (403).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -46416,7 +47302,7 @@ components:
           $ref: '#/components/schemas/SecondProofWays'
         tries_left:
           type: integer
-          description: A wrong chat PIN (POST /v1/auth/second-proof/pin, 401) leaves this many tries before the lock.
+          description: A wrong PIN (401, paying or approving) leaves this many tries before the lock.
         locked:
           type: boolean
       additionalProperties: true
@@ -47698,16 +48584,14 @@ components:
     SecondProofWays:
       type: object
       description: 'The second proofs a person could give (docs/spec/taskiem-for-everyone.md §5.4): `passkey` (POST
-        /v1/auth/second-proof/passkey), `email` (a link to their real email, confirmed or not), `pin` (the chat PIN), and
-        `password` (POST /v1/auth/second-proof/password: set, usable in a business of theirs, on a confirmed email where
-        this server sends email).'
-      required: [passkey, email, pin, password]
+        /v1/auth/second-proof/passkey), `email` (a link to their real email, confirmed or not), and `password` (POST
+        /v1/auth/second-proof/password: set, usable in a business of theirs, and chosen by the person or on a confirmed
+        email where this server sends email). The PIN is for paying and approving only, never a second proof.'
+      required: [passkey, email, password]
       properties:
         passkey:
           type: boolean
         email:
-          type: boolean
-        pin:
           type: boolean
         password:
           type: boolean
@@ -47768,8 +48652,6 @@ components:
                   type: boolean
                 email:
                   type: boolean
-                pin:
-                  type: boolean
                 password:
                   type: boolean
         user:
@@ -47795,6 +48677,16 @@ components:
             email_placeholder:
               type: boolean
               description: The sign-in name receives no mail (an account made in chat); the web app offers Add your email.
+            needs_sign_in_way:
+              type: boolean
+              description: 'The person is in a business and has no way to prove a new device is theirs (no passkey, email
+                or password; the PIN is not one, docs/spec/taskiem-for-everyone.md §5.4): a sign-in by a code to their
+                phone or chat lets them in from any device, so the apps ask them to add one (on Today and Account).'
+            sign_in_way_step:
+              type: boolean
+              description: 'The person has no such way and their account is new to the apps (made since 25 November 2026,
+                or never opened on a phone or browser before): the apps ask for one as a step, which cannot be skipped
+                before a business is entered or started. Others are reminded instead.'
         totp:
           type: boolean
           description: Whether an authenticator is enrolled.
@@ -54033,6 +54925,14 @@ components:
       additionalProperties: false
       required: [id, mine, kind, body, read_at, created_at]
       properties:
+        edited_at:
+          type: string
+          format: date-time
+          description: When its sender last changed its words; shown as "Edited" (docs/spec/chat-previews-and-editing.md §3).
+        edits:
+          type: integer
+          minimum: 0
+          description: How many times it was edited; an edit names the count it saw.
         id:
           type: string
           format: uuid
@@ -54050,6 +54950,8 @@ components:
           description: Who wrote it on the business's side (a first name), when someone did.
         card:
           $ref: '#/components/schemas/CustomerCard'
+        preview:
+          $ref: '#/components/schemas/LinkPreview'
         attachment:
           $ref: '#/components/schemas/ChatAttachment'
         offer:
@@ -54116,6 +55018,26 @@ components:
           type: integer
         name:
           type: string
+        pages:
+          type: integer
+          description: A PDF's page count, once its picture is drawn
+        protected:
+          type: boolean
+          description: A password-protected PDF (no page count, no picture)
+        preview:
+          type: string
+          enum: [ready, none, failed]
+          description: "The picture of a PDF's first page, from its file route with ?preview=1 - ready, none (a protected PDF) or failed; missing while it is drawn, and on files sent before pictures were drawn"
+        w:
+          type: integer
+          description: A photo's, or the PDF picture's, width in pixels
+        h:
+          type: integer
+          description: A photo's, or the PDF picture's, height in pixels
+        doc:
+          type: string
+          enum: [word, excel, powerpoint, opendocument, csv, text]
+          description: A document's family, for its icon
     ChatListItem:
       type: object
       additionalProperties: false
@@ -54312,6 +55234,14 @@ components:
       required: [id, group_id, mine, sender_id, sender, kind, body, created_at]
       description: One message of a group as a member sees it.
       properties:
+        edited_at:
+          type: string
+          format: date-time
+          description: When its sender last changed its words; shown as "Edited" (docs/spec/chat-previews-and-editing.md §3).
+        edits:
+          type: integer
+          minimum: 0
+          description: How many times it was edited; an edit names the count it saw.
         id:
           type: string
           format: uuid
@@ -54351,6 +55281,8 @@ components:
           $ref: '#/components/schemas/PeopleCard'
         location:
           $ref: '#/components/schemas/PeopleLocation'
+        preview:
+          $ref: '#/components/schemas/LinkPreview'
         attachment:
           $ref: '#/components/schemas/ChatAttachment'
         reply_to:
@@ -55015,6 +55947,14 @@ components:
       required: [id, mine, kind, body, read_at, created_at]
       description: One message of the person's copy of a people chat, opened.
       properties:
+        edited_at:
+          type: string
+          format: date-time
+          description: When its sender last changed its words; shown as "Edited" (docs/spec/chat-previews-and-editing.md §3).
+        edits:
+          type: integer
+          minimum: 0
+          description: How many times it was edited; an edit names the count it saw.
         id:
           type: string
           format: uuid
@@ -55030,6 +55970,8 @@ components:
           $ref: '#/components/schemas/PeopleCard'
         location:
           $ref: '#/components/schemas/PeopleLocation'
+        preview:
+          $ref: '#/components/schemas/LinkPreview'
         attachment:
           $ref: '#/components/schemas/ChatAttachment'
         reply_to:
@@ -56063,6 +57005,14 @@ components:
       additionalProperties: false
       required: [id, mine, kind, body, read_at, created_at]
       properties:
+        edited_at:
+          type: string
+          format: date-time
+          description: When its sender last changed its words; shown as "Edited" (docs/spec/chat-previews-and-editing.md §3).
+        edits:
+          type: integer
+          minimum: 0
+          description: How many times it was edited; an edit names the count it saw.
         id:
           type: string
           format: uuid
@@ -56076,8 +57026,13 @@ components:
           type: string
         sender_name:
           type: string
+        sender:
+          type: string
+          description: Who of the business sent a reply (a member's user id); Edit is offered to that member alone
         card:
           $ref: '#/components/schemas/CustomerCard'
+        preview:
+          $ref: '#/components/schemas/LinkPreview'
         attachment:
           $ref: '#/components/schemas/ChatAttachment'
         offer:
@@ -56228,11 +57183,139 @@ components:
                 type: string
               price_kobo:
                 type: integer
+    LinkPreview:
+      type: object
+      additionalProperties: false
+      required: [url, host, title]
+      description: >-
+        The first link's preview (docs/spec/chat-previews-and-editing.md §2), made by Taskiem's server when the message was sent
+        and kept with it. Its picture, when it has one, is Taskiem's own copy, at the chat's previews route; never the page's site.
+      properties:
+        url:
+          type: string
+        host:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        site:
+          type: string
+          description: The site's own name, when it gives one
+        taskiem:
+          type: string
+          enum: [order, invoice, payment, form, chat, store, link]
+          description: A link to Taskiem itself, not fetched as a page; shown as a plain card ("Taskiem · Order link")
+        image:
+          type: object
+          additionalProperties: false
+          required: [w, h]
+          description: The page's picture, its size; wide pictures go across the card, small or square ones in a square on the left
+          properties:
+            w:
+              type: integer
+            h:
+              type: integer
+    MessageEdit:
+      type: object
+      additionalProperties: false
+      required: [text, edits]
+      description: An edit of a sent message (docs/spec/chat-previews-and-editing.md §3).
+      properties:
+        text:
+          type: string
+          maxLength: 4000
+          description: The new words (or caption; may be empty for a file).
+        edits:
+          type: integer
+          minimum: 0
+          description: The count of edits the message had when the client showed it (`edits` on the message).
+    LinkMessageEdit:
+      type: object
+      additionalProperties: false
+      required: [text, edits]
+      description: An edit of a message to a linked business.
+      properties:
+        text:
+          type: string
+          maxLength: 4000
+        edits:
+          type: integer
+          minimum: 0
+        mentions:
+          type: array
+          maxItems: 10
+          description: "Its @ mentions of linked businesses now, each {kind: business, link}; left out, those still named in the words are kept. A # tag cannot be added by editing."
+          items:
+            type: object
+    GroupMessageEdit:
+      type: object
+      additionalProperties: false
+      required: [text, edits]
+      description: An edit of a group message.
+      properties:
+        text:
+          type: string
+          maxLength: 4000
+        edits:
+          type: integer
+          minimum: 0
+        mentions:
+          type: array
+          maxItems: 256
+          description: The members it mentions now; left out, those it mentioned are kept.
+          items:
+            type: string
+            format: uuid
+    LinkMessageEarlier:
+      type: object
+      additionalProperties: false
+      required: [id, edited_by, edited_at, message]
+      description: An earlier wording of a message, kept for the audit log.
+      properties:
+        id:
+          type: string
+          format: uuid
+        message:
+          type: string
+          format: uuid
+        edited_by:
+          type: string
+          description: The member who changed it (their actor id).
+        edited_at:
+          type: string
+          format: date-time
+        words_before:
+          type: string
+        caption_before:
+          type: string
+    LinkPreviewChoice:
+      description: >-
+        What a message is sent with: the card the composer showed ({id}, from POST /v1/link-preview), or false when the person
+        closed it. Left out, the server makes the preview as the message is sent.
+      oneOf:
+      - type: boolean
+        enum: [false]
+      - type: object
+        additionalProperties: false
+        required: [id]
+        properties:
+          id:
+            type: string
+            maxLength: 64
     LinkMessage:
       type: object
       additionalProperties: false
       required: [id, link, mine, kind, created_at]
       properties:
+        edited_at:
+          type: string
+          format: date-time
+          description: When its sender last changed its words; shown as "Edited" (docs/spec/chat-previews-and-editing.md §3).
+        edits:
+          type: integer
+          minimum: 0
+          description: How many times it was edited; an edit names the count it saw.
         id:
           type: string
           format: uuid
@@ -56255,13 +57338,16 @@ components:
         sender_name:
           type: string
           description: The first name of the member who wrote it
+        sender:
+          type: string
+          description: Who of this business sent it (a member's user id, or a workflow or key), on this side's own messages only; Edit is offered to that member alone
         card:
           $ref: '#/components/schemas/LinkDocCard'
         attachment:
           type: object
           additionalProperties: false
           required: [kind, type, size]
-          description: A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id} streams it
+          description: A photo, a PDF, a document or a voice note; GET /v1/link-chats/{link}/files/{id} streams it
           properties:
             kind:
               type: string
@@ -56273,23 +57359,31 @@ components:
               format: int64
             name:
               type: string
+            pages:
+              type: integer
+              description: A PDF's page count, once its picture is drawn
+            protected:
+              type: boolean
+              description: A password-protected PDF (no page count, no picture)
+            preview:
+              type: string
+              enum: [ready, none, failed]
+              description: "The picture of a PDF's first page, from its file route with ?preview=1 - ready, none (a protected PDF) or failed; missing while it is drawn, and on files sent before pictures were drawn"
+            w:
+              type: integer
+              description: A photo's, or the PDF picture's, width in pixels
+            h:
+              type: integer
+              description: A photo's, or the PDF picture's, height in pixels
+            doc:
+              type: string
+              enum: [word, excel, powerpoint, opendocument, csv, text]
+              description: A document's family, for its icon
         forwarded:
           type: boolean
           description: Forwarded from another conversation
         preview:
-          type: object
-          additionalProperties: false
-          required: [url, host, title]
-          description: The first link's preview, fetched by the sender's side when it was sent
-          properties:
-            url:
-              type: string
-            host:
-              type: string
-            title:
-              type: string
-            description:
-              type: string
+          $ref: '#/components/schemas/LinkPreview'
         mentions:
           type: array
           maxItems: 10
@@ -56342,6 +57436,26 @@ components:
                   format: int64
                 name:
                   type: string
+                pages:
+                  type: integer
+                  description: A PDF's page count, once its picture is drawn
+                protected:
+                  type: boolean
+                  description: A password-protected PDF (no page count, no picture)
+                preview:
+                  type: string
+                  enum: [ready, none, failed]
+                  description: "The picture of a PDF's first page, from its file route with ?preview=1 - ready, none (a protected PDF) or failed; missing while it is drawn, and on files sent before pictures were drawn"
+                w:
+                  type: integer
+                  description: A photo's, or the PDF picture's, width in pixels
+                h:
+                  type: integer
+                  description: A photo's, or the PDF picture's, height in pixels
+                doc:
+                  type: string
+                  enum: [word, excel, powerpoint, opendocument, csv, text]
+                  description: A document's family, for its icon
         read_at:
           type: string
           format: date-time

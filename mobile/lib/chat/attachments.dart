@@ -1,4 +1,4 @@
-// A message's photo, voice note or PDF, as the web shows it
+// A message's photo, voice note, PDF or document, as the web shows it
 // (web/src/pages/Conversation.tsx AttachmentView; styles.css .chat-photo,
 // .chat-voice, .chat-file): this business's own copy, streamed by
 // GET /v1/link-chats/{link}/files/{id}. The web's voice note is the
@@ -21,8 +21,8 @@ import '../app/store.dart' show keepMediaBytes, keptMedia;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/tap_area.dart';
-import '../kit/modal.dart';
 import '../theme/theme.dart';
+import 'file_card.dart';
 import 'words.dart';
 
 /// linkchat.ts fileSize: 820 KB, 1.4 MB.
@@ -31,7 +31,7 @@ String fileSize(int bytes) {
   return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 }
 
-/// A file chosen to send: a photo, a PDF or a voice note.
+/// A file chosen to send: a photo, a PDF, a document or a voice note.
 class PickedFile {
   PickedFile({required this.bytes, required this.name, required this.type});
   final Uint8List bytes;
@@ -41,8 +41,21 @@ class PickedFile {
   bool get photo => type.startsWith('image/');
   bool get voice => type.startsWith('audio/');
 
-  /// outbox.ts attachmentOf: what kind of attachment it will be.
-  LinkMessageAttachment get attachment => LinkMessageAttachment(kind: voice ? 'voice' : (photo ? 'photo' : 'file'), type: type, size: bytes.length, name: name);
+  /// outbox.ts attachmentOf: what kind of attachment it will be, with a
+  /// document's family for its card while it is sent.
+  LinkMessageAttachment get attachment {
+    final family = fileFamily(type: type, name: name);
+    final doc = switch (family) {
+      FileFamily.word => 'word',
+      FileFamily.excel => 'excel',
+      FileFamily.powerpoint => 'powerpoint',
+      FileFamily.opendocument => 'opendocument',
+      FileFamily.csv => 'csv',
+      FileFamily.text => 'text',
+      _ => null,
+    };
+    return LinkMessageAttachment(kind: voice ? 'voice' : (photo ? 'photo' : 'file'), type: type, size: bytes.length, name: name, doc: photo || voice ? null : doc);
+  }
 }
 
 /// ChatComposer.tsx FileRules: what a conversation takes.
@@ -57,12 +70,17 @@ class FileRules {
   final bool documents;
 }
 
-/// ChatComposer.tsx BUSINESS_FILES: a photo, a PDF or a voice note, to 25 MB.
+/// ChatComposer.tsx BUSINESS_FILES: a photo, a PDF, a Word, Excel,
+/// PowerPoint, OpenDocument, CSV or text document, or a voice note, to 25 MB
+/// (docs/spec/chat-previews-and-editing.md §1.1).
 const businessFiles = FileRules(
   max: 25 * 1024 * 1024,
   maxWords: '25 MB',
-  types: r'^(image/(jpeg|png|webp)|application/pdf|audio/)',
-  typesMessage: 'Send a photo (JPEG, PNG or WebP), a PDF or a voice note.',
+  types:
+      r'^(image/(jpeg|png|webp)|audio/|application/pdf$|application/msword$|application/vnd\.ms-(excel|powerpoint)$|'
+      r'application/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)$|'
+      r'application/vnd\.oasis\.opendocument\.(text|spreadsheet|presentation)$|text/(csv|plain)$)',
+  typesMessage: 'Taskiem can send photos, voice notes, PDFs and Word, Excel, PowerPoint and text documents.',
   documents: true,
 );
 
@@ -77,7 +95,9 @@ const taskiemFiles = FileRules(
 
 /// Why a file cannot be sent, in words for the person; null when it can.
 String? fileProblem(PickedFile f, [FileRules rules = businessFiles]) {
-  if (f.bytes.length > rules.max) return '${f.name} is larger than ${rules.maxWords}.';
+  if (f.bytes.length > rules.max) return 'This file is larger than ${rules.maxWords}.';
+  // A program, or a document with macros, whatever its type says.
+  if (RegExp(r'\.(exe|msi|bat|cmd|com|scr|ps1|sh|apk|app|dmg|jar|js|vbs|docm|xlsm|pptm|dotm)$', caseSensitive: false).hasMatch(f.name)) return rules.typesMessage;
   if (!RegExp(rules.types).hasMatch(f.type)) return rules.typesMessage;
   return null;
 }
@@ -106,6 +126,11 @@ class ChatFiles extends ChangeNotifier {
 
   /// Oldest drawn first (a LinkedHashMap keeps the order things go in).
   final Map<String, ChatFile?> _got = {};
+
+  /// The pictures of PDFs' first pages (?preview=1), by message: null
+  /// while one comes, or when the server has none.
+  final Map<String, Uint8List?> _pictures = {};
+  final Map<String, DateTime> _noPicture = {};
   final Map<String, DateTime> _failed = {};
   int _kept = 0;
 
@@ -162,6 +187,40 @@ class ChatFiles extends ChangeNotifier {
     _got[m.id] = null;
     unawaited(fetch(m));
     return null;
+  }
+
+  /// The picture of a PDF's first page (docs/spec/chat-previews-and-
+  /// editing.md §1.3), or null while it comes or when there is none; kept
+  /// on the phone with the chat's other media, as the file is. One not
+  /// drawn yet (its message says nothing) is asked for again a minute on,
+  /// or when the message says it is ready.
+  Uint8List? previewOf(LinkMessage m) {
+    final key = '${m.id}#${m.attachment?.preview ?? ''}';
+    if (_pictures.containsKey(key)) return _pictures[key];
+    final missed = _noPicture[key];
+    if (missed != null && now().difference(missed) < const Duration(minutes: 1)) return null;
+    _pictures[key] = null;
+    unawaited(_fetchPicture(m, key));
+    return null;
+  }
+
+  Future<void> _fetchPicture(LinkMessage m, String key) async {
+    try {
+      final at = '${_pathOf(m)}?preview=1';
+      final kept = await keptMedia(at);
+      final b = kept ?? Uint8List.fromList(await transport.bytes(at));
+      // Only a picture that draws is shown (and kept); anything else is
+      // no picture, and the card keeps its icon.
+      final codec = await ui.instantiateImageCodec(b);
+      codec.dispose();
+      if (kept == null) unawaited(keepMediaBytes(at, b));
+      _pictures[key] = b;
+      _noPicture.remove(key);
+      notifyListeners();
+    } on Object {
+      _pictures.remove(key);
+      _noPicture[key] = now();
+    }
   }
 
   Future<ChatFile?> fetch(LinkMessage m) async {
@@ -297,6 +356,7 @@ class AttachmentView extends StatelessWidget {
       if (l.photo) {
         return _LocalPhoto(file: l, room: room);
       }
+      if (!l.voice) return FileCard(m: m, files: files, other: other, room: room, local: l);
       return _fileRow(t, a);
     }
     switch (a.kind) {
@@ -306,9 +366,18 @@ class AttachmentView extends StatelessWidget {
           builder: (context, _) {
             final f = files.of(m);
             final size = f?.size;
-            // `.chat-photo { margin: 2px 0 4px }`; nothing until it is here,
-            // as the web's image has no size before it loads.
-            if (f == null || size == null) return const SizedBox(height: 6);
+            if (f == null || size == null) {
+              // At its own proportions before it has loaded, a soft colour
+              // in its place, so the chat does not jump (§1.1); a photo
+              // sent before its size was kept takes no room, as before.
+              final w = a.w, h = a.h;
+              if (w == null || h == null || w <= 0 || h <= 0) return const SizedBox(height: 6);
+              final s = photoSize(Size(w.toDouble(), h.toDouble()), room);
+              return Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 4),
+                child: Container(width: s.width, height: s.height, decoration: BoxDecoration(color: t.chatSelect, borderRadius: BorderRadius.circular(8))),
+              );
+            }
             final s = photoSize(size, room);
             void open() => showPhoto(context, f.bytes, m.mine ? 'Your photo' : 'Photo from $other');
             return Padding(
@@ -356,21 +425,14 @@ class AttachmentView extends StatelessWidget {
           child: VoicePlayer(m: m, files: files, label: m.mine ? 'Your voice note' : 'Voice note from $other', width: room, trailing: stamp),
         );
       default:
-        return _fileRow(t, a, onTap: (from) => _open(context, a, from));
+        // A PDF (its first page, Taskiem's viewer) or a document (its
+        // type's card, another app): file_card.dart.
+        return FileCard(m: m, files: files, other: other, room: room);
     }
   }
 
-  /// A PDF pressed: fetched if it is not here, then to the share sheet.
-  Future<void> _open(BuildContext context, LinkMessageAttachment a, Rect from) async {
-    final f = files.of(m) ?? await files.fetch(m);
-    if (f == null) {
-      if (context.mounted) showTkToast(context, 'The file didn\'t load. Try again.', error: true);
-      return;
-    }
-    await handOffFile(f.bytes, a.name ?? attachmentLabel(a), a.type, from);
-  }
-
-  /// `.chat-file`: the file's icon, its name, its size, on panel-2.
+  /// `.chat-file`: the file's icon, its name, its size, on panel-2 (a
+  /// voice note on its way).
   Widget _fileRow(TkTokens t, LinkMessageAttachment a, {void Function(Rect from)? onTap}) => Padding(
     padding: const EdgeInsets.only(top: 2, bottom: 4),
     child: Builder(

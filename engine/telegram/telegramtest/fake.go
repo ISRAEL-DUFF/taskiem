@@ -19,7 +19,7 @@ import (
 
 // Call is one call the fake accepted.
 type Call struct {
-	Method    string // sendMessage, sendPhoto, editMessageReplyMarkup, answerCallbackQuery, setWebhook
+	Method    string // sendMessage, sendPhoto, editMessageText, editMessageCaption, editMessageReplyMarkup, answerCallbackQuery, setWebhook
 	ChatID    int64
 	MessageID int64                     // the sent or edited message
 	Text      string                    // a message's text, or a photo's caption
@@ -52,10 +52,19 @@ type Bot struct {
 	calls     []Call
 	nextID    int64
 	failNext  int // status for the next sendMessage
+	failEdits bool
 	retry     int // retry_after for a 429
 	blocked   map[int64]bool
 	files     map[string]file // by file id
 	downloads int
+}
+
+// FailEdits makes editMessageText and editMessageCaption refuse ("message
+// can't be edited"), as Telegram does for a message too old or deleted.
+func (b *Bot) FailEdits(fail bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.failEdits = fail
 }
 
 // New starts a fake for a bot token.
@@ -298,6 +307,17 @@ func (b *Bot) serve(w http.ResponseWriter, r *http.Request) {
 		b.calls = append(b.calls, c)
 		answer(w, map[string]any{"message_id": c.MessageID, "chat": map[string]any{"id": in.ChatID, "type": "private"}, "date": 1759800000,
 			"photo": []any{map[string]any{"file_id": "sent", "width": 320, "height": 320}}})
+		return
+	case "editMessageText", "editMessageCaption":
+		if in.ChatID == 0 || in.MessageID == 0 || in.MessageID > b.nextID || b.failEdits {
+			refuse(w, http.StatusBadRequest, "Bad Request: message can't be edited", 0)
+			return
+		}
+		if method == "editMessageCaption" {
+			c.Text = in.Caption
+		}
+		b.calls = append(b.calls, c)
+		answer(w, map[string]any{"message_id": in.MessageID, "chat": map[string]any{"id": in.ChatID, "type": "private"}, "date": 1759800000, "text": c.Text})
 		return
 	case "editMessageReplyMarkup":
 		if in.ChatID == 0 || in.MessageID == 0 || in.MessageID > b.nextID {

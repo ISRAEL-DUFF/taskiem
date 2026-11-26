@@ -41,6 +41,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'composer.dart';
+import 'edits.dart';
 import 'door.dart' show doorFiles;
 import 'group_info.dart';
 import 'groups.dart';
@@ -49,6 +50,7 @@ import 'my_chat.dart' show OpenMyChat, sayFailure;
 import 'people.dart';
 import 'basket.dart';
 import 'people_cards.dart';
+import 'link_preview.dart' show ComposerPreview;
 import 'people_chat.dart' show PeopleBubble, PeopleLine, deleteForEveryoneNote, deleteForEveryoneWithin, sendFailure, typingBeat;
 import 'people_find.dart' show OpenPeopleChat;
 import 'people_live.dart';
@@ -107,6 +109,7 @@ PeopleMessage asPeopleMessage(GroupMessage g) => PeopleMessage(
   starred: g.starred,
   warn: g.warn,
   warnTransfer: g.warnTransfer,
+  preview: g.preview,
 );
 
 /// [m] with another status (its ticks moved on the live connection).
@@ -493,7 +496,7 @@ class GroupChatData extends ChangeNotifier {
   /// Words, or a file with its caption, answering [reply], mentioning
   /// [mentions] (member ids): shown at once with a clock, then the
   /// server's copy; not sent, the words come back to the box.
-  Future<bool> send(String text, {PickedFile? file, GroupMessage? reply, List<String> mentions = const []}) async {
+  Future<bool> send(String text, {PickedFile? file, GroupMessage? reply, List<String> mentions = const [], Object? preview}) async {
     final words = text.trim();
     if (words.isEmpty && file == null) return false;
     _typingAt = null;
@@ -530,7 +533,7 @@ class GroupChatData extends ChangeNotifier {
         sent = GroupMessage.fromJson((j as Map).cast<String, dynamic>());
         unawaited(files.keep(sent.id, Uint8List.fromList(file.bytes)));
       } else {
-        sent = await api.sendGroupMessage(id: id, body: SendGroupMessageRequest(text: words, clientId: client, replyTo: reply?.id, mentions: mentions.isEmpty ? null : mentions));
+        sent = await api.sendGroupMessage(id: id, body: SendGroupMessageRequest(text: words, clientId: client, replyTo: reply?.id, mentions: mentions.isEmpty ? null : mentions, preview: preview));
       }
       if (_disposed) return true;
       messages = _merge((messages ?? const []).where((m) => m != mine).toList(), [GroupLine(sent)]);
@@ -601,6 +604,20 @@ class GroupChatData extends ChangeNotifier {
       toStanding = pointsToStanding(e);
       _changed();
       return false;
+    }
+  }
+
+  /// Edits one of ours (chat-previews-and-editing.md §3.2): the new words
+  /// and "Edited" at once, put back if the server refuses; the refusal is
+  /// answered (null when saved). Its @ mentions stay as they were.
+  Future<Object?> editMessage(GroupMessage m, String text) async {
+    _replace(GroupMessage.fromJson({...m.toJson(), 'body': text, 'edited_at': DateTime.now().toUtc().toIso8601String(), 'edits': (m.edits ?? 0) + 1}));
+    try {
+      _replace(await api.editGroupMessage(id: id, message: m.id, body: GroupMessageEdit(text: text, edits: m.edits ?? 0)));
+      return null;
+    } on Object catch (e) {
+      _replace(m);
+      return e;
     }
   }
 
@@ -847,6 +864,9 @@ class GroupChatScreen extends StatefulWidget {
 
 class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
   final _text = TextEditingController();
+
+  /// A link typed: its card above the box (chat-previews-and-editing.md §2.1).
+  late final _linkPreview = ComposerPreview(api: widget.data.auth.api, transport: widget.data.auth.transport, chat: 'group:${widget.data.id}');
   // Saved texts by @name (saved objects S1): their words into the box.
   late final _saved = savedTextBox(
     text: _text,
@@ -928,12 +948,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
 
   @override
   void dispose() {
+    _sel.dispose();
     widget.notify?.unshow(this);
     _back?.cancel();
     _life?.dispose();
     d.stopTyping();
     _saved.dispose();
     _text.dispose();
+    _linkPreview.dispose();
     d.dispose();
     super.dispose();
   }
@@ -1048,7 +1070,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       _at = null;
     });
     _mentions.clear();
-    final sent = await d.send(text, file: file, reply: reply, mentions: mentions);
+    final preview = file == null ? _linkPreview.choice(text) : null;
+    _linkPreview.reset();
+    final sent = await d.send(text, file: file, reply: reply, mentions: mentions, preview: preview);
     // Not sent: the words come back to the box, and their picks with them.
     if (!sent && mounted) {
       for (final p in picked) {
@@ -1057,20 +1081,69 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
     }
   }
 
-  Future<void> _hold(GroupMessage m, Rect at) async {
-    if (m.id.startsWith('local-') || m.kind == 'event') return;
+  /// One of ours being edited (chat-previews-and-editing.md §3.2).
+  EditDraft? _editing;
+
+  void _startEdit(GroupMessage m) {
+    setState(() {
+      _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: m.attachment != null);
+      _reply = null;
+    });
+    _text.text = m.body;
+    _text.selection = TextSelection.collapsed(offset: m.body.length);
+  }
+
+  Future<void> _saveEdit(EditDraft e, String words) async {
+    setState(() => _editing = null);
+    if (words == e.text.trim()) return;
+    final m = d.messages?.where((x) => x.id == e.id).firstOrNull?.m;
+    if (m == null) return;
+    final err = await d.editMessage(m, words);
+    if (err == null || !mounted) return;
+    showTkToast(context, editRefusal(err), error: true);
+    if (refusedForTime(err) && _text.text.isEmpty) _text.text = words;
+  }
+
+  /// The messages held (WhatsApp's selection, menu.dart).
+  late final _sel = MessageSelection(actsOf: _actsOf, onDelete: (ids) => _delete(_found(ids)), onForward: (ids) => _forward(_found(ids)));
+
+  List<GroupMessage> _found(List<String> ids) => [for (final id in ids) ?d.messages?.where((x) => x.id == id).firstOrNull?.m];
+
+  /// What may be done with a message held.
+  HeldActs? _actsOf(String id) {
+    final x = d.messages?.where((x) => x.id == id).firstOrNull;
+    if (x == null || x.local) return null;
+    final m = x.m;
+    if (m.id.startsWith('local-') || m.kind == 'event') return null;
     final write = d.canSend;
     final live = m.deleted != true;
-    await showMessageMenu(
-      context,
-      bubble: at,
-      mine: m.mine,
+    final edit = write &&
+        editBlock(
+              mine: m.mine,
+              kind: m.kind,
+              createdAt: m.createdAt,
+              now: DateTime.now(),
+              deleted: m.deleted == true,
+              forwarded: m.forwarded == true,
+              card: m.card != null,
+              fileKind: m.attachment?.kind,
+            ) ==
+            null;
+    return HeldActs(
       what: groupLine(m),
+      mine: m.mine,
       mineEmoji: m.myReaction,
       onReact: write && live ? (e) => d.react(m, e) : null,
-      items: [
-        if (write && live) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
-        if (live && m.card == null && m.body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.body)), done: 'Copied'),
+      reply: write && live ? () => setState(() => _reply = m) : null,
+      words: live && m.card == null ? m.body : '',
+      edit: edit ? () => _startEdit(m) : null,
+      forward: live && m.card?.type != 'split',
+      star: live ? () => d.star(m) : null,
+      starred: m.starred == true,
+      info: m.mine && live ? () => showReadBy(context, d, m) : null,
+      infoLabel: 'Info',
+      delete: true,
+      more: [
         if (live && m.card == null && m.body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, d.auth, m.body)),
         // A photo (reading account details from photos): read on the phone.
         if (live && m.card == null && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/'))
@@ -1080,33 +1153,41 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
             '${d.base}/files/${Uri.encodeComponent(m.id)}',
             from: (kind: 'group', chat: d.id, message: m.id, from: m.mine ? '' : m.sender),
           ),
-        if (live && m.card?.type != 'split') MenuItem('forward', 'Forward', () => _forward(m)),
-        if (live) MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => d.star(m)),
-        if (m.mine && live) MenuItem('info', 'Info', () => showReadBy(context, d, m)),
         if (live && (m.reactions ?? const []).isNotEmpty) MenuItem('emoji', 'Who reacted', () => showGroupReactions(context, d, m)),
-        MenuItem('trash', 'Delete', () => _delete(m), danger: true, separated: true),
       ],
     );
   }
 
-  Future<void> _forward(GroupMessage m) async {
-    if (m.forwardedMany == true) showTkToast(context, 'This message has been forwarded many times. It can go to one chat at a time.');
-    final to = await pickChatsAndGroups(context, d.auth, title: 'Forward to', what: groupLine(m), max: m.forwardedMany == true ? 1 : 5, exceptGroup: d.id);
+  Future<void> _forward(List<GroupMessage> all) async {
+    if (all.isEmpty) return;
+    final many = all.any((m) => m.forwardedMany == true);
+    if (many) showTkToast(context, 'This message has been forwarded many times. It can go to one chat at a time.');
+    final to = await pickChatsAndGroups(context, d.auth, title: 'Forward to', what: all.length == 1 ? groupLine(all.single) : '${all.length} messages', max: many ? 1 : 5, exceptGroup: d.id);
     if (to == null || (to.chats.isEmpty && to.groups.isEmpty) || !mounted) return;
-    final words = await d.forward(m, to);
-    if (mounted) showTkToast(context, words, error: !words.startsWith('Forwarded'));
+    String? words;
+    for (final m in all) {
+      final said = await d.forward(m, to);
+      if (words == null || !said.startsWith('Forwarded')) words = said;
+      if (!said.startsWith('Forwarded')) break;
+    }
+    if (mounted && words != null) showTkToast(context, words, error: !words.startsWith('Forwarded'));
   }
 
-  Future<void> _delete(GroupMessage m) async {
-    final everyone = d.canDeleteForEveryone(m);
+  Future<void> _delete(List<GroupMessage> all) async {
+    if (all.isEmpty) return;
+    // For everyone only when each of them may be.
+    final everyone = all.every(d.canDeleteForEveryone);
     final choice = await pickAction(
       context,
-      title: 'Delete this message?',
+      title: all.length == 1 ? 'Delete this message?' : 'Delete ${all.length} messages?',
       note: everyone ? deleteForEveryoneNote.replaceFirst('their chat', 'everyone’s copy of the group') : null,
       actions: [('me', 'Delete for me', 'b-person', false), if (everyone) ('everyone', 'Delete for everyone', 'b-people', true)],
     );
     if (choice == null || !mounted) return;
-    final ok = await d.delete(m, everyone: choice == 'everyone');
+    var ok = true;
+    for (final m in all) {
+      ok = await d.delete(m, everyone: choice == 'everyone') && ok;
+    }
     _say(ok, choice == 'everyone' ? 'Deleted for everyone' : 'Deleted for you');
   }
 
@@ -1182,6 +1263,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       quoteName: quoted == null ? null : (quoted.mine ? 'You' : quoted.sender),
       head: head,
       files: d.files,
+      previewPath: '${d.base}/previews/${Uri.encodeComponent(m.id)}',
       quote: quoted == null ? null : asPeopleMessage(quoted),
       quoteMissing: m.replyTo != null && quoted == null,
       busy: _paying == m.id,
@@ -1245,7 +1327,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       padding: EdgeInsets.only(top: first ? 6 : 0),
       child: BubbleHold(
         label: m.mine ? 'Your message' : 'Message from $who${m.mentionsMe == true ? ', mentioning you' : ''}',
-        onHold: x.local ? null : (at) => _hold(m, at),
+        onHold: x.local ? null : (_) => _sel.hold(m.id),
         onReply: d.canSend && !x.local && m.deleted != true ? () => setState(() => _reply = m) : null,
         child: shown,
       ),
@@ -1317,7 +1399,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                     color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
-                      child: ChatHeadBar(
+                      child: SelectionHead(selection: _sel, child: ChatHeadBar(
                         onBack: widget.onBack,
                         onMore: g == null ? null : _menu,
                         onAvatar: g == null ? null : _info,
@@ -1325,13 +1407,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                         title: name,
                         subtitle: groupHeadLine(g, typing: d.offline ? const [] : typing, offline: d.offline),
                         actions: [ChatHeadBar.headButton('Search this group', TkIcon('b-search', size: 22, stroke: 2.2, color: t.text), g == null ? null : _search)],
-                      ),
+                      )),
                     ),
                   ),
                   Expanded(
                     child: d.missing
                         ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('This group is no longer here.', textAlign: TextAlign.center, style: tkHint(t))))
-                        : ThreadView<GroupLine>(
+                        : SelectionScope(selection: _sel, child: ThreadView<GroupLine>(selection: _sel, 
                             key: ValueKey('thread ${d.focusRound}'),
                             items: d.focusing ? null : list,
                             focus: d.focusFound ? d.focus : null,
@@ -1343,7 +1425,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                             tail: typing.isNotEmpty && !d.offline ? const TypingBubble() : null,
                             empty: Text('No messages yet. Say hello to the group.', textAlign: TextAlign.center, style: tkHint(t)),
                             render: (x, prev) => _bubble(x, prev, nextOf[x.id], byId, now),
-                          ),
+                          )),
                   ),
                   if (d.toStanding)
                     _Notice(
@@ -1369,7 +1451,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                       recorder: widget.recorder,
                       replying: _reply == null ? null : (_reply!.mine ? 'your message: ' : '${_reply!.sender}: ') + groupLine(_reply!),
                       onCancelReply: () => setState(() => _reply = null),
+                      editing: _editing,
+                      onSaveEdit: _saveEdit,
+                      onCancelEdit: () {
+                        setState(() => _editing = null);
+                        _text.clear();
+                      },
                       onTools: _tools,
+                      linkPreview: _linkPreview,
                       onSend: (t, f) => unawaited(_send(t, f)),
                     )
                   else

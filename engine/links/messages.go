@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/saved"
 )
 
@@ -94,15 +95,21 @@ const (
 	DocBill     = "bill"
 )
 
-// Attachment is a photo, a PDF or a voice note sent with a message, in
-// this side's own storage: each business keeps its own copy.
+// Attachment is a photo, a PDF, a document or a voice note sent with a
+// message, in this side's own storage: each business keeps its own copy.
 type Attachment struct {
 	Kind string `json:"kind"` // photo, file or voice
 	Type string `json:"type"`
 	Size int64  `json:"size"`
 	Name string `json:"name,omitempty"`
+	// The file's facts: a PDF's pages and picture, a photo's size, a
+	// document's family (docs/spec/chat-previews-and-editing.md §1.3).
+	media.Facts
 	// Path is where this side's copy is stored; never shown.
 	Path string `json:"-"`
+	// PreviewPath is where this side keeps the picture of a PDF's first
+	// page; never shown (GET …/files/{id}?preview=1 answers it).
+	PreviewPath string `json:"-"`
 }
 
 // Preview is a link's preview in a message: the page's host, title and
@@ -112,6 +119,73 @@ type Preview struct {
 	Host        string `json:"host"`
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
+	// Site is the site's own name (og:site_name), when it gives one.
+	Site string `json:"site,omitempty"`
+	// Image is the page's picture, kept by Taskiem (never loaded from the
+	// page's site): its size; its bytes are answered by the chat's
+	// previews route.
+	Image *PreviewImage `json:"image,omitempty"`
+	// Taskiem names a link to Taskiem itself (order, invoice, payment,
+	// form, chat, store, or link): not fetched as a page
+	// (docs/spec/chat-previews-and-editing.md §2.1).
+	Taskiem string `json:"taskiem,omitempty"`
+}
+
+// PreviewImage is a link preview's picture: its width and height, and
+// where this side's copies are kept, which clients are never shown.
+type PreviewImage struct {
+	W, H int
+	// Path and Small are where this side keeps the picture, at most 800
+	// and 320 pixels on its longest side: a path in the business's own
+	// storage, or a person's sealed file.
+	Path, Small string
+}
+
+// MarshalJSON is what clients see of the picture: its size only.
+func (i PreviewImage) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]int{"w": i.W, "h": i.H})
+}
+
+// Stored is the picture as kept, with its paths.
+func (i PreviewImage) Stored() map[string]any {
+	return map[string]any{"w": i.W, "h": i.H, "path": i.Path, "small": i.Small}
+}
+
+// UnmarshalJSON reads the picture as kept (StoredPreview) or as shown.
+func (i *PreviewImage) UnmarshalJSON(b []byte) error {
+	var v struct {
+		W     int    `json:"w"`
+		H     int    `json:"h"`
+		Path  string `json:"path"`
+		Small string `json:"small"`
+	}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	*i = PreviewImage{W: v.W, H: v.H, Path: v.Path, Small: v.Small}
+	return nil
+}
+
+// StoredPreview is a preview as kept, its picture's paths with it.
+func StoredPreview(p *Preview) []byte {
+	if p == nil {
+		return nil
+	}
+	m := map[string]any{"url": p.URL, "host": p.Host, "title": p.Title}
+	if p.Description != "" {
+		m["description"] = p.Description
+	}
+	if p.Site != "" {
+		m["site"] = p.Site
+	}
+	if p.Taskiem != "" {
+		m["taskiem"] = p.Taskiem
+	}
+	if p.Image != nil {
+		m["image"] = p.Image.Stored()
+	}
+	raw, _ := json.Marshal(m)
+	return raw
 }
 
 // Mention is a structured reference in a message, put in by the
@@ -157,8 +231,12 @@ type Message struct {
 	Kind   string    `json:"kind"`
 	Body   string    `json:"body,omitempty"`
 	// Asked is what was asked of Taskiem, on a note of kind taskiem.
-	Asked      string      `json:"asked,omitempty"`
-	SenderName string      `json:"sender_name,omitempty"`
+	Asked      string `json:"asked,omitempty"`
+	SenderName string `json:"sender_name,omitempty"`
+	// Sender is who of this business sent it (a member's user id, or a
+	// workflow or key), on this side's own messages only: the menu offers
+	// Edit to its sender alone, as the server allows.
+	Sender     string      `json:"sender,omitempty"`
 	Card       *DocCard    `json:"card,omitempty"`
 	Attachment *Attachment `json:"attachment,omitempty"`
 	Forwarded  bool        `json:"forwarded,omitempty"`
@@ -174,6 +252,10 @@ type Message struct {
 	// is about (docs/spec/chat-pay-people.md "After"), shown as it stands.
 	Payment *uuid.UUID `json:"payment,omitempty"`
 	Batch   *uuid.UUID `json:"batch,omitempty"`
+	// EditedAt is when its sender last changed its words ("Edited"), and
+	// Edits how many times: an edit names the count it saw (EditTx).
+	EditedAt *time.Time `json:"edited_at,omitempty"`
+	Edits    int        `json:"edits"`
 }
 
 // Conversation is one linked business's conversation, as the list shows
@@ -197,7 +279,8 @@ type Conversation struct {
 }
 
 const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, COALESCE(m.asked, ''), m.sender_name, m.card, m.attachment, m.forwarded, m.preview, m.mentions, m.read_at, m.created_at,
-	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment, m.payment_id, m.batch_id`
+	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment, m.payment_id, m.batch_id, m.edited_at, m.edits,
+	CASE WHEN m.mine THEN COALESCE(m.sender_id, '') ELSE '' END`
 
 const messageFrom = ` FROM link_messages m LEFT JOIN link_messages q ON q.tenant_id = m.tenant_id AND q.pair_id = m.reply_to`
 
@@ -208,7 +291,7 @@ func scanMessage(r pgx.Row) (Message, error) {
 	var qMine *bool
 	var qKind, qBody *string
 	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.Asked, &m.SenderName, &card, &att, &m.Forwarded, &prev, &ments, &m.ReadAt, &m.CreatedAt,
-		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt, &m.Payment, &m.Batch); err != nil {
+		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt, &m.Payment, &m.Batch, &m.EditedAt, &m.Edits, &m.Sender); err != nil {
 		return m, err
 	}
 	if card != nil {
@@ -514,8 +597,12 @@ type SendOpts struct {
 	MaxPerDay int64
 	// Forwarded marks a message forwarded from another conversation.
 	Forwarded bool
-	// Preview is the first link's preview, on both copies.
-	Preview *Preview
+	// Preview is the first link's preview, on both copies; its picture
+	// (Image) is our copy, and TheirImage makes the other side's copy in
+	// its own storage, as TheirCopy does a file's. When it fails, the
+	// other side's preview goes without a picture.
+	Preview    *Preview
+	TheirImage func(ctx context.Context, other uuid.UUID) (*PreviewImage, error)
 	// Mentions are the message's structured references (checked by the
 	// caller); the other side's copy names a business without our link.
 	Mentions []Mention
@@ -546,10 +633,8 @@ func MessageByClientTx(ctx context.Context, tx pgx.Tx, tenant, link, client uuid
 // SendWithTx is SendTx with what o carries.
 func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string, from Sender, by Actor, o SendOpts) (Message, uuid.UUID, error) {
 	replyTo, ourFile := o.ReplyTo, o.Ours
-	var preview, ours, theirs []byte
-	if o.Preview != nil {
-		preview, _ = json.Marshal(o.Preview)
-	}
+	var ours, theirs []byte
+	preview := StoredPreview(o.Preview)
 	if len(o.Mentions) > 0 {
 		ours, _ = json.Marshal(o.Mentions)
 		other := make([]Mention, len(o.Mentions))
@@ -578,7 +663,7 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 			return nil
 		}
 		a.Name = cutRunes(strings.TrimSpace(a.Name), 120)
-		raw, _ := json.Marshal(map[string]any{"kind": a.Kind, "type": a.Type, "size": a.Size, "name": a.Name, "path": a.Path})
+		raw, _ := json.Marshal(a.Map(map[string]any{"kind": a.Kind, "type": a.Type, "size": a.Size, "name": a.Name, "path": a.Path}))
 		return raw
 	}
 	l, err := GetTx(ctx, tx, link)
@@ -626,8 +711,19 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 			return m, other, fmt.Errorf("%w: the file could not be kept for the other business; nothing was sent", ErrStorage)
 		}
 	}
+	theirPreview := preview
+	if o.Preview != nil && o.Preview.Image != nil {
+		p := *o.Preview
+		p.Image = nil
+		if o.TheirImage != nil {
+			if img, err := o.TheirImage(ctx, other); err == nil {
+				p.Image = img
+			}
+		}
+		theirPreview = StoredPreview(&p)
+	}
 	if _, err = tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, reply_to, created_at, attachment, forwarded, preview, mentions)
-		VALUES ($1, $2, $3, $4, false, 'text', $5, $6, $7, $8, $9, $10, $11, $12)`, uuid.Must(uuid.NewV7()), other, link, pair, body, name, replyTo, m.CreatedAt, jsonOf(theirFile), o.Forwarded, preview, theirs); err != nil {
+		VALUES ($1, $2, $3, $4, false, 'text', $5, $6, $7, $8, $9, $10, $11, $12)`, uuid.Must(uuid.NewV7()), other, link, pair, body, name, replyTo, m.CreatedAt, jsonOf(theirFile), o.Forwarded, theirPreview, theirs); err != nil {
 		return m, other, err
 	}
 	// For the other side's workflows (L6): a message from a linked business.
@@ -873,13 +969,53 @@ func AttachmentTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID) 
 	}
 	var a struct {
 		Attachment
-		Path string `json:"path"`
+		Path        string `json:"path"`
+		PreviewPath string `json:"preview_path"`
 	}
 	if err := json.Unmarshal(raw, &a); err != nil {
 		return Attachment{}, err
 	}
-	a.Attachment.Path = a.Path
+	a.Attachment.Path, a.Attachment.PreviewPath = a.Path, a.PreviewPath
 	return a.Attachment, nil
+}
+
+// SetFileFactsTx keeps what was learnt of this side's copy of a message's
+// file once it was looked at after sending (a PDF's pages and picture),
+// and where its picture is, so the message reads as changed in the live
+// stream and the app's sync. A message hidden for this side is left.
+func SetFileFactsTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID, f media.Facts, previewPath string) error {
+	set := f.Map(nil)
+	if previewPath != "" {
+		set["preview_path"] = previewPath
+	}
+	raw, err := json.Marshal(set)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `UPDATE link_messages SET attachment = attachment || $4::jsonb
+		WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3 AND attachment IS NOT NULL AND hidden_at IS NULL`, tenant, link, pair, raw)
+	return err
+}
+
+// PreviewImageTx is where this side keeps the picture of a message's link
+// preview, for the business in scope.
+func PreviewImageTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID) (PreviewImage, error) {
+	var raw []byte
+	err := tx.QueryRow(ctx, `SELECT preview->'image' FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3 AND hidden_at IS NULL`, tenant, link, pair).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && raw == nil) {
+		return PreviewImage{}, fmt.Errorf("%w: no such picture", ErrNotFound)
+	}
+	if err != nil {
+		return PreviewImage{}, err
+	}
+	var img PreviewImage
+	if err := json.Unmarshal(raw, &img); err != nil {
+		return img, err
+	}
+	if img.Path == "" {
+		return img, fmt.Errorf("%w: no such picture", ErrNotFound)
+	}
+	return img, nil
 }
 
 // HideTx deletes a message for the business in scope: its own copy is

@@ -273,11 +273,17 @@ func (s *Server) waDirectFile(ctx context.Context, c *chat, caption string) erro
 		}
 		return err
 	}
-	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
-		name = name[i+1:]
+	// Checked as a file sent in Taskiem is (§1.2): a Word file from
+	// WhatsApp arrives, a macro or a program does not.
+	checked, err := media.CheckChatUpload(data, name)
+	if err != nil {
+		if errIsAny(err, directRefusals...) {
+			return c.say(ctx, s, c.t("chat.link.not_sent", "reason", whatsapp.SafeText(directReason(err))))
+		}
+		return err
 	}
 	att := func(f media.File) *links.Attachment {
-		return &links.Attachment{Kind: media.ChatKind(f.Type), Type: f.Type, Size: f.Size, Name: name, Path: f.Path}
+		return linkAttachment(f, checked)
 	}
 	return s.directSend(ctx, c, to, func(l links.Link) error {
 		mine, err := s.Media.PutChatFile(ctx, c.tenant.ID, data)
@@ -294,13 +300,15 @@ func (s *Server) waDirectFile(ctx context.Context, c *chat, caption string) erro
 			theirs, other = att(f), business
 			return theirs, nil
 		}
-		if _, err := s.sendLink(ctx, c.p, l.ID, body, links.SendOpts{Ours: att(mine), TheirCopy: theirCopy}); err != nil {
+		m, err := s.sendLink(ctx, c.p, l.ID, body, links.SendOpts{Ours: att(mine), TheirCopy: theirCopy})
+		if err != nil {
 			s.dropChatFile(ctx, c.tenant.ID, mine.Path)
 			if theirs != nil {
 				s.dropChatFile(ctx, other, theirs.Path)
 			}
 			return err
 		}
+		s.drawLinkLater(ctx, c.tenant.ID, other, l.ID, m.PairID, checked.Type, data)
 		return nil
 	})
 }

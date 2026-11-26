@@ -43,8 +43,10 @@ import 'book_sheet.dart' show showBookSheet;
 import 'cards.dart' show CardButton;
 import 'chats.dart' show ChatRow;
 import 'composer.dart';
+import 'edits.dart';
 import 'discover.dart' show DiscoverProfileScreen;
 import 'door.dart';
+import 'link_preview.dart' show ComposerPreview;
 import 'pay_transfer.dart' show payMyInvoice;
 import 'made_tools.dart' show MadeRun;
 import 'my_chat_their_tools.dart' show TheirAnswer, TheirRuns;
@@ -59,7 +61,7 @@ import 'save_as.dart' show saveAsItems, saveNamed;
 import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 import 'words.dart';
 import 'saved_files.dart' show attachSavedFile;
-import 'menu.dart' show showMessageMenu;
+import 'menu.dart' show HeldActs, MessageSelection, SelectionHead, SelectionScope;
 import 'pay_collect.dart' show PayListBar;
 
 
@@ -678,7 +680,7 @@ class MyChatData extends ChangeNotifier {
 
   /// Words, or a file with its caption: shown at once with a clock, then
   /// the server's copy; not sent, the words come back to the box.
-  Future<void> send(String text, {PickedFile? file}) async {
+  Future<void> send(String text, {PickedFile? file, Object? preview}) async {
     final words = text.trim();
     if (words.isEmpty && file == null) return;
     // The same words again after an answer that never came: the same id.
@@ -707,7 +709,7 @@ class MyChatData extends ChangeNotifier {
         sent = PersonMessage.fromJson((j as Map).cast<String, dynamic>());
         unawaited(files.keep(sent.id, Uint8List.fromList(file.bytes)));
       } else {
-        sent = await api.sendMyChatMessage(id: id, body: SendMyChatMessageRequest(text: words, clientId: client));
+        sent = await api.sendMyChatMessage(id: id, body: SendMyChatMessageRequest(text: words, clientId: client, preview: preview));
       }
       if (_disposed) return;
       messages = _merge((messages ?? const []).where((m) => m != mine).toList(), [MyLine(sent)]);
@@ -790,6 +792,26 @@ class MyChatData extends ChangeNotifier {
     }
   }
 
+  /// Edits one of ours (chat-previews-and-editing.md §3.2): the new words
+  /// and "Edited" at once, put back if the business's side refuses (an
+  /// order read from it, its time over); the refusal answered, null when
+  /// saved.
+  Future<Object?> editMessage(PersonMessage m, String text) async {
+    void put(PersonMessage x) {
+      messages = _merge(messages ?? const [], [MyLine(x)]);
+      _changed();
+    }
+
+    put(PersonMessage.fromJson({...m.toJson(), 'body': text, 'edited_at': DateTime.now().toUtc().toIso8601String(), 'edits': (m.edits ?? 0) + 1}));
+    try {
+      put(await api.editMyChatMessage(id: id, message: m.id, body: MessageEdit(text: text, edits: m.edits ?? 0)));
+      return null;
+    } on Object catch (e) {
+      put(m);
+      return e;
+    }
+  }
+
   void _changed() {
     if (!_disposed) notifyListeners();
   }
@@ -848,6 +870,9 @@ class MyChatScreen extends StatefulWidget {
 
 class _MyChatScreenState extends State<MyChatScreen> with Polling {
   late final _text = TextEditingController(text: widget.draft);
+
+  /// A link typed: its card above the box (chat-previews-and-editing.md §2.1).
+  late final _linkPreview = ComposerPreview(api: widget.data.auth.api, transport: widget.data.auth.transport, chat: 'door:${widget.data.id}');
   // Saved things by @name (saved objects S1): a text's words into the box;
   // the rest of one's own shared with the business as cards.
   late final _saved = savedTextBox(
@@ -905,11 +930,13 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
 
   @override
   void dispose() {
+    _sel.dispose();
     widget.notify?.unshow(this);
     d.onAsk = null;
     _back?.cancel();
     _saved.dispose();
     _text.dispose();
+    _linkPreview.dispose();
     // The screen owns its conversation: closed, it stops reading.
     d.dispose();
     super.dispose();
@@ -968,7 +995,27 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
   /// delivery, your orders with them.
   /// A message's menu (saved objects S1): Copy and Save as… on its words,
   /// Save as… on a photo or document.
-  Future<void> _hold(MyLine x, Rect at) async {
+  /// One of ours being edited (chat-previews-and-editing.md §3.2).
+  EditDraft? _editing;
+
+  Future<void> _saveEdit(EditDraft e, String words) async {
+    setState(() => _editing = null);
+    if (words == e.text.trim()) return;
+    final m = d.messages?.where((x) => x.m.id == e.id).firstOrNull?.m;
+    if (m == null) return;
+    final err = await d.editMessage(m, words);
+    if (err == null || !mounted) return;
+    showTkToast(context, editRefusal(err), error: true);
+    if (refusedForTime(err) && _text.text.isEmpty) _text.text = words;
+  }
+
+  /// The messages held (WhatsApp's selection, menu.dart).
+  late final _sel = MessageSelection(actsOf: _actsOf);
+
+  /// What may be done with a message held: Copy, Save as… and Edit.
+  HeldActs? _actsOf(String id) {
+    final x = d.messages?.where((x) => x.m.id == id).firstOrNull;
+    if (x == null || x.local) return null;
     final m = x.m;
     final a = m.attachment;
     final words = m.card == null && !(a != null && {'Photo', 'Voice note', 'File', a.name}.contains(m.body)) ? m.body.trim() : '';
@@ -982,8 +1029,25 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
       fileType: a?.type ?? '',
       from: (kind: 'person', chat: d.id, message: m.id, from: m.mine ? '' : d.name),
     );
-    if (items.isEmpty) return;
-    await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
+    final c = d.chat;
+    final edit = c != null &&
+        !c.blocked &&
+        !c.blockedYou &&
+        editBlock(mine: m.mine, kind: m.kind, createdAt: m.createdAt, now: DateTime.now(), card: m.card != null, fileKind: a?.kind, line: m.line) == null;
+    if (items.isEmpty && !edit) return null;
+    return HeldActs(
+      what: (m.card?.title ?? m.body).split('\n').first,
+      mine: m.mine,
+      words: words,
+      edit: edit
+          ? () {
+              setState(() => _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: a != null));
+              _text.text = m.body;
+              _text.selection = TextSelection.collapsed(offset: m.body.length);
+            }
+          : null,
+      more: [for (final i in items) if (i.label != 'Copy') i],
+    );
   }
 
   (String, VoidCallback)? _cardAction(CustomerCard c) => switch (c.type) {
@@ -1047,7 +1111,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                     color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
-                      child: ChatHeadBar(
+                      child: SelectionHead(selection: _sel, child: ChatHeadBar(
                         onBack: widget.onBack,
                         onMore: c == null ? null : _menu,
                         // Their shop, to browse (shop.dart).
@@ -1072,7 +1136,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                         title: name,
                         typing: c?.typing == true,
                         subtitle: d.offline ? 'Waiting for network…' : (c?.hours?.line ?? 'Business'),
-                      ),
+                      )),
                     ),
                   ),
                   if (c?.lines?.contains('whatsapp') == true) const _OnWhatsApp(),
@@ -1084,7 +1148,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                       onAction: () => setState(() => d.notice = null),
                     ),
                   Expanded(
-                    child: ThreadView<MyLine>(
+                    child: SelectionScope(selection: _sel, child: ThreadView<MyLine>(selection: _sel, 
                       items: list,
                       of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
                       now: now,
@@ -1112,7 +1176,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                           padding: EdgeInsets.only(top: first ? 6 : 0),
                           child: BubbleHold(
                             label: m.mine ? 'Your message' : 'Message from ${d.name}',
-                            onHold: x.local ? null : (at) => _hold(x, at),
+                            onHold: x.local ? null : (_) => _sel.hold(x.m.id),
                             child: DoorBubble(
                             id: m.id,
                             mine: m.mine,
@@ -1125,6 +1189,8 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                             card: m.card,
                             attachment: m.attachment,
                             local: x.file,
+                            preview: m.preview,
+                            previewPath: '${d.base}/previews/${Uri.encodeComponent(m.id)}',
                             offer: m.offer == true,
                             warn: !m.mine && m.warnTransfer == true,
                             cardAction: act?.$1,
@@ -1136,6 +1202,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 if (m.line == 'whatsapp') LineMark(line: m.line, color: meta),
+                                ...editedMark(m.editedAt, meta),
                                 Text(clock(m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
                                 if (m.mine) ...[const SizedBox(width: 4), DoorTicks(sending: x.local, read: m.readAt != null, meta: meta)],
                               ],
@@ -1143,7 +1210,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                           )),
                         );
                       },
-                    ),
+                    )),
                   ),
                   if (c != null && c.askOffers && c.offers == 'unasked' && canSend)
                     _OffersQuestion(name: name, onAnswer: (yes) => _say(d.put(offers: yes), yes ? 'You’ll get offers from $name' : 'No offers from $name'), onDismiss: () => d.put(offersAsked: true)),
@@ -1164,7 +1231,18 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                       pickers: widget.pickers,
                       recorder: widget.recorder,
                       onTools: () => showMyChatTools(context, d),
-                      onSend: (text, file) => d.send(text, file: file),
+                      editing: _editing,
+                      onSaveEdit: _saveEdit,
+                      onCancelEdit: () {
+                        setState(() => _editing = null);
+                        _text.clear();
+                      },
+                      linkPreview: _linkPreview,
+                      onSend: (text, file) {
+                        final preview = file == null ? _linkPreview.choice(text) : null;
+                        _linkPreview.reset();
+                        d.send(text, file: file, preview: preview);
+                      },
                     )
                   else
                     SizedBox(height: pad.bottom),

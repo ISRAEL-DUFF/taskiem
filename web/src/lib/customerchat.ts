@@ -1,3 +1,4 @@
+import type { LinkPreview } from "./linkchat";
 // Customers' conversations (docs/spec/chat-five-more-flows.md, phase 1):
 // a customer who writes to the business's own WhatsApp number is a thread
 // in the chat; staff who handle orders answer there, and the answer goes
@@ -52,6 +53,8 @@ export interface CustomerMessage {
   mine: boolean;
   kind: "text" | "media" | "card";
   body: string;
+  /** The first link's card; its picture at the chat's previews route. */
+  preview?: LinkPreview;
   /** In the app: a card, a photo, voice note or file, an offer. */
   card?: AppCard;
   attachment?: AppAttachment;
@@ -59,6 +62,8 @@ export interface CustomerMessage {
   /** A photo being sent: this device's own copy. */
   localPreview?: string;
   sender_name?: string;
+  /** Who of the business sent a reply: Edit is theirs alone. */
+  sender?: string;
   sent_as?: "text" | "template";
   /** A reply's way to the customer, as WhatsApp reports it. */
   delivery?: "sending" | "sent" | "delivered" | "read" | "failed";
@@ -66,6 +71,10 @@ export interface CustomerMessage {
   failure?: string;
   read_at: string | null;
   created_at: string;
+  /** When its sender last changed its words ("Edited"), and how many times
+   * (chat-previews-and-editing.md §3). */
+  edited_at?: string | null;
+  edits?: number;
   /** Shown before the server answers. */
   local?: boolean;
   /** Where it went: on WhatsApp or in the app (§11). */

@@ -153,7 +153,7 @@ func (s *Server) liveGroupsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 
 	if len(groups) > 0 {
 		// Messages, new or changed, and the person's own marks.
-		mrows, err := tx.Query(ctx, `SELECT `+"x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen"+`,
+		mrows, err := tx.Query(ctx, `SELECT `+"x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen, x.edited_at, x.edits"+`,
 			k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1), x.group_id, x.changed_at
 			FROM group_messages x JOIN group_members me ON me.group_id = x.group_id AND me.person_id = $1
 			LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
@@ -186,7 +186,7 @@ func (s *Server) liveGroupsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 			more = true
 		}
 		// The person's own marks (a star from another device).
-		krows, err := tx.Query(ctx, `SELECT `+"x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen"+`,
+		krows, err := tx.Query(ctx, `SELECT `+"x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen, x.edited_at, x.edits"+`,
 			k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1), x.group_id, k.changed_at
 			FROM group_marks k JOIN group_messages x ON x.group_id = k.group_id AND x.id = k.message_id
 			WHERE k.person_id = $1 AND k.changed_at > $2 AND k.hidden_at IS NULL ORDER BY k.changed_at LIMIT `+strconv.Itoa(liveBatch), person, gl.marks.since)

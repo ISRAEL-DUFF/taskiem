@@ -29,10 +29,13 @@ import { useAutoGrow } from "../lib/useAutoGrow";
 import { useThread } from "../lib/useThread";
 import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
-import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
+import { BubbleShell, CopyItem, EditedMark, EditItem, PopItem, Ticks } from "./BubbleShell";
+import { canEdit, editTarget, lastEditable, saveEdit } from "../lib/edits";
+import type { EditTarget } from "./ChatComposer";
 import { PayChip, PayFromMessages, PayListBar, PhotoAccountItems } from "./PayChip";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES } from "./ChatComposer";
+import { chatFileOK } from "../lib/chatfiles";
 import { ChatHead } from "./ChatHead";
 import { useConfirm } from "./ConfirmSheet";
 import { CardSheet } from "./CustomerCards";
@@ -43,6 +46,7 @@ import { MentionList, useMentions } from "./Mentions";
 import { useSavedPicks } from "./SavedPicks";
 import { sendSaved } from "./SavedCard";
 import { SaveAsItem, useSaveAs } from "./SaveAs";
+import { ComposerLinkCard, LinkCard, LinkedWords, useComposerPreview } from "./ChatLinks";
 import type { Suggestion } from "../lib/mentions";
 
 // Customers' conversations in the Chat page (docs/spec/chat-five-more-flows.md,
@@ -365,6 +369,16 @@ export function CustomerPane({
   // thread's), as the list reads it.
   const draftKey = c ? `customer:${c.id}` : undefined;
   const [text, setText] = useState("");
+  // A reply of ours being edited (chat-previews-and-editing.md §3.2).
+  const [editing, setEditing] = useState<EditTarget>();
+  const startEdit = (t: EditTarget) => {
+    setEditing(t);
+    setText(t.text);
+  };
+  const stopEdit = () => {
+    setEditing(undefined);
+    setText("");
+  };
   useEffect(() => {
     if (draftKey) setText(getDraft(draftKey));
   }, [draftKey]);
@@ -400,6 +414,8 @@ export function CustomerPane({
   const canSend = !!cur && !lineClosed(cur) && !erased;
   const [cards, setCards] = useState(false);
   const [asOffer, setAsOffer] = useState(false);
+  // A link typed for the app: its card above the box (WhatsApp draws its own).
+  const linkPreview = useComposerPreview(text, app && !asOffer ? `customer:${id}` : undefined);
   const mayOfferNow = !!c && canSend && appOpen && (app || both) && mayOffer({ ...c, line: "app" });
   // An offer goes in the app: the 24 hours' limit is of the line used.
   const sendLine: Line = asOffer && mayOfferNow ? "app" : replyLine;
@@ -471,6 +487,22 @@ export function CustomerPane({
   // Each send is its own (its own client_id): a card or a file chosen while
   // another message is on its way goes too, never dropped.
   const send = (extra?: { card?: CardAsk; cardWords?: string; file?: File; fileWords?: string }) => {
+    if (editing && !extra) {
+      const t = editing;
+      const w = text.trim();
+      if (!w && !t.caption) return;
+      setEditing(undefined);
+      setText("");
+      if (w !== t.text.trim())
+        void saveEdit({
+          url: `/v1/customer-chats/${id}/messages/${t.id}`,
+          t,
+          text: w,
+          set: setMessages,
+          keepWords: (x) => setText((cur) => (cur.trim() ? cur : x)),
+        });
+      return;
+    }
     const words = extra?.card ? (extra.cardWords ?? "") : extra?.fileWords !== undefined ? extra.fileWords : text.trim();
     const plain = !extra?.card && !extra?.file;
     // Cards and files go in the app whatever line is chosen.
@@ -525,6 +557,7 @@ export function CustomerPane({
                   text: words,
                   client_id: client,
                   ...(offer ? { offer: true } : c ? replyLineBody(c, line) : {}),
+                  ...(line === "app" && !offer ? { preview: linkPreview.choice(words) } : {}),
                 },
           );
         if (offer) setAsOffer(false);
@@ -702,6 +735,7 @@ export function CustomerPane({
                 actions: (
                   <>
                     {words && <CopyItem text={words} />}
+                    {canSend && canEdit(m) && <EditItem onClick={() => (close(), startEdit(editTarget(m)))} />}
                     {words && <SaveAsItem text={words} onSave={saveAs.fromWords} close={close} label={file ? "Save the words as…" : "Save as…"} />}
                     {file && (
                       <PopItem
@@ -734,6 +768,7 @@ export function CustomerPane({
                     as a message to answer ·
                   </span>
                 )}
+                <EditedMark at={m.edited_at} />
                 <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
                   {clock(m.created_at)}
                 </time>
@@ -774,15 +809,17 @@ export function CustomerPane({
                 src={m.local ? undefined : `/v1/customer-chats/${encodeURIComponent(id)}/files/${encodeURIComponent(m.id)}`}
                 who={c ? customerTitle(c) : "the customer"}
                 mine={m.mine}
+                at={m.created_at}
               />
             )}
+            {m.preview && !m.local && <LinkCard p={m.preview} src={`/v1/customer-chats/${encodeURIComponent(id)}/previews/${encodeURIComponent(m.id)}`} />}
             {!m.card && !(m.attachment && ["Photo", "Voice note", "File", m.attachment.name].includes(m.body)) && (
               <span className="text">
-                {m.kind === "media" && !m.attachment ? <em>{m.body}</em> : m.body}
+                {m.kind === "media" && !m.attachment ? <em>{m.body}</em> : <LinkedWords text={m.body} />}
                 {/* Room for the time and ticks in the corner of the last line (in a
                     thread with both lines; the others keep their look, which the
                     app copies). */}
-                {markLines && !m.card && !m.attachment && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
+                {markLines && !m.card && !m.attachment && <span className={`stamp-gap${m.mine ? " mine" : ""}${m.edited_at ? " edited" : ""}`} aria-hidden="true" />}
               </span>
             )}
             {!m.mine && !m.local && !m.card && m.kind === "text" && <PayChip text={m.body} message={m.id} />}
@@ -843,6 +880,20 @@ export function CustomerPane({
         </label>
       )}
       <PayListBar />
+      {canSend && <ComposerLinkCard s={linkPreview} />}
+      {canSend && editing && (
+        <div className="composer-reply composer-editing" data-testid="customer-editing">
+          <Icon name="pencil" />
+          <span className="quote">
+            <strong>Editing message</strong>
+            <span className="was">{editing.text}</span>
+          </span>
+          <button type="button" className="icon-button small" onClick={stopEdit} title="Cancel the edit">
+            <Icon name="close" />
+            <span className="sr-only">Cancel the edit</span>
+          </button>
+        </div>
+      )}
       {canSend && (
         <form
           className="composer"
@@ -873,8 +924,8 @@ export function CustomerPane({
                   const f = e.target.files?.[0];
                   e.target.value = "";
                   if (!f) return;
-                  if (f.size > BUSINESS_FILES.max || !BUSINESS_FILES.types.test(f.type)) {
-                    setSendError(new Error(f.size > BUSINESS_FILES.max ? `${f.name} is larger than ${BUSINESS_FILES.maxWords}.` : BUSINESS_FILES.typesMessage));
+                  if (f.size > BUSINESS_FILES.max || !chatFileOK(f)) {
+                    setSendError(new Error(f.size > BUSINESS_FILES.max ? `This file is larger than ${BUSINESS_FILES.maxWords}.` : BUSINESS_FILES.typesMessage));
                     return;
                   }
                   send({ file: f });
@@ -902,6 +953,19 @@ export function CustomerPane({
               }}
               onKeyDown={(e) => {
                 if (mentions.onKeyDown(e)) return;
+                if (e.key === "Escape" && editing) {
+                  e.preventDefault();
+                  stopEdit();
+                  return;
+                }
+                if (e.key === "ArrowUp" && !editing && text === "") {
+                  const last = lastEditable(messages);
+                  if (last) {
+                    e.preventDefault();
+                    startEdit(last);
+                    return;
+                  }
+                }
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   send();
@@ -917,10 +981,10 @@ export function CustomerPane({
           <button
             type="submit"
             className="primary icon-button send-button"
-            disabled={!text.trim() || tooLong}
+            disabled={editing ? !text.trim() && !editing.caption : !text.trim() || tooLong}
           >
-            <Icon name="arrow-up" />
-            <span className="sr-only">Send</span>
+            <Icon name={editing ? "check" : "arrow-up"} />
+            <span className="sr-only">{editing ? "Save the edit" : "Send"}</span>
           </button>
         </form>
       )}

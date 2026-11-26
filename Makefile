@@ -45,7 +45,7 @@ e2e: web
 	pnpm --filter @taskiem/web e2e
 
 build:
-	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o bin/taskiem ./cmd/taskiem
+	CGO_ENABLED=0 go build -trimpath -tags nodynamic -ldflags "-s -w -X main.version=$(VERSION)" -o bin/taskiem ./cmd/taskiem
 
 # The real engine at the G1 rate (tools/loadtest -h for the flags).
 load:

@@ -7,6 +7,7 @@ import { cmpTime } from "./stamp";
 import { whenWords } from "./time";
 import type { DealCard } from "./deals";
 import type { Mention } from "./mentions";
+import type { FileFacts } from "./chatfiles";
 
 export type DocKind = "order" | "purchase" | "invoice" | "bill" | "delivery" | "dispatch";
 
@@ -83,21 +84,28 @@ export interface Quote {
   attachment?: Attachment;
 }
 
-/** A photo, a PDF or a voice note sent with a message; each business
- * keeps its own copy, streamed by fileURL. */
-export interface Attachment {
+/** A photo, a PDF, a document or a voice note sent with a message; each
+ * business keeps its own copy, streamed by fileURL. Its facts (a PDF's
+ * pages and picture, a photo's size, a document's family) are FileFacts'. */
+export interface Attachment extends FileFacts {
   kind: "photo" | "file" | "voice";
   type: string;
   size: number;
   name?: string;
 }
 
-/** A link's preview: the page's host, title and description. */
+/** A link's preview (chat-previews-and-editing.md §2): the page's host,
+ * title, description and site's name; its picture's size, the picture
+ * itself at the chat's previews route (Taskiem's own copy); or a link to
+ * Taskiem itself, not fetched, shown as a plain card. */
 export interface LinkPreview {
   url: string;
   host: string;
   title: string;
   description?: string;
+  site?: string;
+  taskiem?: "order" | "invoice" | "payment" | "form" | "chat" | "store" | "link";
+  image?: { w: number; h: number };
 }
 
 export interface LinkMessage {
@@ -112,6 +120,8 @@ export interface LinkMessage {
   /** On a taskiem note, the words asked of Taskiem. */
   asked?: string;
   sender_name?: string;
+  /** Who of this business sent it (our own messages only): Edit is theirs alone. */
+  sender?: string;
   card?: DocCard;
   attachment?: Attachment;
   forwarded?: boolean;
@@ -120,6 +130,10 @@ export interface LinkMessage {
   reply?: Quote;
   read_at?: string;
   created_at: string;
+  /** When its sender last changed its words ("Edited"), and how many times
+   * (chat-previews-and-editing.md §3). */
+  edited_at?: string | null;
+  edits?: number;
   /** The people's emoji on it, from both businesses (see Reaction). */
   reactions?: Reaction[];
   /** You starred it (a star is yours alone). */

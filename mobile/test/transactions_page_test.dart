@@ -106,6 +106,13 @@ void main() {
     expect(txSub(e1), 'Paystack (main) · P-1 · invoice INV-0104');
     expect(txSub(e2), 'Cash', reason: 'its words are its title; the kind and the account the same');
     expect(txSub(e3), 'Expense · Cash · x');
+    // Taskiem's own references never show; a payments account's do.
+    for (final r in ['entered:87a17496', 'sale:k', 'posting:p', 'chat:n', 'tnt:x', 'purchase:y', 'thing-sale:z', 'withdraw:w']) {
+      expect(shownReference(r), '', reason: r);
+    }
+    for (final r in ['P-1', 'T1234567890']) {
+      expect(shownReference(r), r);
+    }
     expect(whereWords('iswallet/taskiem'), 'Taskiem wallet');
     expect(txStatus(status: e4.status, toMatch: false, direction: 'out'), (word: 'Reversed', tone: CardTone.plain));
     expect(txStatus(status: 'settled', toMatch: true, direction: 'in'), (word: 'To match', tone: CardTone.warn));

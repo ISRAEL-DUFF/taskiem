@@ -88,10 +88,13 @@ import {
   useOutbox,
 } from "../lib/outboxStore";
 import { ThreadJump } from "./ThreadParts";
+import { LinkCard as LinkPreviewCard } from "./ChatLinks";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
 import { ChatSearchPanel } from "./ChatSearch";
-import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
+import { BubbleShell, CopyItem, EditedMark, EditItem, PopItem, Ticks } from "./BubbleShell";
+import { canEdit, editTarget, lastEditable, saveEdit } from "../lib/edits";
+import type { EditTarget } from "./ChatComposer";
 import { ReadMore, useFold } from "./ReadMore";
 import { useChatLive } from "./ChatLive";
 import {
@@ -103,6 +106,8 @@ import {
 } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
 import { PayDiaryState } from "./PayDiary";
+import { FileCard } from "./ChatFiles";
+import { frameOf } from "../lib/chatfiles";
 
 // The conversation with a linked business (business links L3; §5.5): the
 // stream of bubbles, theirs on the left and ours on the right, grouped by
@@ -395,6 +400,7 @@ function AttachmentView({
           <img src={m.localPreview} alt="Your photo" />
         </span>
       );
+    if (a.kind === "file") return <FileCard a={a} />;
     return (
       <span className="chat-file">
         <Icon name="file" />
@@ -404,16 +410,21 @@ function AttachmentView({
     );
   }
   const src = fileURL(m);
-  if (a.kind === "photo")
+  if (a.kind === "photo") {
+    // At its own proportions before it has loaded (§1.1).
+    const frame = frameOf(a);
     return (
       <a href={src} target="_blank" rel="noopener" className="chat-photo">
         <img
           src={src}
           alt={m.mine ? "Your photo" : `Photo from ${other}`}
           loading="lazy"
+          width={frame?.width}
+          height={frame?.height}
         />
       </a>
     );
+  }
   if (a.kind === "voice")
     return (
       <audio
@@ -425,11 +436,12 @@ function AttachmentView({
       />
     );
   return (
-    <a href={src} download={a.name || true} className="chat-file">
-      <Icon name="file" />
-      <span className="name">{attachmentLabel(a)}</span>
-      <span className="hint">{fileSize(a.size)}</span>
-    </a>
+    <FileCard
+      a={a}
+      src={src}
+      who={m.mine ? "You" : m.sender_name ? `${m.sender_name}, ${other}` : other}
+      at={m.created_at}
+    />
   );
 }
 
@@ -615,21 +627,10 @@ function InfoSheet({
   );
 }
 
-/** A link's preview in its bubble: the page's host, title and words. */
-function PreviewCard({ p }: { p: LinkPreview }) {
-  return (
-    <a
-      className="chat-preview"
-      href={p.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      data-testid="chat-preview"
-    >
-      <span className="host">{p.host}</span>
-      <span className="title">{p.title}</span>
-      {p.description && <span className="desc">{p.description}</span>}
-    </a>
-  );
+/** A link's card at the top of its bubble (chat-previews-and-editing.md
+ * §2.1): the picture is this business's own copy, from Taskiem. */
+function PreviewCard({ p, link, id }: { p: LinkPreview; link: string; id: string }) {
+  return <LinkPreviewCard p={p} src={`/v1/link-chats/${encodeURIComponent(link)}/previews/${encodeURIComponent(id)}`} />;
 }
 
 function Bubble({
@@ -645,6 +646,7 @@ function Bubble({
   onSaveAs,
   onSavePhoto,
   onHide,
+  onEdit,
   onJump,
   flash = false,
   first = true,
@@ -676,6 +678,8 @@ function Bubble({
    * given where the conversation fetches it. */
   onSavePhoto?: (url: string) => void;
   onHide?: (m: LinkMessage) => void;
+  /** Edits one of ours (its words into the box). */
+  onEdit?: (m: LinkMessage) => void;
   /** Goes to the message a quote quotes. */
   onJump?: (id: string) => void;
   /** Shown for a moment after a jump lands on it. */
@@ -726,7 +730,7 @@ function Bubble({
   // The time and ticks sit in the corner of the last line of text (the text
   // keeps room for them); with a photo only, a link preview or a card they
   // have a row of their own.
-  const inline = !card && !!m.body && !m.preview && local !== "failed";
+  const inline = !card && !!m.body && local !== "failed";
   return (
     <BubbleShell
       id={m.id}
@@ -786,6 +790,7 @@ function Bubble({
                     </PopItem>
                   )}
                   {!card && m.body && <CopyItem text={m.body} />}
+                  {onEdit && canEdit(m) && <EditItem onClick={() => (close(), onEdit(m))} />}
                   {!card && m.body && onSaveAs && <SaveAsItem text={m.body} onSave={onSaveAs} close={close} />}
                   {photo && onSavePhoto && (
                     <PhotoAccountItems
@@ -862,6 +867,7 @@ function Bubble({
                 <Icon name="star" />
               </span>
             )}
+            <EditedMark at={m.edited_at} />
             <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
               {clock(m.created_at)}
             </time>
@@ -996,13 +1002,14 @@ function Bubble({
               live={live}
             />
           )}
+          {m.preview && !local && <PreviewCard p={m.preview} link={m.link} id={m.id} />}
           {m.body && (
             <span className="text">
               <MentionText text={fold.shown} mentions={m.mentions} />
               {fold.folded && <ReadMore onClick={fold.more} />}
               {inline && (
                 <span
-                  className={`stamp-gap${m.mine ? " mine" : ""}`}
+                  className={`stamp-gap${m.mine ? " mine" : ""}${m.edited_at ? " edited" : ""}`}
                   aria-hidden="true"
                 />
               )}
@@ -1020,7 +1027,6 @@ function Bubble({
           {(m.mentions ?? []).map((x) =>
             x.kind === "saved" && x.saved ? <SavedCardView key={`saved:${x.name}`} card={x.saved} mine={m.mine} saveTo="business" /> : null,
           )}
-          {m.preview && <PreviewCard p={m.preview} />}
         </>
       )}
     </BubbleShell>
@@ -1205,6 +1211,7 @@ export function ConversationPane({
   const { can } = useAuth();
   const write = can("chat.trade") && conv.state === "active";
   const [messages, setMessages] = useState<LinkMessage[]>();
+  const editRef = useRef<(t: EditTarget, text: string) => void>(undefined);
   // Stars being saved: a copy of a message read before the star was saved
   // (the live stream's look after a read mark, a refresh on its way) must
   // not take the star back off. Held until the server's copy agrees, and
@@ -1400,9 +1407,12 @@ export function ConversationPane({
   // the rest named as tags, each shared as a card with the message.
   const savedTexts = useSavedPicks("share");
   const c = useComposer<LinkMessage>({
+    onEdit: (t, text) => editRef.current?.(t, text),
+    lastEditable: () => (write ? lastEditable(messages) : undefined),
     draftKey: conv.link,
     rules: BUSINESS_FILES,
     enabled: write,
+    linkChat: `link:${conv.link}`,
     sources: {
       // With chat tools, the business we are talking to is not offered:
       // it gets the message already.
@@ -1480,6 +1490,17 @@ export function ConversationPane({
   const searchButton = useRef<HTMLButtonElement>(null);
   const act = useAction();
   const path = `/v1/link-chats/${conv.link}`;
+  // An edit saved (chat-previews-and-editing.md §3.2).
+  editRef.current = (t, text) =>
+    void saveEdit({
+      url: `${path}/messages/${t.id}`,
+      t,
+      text,
+      set: setMessages,
+      unwrap: (r) => (r as { message: LinkMessage }).message,
+      keepWords: c.keepWords,
+      reload: () => onChanged(),
+    });
   // The thread's scrolling, as WhatsApp Web's: older messages load as the
   // reader nears the top; the view follows new messages only while the
   // reader is at the bottom; "N unread messages" marks where they begin;
@@ -1748,6 +1769,7 @@ export function ConversationPane({
         : undefined,
       file,
       mentions: s.mentions,
+      linkPreview: s.preview,
       state: "sending",
       at: new Date().toISOString(),
     };
@@ -2080,6 +2102,7 @@ export function ConversationPane({
                   : undefined
               }
               onHide={can("chat.trade") ? hide : undefined}
+              onEdit={write && !m.local ? (x) => c.startEdit(editTarget(x)) : undefined}
               onReact={write && !m.local ? react : undefined}
               onStar={m.local ? undefined : star}
               onInfo={m.local ? undefined : setInfo}

@@ -25,6 +25,20 @@
         "pub"
       ],
       "reason": "Founder, 11 November 2026: the phone app's Dart packages need not meet the server's and web's gate in full. MPL-2.0 is file-level: only changes to its own files would have to be shared, and the app ships compiled (file_picker's Linux part, dbus, is one)."
+    },
+    {
+      "licence": "Zlib",
+      "ecosystems": [
+        "pub"
+      ],
+      "reason": "The phone app's PDF viewer (pdfrx, pdfium_dart) needs the archive package, under Zlib (docs/spec/chat-previews-and-editing.md §6.1). A permissive licence: use in compiled software on the sole condition of keeping its notice in the source. Added 26 November 2026 with the file previews, under the founder's rule of 11 November that the app's Dart packages need not meet the server's gate in full; for the founder to confirm."
+    },
+    {
+      "licence": "bzip2-1.0.6",
+      "ecosystems": [
+        "pub"
+      ],
+      "reason": "The phone app's PDF viewer (pdfrx, pdfium_dart) needs the archive package, under bzip2-1.0.6 (docs/spec/chat-previews-and-editing.md §6.1). A permissive licence: use in compiled software on the sole condition of keeping its notice in the source. Added 26 November 2026 with the file previews, under the founder's rule of 11 November that the app's Dart packages need not meet the server's gate in full; for the founder to confirm."
     }
   ],
   "exceptions": {

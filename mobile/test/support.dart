@@ -3,12 +3,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/api/transport.dart';
 import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/session.dart';
+import 'package:taskiem/chat/menu.dart' show SelectionBar, SelectionHead;
+import 'package:taskiem/chat/thread.dart' show ThreadView, ThreadViewState;
 import 'package:taskiem/theme/theme.dart';
 
 /// Loads the app's own fonts, so a test draws the web's Inter, not the test
@@ -106,4 +109,51 @@ Future<void> snap(dynamic t, String name) async {
     // ignore: avoid_dynamic_calls
     File('$dir/$name.png').writeAsBytesSync(png!.buffer.asUint8List());
   });
+}
+
+/// What the selection bar offers for the messages held now (a message
+/// held is selected, as WhatsApp's): its buttons, then those under its ⋮.
+List<String> heldActions(WidgetTester t) {
+  final head = find.byType(SelectionHead);
+  if (head.evaluate().isEmpty) return const [];
+  return [for (final a in t.widget<SelectionHead>(head.first).selection.actions()) a.label];
+}
+
+/// Chooses [label] for the messages held: its button on the selection bar,
+/// or from under the bar's ⋮.
+Future<void> chooseHeld(WidgetTester t, String label) async {
+  final bar = find.byType(SelectionBar);
+  expect(bar, findsOneWidget, reason: 'a message held');
+  final button = find.descendant(of: bar, matching: find.bySemanticsLabel(label));
+  if (button.evaluate().isNotEmpty) {
+    await t.tap(button.first);
+  } else {
+    await t.tap(find.descendant(of: bar, matching: find.bySemanticsLabel('More options')));
+    await t.pumpAndSettle();
+    await t.tap(find.text(label).last);
+  }
+  await t.pump();
+}
+
+/// The chat's thread moved until [f] is built and in sight: the thread
+/// builds only what is near the view, as WhatsApp's. Found where it is now,
+/// it stays; else from the top of the thread down.
+Future<void> seeInThread(WidgetTester t, Finder f) async {
+  if (f.evaluate().isNotEmpty) return;
+  final thread = t.state<ThreadViewState<dynamic>>(find.byWidgetPredicate((w) => w is ThreadView).first);
+  final s = thread.scroll;
+  // Its top: measured as it comes near, so found in a few steps.
+  for (var i = 0; i < 20 && f.evaluate().isEmpty; i++) {
+    final top = s.position.minScrollExtent;
+    s.jumpTo(top);
+    await t.pump();
+    if (s.position.minScrollExtent == top) break;
+  }
+  for (var i = 0; i < 200 && f.evaluate().isEmpty && s.position.pixels < s.position.maxScrollExtent; i++) {
+    s.jumpTo((s.position.pixels + 300).clamp(s.position.minScrollExtent, s.position.maxScrollExtent));
+    await t.pump();
+  }
+  // Once it is built, its whole self in sight.
+  if (f.evaluate().isNotEmpty) await t.ensureVisible(f.first);
+  await t.pump();
 }

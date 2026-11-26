@@ -7543,6 +7543,10 @@
       "text": "Ọ bụ naanị onye na-edegara azụmahịa ejikọrọ ọnụ maka {org} nwere ike iziga nke a.",
       "reviewed": false
     },
+    "chat.link.edited": {
+      "text": "✏️ Edeziri: {words}",
+      "reviewed": false
+    },
     "chat.link.ask_what": {
       "text": "Gịnị ka ị chọrọ ịgwa *{name}*? Ziga *ask {name}* na ozi gị.",
       "reviewed": false

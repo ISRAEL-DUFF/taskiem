@@ -305,6 +305,41 @@ func keyboard(rows [][]InlineButton) (map[string]any, error) {
 	return map[string]any{"inline_keyboard": kb}, nil
 }
 
+// EditMessageText changes a sent message's words in place (editMessageText),
+// its *bold* as entities as in SendMessage. Words already as given are fine.
+func (c *Client) EditMessageText(ctx context.Context, chatID, messageID int64, text string) error {
+	if strings.TrimSpace(text) == "" {
+		return errors.New("telegram: editMessageText: empty text")
+	}
+	plain, ents := Bold(text)
+	body := map[string]any{"chat_id": chatID, "message_id": messageID, "text": clip(plain, 4096), "link_preview_options": map[string]any{"is_disabled": true}}
+	if ents = clipEntities(ents, 4095); len(ents) > 0 {
+		body["entities"] = ents
+	}
+	return notModified(c.call(ctx, "editMessageText", body, nil))
+}
+
+// EditMessageCaption changes a sent photo's caption in place
+// (editMessageCaption).
+func (c *Client) EditMessageCaption(ctx context.Context, chatID, messageID int64, caption string) error {
+	plain, ents := Bold(caption)
+	body := map[string]any{"chat_id": chatID, "message_id": messageID, "caption": clip(plain, 1024)}
+	if ents = clipEntities(ents, 1023); len(ents) > 0 {
+		body["caption_entities"] = ents
+	}
+	return notModified(c.call(ctx, "editMessageCaption", body, nil))
+}
+
+// notModified is nil for Telegram's "message is not modified" (the words
+// were already so), else err.
+func notModified(err error) error {
+	var ae *APIError
+	if errors.As(err, &ae) && ae.Status == http.StatusBadRequest && strings.Contains(ae.Description, "message is not modified") {
+		return nil
+	}
+	return err
+}
+
 // RemoveKeyboard takes the inline keyboard off a sent message, so a
 // decision cannot be tapped twice. A message already without one is fine.
 func (c *Client) RemoveKeyboard(ctx context.Context, chatID, messageID int64) error {
