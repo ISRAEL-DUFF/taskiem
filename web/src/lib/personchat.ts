@@ -1,3 +1,4 @@
+import type { LinkPreview } from "./linkchat";
 // A person's chats with businesses (docs/spec/taskiem-for-everyone.md §8,
 // §9, §15): what the person's side of the API answers (GET /v1/me/chats…,
 // GET /v1/chat-links/{code}, GET /v1/me/storefront-orders), and the words
@@ -105,6 +106,8 @@ export interface PersonMessage {
   mine: boolean;
   kind: "text" | "media" | "card";
   body: string;
+  /** The first link's card; its picture at the chat's previews route. */
+  preview?: LinkPreview;
   sender_name?: string;
   card?: AppCard;
   attachment?: AppAttachment;

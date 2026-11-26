@@ -53,6 +53,7 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/messages", s.sendLinkMessage)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/files", s.sendLinkFile)
 	r.Get("/link-chats/{link}/files/{id}", s.linkFile)
+	r.Get("/link-chats/{link}/previews/{id}", s.linkPreviewImage)
 	r.Get("/link-chats/{link}/items", s.linkChatItems)
 	r.Get("/link-chats/{link}/photo", s.linkChatPhoto)
 	r.Get("/link-chats/{link}/refs", s.linkChatRefs)
@@ -386,6 +387,8 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		// ClientID is an id the sender made: the same send repeated (a retry
 		// after a dropped connection) is answered with the first message.
 		ClientID *uuid.UUID `json:"client_id"`
+		// Preview: the card the composer showed ({id}), or false for none.
+		Preview previewChoice `json:"preview"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -486,7 +489,7 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		ments = append(ments, shared...)
 	}
-	m, err := s.sendLink(r.Context(), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo, Mentions: ments, ClientID: in.ClientID})
+	m, err := s.sendLink(withPreviewChoice(r.Context(), in.Preview), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo, Mentions: ments, ClientID: in.ClientID})
 	if errors.Is(err, links.ErrDuplicate) {
 		// The same send, repeated while the first was being written.
 		if first, ferr := s.sentWith(r.Context(), p, link, in.ClientID); ferr == nil && first != nil {
@@ -641,6 +644,9 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 	// The first link's preview, fetched by our side before the message is
 	// written (link_preview.go), only once the message is known to be one
 	// that can be sent: the link active and the sender allowed to write.
+	// Its picture is stored by each side in its own storage, and removed
+	// again if the message is not sent.
+	var kept []func()
 	if o.Preview == nil && previewURL(text, s.previewAnyPort) != "" {
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 			l, err := links.GetTx(ctx, tx, link)
@@ -655,9 +661,41 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 			return links.Message{}, err
 		}
 		if as != nil || p.Can(PermChatTrade) {
-			o.Preview = s.linkPreview(ctx, p, text)
+			made := s.previewForSend(ctx, p, "link:"+link.String(), "t:"+p.TenantID.String(), p.TenantID.String(), text, previewChoiceFrom(ctx))
+			if made != nil {
+				o.Preview = s.keepBusinessPreview(ctx, p.TenantID, made)
+				ours := o.Preview
+				kept = append(kept, func() { s.dropBusinessImage(ctx, p.TenantID, ours) })
+				if made.img != nil && s.Media != nil {
+					o.TheirImage = s.theirPreviewImage(made.img, &kept)
+				}
+			}
 		}
 	}
+	m, err := s.sendLinkKept(ctx, p, link, text, as, o)
+	if err != nil {
+		for _, undo := range kept {
+			undo()
+		}
+	}
+	return m, err
+}
+
+// theirPreviewImage makes the other business's copy of a preview's
+// picture in its own storage, noting how to remove it in kept.
+func (s *Server) theirPreviewImage(img *media.LinkImage, kept *[]func()) func(context.Context, uuid.UUID) (*links.PreviewImage, error) {
+	return func(ctx context.Context, other uuid.UUID) (*links.PreviewImage, error) {
+		pi, err := s.keepBusinessImage(ctx, other, img)
+		if err != nil {
+			return nil, err
+		}
+		*kept = append(*kept, func() { s.dropBusinessImage(ctx, other, &links.Preview{Image: pi}) })
+		return pi, nil
+	}
+}
+
+// sendLinkKept is sendLinkAs once the preview is made.
+func (s *Server) sendLinkKept(ctx context.Context, p *Principal, link uuid.UUID, text string, as *links.Sender, o links.SendOpts) (links.Message, error) {
 	// The plan's messages per day (§13), counted against the sender.
 	lim, err := s.Store.LimitsFor(ctx, p.TenantID)
 	if err != nil {
@@ -1251,6 +1289,43 @@ func (s *Server) linkFile(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+// linkPreviewImage is GET /v1/link-chats/{link}/previews/{id}: this
+// side's copy of the picture of a message's link preview (?size=small:
+// 320 pixels on its longest side, else 800), streamed through the API so
+// no phone or browser loads it from the page's site.
+func (s *Server) linkPreviewImage(w http.ResponseWriter, r *http.Request) {
+	link, err := linkParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	pair, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil || s.Media == nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	p := principalFrom(r.Context())
+	var img links.PreviewImage
+	if err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		var err error
+		img, err = links.PreviewImageTx(r.Context(), tx, p.TenantID, link, pair)
+		return err
+	}); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	}
+	path := img.Path
+	if r.URL.Query().Get("size") == "small" && img.Small != "" {
+		path = img.Small
+	}
+	data, _, err := s.Media.GetFile(r.Context(), p.TenantID, path)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writePreviewImage(w, data)
+}
+
 // linkTyping is POST /v1/link-chats/{link}/typing: we are typing in the
 // conversation, for the other side's typing line, for a few seconds.
 func (s *Server) linkTyping(w http.ResponseWriter, r *http.Request) {
@@ -1361,10 +1436,19 @@ func (s *Server) forwardLinkMessage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// The preview's picture goes with it: ours is the same file, theirs a
+	// copy in each business's own storage.
+	var pic *media.LinkImage
+	if m.Preview != nil && m.Preview.Image != nil && s.Media != nil {
+		pic = s.businessPreviewImage(ctx, p.TenantID, m.Preview.Image)
+	}
 	out := []links.Message{}
 	for _, to := range in.To {
 		o := links.SendOpts{Forwarded: true, Preview: m.Preview}
 		var kept []func()
+		if pic != nil {
+			o.TheirImage = s.theirPreviewImage(pic, &kept)
+		}
 		if file != nil {
 			att := func(ctx context.Context, t uuid.UUID) (*links.Attachment, error) {
 				f, err := s.Media.PutChatFile(ctx, t, data)

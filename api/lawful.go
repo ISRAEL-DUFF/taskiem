@@ -394,7 +394,7 @@ func (s *Server) lawfulChatsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID,
 	}
 	for _, c := range refs {
 		rows, err := tx.Query(ctx, `SELECT m.id, m.mine, m.kind, m.sealed, m.attachment, m.deleted_at IS NOT NULL, m.created_at, f.sealed
-			FROM people_messages m LEFT JOIN people_files f ON $4 AND f.person_id = m.person_id AND f.message_id = m.id
+			FROM people_messages m LEFT JOIN people_files f ON $4 AND f.person_id = m.person_id AND f.message_id = m.id AND f.kind = 'file'
 			WHERE m.person_id = $1 AND m.chat_id = $2 AND m.created_at >= $3 AND m.created_at < $5 ORDER BY m.created_at, m.id`,
 			person, c.id, lr.From, lr.Files, lr.To)
 		if err != nil {

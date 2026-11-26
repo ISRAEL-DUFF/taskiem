@@ -92,12 +92,18 @@ export interface Attachment {
   name?: string;
 }
 
-/** A link's preview: the page's host, title and description. */
+/** A link's preview (chat-previews-and-editing.md §2): the page's host,
+ * title, description and site's name; its picture's size, the picture
+ * itself at the chat's previews route (Taskiem's own copy); or a link to
+ * Taskiem itself, not fetched, shown as a plain card. */
 export interface LinkPreview {
   url: string;
   host: string;
   title: string;
   description?: string;
+  site?: string;
+  taskiem?: "order" | "invoice" | "payment" | "form" | "chat" | "store" | "link";
+  image?: { w: number; h: number };
 }
 
 export interface LinkMessage {

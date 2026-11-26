@@ -10790,6 +10790,8 @@ paths:
               additionalProperties: false
               required: [text]
               properties:
+                preview:
+                  $ref: '#/components/schemas/LinkPreviewChoice'
                 text:
                   type: string
                   maxLength: 4000
@@ -11985,6 +11987,167 @@ paths:
                 format: binary
         default:
           $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/previews/{id}:
+    get:
+      operationId: linkPreviewImage
+      tags:
+      - Links
+      summary: The picture of a message's link preview
+      description: >-
+        This business's own copy of the picture, by the message's id, streamed through the API: no phone or browser loads it from the page's site.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: size
+        in: query
+        required: false
+        description: small for the picture at 320 pixels on its longest side; else 800
+        schema:
+          type: string
+          enum: [small]
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-preview:
+    post:
+      operationId: previewLink
+      tags:
+      - Links
+      summary: Preview a link being typed
+      description: >-
+        The card of a link typed in a chat's message box (docs/spec/chat-previews-and-editing.md §2.2), for a chat the person can
+        write in: chat is link:<link>, customer:<chat>, people:<chat>, group:<group> or door:<chat> (a person's chat with a business).
+        The same limits and remembered pages as sending. The card, and its picture, are held 30 minutes for the message sent with it
+        (preview: {id}); a picture never sent is never kept.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [url, chat]
+              properties:
+                url:
+                  type: string
+                  maxLength: 4000
+                chat:
+                  type: string
+                  maxLength: 100
+      responses:
+        '200':
+          description: The card
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [id, url, host, title]
+                properties:
+                  id:
+                    type: string
+                    description: "What the message is sent with: preview {id}"
+                  url:
+                    type: string
+                  host:
+                    type: string
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  site:
+                    type: string
+                  taskiem:
+                    type: string
+                    enum: [order, invoice, payment, form, chat, store, link]
+                  image:
+                    type: object
+                    additionalProperties: false
+                    required: [id, w, h]
+                    description: Its picture, at GET /v1/link-preview/{id}/image
+                    properties:
+                      id:
+                        type: string
+                      w:
+                        type: integer
+                      h:
+                        type: integer
+        '204':
+          description: No card for this link (none could be made, or not now)
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-preview/{id}/image:
+    get:
+      operationId: heldLinkPreviewImage
+      tags:
+      - Links
+      summary: The picture of a link being typed
+      description: >-
+        The picture of a card made for your message box, while it is held.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 64
+      - name: size
+        in: query
+        required: false
+        description: small for the picture at 320 pixels on its longest side; else 800
+        schema:
+          type: string
+          enum: [small]
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/items:
     get:
       operationId: linkChatItems
@@ -13075,6 +13238,53 @@ paths:
                 format: binary
         default:
           $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/previews/{message}:
+    get:
+      operationId: customerPreviewImage
+      tags:
+      - Customers
+      summary: The picture of a message's link preview
+      description: >-
+        The business's own copy of the picture.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: size
+        in: query
+        required: false
+        description: small for the picture at 320 pixels on its longest side; else 800
+        schema:
+          type: string
+          enum: [small]
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/customer-chats/{id}/block:
     post:
       operationId: blockCustomer
@@ -13346,6 +13556,8 @@ paths:
               type: object
               additionalProperties: false
               properties:
+                preview:
+                  $ref: '#/components/schemas/LinkPreviewChoice'
                 text:
                   type: string
                   maxLength: 2000
@@ -25898,6 +26110,8 @@ paths:
               type: object
               additionalProperties: false
               properties:
+                preview:
+                  $ref: '#/components/schemas/LinkPreviewChoice'
                 text:
                   type: string
                   maxLength: 4000
@@ -26033,6 +26247,45 @@ paths:
                 type: string
                 format: binary
             audio/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/previews/{message}:
+    get:
+      operationId: personPreviewImage
+      tags:
+      - You
+      summary: The picture of a message's link preview
+      description: >-
+        Your own copy of the picture, in your chat with a business.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
               schema:
                 type: string
                 format: binary
@@ -28724,6 +28977,8 @@ paths:
               type: object
               additionalProperties: false
               properties:
+                preview:
+                  $ref: '#/components/schemas/LinkPreviewChoice'
                 text:
                   type: string
                   maxLength: 16000
@@ -28874,6 +29129,45 @@ paths:
                 type: string
                 format: binary
             application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/previews/{message}:
+    get:
+      operationId: groupPreviewImage
+      tags:
+      - People
+      summary: The picture of a group message's link preview
+      description: >-
+        The group's sealed copy of the picture, opened, for a member who sees the message.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
               schema:
                 type: string
                 format: binary
@@ -30483,6 +30777,8 @@ paths:
               type: object
               additionalProperties: false
               properties:
+                preview:
+                  $ref: '#/components/schemas/LinkPreviewChoice'
                 text:
                   type: string
                   maxLength: 4000
@@ -30640,6 +30936,45 @@ paths:
                 type: string
                 format: binary
             audio/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/previews/{message}:
+    get:
+      operationId: peoplePreviewImage
+      tags:
+      - People
+      summary: The picture of a message's link preview
+      description: >-
+        Your own sealed copy of the picture, opened.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The picture, a JPEG or a PNG
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
               schema:
                 type: string
                 format: binary
@@ -54027,6 +54362,8 @@ components:
           description: Who wrote it on the business's side (a first name), when someone did.
         card:
           $ref: '#/components/schemas/CustomerCard'
+        preview:
+          $ref: '#/components/schemas/LinkPreview'
         attachment:
           $ref: '#/components/schemas/ChatAttachment'
         offer:
@@ -54328,6 +54665,8 @@ components:
           $ref: '#/components/schemas/PeopleCard'
         location:
           $ref: '#/components/schemas/PeopleLocation'
+        preview:
+          $ref: '#/components/schemas/LinkPreview'
         attachment:
           $ref: '#/components/schemas/ChatAttachment'
         reply_to:
@@ -55007,6 +55346,8 @@ components:
           $ref: '#/components/schemas/PeopleCard'
         location:
           $ref: '#/components/schemas/PeopleLocation'
+        preview:
+          $ref: '#/components/schemas/LinkPreview'
         attachment:
           $ref: '#/components/schemas/ChatAttachment'
         reply_to:
@@ -56055,6 +56396,8 @@ components:
           type: string
         card:
           $ref: '#/components/schemas/CustomerCard'
+        preview:
+          $ref: '#/components/schemas/LinkPreview'
         attachment:
           $ref: '#/components/schemas/ChatAttachment'
         offer:
@@ -56205,6 +56548,53 @@ components:
                 type: string
               price_kobo:
                 type: integer
+    LinkPreview:
+      type: object
+      additionalProperties: false
+      required: [url, host, title]
+      description: >-
+        The first link's preview (docs/spec/chat-previews-and-editing.md §2), made by Taskiem's server when the message was sent
+        and kept with it. Its picture, when it has one, is Taskiem's own copy, at the chat's previews route; never the page's site.
+      properties:
+        url:
+          type: string
+        host:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        site:
+          type: string
+          description: The site's own name, when it gives one
+        taskiem:
+          type: string
+          enum: [order, invoice, payment, form, chat, store, link]
+          description: A link to Taskiem itself, not fetched as a page; shown as a plain card ("Taskiem · Order link")
+        image:
+          type: object
+          additionalProperties: false
+          required: [w, h]
+          description: The page's picture, its size; wide pictures go across the card, small or square ones in a square on the left
+          properties:
+            w:
+              type: integer
+            h:
+              type: integer
+    LinkPreviewChoice:
+      description: >-
+        What a message is sent with: the card the composer showed ({id}, from POST /v1/link-preview), or false when the person
+        closed it. Left out, the server makes the preview as the message is sent.
+      oneOf:
+      - type: boolean
+        enum: [false]
+      - type: object
+        additionalProperties: false
+        required: [id]
+        properties:
+          id:
+            type: string
+            maxLength: 64
     LinkMessage:
       type: object
       additionalProperties: false
@@ -56254,19 +56644,7 @@ components:
           type: boolean
           description: Forwarded from another conversation
         preview:
-          type: object
-          additionalProperties: false
-          required: [url, host, title]
-          description: The first link's preview, fetched by the sender's side when it was sent
-          properties:
-            url:
-              type: string
-            host:
-              type: string
-            title:
-              type: string
-            description:
-              type: string
+          $ref: '#/components/schemas/LinkPreview'
         mentions:
           type: array
           maxItems: 10

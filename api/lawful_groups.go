@@ -121,7 +121,7 @@ func (s *Server) lawfulGroupsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID
 				return err
 			}
 			rows, err := tx.Query(ctx, `SELECT x.id, x.sender_id, x.kind, x.sealed, x.attachment, x.deleted_at IS NOT NULL, x.created_at, f.sealed
-				FROM group_messages x LEFT JOIN group_files f ON $4 AND f.group_id = x.group_id AND f.message_id = x.id
+				FROM group_messages x LEFT JOIN group_files f ON $4 AND f.group_id = x.group_id AND f.message_id = x.id AND f.kind = 'file'
 				LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
 				WHERE x.group_id = $2 AND x.kind <> 'event' AND k.hidden_at IS NULL AND x.created_at >= $3 AND x.created_at < $5
 				  AND CASE WHEN $6 = 'sent' THEN x.sender_id = $1 ELSE ($7::uuid IS NULL OR x.sender_id = $1 OR x.sender_id = $7) END

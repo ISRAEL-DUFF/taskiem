@@ -88,6 +88,7 @@ import {
   useOutbox,
 } from "../lib/outboxStore";
 import { ThreadJump } from "./ThreadParts";
+import { LinkCard as LinkPreviewCard } from "./ChatLinks";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
 import { ChatSearchPanel } from "./ChatSearch";
@@ -615,21 +616,10 @@ function InfoSheet({
   );
 }
 
-/** A link's preview in its bubble: the page's host, title and words. */
-function PreviewCard({ p }: { p: LinkPreview }) {
-  return (
-    <a
-      className="chat-preview"
-      href={p.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      data-testid="chat-preview"
-    >
-      <span className="host">{p.host}</span>
-      <span className="title">{p.title}</span>
-      {p.description && <span className="desc">{p.description}</span>}
-    </a>
-  );
+/** A link's card at the top of its bubble (chat-previews-and-editing.md
+ * §2.1): the picture is this business's own copy, from Taskiem. */
+function PreviewCard({ p, link, id }: { p: LinkPreview; link: string; id: string }) {
+  return <LinkPreviewCard p={p} src={`/v1/link-chats/${encodeURIComponent(link)}/previews/${encodeURIComponent(id)}`} />;
 }
 
 function Bubble({
@@ -726,7 +716,7 @@ function Bubble({
   // The time and ticks sit in the corner of the last line of text (the text
   // keeps room for them); with a photo only, a link preview or a card they
   // have a row of their own.
-  const inline = !card && !!m.body && !m.preview && local !== "failed";
+  const inline = !card && !!m.body && local !== "failed";
   return (
     <BubbleShell
       id={m.id}
@@ -996,6 +986,7 @@ function Bubble({
               live={live}
             />
           )}
+          {m.preview && !local && <PreviewCard p={m.preview} link={m.link} id={m.id} />}
           {m.body && (
             <span className="text">
               <MentionText text={fold.shown} mentions={m.mentions} />
@@ -1020,7 +1011,6 @@ function Bubble({
           {(m.mentions ?? []).map((x) =>
             x.kind === "saved" && x.saved ? <SavedCardView key={`saved:${x.name}`} card={x.saved} mine={m.mine} saveTo="business" /> : null,
           )}
-          {m.preview && <PreviewCard p={m.preview} />}
         </>
       )}
     </BubbleShell>
@@ -1403,6 +1393,7 @@ export function ConversationPane({
     draftKey: conv.link,
     rules: BUSINESS_FILES,
     enabled: write,
+    linkChat: `link:${conv.link}`,
     sources: {
       // With chat tools, the business we are talking to is not offered:
       // it gets the message already.
@@ -1748,6 +1739,7 @@ export function ConversationPane({
         : undefined,
       file,
       mentions: s.mentions,
+      linkPreview: s.preview,
       state: "sending",
       at: new Date().toISOString(),
     };

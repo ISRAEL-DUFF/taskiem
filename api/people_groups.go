@@ -110,6 +110,7 @@ func (s *Server) groupRoutes(r chi.Router) {
 	r.Post("/me/groups/{id}/messages", s.sendGroupMessage)
 	r.Post("/me/groups/{id}/files", s.sendGroupFile)
 	r.Get("/me/groups/{id}/files/{message}", s.groupFile)
+	r.Get("/me/groups/{id}/previews/{message}", s.groupPreviewImage)
 	r.Put("/me/groups/{id}/messages/{message}", s.markGroupMessage)
 	r.Delete("/me/groups/{id}/messages/{message}", s.deleteGroupMessage)
 	r.Get("/me/groups/{id}/messages/{message}/info", s.groupMessageInfo)
@@ -132,7 +133,7 @@ func (s *Server) groupPublicRoutes(r chi.Router) {
 // (personalAllowed).
 var groupPersonRoutes = regexp.MustCompile(`^((GET|POST) /v1/me/groups|GET /v1/me/groups/(invites|search|starred)|POST /v1/me/groups/invites/[^/]+/(accept|decline)|` +
 	`POST /v1/me/forward|(POST|DELETE) /v1/me/group-links/[^/]+/join|(GET|PUT|DELETE) /v1/me/groups/[^/]+|PUT /v1/me/groups/[^/]+/me|POST /v1/me/groups/[^/]+/(leave|read|typing|messages|files|members|link|report|appeal)|` +
-	`(GET|PUT|DELETE) /v1/me/groups/[^/]+/photo|GET /v1/me/groups/[^/]+/(members|link|link/qr|joins|messages|media|files/[^/]+)|(PUT|DELETE) /v1/me/groups/[^/]+/members/[^/]+|` +
+	`(GET|PUT|DELETE) /v1/me/groups/[^/]+/photo|GET /v1/me/groups/[^/]+/(members|link|link/qr|joins|messages|media|files/[^/]+|previews/[^/]+)|(PUT|DELETE) /v1/me/groups/[^/]+/members/[^/]+|` +
 	`POST /v1/me/groups/[^/]+/members/[^/]+/block|DELETE /v1/me/groups/[^/]+/(invites/[^/]+|link)|POST /v1/me/groups/[^/]+/joins/[^/]+/(approve|decline)|` +
 	`(PUT|DELETE) /v1/me/groups/[^/]+/messages/[^/]+|GET /v1/me/groups/[^/]+/messages/[^/]+/(info|reactions|card)|POST /v1/me/groups/[^/]+/messages/[^/]+/paid)$`)
 
@@ -149,6 +150,9 @@ const groupPhotoRow = "gp"
 
 func groupMsgKey(id uuid.UUID) string  { return "gm:" + id.String() }
 func groupFileRow(id uuid.UUID) string { return "gf:" + id.String() }
+
+// groupLinkImageRow seals the picture of a group message's link preview.
+func groupLinkImageRow(id uuid.UUID) string { return "gli:" + id.String() }
 
 func openGroupInfo(key []byte, group uuid.UUID, sealed []byte) groupInfo {
 	var v groupInfo

@@ -30,9 +30,11 @@ var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/
 	`POST /v1/me/phone/(start|verify)|POST /v1/auth/second-proof/(email/start|email/verify|password|passkey/options|passkey)|` +
 	`GET /v1/me/invitations|POST /v1/me/invitations/[^/]+/(accept|decline)|POST /v1/auth/logout|` +
 	// A person's chats with businesses (customer_door.go, stage 2).
-	`(GET|POST) /v1/me/chats|(GET|PUT) /v1/me/chats/[^/]+|GET /v1/me/chats/[^/]+/(messages|files/[^/]+|shop|services|services/[^/]+/times|orders|orders/[^/]+/pay)|` +
+	`(GET|POST) /v1/me/chats|(GET|PUT) /v1/me/chats/[^/]+|GET /v1/me/chats/[^/]+/(messages|files/[^/]+|previews/[^/]+|shop|services|services/[^/]+/times|orders|orders/[^/]+/pay)|` +
 	`POST /v1/me/chats/[^/]+/(messages|files|read|typing|block|report|orders|bookings)|DELETE /v1/me/chats/[^/]+/block|` +
 	`(GET|POST) /v1/me/chats/[^/]+/invoices/[^/]+/transfer|` +
+	// The composer's link previews (link_preview_chats.go).
+	`POST /v1/link-preview|GET /v1/link-preview/[^/]+/image|` +
 	// The person's own devices for pushes on You (push.go, 00460).
 	`GET /v1/me/push(/key)?|(PUT|DELETE) /v1/me/push|(PATCH|DELETE) /v1/me/push/[^/]+|` +
 	// Orders on You and saved addresses (person_orders.go, person_addresses.go, stage 3).

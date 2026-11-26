@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -181,6 +182,10 @@ type appMessage struct {
 	// The business's copy of a file (its storage path) and the person's.
 	bizFile    map[string]any
 	personFile *sentFile
+	// preview is the first link's preview; bizPreview the business's copy
+	// of it, its picture in the business's own storage.
+	preview    *madePreview
+	bizPreview *links.Preview
 	offer      bool
 	senderID   string // the business's member, or system:*
 	senderName string
@@ -248,9 +253,22 @@ func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage)
 			bizCard, _ = json.Marshal(customerCard{Type: m.card.Type, Sealed: env})
 		}
 	}
-	if err := tx.QueryRow(ctx, `INSERT INTO customer_messages (id, tenant_id, conversation_id, mine, kind, body, sender_id, sender_name, client_id, delivery, card, attachment, offer)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING created_at`,
-		m.id, m.tenant, m.thread, !m.fromPerson, m.kind, body, senderID, m.senderName, client, delivery, bizCard, bizAtt, m.offer).Scan(&at); err != nil {
+	// The link's preview: the business's sealed as the words are, the
+	// person's in their own row.
+	var bizPreview, personPreview []byte
+	if m.preview != nil {
+		personPreview = links.StoredPreview(m.preview.view())
+		bp := m.bizPreview
+		if bp == nil {
+			bp = &m.preview.Preview
+		}
+		if bizPreview, err = s.sealCustomerPreview(ctx, tx, m.tenant, m.subject, bp); err != nil {
+			return at, conv, err
+		}
+	}
+	if err := tx.QueryRow(ctx, `INSERT INTO customer_messages (id, tenant_id, conversation_id, mine, kind, body, sender_id, sender_name, client_id, delivery, card, attachment, offer, preview)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING created_at`,
+		m.id, m.tenant, m.thread, !m.fromPerson, m.kind, body, senderID, m.senderName, client, delivery, bizCard, bizAtt, m.offer, bizPreview).Scan(&at); err != nil {
 		return at, conv, err
 	}
 	// Made here only when the business writes first: not one of the
@@ -265,10 +283,18 @@ func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage)
 		pclient = &m.clientID
 	}
 	shown := m.senderName
-	if _, err := tx.Exec(ctx, `INSERT INTO person_messages (id, person_id, conversation_id, tenant_id, mine, kind, body, sender_name, card, attachment, offer, client_id, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-		m.id, m.person, conv, m.tenant, m.fromPerson, m.kind, m.text, shown, card, personAtt, m.offer, pclient, at); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO person_messages (id, person_id, conversation_id, tenant_id, mine, kind, body, sender_name, card, attachment, offer, client_id, created_at, preview)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		m.id, m.person, conv, m.tenant, m.fromPerson, m.kind, m.text, shown, card, personAtt, m.offer, pclient, at, personPreview); err != nil {
 		return at, conv, err
+	}
+	if m.preview != nil && m.preview.img != nil {
+		// The person's copy of the link's picture, kept as their files are.
+		img := m.preview.img
+		if _, err := tx.Exec(ctx, `INSERT INTO person_files (id, person_id, tenant_id, message_id, kind, type, size, data) VALUES ($1, $2, $3, $4, 'link_image', $5, $6, $7)`,
+			uuid.Must(uuid.NewV7()), m.person, m.tenant, m.id, img.Type, len(img.Big), img.Big); err != nil {
+			return at, conv, err
+		}
 	}
 	if m.personFile != nil {
 		if _, err := tx.Exec(ctx, `INSERT INTO person_files (id, person_id, tenant_id, message_id, type, size, name, data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -344,6 +370,14 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 		bizFile = map[string]any{"kind": v.Kind, "type": f.Type, "size": f.Size, "name": v.Name, "path": f.Path}
 		out.Kind, out.Attachment = "media", v
 	}
+	// The first link's preview, on words only; its picture in our storage.
+	var bizPreview *links.Preview
+	if in.Preview != nil && in.File == nil && in.Card == nil {
+		bizPreview = s.keepBusinessPreview(ctx, tenant, in.Preview)
+		out.Preview = in.Preview.view()
+	} else {
+		in.Preview = nil
+	}
 	var again *customerMessageView
 	var name string
 	var muted bool
@@ -379,7 +413,7 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 		}
 		m := appMessage{id: out.ID, tenant: tenant, thread: chat.ID, subject: subject, person: person, kind: out.Kind, text: in.Text, card: in.Card,
 			bizFile: bizFile, personFile: in.File, offer: in.Offer, senderID: in.SenderID, senderName: in.SenderName, clientID: in.ClientID,
-			system: strings.HasPrefix(in.SenderID, "system:")}
+			system: strings.HasPrefix(in.SenderID, "system:"), preview: in.Preview, bizPreview: bizPreview}
 		if out.CreatedAt, conv, err = s.writeAppMessageTx(ctx, tx, m); err != nil {
 			return err
 		}
@@ -389,6 +423,7 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 		if bizFile != nil {
 			s.dropChatFile(ctx, tenant, bizFile["path"].(string))
 		}
+		s.dropBusinessImage(ctx, tenant, bizPreview)
 		if again != nil {
 			return *again, false, nil
 		}
@@ -509,6 +544,7 @@ func (s *Server) customerAppRoutes(r chi.Router) {
 	r.With(orders, s.tenantWide).Post("/customer-chats/offers", s.broadcastOffer)
 	r.With(orders, s.tenantWide).Post("/customer-chats/{id}/files", s.sendCustomerFile)
 	r.With(orders).Get("/customer-chats/{id}/files/{message}", s.customerFile)
+	r.With(orders).Get("/customer-chats/{id}/previews/{message}", s.customerPreviewImage)
 	r.With(orders, s.tenantWide).Post("/customer-chats/{id}/block", s.blockCustomer)
 	r.With(orders, s.tenantWide).Delete("/customer-chats/{id}/block", s.blockCustomer)
 	r.With(orders).Post("/customer-chats/{id}/typing", s.customerTyping)

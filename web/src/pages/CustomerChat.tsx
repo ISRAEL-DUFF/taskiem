@@ -43,6 +43,7 @@ import { MentionList, useMentions } from "./Mentions";
 import { useSavedPicks } from "./SavedPicks";
 import { sendSaved } from "./SavedCard";
 import { SaveAsItem, useSaveAs } from "./SaveAs";
+import { ComposerLinkCard, LinkCard, LinkedWords, useComposerPreview } from "./ChatLinks";
 import type { Suggestion } from "../lib/mentions";
 
 // Customers' conversations in the Chat page (docs/spec/chat-five-more-flows.md,
@@ -400,6 +401,8 @@ export function CustomerPane({
   const canSend = !!cur && !lineClosed(cur) && !erased;
   const [cards, setCards] = useState(false);
   const [asOffer, setAsOffer] = useState(false);
+  // A link typed for the app: its card above the box (WhatsApp draws its own).
+  const linkPreview = useComposerPreview(text, app && !asOffer ? `customer:${id}` : undefined);
   const mayOfferNow = !!c && canSend && appOpen && (app || both) && mayOffer({ ...c, line: "app" });
   // An offer goes in the app: the 24 hours' limit is of the line used.
   const sendLine: Line = asOffer && mayOfferNow ? "app" : replyLine;
@@ -525,6 +528,7 @@ export function CustomerPane({
                   text: words,
                   client_id: client,
                   ...(offer ? { offer: true } : c ? replyLineBody(c, line) : {}),
+                  ...(line === "app" && !offer ? { preview: linkPreview.choice(words) } : {}),
                 },
           );
         if (offer) setAsOffer(false);
@@ -776,9 +780,10 @@ export function CustomerPane({
                 mine={m.mine}
               />
             )}
+            {m.preview && !m.local && <LinkCard p={m.preview} src={`/v1/customer-chats/${encodeURIComponent(id)}/previews/${encodeURIComponent(m.id)}`} />}
             {!m.card && !(m.attachment && ["Photo", "Voice note", "File", m.attachment.name].includes(m.body)) && (
               <span className="text">
-                {m.kind === "media" && !m.attachment ? <em>{m.body}</em> : m.body}
+                {m.kind === "media" && !m.attachment ? <em>{m.body}</em> : <LinkedWords text={m.body} />}
                 {/* Room for the time and ticks in the corner of the last line (in a
                     thread with both lines; the others keep their look, which the
                     app copies). */}
@@ -843,6 +848,7 @@ export function CustomerPane({
         </label>
       )}
       <PayListBar />
+      {canSend && <ComposerLinkCard s={linkPreview} />}
       {canSend && (
         <form
           className="composer"

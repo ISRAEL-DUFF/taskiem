@@ -383,7 +383,11 @@ type Server struct {
 	hosts        hostCache                           // custom domains: Host to embed app
 	defs         lru.Cache[string, *wd.Definition]   // "workflow/version"; versions are immutable, bounded (S34)
 	stockLow     lru.Cache[uuid.UUID, lowSeen]       // businesses' low items, for the evening and morning messages (stock_sales.go)
-	previews     lru.Cache[string, *links.Preview]   // link previews by URL (link_preview.go)
+	previews     *lru.Cache[string, *madePreview]    // link previews by whose and URL (link_preview.go)
+	previewsMu   sync.Mutex
+	holds        previewHolds // the composer's previews, waiting to be sent (link_preview.go)
+	// previewClock stands in for the clock of held previews (tests).
+	previewClock func() time.Time
 	// previewAnyPort lets a link preview reach any port (tests' local pages).
 	previewAnyPort bool
 	bg             sync.WaitGroup
@@ -539,6 +543,7 @@ func (s *Server) Handler() http.Handler {
 			s.peopleRoutes(r)                   // finding people, contacts, the person's link, privacy towards people (people.go)
 			s.peopleChatRoutes(r)               // chats between people (people_chats.go)
 			s.groupRoutes(r)                    // groups of people (people_groups.go)
+			s.linkPreviewRoutes(r)              // the composer's link previews (link_preview_chats.go)
 			s.basketRoutes(r)                   // ordering together (people_baskets.go)
 			s.peopleSafetyRoutes(r)             // the person's standing and appeals (people_safety.go)
 			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)

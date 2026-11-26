@@ -1,3 +1,4 @@
+import type { LinkPreview } from "./linkchat";
 // People groups on the web (docs/spec/people-chatting.md §9, §13; "As
 // built: stage 5b, groups (server)" and "…, group safety (server)"): what
 // the API answers for a group, its messages, members, invites, link and
@@ -73,6 +74,8 @@ export interface GroupMessage {
   sender: string;
   kind: "text" | "media" | "card" | "location" | "event";
   body: string;
+  /** The first link's card; its picture at the chat's previews route. */
+  preview?: LinkPreview;
   event?: GroupEvent;
   card?: PeopleCard;
   location?: { lat: number; lng: number; label?: string };

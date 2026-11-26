@@ -45,6 +45,7 @@ import { CustomerInvoiceCard } from "./PayByTransfer";
 import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
+import { LinkCard, LinkedWords, type PreviewChoice } from "./ChatLinks";
 import { ChatHead } from "./ChatHead";
 import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
@@ -533,7 +534,7 @@ export function PersonChatPage() {
     void post(`${base}/typing`).catch(() => undefined);
   };
 
-  const send = async (text: string, file?: File) => {
+  const send = async (text: string, file?: File, linkPreview?: PreviewChoice) => {
     const client = file ? `${Date.now()}-${++localN}` : clientFor(kept.current, text, () => `${Date.now()}-${++localN}`);
     kept.current = undefined;
     const preview = file ? await asDataURL(file) : undefined;
@@ -558,7 +559,7 @@ export function PersonChatPage() {
         if (text) form.append("text", text);
         form.append("client_id", client);
         out = await upload<PersonMessage>(`${base}/files`, form);
-      } else out = await post<PersonMessage>(`${base}/messages`, { text, client_id: client });
+      } else out = await post<PersonMessage>(`${base}/messages`, { text, client_id: client, preview: linkPreview });
       setMessages((cur) => mergeMessages((cur ?? []).filter((m) => m.id !== mine.id), [out]));
     } catch (e) {
       // Not sent: the words come back to the box, and why is said. When
@@ -609,9 +610,10 @@ export function PersonChatPage() {
     onType: typing,
     onSend: (s) => {
       setSendError(undefined);
-      void send(s.text, s.file);
+      void send(s.text, s.file, s.preview);
     },
     enabled: !!c && !c.blocked && !c.blocked_you && !erased,
+    linkChat: `door:${id}`,
     // One of their tools opens as the tools menu closes: one sheet in
     // place of another, so the focus stays in it, not the box behind.
     closes: [!!tool || !!their, reporting, !!sharing],
@@ -857,9 +859,10 @@ export function PersonChatPage() {
                 />
               )}
               {m.attachment && <AppAttachmentView a={m.attachment} src={m.local ? undefined : personFileURL(id, m.id)} preview={m.localPreview} who={name} mine={m.mine} />}
+              {m.preview && !m.local && <LinkCard p={m.preview} src={`/v1/me/chats/${encodeURIComponent(id)}/previews/${encodeURIComponent(m.id)}`} />}
               {caption && (
                 <span className="text">
-                  {caption}
+                  <LinkedWords text={caption} />
                   {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
                 </span>
               )}

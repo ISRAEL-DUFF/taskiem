@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/people"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/push"
@@ -119,8 +120,11 @@ type groupMessage struct {
 	Card       *peopleCard     `json:"card,omitempty"`
 	Location   *peopleLocation `json:"location,omitempty"`
 	Attachment *chatAttachment `json:"attachment,omitempty"`
-	ReplyTo    *uuid.UUID      `json:"reply_to,omitempty"`
-	Forwarded  bool            `json:"forwarded,omitempty"`
+	// Preview is the first link's preview; its picture is at
+	// GET /v1/me/groups/{id}/previews/{message}.
+	Preview   *links.Preview `json:"preview,omitempty"`
+	ReplyTo   *uuid.UUID     `json:"reply_to,omitempty"`
+	Forwarded bool           `json:"forwarded,omitempty"`
 	// ForwardedMany: forwarded five or more times on its way; forwarded on
 	// to one chat at a time.
 	ForwardedMany bool `json:"forwarded_many,omitempty"`
@@ -241,7 +245,7 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 		}
 		v.Reactions = reactions[m.id]
 		c, _ := openGroupSealed(key, group, m.id, m.sealed)
-		v.Body, v.Card, v.Location = c.Body, c.Card, c.Location
+		v.Body, v.Card, v.Location, v.Preview = c.Body, c.Card, c.Location, c.Preview
 		if m.attach != nil {
 			a := &chatAttachment{Name: c.Name}
 			a.Kind, _ = m.attach["kind"].(string)
@@ -540,7 +544,7 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 			return err
 		}
 		id := uuid.Must(uuid.NewV7())
-		content := peopleSealed{Body: d.body, Card: d.card, Location: d.location}
+		content := peopleSealed{Body: d.body, Card: d.card, Location: d.location, Preview: d.preview.view()}
 		var attach map[string]any
 		if d.file != nil {
 			content.Name = d.file.Name
@@ -581,6 +585,18 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 			}
 			if _, err := tx.Exec(ctx, `INSERT INTO group_files (group_id, message_id, type, size, sealed) VALUES ($1, $2, $3, $4, $5)`,
 				g.ID, id, d.file.Type, len(d.file.Data), data); err != nil {
+				return err
+			}
+		}
+		if d.preview != nil && d.preview.img != nil {
+			// The link's picture, sealed under the group's key as a file is.
+			img := d.preview.img
+			data, err := peoplechats.Seal(key, g.ID, groupLinkImageRow(id), img.Big)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO group_files (group_id, message_id, kind, type, size, sealed) VALUES ($1, $2, 'link_image', $3, $4, $5)`,
+				g.ID, id, img.Type, len(img.Big), data); err != nil {
 				return err
 			}
 		}
@@ -719,6 +735,8 @@ func (s *Server) sendGroupMessage(w http.ResponseWriter, r *http.Request) {
 		Location *peopleLocation `json:"location"`
 		Card     *cardRequest    `json:"card"`
 		Mentions []uuid.UUID     `json:"mentions"`
+		// Preview: the card the composer showed ({id}), or false for none.
+		Preview previewChoice `json:"preview"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -765,6 +783,11 @@ func (s *Server) sendGroupMessage(w http.ResponseWriter, r *http.Request) {
 		if d.body == "" {
 			writeErr(w, http.StatusBadRequest, "the message is required (up to 4,000 characters)")
 			return
+		}
+		// The first link's preview, made as the words are sealed, only for
+		// a group the person can write in.
+		if previewURL(d.body, s.previewAnyPort) != "" && s.groupMaySend(r.Context(), person, chi.URLParam(r, "id")) {
+			d.preview = s.previewForSend(r.Context(), principalFrom(r.Context()), "group:"+chi.URLParam(r, "id"), "p:"+person.String(), person.String(), d.body, in.Preview)
 		}
 	}
 	m, fresh, err := s.groupSend(r.Context(), person, chi.URLParam(r, "id"), d, in.Mentions)
@@ -850,7 +873,7 @@ func (s *Server) groupFile(w http.ResponseWriter, r *http.Request) {
 			return errDoorNone
 		}
 		var sealed []byte
-		if err := tx.QueryRow(ctx, `SELECT sealed, type FROM group_files WHERE group_id = $1 AND message_id = $2`, g.ID, m.id).Scan(&sealed, &ctype); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT sealed, type FROM group_files WHERE group_id = $1 AND message_id = $2 AND kind = 'file'`, g.ID, m.id).Scan(&sealed, &ctype); err != nil {
 			return err
 		}
 		key, err := s.keys().GroupKeyTx(ctx, tx, g.ID)
@@ -1776,7 +1799,7 @@ func (s *Server) groupDraftOf(ctx context.Context, person, group, msg uuid.UUID)
 		if m.attach != nil {
 			var sealed []byte
 			var ctype string
-			if err := tx.QueryRow(ctx, `SELECT sealed, type FROM group_files WHERE group_id = $1 AND message_id = $2`, g.ID, m.id).Scan(&sealed, &ctype); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT sealed, type FROM group_files WHERE group_id = $1 AND message_id = $2 AND kind = 'file'`, g.ID, m.id).Scan(&sealed, &ctype); err != nil {
 				return err
 			}
 			data, err := peoplechats.Open(key, g.ID, groupFileRow(m.id), sealed)

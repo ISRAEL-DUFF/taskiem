@@ -30,6 +30,7 @@ import {
 } from "./Mentions";
 import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { PendingFile } from "./PendingFile";
+import { ComposerLinkCard, useComposerPreview, type PreviewChoice } from "./ChatLinks";
 import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
 import { extrasFor, ToolSheet, ToolsPanel, type ExtraTile } from "./ChatTools";
@@ -118,6 +119,9 @@ export type Sending<R> = {
   held: boolean;
   /** Everything picked with "@", to give back if it is not sent. */
   picked?: Suggestion[];
+  /** The link's card shown ({id}), closed with ✕ (false), or nothing
+   * said: send it as the message's `preview`. */
+  preview?: PreviewChoice;
 };
 
 export type ComposerOptions<R> = {
@@ -161,11 +165,16 @@ export type ComposerOptions<R> = {
   madeTools?: boolean;
   /** One of Your tools started a run (its answer comes to the chat). */
   onToolRun?: (run: string) => void;
+  /** The chat a typed link's card is made for (link:…, people:…,
+   * group:…, door:…, customer:…); none without it. */
+  linkChat?: string;
 };
 
 export function useComposer<R>(o: ComposerOptions<R>) {
   const enabled = o.enabled ?? true;
   const [text, setText] = useState(() => getDraft(o.draftKey));
+  // A link typed: its card above the box (chat-previews-and-editing.md §2.1).
+  const linkPreview = useComposerPreview(text, enabled ? o.linkChat : undefined);
   const textBox = useRef<HTMLTextAreaElement>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -344,11 +353,13 @@ export function useComposer<R>(o: ComposerOptions<R>) {
       picks: mentions.pickedPeople(),
       picked: mentions.picked(),
       held: !!held,
+      preview: f ? undefined : linkPreview.choice(body),
     };
     if (!held) {
       setText("");
       setFile(undefined);
       mentions.reset();
+      linkPreview.reset();
     }
     setReply(undefined);
     o.onSend(s);
@@ -526,6 +537,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     openMade,
     madeReach,
     openMadeWords,
+    linkPreview,
   };
 }
 
@@ -583,6 +595,7 @@ export function ComposerView<R>({
           onRemove={() => c.setFile(undefined)}
         />
       )}
+      {!file && <ComposerLinkCard s={c.linkPreview} />}
       <input
         ref={c.pick}
         type="file"

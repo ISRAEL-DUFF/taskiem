@@ -36,6 +36,12 @@ func (s *Server) SetUSSDStart(fn func(context.Context, runtime.StartRequest) (ru
 // PreviewAnyPort lets link previews reach a test's local page.
 func (s *Server) PreviewAnyPort() { s.previewAnyPort = true }
 
+// SetPreviewClock sets the clock of the composer's held previews.
+func (s *Server) SetPreviewClock(fn func() time.Time) { s.previewClock = fn }
+
+// HeldPreviews is how many of the composer's previews are held now.
+func (s *Server) HeldPreviews() int { return s.holds.Len(s.now()) }
+
 // BillsDueLine is the morning summary's line on linked suppliers' bills.
 func (s *Server) BillsDueLine(ctx context.Context, tenant uuid.UUID) string {
 	return s.billsDueDailyLine(ctx, lang.EN, tenant)

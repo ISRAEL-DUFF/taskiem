@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/reach"
@@ -247,7 +248,7 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 		}
 		switch {
 		case kind == "text":
-			kept = &keptMessage{chat: id, message: msg, text: text}
+			kept = &keptMessage{chat: id, message: msg, text: text, subject: subject}
 		case in.Media != nil && in.Image == nil && in.Document == nil:
 			// A voice note: put in words after, where voice notes are on.
 			kept = &keptMessage{chat: id, message: msg, subject: subject, voice: in.Media}
@@ -290,6 +291,16 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 		}
 		return sp.Commit(ctx)
 	})
+	if err == nil && kept != nil && kept.voice == nil && previewURL(kept.text, s.previewAnyPort) != "" {
+		// A link in it gets its preview on arrival, as if sent in Taskiem,
+		// away from the webhook.
+		k := *kept
+		s.bg.Add(1)
+		go func() {
+			defer s.bg.Done()
+			s.previewArrived(wa.Tenant, k.chat, k.message, k.subject, number, k.text)
+		}()
+	}
 	if err == nil && kept != nil {
 		// Read for an order (phase 2), away from the webhook: a voice note
 		// put in words first.
@@ -420,6 +431,9 @@ type customerMessageView struct {
 	Card       *customerCard   `json:"card,omitempty"`
 	Attachment *chatAttachment `json:"attachment,omitempty"`
 	Offer      bool            `json:"offer,omitempty"`
+	// Preview is the first link's preview; its picture is at
+	// GET /v1/customer-chats/{id}/previews/{message}.
+	Preview *links.Preview `json:"preview,omitempty"`
 	// Line is where the message went: on WhatsApp (the business's own
 	// number) or in the app (§11: one thread may hold both).
 	Line string `json:"line,omitempty"`
@@ -697,7 +711,7 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		lines := t.lineOfRow()
-		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer, conversation_id FROM customer_messages
+		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer, conversation_id, preview FROM customer_messages
 			WHERE tenant_id = $1 AND conversation_id = ANY ($2)`
 		args := []any{p.TenantID, t.ids()}
 		if b, err := uuid.Parse(r.URL.Query().Get("before")); err == nil {
@@ -712,12 +726,13 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 			v    customerMessageView
 			body []byte
 			att  []byte
+			pv   []byte
 		}
 		raws, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (rawMsg, error) {
 			var x rawMsg
 			var conv uuid.UUID
 			err := r.Scan(&x.v.ID, &x.v.Mine, &x.v.Kind, &x.body, &x.v.SenderName, &x.v.SentAs, &x.v.Delivery, &x.v.Failure, &x.v.ReadAt, &x.v.CreatedAt,
-				&x.v.Card, &x.att, &x.v.Offer, &conv)
+				&x.v.Card, &x.att, &x.v.Offer, &conv, &x.pv)
 			x.v.Line = lines[conv]
 			return x, err
 		})
@@ -733,6 +748,9 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			if x.v.Attachment, err = s.openAttachment(r.Context(), tx, p.TenantID, x.att); err != nil {
+				return err
+			}
+			if x.v.Preview, err = s.openCustomerPreview(r.Context(), tx, p.TenantID, x.pv); err != nil {
 				return err
 			}
 			if err := s.openCustomerCard(r.Context(), tx, p.TenantID, x.v.Card); err != nil {
@@ -884,6 +902,8 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 		// Line: whatsapp or app, for a customer with both (§11); left
 		// out, the line they last wrote on.
 		Line string `json:"line"`
+		// Preview: the card the composer showed ({id}), or false for none.
+		Preview previewChoice `json:"preview"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -958,8 +978,14 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "too many replies at once; try again in a moment")
 		return
 	}
+	// The first link's preview, kept on a message in the app (WhatsApp
+	// draws its own).
+	var pv *madePreview
+	if card == nil && !req.Offer && previewURL(text, s.previewAnyPort) != "" {
+		pv = s.previewForSend(ctx, p, "customer:"+chi.URLParam(r, "id"), "t:"+p.TenantID.String(), p.TenantID.String(), text, req.Preview)
+	}
 	m, fresh, err := s.sendCustomer(ctx, p.TenantID, chi.URLParam(r, "id"), customerSend{Text: text, ClientID: req.ClientID, SenderID: p.Actor(), SenderName: sender,
-		Card: card, Offer: req.Offer, Line: req.Line, Default: req.Line == ""})
+		Card: card, Offer: req.Offer, Line: req.Line, Default: req.Line == "", Preview: pv})
 	if err != nil {
 		s.customerSendFail(w, r, err)
 		return
@@ -985,6 +1011,8 @@ type customerSend struct {
 	Card  *customerCard
 	Offer bool
 	File  *sentFile
+	// Preview is the first link's preview (words only, in the app).
+	Preview *madePreview
 	// Line is the customer's line it goes on (§11): whatsapp or app. Left
 	// empty, the row named; with Default, the line they last wrote on.
 	// Cards, offers and files go in the app.
@@ -1021,11 +1049,11 @@ func (s *Server) customerRepeat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		return nil, nil
 	}
 	var m customerMessageView
-	var body, att []byte
+	var body, att, pv []byte
 	err := tx.QueryRow(ctx, `SELECT m.id, m.mine, m.kind, m.body, m.sender_name, COALESCE(m.sent_as, ''), COALESCE(m.delivery, ''), COALESCE(m.failure, ''), m.read_at, m.created_at,
-		m.card, m.attachment, m.offer, c.line FROM customer_messages m JOIN customer_conversations c ON c.tenant_id = m.tenant_id AND c.id = m.conversation_id
+		m.card, m.attachment, m.offer, c.line, m.preview FROM customer_messages m JOIN customer_conversations c ON c.tenant_id = m.tenant_id AND c.id = m.conversation_id
 		WHERE m.tenant_id = $1 AND m.conversation_id = ANY ($2) AND m.client_id = $3 ORDER BY m.created_at LIMIT 1`, tenant, chats, clientID).
-		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &att, &m.Offer, &m.Line)
+		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &att, &m.Offer, &m.Line, &pv)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -1036,6 +1064,9 @@ func (s *Server) customerRepeat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		return nil, err
 	}
 	if m.Attachment, err = s.openAttachment(ctx, tx, tenant, att); err != nil {
+		return nil, err
+	}
+	if m.Preview, err = s.openCustomerPreview(ctx, tx, tenant, pv); err != nil {
 		return nil, err
 	}
 	if err := s.openCustomerCard(ctx, tx, tenant, m.Card); err != nil {

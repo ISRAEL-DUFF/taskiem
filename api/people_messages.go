@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/peoplesafety"
 	"github.com/israel-duff/taskiem/engine/push"
@@ -35,7 +36,10 @@ type peopleMessage struct {
 	Card       *peopleCard     `json:"card,omitempty"`
 	Location   *peopleLocation `json:"location,omitempty"`
 	Attachment *chatAttachment `json:"attachment,omitempty"`
-	ReplyTo    *uuid.UUID      `json:"reply_to,omitempty"`
+	// Preview is the first link's preview; its picture is at
+	// GET /v1/me/people/{id}/previews/{message}.
+	Preview *links.Preview `json:"preview,omitempty"`
+	ReplyTo *uuid.UUID     `json:"reply_to,omitempty"`
 	// Forwarded, and forwarded many times (five or more on its way here):
 	// it can be forwarded to one chat at a time only.
 	Forwarded     bool `json:"forwarded,omitempty"`
@@ -112,7 +116,7 @@ func (m peopleRow) view(key []byte, owner uuid.UUID) (peopleMessage, peopleSeale
 	if key != nil {
 		v, _ = openSealed(key, owner, m.ID, m.sealed)
 	}
-	out.Body, out.Card, out.Location = v.Body, v.Card, v.Location
+	out.Body, out.Card, out.Location, out.Preview = v.Body, v.Card, v.Location, v.Preview
 	if m.attach != nil {
 		a := &chatAttachment{Name: v.Name}
 		a.Kind, _ = m.attach["kind"].(string)
@@ -146,6 +150,9 @@ type peopleDraft struct {
 	card     *peopleCard
 	location *peopleLocation
 	file     *sentFile
+	// preview is the first link's preview, made before the message is
+	// written (link_preview.go).
+	preview  *madePreview
 	replyTo  *uuid.UUID
 	forwards int
 	clientID string
@@ -411,7 +418,7 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 			return err
 		}
 		id := uuid.Must(uuid.NewV7())
-		content := peopleSealed{Body: d.body, Card: d.card, Location: d.location}
+		content := peopleSealed{Body: d.body, Card: d.card, Location: d.location, Preview: d.preview.view()}
 		var attach map[string]any
 		if d.file != nil {
 			content.Name = d.file.Name
@@ -543,6 +550,18 @@ func insertPeopleMessage(ctx context.Context, tx pgx.Tx, key []byte, owner, chat
 	if err := indexPeopleMessageTx(ctx, tx, key, owner, conv, id, content); err != nil {
 		return err
 	}
+	if d.preview != nil && d.preview.img != nil {
+		// The link's picture, sealed as a file is.
+		img := d.preview.img
+		data, err := peoplechats.Seal(key, owner, linkImageRow(id), img.Big)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO people_files (person_id, message_id, conversation_id, kind, type, size, sealed) VALUES ($1, $2, $3, 'link_image', $4, $5, $6)`,
+			owner, id, conv, img.Type, len(img.Big), data); err != nil {
+			return err
+		}
+	}
 	if d.file == nil {
 		return nil
 	}
@@ -634,6 +653,8 @@ func (s *Server) sendPeopleMessage(w http.ResponseWriter, r *http.Request) {
 		ReplyTo  *uuid.UUID      `json:"reply_to"`
 		Location *peopleLocation `json:"location"`
 		Card     *cardRequest    `json:"card"`
+		// Preview: the card the composer showed ({id}), or false for none.
+		Preview previewChoice `json:"preview"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -680,6 +701,11 @@ func (s *Server) sendPeopleMessage(w http.ResponseWriter, r *http.Request) {
 		if d.body == "" {
 			writeErr(w, http.StatusBadRequest, "the message is required (up to 4,000 characters)")
 			return
+		}
+		// The first link's preview, made by the server as it seals the words
+		// (and nowhere else), only for a chat the person can write in.
+		if previewURL(d.body, s.previewAnyPort) != "" && s.peopleMaySend(r.Context(), person, chi.URLParam(r, "id")) {
+			d.preview = s.previewForSend(r.Context(), principalFrom(r.Context()), "people:"+chi.URLParam(r, "id"), "p:"+person.String(), person.String(), d.body, in.Preview)
 		}
 	}
 	m, fresh, err := s.peopleSend(r.Context(), person, chi.URLParam(r, "id"), d)
@@ -773,7 +799,7 @@ func (s *Server) peopleFile(w http.ResponseWriter, r *http.Request) {
 		var sealedFile, sealedMsg []byte
 		if err := tx.QueryRow(ctx, `SELECT f.sealed, f.type, m.sealed, m.attachment->>'kind' FROM people_files f
 			JOIN people_messages m ON m.person_id = f.person_id AND m.id = f.message_id
-			WHERE f.person_id = $1 AND m.chat_id = $2 AND f.message_id = $3 AND m.deleted_at IS NULL`, person, c.ID, msg).Scan(&sealedFile, &ctype, &sealedMsg, &kind); err != nil {
+			WHERE f.person_id = $1 AND m.chat_id = $2 AND f.message_id = $3 AND f.kind = 'file' AND m.deleted_at IS NULL`, person, c.ID, msg).Scan(&sealedFile, &ctype, &sealedMsg, &kind); err != nil {
 			return err
 		}
 		key, err := s.keys().KeyTx(ctx, tx, person, false)
@@ -1223,7 +1249,7 @@ func (s *Server) peopleDraftOf(ctx context.Context, person, chat, msg uuid.UUID)
 		if m.attach != nil {
 			var sealed []byte
 			var ctype string
-			if err := tx.QueryRow(ctx, `SELECT sealed, type FROM people_files WHERE person_id = $1 AND message_id = $2`, person, m.ID).Scan(&sealed, &ctype); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT sealed, type FROM people_files WHERE person_id = $1 AND message_id = $2 AND kind = 'file'`, person, m.ID).Scan(&sealed, &ctype); err != nil {
 				return err
 			}
 			data, err := peoplechats.Open(key, person, fileRow(m.ID), sealed)

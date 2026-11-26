@@ -48,6 +48,7 @@ import { AppAttachmentView } from "./AppCards";
 import { BubbleShell, CopyItem, PopItem } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
+import { LinkCard, LinkedWords, type PreviewChoice } from "./ChatLinks";
 import { ChatHead } from "./ChatHead";
 import { ChatStream } from "./ChatStream";
 import { useConfirm } from "./ConfirmSheet";
@@ -274,7 +275,7 @@ export function GroupChatPage() {
       .finally(() => (loadingOlder.current = false));
   };
 
-  const send = async (text: string, file?: File, reply?: GroupMessage, picks?: { id: string; name: string }[]) => {
+  const send = async (text: string, file?: File, reply?: GroupMessage, picks?: { id: string; name: string }[], linkPreview?: PreviewChoice) => {
     setProblem(undefined);
     gate.current.sent();
     const mentions = mentionedIn(text, mentionable(members), picks);
@@ -307,7 +308,7 @@ export function GroupChatPage() {
         if (reply) form.append("reply_to", reply.id);
         if (mentions.length) form.append("mentions", mentions.join(","));
         out = await upload<GroupMessage>(`${base}/files`, form);
-      } else out = await post<GroupMessage>(`${base}/messages`, { text, client_id: client, reply_to: reply?.id, mentions: mentions.length ? mentions : undefined });
+      } else out = await post<GroupMessage>(`${base}/messages`, { text, client_id: client, reply_to: reply?.id, mentions: mentions.length ? mentions : undefined, preview: linkPreview });
       setMessages((cur) => mergePeople((cur ?? []).filter((m) => m.id !== mine.id), [out]));
       setSendError(undefined);
     } catch (e) {
@@ -379,9 +380,10 @@ export function GroupChatPage() {
     },
     onSend: (s) => {
       setSendError(undefined);
-      void send(s.text, s.file, s.reply, s.picks);
+      void send(s.text, s.file, s.reply, s.picks, s.preview);
     },
     enabled: !!g?.can_post,
+    linkChat: `group:${id}`,
     closes: [!!sheet],
   });
 
@@ -572,6 +574,7 @@ export function GroupChatPage() {
                 onPaid={(paid) => void markPaid(m, paid)}
                 onSheet={(k) => setSheet({ k, m })}
                 fileURL={groupFileURL(id, m.id)}
+                previewURL={`/v1/me/groups/${encodeURIComponent(id)}/previews/${encodeURIComponent(m.id)}`}
               />
             );
           }}
@@ -656,6 +659,7 @@ function GroupBubble({
   onPaid,
   onSheet,
   fileURL,
+  previewURL,
   onSaveAs,
   onSavePhoto,
 }: {
@@ -678,6 +682,8 @@ function GroupBubble({
   onPaid: (paid: boolean) => void;
   onSheet: (k: "forward" | "card" | "delete" | "info" | "reactions") => void;
   fileURL: string;
+  /** Its link card's picture, the group's own copy. */
+  previewURL: string;
 }) {
   const fw = forwardWords(m);
   const card = !m.deleted ? m.card : undefined;
@@ -811,6 +817,7 @@ function GroupBubble({
       {card && <PeopleCardView card={card} onOpen={card.type !== "split" ? () => onSheet("card") : undefined} mine={m.mine} onPaid={card.type === "split" && live && current ? onPaid : undefined} busy={busy} />}
       {m.attachment && !m.deleted && <AppAttachmentView a={m.attachment} src={m.local ? undefined : fileURL} preview={m.localPreview} who={who} mine={m.mine} />}
       {m.location && !m.deleted && <PlaceView place={m.location} />}
+      {m.preview && !m.deleted && !m.local && <LinkCard p={m.preview} src={previewURL} />}
       {caption && (
         <span className="text">
           {mentionPieces(caption, names).map((p, i) =>
@@ -819,7 +826,9 @@ function GroupBubble({
                 {p.text}
               </mark>
             ) : (
-              <span key={i}>{p.text}</span>
+              <span key={i}>
+                <LinkedWords text={p.text} />
+              </span>
             ),
           )}
           {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}

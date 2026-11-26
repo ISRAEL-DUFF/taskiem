@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/linkify"
 )
 
 // DefaultGraphURL is the Graph API version the channel speaks.
@@ -99,9 +100,13 @@ type Button struct {
 	Title string // at most 20 characters
 }
 
-// SendText sends a free-form message (inside the window only).
+// SendText sends a free-form message (inside the window only). A message
+// with a web address in it asks WhatsApp to draw that page's preview
+// (docs/spec/chat-previews-and-editing.md §2.2), found by the rule every
+// chat shares (engine/linkify).
 func (c *Client) SendText(ctx context.Context, to, body string) (string, error) {
-	return c.send(ctx, to, "text", map[string]any{"body": clip(body, 4096), "preview_url": false})
+	body = clip(body, 4096)
+	return c.send(ctx, to, "text", map[string]any{"body": body, "preview_url": linkify.First(body) != ""})
 }
 
 // SendButtons sends text with up to three reply buttons (inside the window

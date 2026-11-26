@@ -33,6 +33,7 @@ import {
   type SuggestionGroup,
 } from "../lib/mentions";
 import { formatPrice } from "../lib/storefront";
+import { LinkedWords } from "./ChatLinks";
 import { exploreLogo, type ExploreCard, type ExploreResult } from "../lib/explore";
 import { BusinessCardSheet } from "./BusinessCardSheet";
 import { savedIcon } from "../lib/saved";
@@ -765,7 +766,8 @@ export function MentionText({
     <>
       {mentionParts(text, mentions).map((p, i) =>
         !p.mention ? (
-          p.text
+          // Web addresses open in a new tab; a mention keeps its chip.
+          <LinkedWords key={i} text={p.text} />
         ) : p.mention.kind === "business" && p.mention.link ? (
           <Link key={i} className="mention" to={`/chat?with=${p.mention.link}`}>
             {p.text}

@@ -1,3 +1,4 @@
+import type { LinkPreview } from "./linkchat";
 // Customers' conversations (docs/spec/chat-five-more-flows.md, phase 1):
 // a customer who writes to the business's own WhatsApp number is a thread
 // in the chat; staff who handle orders answer there, and the answer goes
@@ -52,6 +53,8 @@ export interface CustomerMessage {
   mine: boolean;
   kind: "text" | "media" | "card";
   body: string;
+  /** The first link's card; its picture at the chat's previews route. */
+  preview?: LinkPreview;
   /** In the app: a card, a photo, voice note or file, an offer. */
   card?: AppCard;
   attachment?: AppAttachment;

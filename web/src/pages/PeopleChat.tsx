@@ -27,6 +27,7 @@ import {
   mergePeople,
   messageLine,
   peopleFileURL,
+  peoplePreviewURL,
   PEOPLE_TRANSFER_WARNING,
   phoneWords,
   photoOf,
@@ -63,6 +64,7 @@ import { BasketCardBody } from "./Basket";
 import { BubbleShell, CopyItem, PopItem } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
+import { LinkCard, LinkedWords, type PreviewChoice } from "./ChatLinks";
 import { ChatHead } from "./ChatHead";
 import { ChatStream } from "./ChatStream";
 import { useConfirm } from "./ConfirmSheet";
@@ -303,7 +305,7 @@ export function PeopleChatPage() {
       .finally(() => (loadingOlder.current = false));
   };
 
-  const send = async (text: string, file?: File, reply?: PeopleMessage) => {
+  const send = async (text: string, file?: File, reply?: PeopleMessage, linkPreview?: PreviewChoice) => {
     setProblem(undefined);
     gate.current.sent();
     const client = file ? `${Date.now()}-${++localN}` : clientFor(kept.current, text, () => `${Date.now()}-${++localN}`);
@@ -332,7 +334,7 @@ export function PeopleChatPage() {
         form.append("client_id", client);
         if (reply) form.append("reply_to", reply.id);
         out = await upload<PeopleMessage>(`${base}/files`, form);
-      } else out = await post<PeopleMessage>(`${base}/messages`, { text, client_id: client, reply_to: reply?.id });
+      } else out = await post<PeopleMessage>(`${base}/messages`, { text, client_id: client, reply_to: reply?.id, preview: linkPreview });
       setMessages((cur) => mergePeople((cur ?? []).filter((m) => m.id !== mine.id), [out]));
       setSendError(undefined);
       // The first message to someone (a request now waiting for them), or
@@ -426,9 +428,10 @@ export function PeopleChatPage() {
     },
     onSend: (s) => {
       setSendError(undefined);
-      void send(s.text, s.file, s.reply);
+      void send(s.text, s.file, s.reply, s.preview);
     },
     enabled: !!c && !c.blocked && !c.gone && !c.suspended && !c.request,
+    linkChat: `people:${id}`,
     closes: [!!sheet],
   });
 
@@ -737,9 +740,10 @@ export function PeopleChatPage() {
               )}
               {m.attachment && !m.deleted && <AppAttachmentView a={m.attachment} src={m.local ? undefined : peopleFileURL(id, m.id)} preview={m.localPreview} who={name} mine={m.mine} />}
               {m.location && !m.deleted && <PlaceView place={m.location} />}
+              {m.preview && !m.deleted && !m.local && <LinkCard p={m.preview} src={peoplePreviewURL(id, m.id)} />}
               {caption && (
                 <span className="text">
-                  {caption}
+                  <LinkedWords text={caption} />
                   {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
                 </span>
               )}

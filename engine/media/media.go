@@ -266,6 +266,29 @@ func (s *Service) PutChatFile(ctx context.Context, tenant uuid.UUID, data []byte
 	return File{Path: path, Type: ctype, Size: size}, nil
 }
 
+// PutLinkImage stores a link preview's picture, already cleaned
+// (CleanLinkImage), in the tenant's private bucket: each business keeps
+// its own copy, as it keeps a chat's files, and the picture is shown
+// through the API, never from the page's own site.
+func (s *Service) PutLinkImage(ctx context.Context, tenant uuid.UUID, data []byte, ctype string) (string, error) {
+	if ctype != "image/jpeg" && ctype != "image/png" {
+		return "", fmt.Errorf("%w: a link's picture is a JPEG or a PNG", ErrImage)
+	}
+	c, _, err := s.client(ctx, tenant)
+	if err != nil {
+		return "", err
+	}
+	ext := ".jpg"
+	if ctype == "image/png" {
+		ext = ".png"
+	}
+	path := "chat/link-" + uuid.Must(uuid.NewV7()).String() + ext
+	if _, err := c.put(ctx, PrivateBucket, path, ctype, data); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 // GetFile downloads one of the tenant's private files, for the web app to
 // show through the API (its Content-Security-Policy allows images and
 // sound from its own origin only): through a signed URL a minute long,

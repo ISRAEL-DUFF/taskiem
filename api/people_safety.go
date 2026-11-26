@@ -229,7 +229,7 @@ func (s *Server) reportTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, c pe
 		return uuid.Nil, err
 	}
 	rows, err := tx.Query(ctx, `SELECT m.id, m.mine, m.kind, m.sealed, m.attachment, m.deleted_at IS NOT NULL, m.created_at, f.sealed IS NOT NULL, f.type, f.size
-		FROM people_messages m LEFT JOIN people_files f ON f.person_id = m.person_id AND f.message_id = m.id
+		FROM people_messages m LEFT JOIN people_files f ON f.person_id = m.person_id AND f.message_id = m.id AND f.kind = 'file'
 		WHERE m.person_id = $1 AND m.chat_id = $2 ORDER BY m.created_at DESC, m.id DESC LIMIT 20`, person, c.ID)
 	if err != nil {
 		return uuid.Nil, err
@@ -285,7 +285,7 @@ func (s *Server) reportTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, c pe
 			continue
 		}
 		var sealed []byte
-		if err := tx.QueryRow(ctx, `SELECT sealed FROM people_files WHERE person_id = $1 AND message_id = $2`, person, f.id).Scan(&sealed); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT sealed FROM people_files WHERE person_id = $1 AND message_id = $2 AND kind = 'file'`, person, f.id).Scan(&sealed); err != nil {
 			return uuid.Nil, err
 		}
 		data, err := peoplechats.Open(key, person, fileRow(f.id), sealed)
