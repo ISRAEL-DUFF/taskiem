@@ -32,8 +32,8 @@ import '../kit/kit.dart' show TkLink;
 import '../kit/sheet.dart' show TkCta, TkKitField, TkLines;
 import '../theme/look.dart';
 import '../theme/theme.dart';
-import 'settings_more.dart' show factorsOf;
 import 'sign_in.dart' show CodeBoxes;
+import 'you.dart' show ChangeNumberScreen;
 
 /// How many digits a PIN is.
 const pinDigits = 4;
@@ -43,7 +43,7 @@ const pinUses = 'It approves on WhatsApp, and pays small amounts (up to ₦100,0
     'It can pay as soon as it is set. Taskiem never asks for it in a message.';
 
 /// No phone to send a code to, and no passkey on this phone.
-const pinNoWay = 'Add your phone number in Settings first: we send a code to it to check it is you. A passkey works too.';
+const pinNoWay = 'Add your phone number first: we send a code to it to check it is you.';
 
 /// One digit repeated, or a run up or down (1234, 9876, 8901), as the
 /// server refuses.
@@ -306,16 +306,32 @@ class _PinFormState extends State<PinForm> {
   }
 }
 
-/// No way to confirm a PIN yet: a phone to add (or a passkey).
+/// No way to confirm a PIN yet: a phone to add, right here; [onBack]
+/// once its page is closed, to look again.
 class _NoWay extends StatelessWidget {
-  const _NoWay();
+  const _NoWay({required this.auth, required this.onBack});
+  final Auth auth;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
     final look = TkLook.of(context);
-    return Semantics(
-      liveRegion: true,
-      child: TkCallout(leading: TkSquare('b-phone', color: look.violet), title: 'Add your phone first', sub: pinNoWay, subLines: 4, color: look.violet),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          liveRegion: true,
+          child: TkCallout(leading: TkSquare('b-phone', color: look.violet), title: 'Add your phone first', sub: pinNoWay, subLines: 4, color: look.violet),
+        ),
+        const SizedBox(height: 14),
+        TkCta(
+          label: 'Add my phone',
+          onTap: () async {
+            await tkPush<void>(context, ChangeNumberScreen(auth: auth));
+            onBack();
+          },
+        ),
+      ],
     );
   }
 }
@@ -337,8 +353,9 @@ class _Renew extends StatelessWidget {
   }
 }
 
-/// This phone can confirm with the person's passkey.
-Future<bool> _phonePasskey(Auth auth) async => factorsOf(auth).passkey && await passkeys.available();
+/// This phone can confirm with the person's passkey: not offered in the
+/// app, where a passkey does not work yet; the code to the phone does.
+Future<bool> _phonePasskey(Auth auth) async => false;
 
 /// At sign-up, once the phone is proven: the PIN offered when there is
 /// none (GET /v1/me/pin `set: false`), with Not now. Anything else (one
@@ -394,7 +411,7 @@ class _PinStepScreenState extends State<PinStepScreen> {
       back: false,
       description: '4 digits of your own, for approving on WhatsApp and paying small amounts. You can set it later in Settings.',
       children: [
-        if (way == null) const _NoWay() else PinForm(auth: widget.auth, pin: p, passkey: _passkey, first: true, onSaved: _saved, onBusy: (b) => setState(() => _busy = b)),
+        if (way == null) _NoWay(auth: widget.auth, onBack: _check) else PinForm(auth: widget.auth, pin: p, passkey: _passkey, first: true, onSaved: _saved, onBusy: (b) => setState(() => _busy = b)),
         Center(child: TkLink(label: 'Not now', bold: true, onTap: _busy ? null : widget.onDone)),
       ],
     );
@@ -484,7 +501,7 @@ class _PinScreenState extends State<PinScreen> {
       final way = pinWay(p, passkey: _passkey);
       body = [
         if (p.renew == true) const _Renew(),
-        if (way == null) const _NoWay() else PinForm(auth: widget.auth, pin: p, passkey: _passkey, first: true, onSaved: _saved),
+        if (way == null) _NoWay(auth: widget.auth, onBack: _load) else PinForm(auth: widget.auth, pin: p, passkey: _passkey, first: true, onSaved: _saved),
       ];
     } else {
       final locked = p.lockedUntil != null && p.lockedUntil!.isAfter(now) ? p.lockedUntil : null;
@@ -516,7 +533,7 @@ class _PinScreenState extends State<PinScreen> {
           TkCta(label: 'Change PIN', onTap: () => setState(() => (_changing = true, _error = null))),
           Center(child: TkLink(label: 'Remove my PIN', bold: true, onTap: _busy ? null : _remove)),
         ] else if (way == null)
-          const _NoWay()
+          _NoWay(auth: widget.auth, onBack: _load)
         else
           PinForm(auth: widget.auth, pin: p, passkey: _passkey, first: false, onSaved: _saved, onBusy: (b) => setState(() => _busy = b)),
         if (_changing) Center(child: TkLink(label: 'Cancel', bold: true, onTap: _busy ? null : () => setState(() => (_changing = false, _error = null)))),
