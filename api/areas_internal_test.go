@@ -67,6 +67,9 @@ func init() {
 		alwaysOn[r] = "the Schools area, which the schools package refuses itself when off"
 	}
 	alwaysOn["POST /v1/forms/{id}/links"] = "links to a form, not business links"
+	for _, r := range []string{"POST /v1/link-preview", "GET /v1/link-preview/{id}/image"} {
+		alwaysOn[r] = "previews of web links typed in any chat (people and groups too), not business links"
+	}
 	for _, r := range []string{
 		"POST /v1/payroll/approvers/{user}/link", "POST /v1/payroll/approvers/{user}/link/confirm", "DELETE /v1/payroll/approvers/{user}/link",
 	} {
