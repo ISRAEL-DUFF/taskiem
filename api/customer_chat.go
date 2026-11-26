@@ -359,6 +359,7 @@ func (s *Server) customerChatRoutes(r chi.Router) {
 	r.With(orders).Get("/customer-chats/{id}", s.getCustomerChat)
 	r.With(orders).Get("/customer-chats/{id}/messages", s.customerMessages)
 	r.With(orders, s.tenantWide).Post("/customer-chats/{id}/messages", s.replyCustomer)
+	r.With(orders, s.tenantWide).Patch("/customer-chats/{id}/messages/{message}", s.editCustomerMessage)
 	r.With(orders).Post("/customer-chats/{id}/read", s.readCustomerChat)
 	r.With(orders, s.tenantWide).Put("/customer-chats/{id}", s.putCustomerChat)
 }
@@ -437,6 +438,10 @@ type customerMessageView struct {
 	// Line is where the message went: on WhatsApp (the business's own
 	// number) or in the app (§11: one thread may hold both).
 	Line string `json:"line,omitempty"`
+	// EditedAt is when its sender last changed its words ("Edited"), and
+	// Edits how many times; an edit names the count it saw.
+	EditedAt *time.Time `json:"edited_at,omitempty"`
+	Edits    int        `json:"edits"`
 }
 
 // openCustomerText opens a sealed message or number, or "" when its
@@ -711,7 +716,7 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		lines := t.lineOfRow()
-		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer, conversation_id, preview FROM customer_messages
+		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer, conversation_id, preview, edited_at, edits FROM customer_messages
 			WHERE tenant_id = $1 AND conversation_id = ANY ($2)`
 		args := []any{p.TenantID, t.ids()}
 		if b, err := uuid.Parse(r.URL.Query().Get("before")); err == nil {
@@ -732,7 +737,7 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 			var x rawMsg
 			var conv uuid.UUID
 			err := r.Scan(&x.v.ID, &x.v.Mine, &x.v.Kind, &x.body, &x.v.SenderName, &x.v.SentAs, &x.v.Delivery, &x.v.Failure, &x.v.ReadAt, &x.v.CreatedAt,
-				&x.v.Card, &x.att, &x.v.Offer, &conv, &x.pv)
+				&x.v.Card, &x.att, &x.v.Offer, &conv, &x.pv, &x.v.EditedAt, &x.v.Edits)
 			x.v.Line = lines[conv]
 			return x, err
 		})
@@ -1051,9 +1056,9 @@ func (s *Server) customerRepeat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	var m customerMessageView
 	var body, att, pv []byte
 	err := tx.QueryRow(ctx, `SELECT m.id, m.mine, m.kind, m.body, m.sender_name, COALESCE(m.sent_as, ''), COALESCE(m.delivery, ''), COALESCE(m.failure, ''), m.read_at, m.created_at,
-		m.card, m.attachment, m.offer, c.line, m.preview FROM customer_messages m JOIN customer_conversations c ON c.tenant_id = m.tenant_id AND c.id = m.conversation_id
+		m.card, m.attachment, m.offer, c.line, m.preview, m.edited_at, m.edits FROM customer_messages m JOIN customer_conversations c ON c.tenant_id = m.tenant_id AND c.id = m.conversation_id
 		WHERE m.tenant_id = $1 AND m.conversation_id = ANY ($2) AND m.client_id = $3 ORDER BY m.created_at LIMIT 1`, tenant, chats, clientID).
-		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &att, &m.Offer, &m.Line, &pv)
+		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &att, &m.Offer, &m.Line, &pv, &m.EditedAt, &m.Edits)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

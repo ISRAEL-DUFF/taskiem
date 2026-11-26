@@ -47,6 +47,8 @@ type groupMsgRow struct {
 	// screen: the checks warned of it (B1): shown with the warning to the
 	// members who haven't added its sender.
 	screen     *string
+	editedAt   *time.Time
+	edits      int
 	starredAt  *time.Time
 	myReaction *string
 }
@@ -58,12 +60,13 @@ func groupMsgColsAs(a string) string {
 		a + ".sealed AS " + a + "_sealed, " + a + ".event AS " + a + "_event, " + a + ".attachment AS " + a + "_attach, " +
 		a + ".card_type AS " + a + "_card, " + a + ".reply_to AS " + a + "_reply, COALESCE(" + a + ".forwards, 0) AS " + a + "_forwards, " +
 		a + ".mentions AS " + a + "_mentions, " + a + ".deleted_at AS " + a + "_deleted, " + a + ".paid_at AS " + a + "_paid, " +
-		a + ".paid_by AS " + a + "_paid_by, COALESCE(" + a + ".created_at, 'epoch') AS " + a + "_at, " + a + ".screen AS " + a + "_screen"
+		a + ".paid_by AS " + a + "_paid_by, COALESCE(" + a + ".created_at, 'epoch') AS " + a + "_at, " + a + ".screen AS " + a + "_screen, " +
+		a + ".edited_at AS " + a + "_edited_at, COALESCE(" + a + ".edits, 0) AS " + a + "_edits"
 }
 
 func (m *groupMsgRow) dest() []any {
 	return []any{&m.id, &m.sender, &m.kind, &m.sealed, &m.evRaw, &m.attach, &m.cardType, &m.replyTo, &m.forwards, &m.mentions,
-		&m.deletedAt, &m.paidAt, &m.paidBy, &m.createdAt, &m.screen}
+		&m.deletedAt, &m.paidAt, &m.paidBy, &m.createdAt, &m.screen, &m.editedAt, &m.edits}
 }
 
 func (m *groupMsgRow) decode() {
@@ -78,7 +81,7 @@ func (m *groupMsgRow) decode() {
 // groupMsgSelect reads a group's messages for the person ($1) in a group
 // ($2), with their own star and reaction; never one deleted for them.
 // Row-level security keeps it to their time in the group.
-const groupMsgSelect = `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen" + `,
+const groupMsgSelect = `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen, x.edited_at, x.edits" + `,
 	k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1)
 	FROM group_messages x LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
 	WHERE x.group_id = $2 AND k.hidden_at IS NULL`
@@ -149,6 +152,10 @@ type groupMessage struct {
 	// met".
 	Warn      bool      `json:"warn,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// EditedAt is when its sender last changed its words ("Edited"), and
+	// Edits how many times; an edit names the count it saw.
+	EditedAt *time.Time `json:"edited_at,omitempty"`
+	Edits    int        `json:"edits"`
 }
 
 // groupEventOut is an event message's what and who.
@@ -216,7 +223,8 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 	}
 	for _, m := range rows {
 		v := groupMessage{ID: m.id, GroupID: group, SenderID: m.sender, Kind: m.kind, ReplyTo: m.replyTo, Forwarded: m.forwards > 0,
-			ForwardedMany: m.forwards >= peopleForwardedMany, Mentions: m.mentions, Starred: m.starredAt != nil, CreatedAt: m.createdAt}
+			ForwardedMany: m.forwards >= peopleForwardedMany, Mentions: m.mentions, Starred: m.starredAt != nil, CreatedAt: m.createdAt,
+			EditedAt: m.editedAt, Edits: m.edits}
 		v.Mine = m.sender != nil && *m.sender == person
 		switch {
 		case m.sender != nil:

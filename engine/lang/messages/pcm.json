@@ -7774,6 +7774,10 @@
       "text": "Na only person wey dey write to linked businesses for {org} fit send that one.",
       "reviewed": false
     },
+    "chat.link.edited": {
+      "text": "✏️ E don change: {words}",
+      "reviewed": false
+    },
     "chat.link.ask_what": {
       "text": "Wetin you wan tell *{name}*? Send *ask {name}* and your message.",
       "reviewed": false

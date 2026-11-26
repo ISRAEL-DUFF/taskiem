@@ -61,10 +61,14 @@ type peopleMessage struct {
 	Warn      bool       `json:"warn,omitempty"`
 	ReadAt    *time.Time `json:"read_at"`
 	CreatedAt time.Time  `json:"created_at"`
+	// EditedAt is when its sender last changed its words ("Edited"), and
+	// Edits how many times; an edit names the count it saw.
+	EditedAt *time.Time `json:"edited_at,omitempty"`
+	Edits    int        `json:"edits"`
 }
 
 const peopleMessageCols = `id, mine, kind, sealed, attachment, card_type, reply_to, forwards, delivered_at, read_at, starred_at IS NOT NULL,
-	COALESCE(my_reaction, ''), COALESCE(their_reaction, ''), deleted_at IS NOT NULL, COALESCE(screen, ''), paid_at, paid_by_me, created_at`
+	COALESCE(my_reaction, ''), COALESCE(their_reaction, ''), deleted_at IS NOT NULL, COALESCE(screen, ''), paid_at, paid_by_me, created_at, edited_at, edits`
 
 // peopleRow is a message as kept, with its sealed value.
 type peopleRow struct {
@@ -86,7 +90,7 @@ type peopleRow struct {
 func scanPeopleRow(r pgx.Row, extra ...any) (peopleRow, error) {
 	var m peopleRow
 	dest := append([]any{&m.ID, &m.Mine, &m.Kind, &m.sealed, &m.attach, &m.cardType, &m.ReplyTo, &m.forwards, &m.delivered, &m.ReadAt, &m.Starred,
-		&m.MyReaction, &m.TheirReaction, &m.Deleted, &m.screen, &m.paidAt, &m.paidByMe, &m.CreatedAt}, extra...)
+		&m.MyReaction, &m.TheirReaction, &m.Deleted, &m.screen, &m.paidAt, &m.paidByMe, &m.CreatedAt, &m.EditedAt, &m.Edits}, extra...)
 	err := r.Scan(dest...)
 	m.Warn = m.screen != ""
 	return m, err

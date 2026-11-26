@@ -52,6 +52,7 @@ func (s *Server) customerDoorRoutes(r chi.Router) {
 	r.Put("/me/chats/{id}", s.putPersonChat)
 	r.Get("/me/chats/{id}/messages", s.personMessages)
 	r.Post("/me/chats/{id}/messages", s.sendPersonMessage)
+	r.Patch("/me/chats/{id}/messages/{message}", s.editPersonMessage)
 	r.Post("/me/chats/{id}/files", s.sendPersonFile)
 	r.Get("/me/chats/{id}/files/{message}", s.personFile)
 	r.Get("/me/chats/{id}/previews/{message}", s.personPreviewImage)
@@ -205,6 +206,10 @@ type personMessage struct {
 	Line      string     `json:"line"`
 	ReadAt    *time.Time `json:"read_at"`
 	CreatedAt time.Time  `json:"created_at"`
+	// EditedAt is when its sender last changed its words ("Edited"), and
+	// Edits how many times; an edit names the count it saw.
+	EditedAt *time.Time `json:"edited_at,omitempty"`
+	Edits    int        `json:"edits"`
 }
 
 const personChatCols = `c.id, c.tenant_id, c.last_message_at, c.muted, c.archived, c.blocked_at IS NOT NULL, c.business_blocked_at IS NOT NULL, c.offers,
@@ -756,7 +761,7 @@ func (s *Server) personMessages(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		q := `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line, preview FROM person_messages WHERE person_id = $1 AND conversation_id = $2`
+		q := `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line, preview, edited_at, edits FROM person_messages WHERE person_id = $1 AND conversation_id = $2`
 		args := []any{person, c.ID}
 		if b, err := uuid.Parse(r.URL.Query().Get("before")); err == nil {
 			q += ` AND (created_at, id) < (SELECT created_at, id FROM person_messages WHERE person_id = $1 AND id = $3)`
@@ -768,7 +773,7 @@ func (s *Server) personMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (personMessage, error) {
 			var m personMessage
-			if err := r.Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line, &m.Preview); err != nil {
+			if err := r.Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line, &m.Preview, &m.EditedAt, &m.Edits); err != nil {
 				return m, err
 			}
 			m.WarnTransfer = !m.Mine && ((m.Kind != "card" && warnTransfer(m.Body)) || savedNamesAccount(m.Card))
@@ -896,9 +901,9 @@ func personRepeat(ctx context.Context, tx pgx.Tx, person, conv uuid.UUID, client
 		return nil, nil
 	}
 	var m personMessage
-	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line, preview FROM person_messages
+	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line, preview, edited_at, edits FROM person_messages
 		WHERE person_id = $1 AND conversation_id = $2 AND client_id = $3`, person, conv, clientID).
-		Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line, &m.Preview)
+		Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line, &m.Preview, &m.EditedAt, &m.Edits)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Internals the external tests reach.
@@ -31,6 +32,14 @@ func (s *Server) GroupTickRuns() int64 { return s.groupTickRuns.Load() }
 // SetUSSDStart replaces how the USSD hand-off starts runs (a slow engine).
 func (s *Server) SetUSSDStart(fn func(context.Context, runtime.StartRequest) (runtime.RunRef, bool, error)) {
 	s.ussd.start = fn
+}
+
+// ChatChannel is a chat channel, for a test's fakes.
+type ChatChannel = chatChannel
+
+// EditOnPhone changes one phone's copy of an edited message (message_edits.go).
+func EditOnPhone(ctx context.Context, ch ChatChannel, channel, addr, id string, edited, followUp whatsapp.Message) (bool, error) {
+	return editOnPhone(ctx, ch, phoneCopy{channel: channel, addr: addr, id: id}, edited, followUp)
 }
 
 // PreviewAnyPort lets link previews reach a test's local page.

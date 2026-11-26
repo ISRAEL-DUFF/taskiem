@@ -112,6 +112,28 @@ func (c *slackChannel) Send(ctx context.Context, addr string, m whatsapp.Message
 	return ts, nil
 }
 
+// Edit changes a direct message the business's bot sent to the Slack user
+// (its ts, as Send answered it) to m's words in place (chat.update), in
+// the conversation it was sent in.
+func (c *slackChannel) Edit(ctx context.Context, addr, id string, m whatsapp.Message) error {
+	team, input, err := slackMessage(addr, m)
+	if err != nil {
+		return err
+	}
+	_, user, _ := parseSlackAddr(addr)
+	open, err := c.s.slackCall(ctx, c.tenant, team, "open_conversation", map[string]any{"users": user})
+	if err != nil {
+		return err
+	}
+	channel, _ := open["channel"].(string)
+	if channel == "" {
+		return errors.New("slack: no conversation with the user")
+	}
+	input["channel"], input["ts"] = channel, id
+	_, err = c.s.slackCall(ctx, c.tenant, team, "update_message", input)
+	return err
+}
+
 // slackMessage is m as post_message's input, for the workspace addr is in.
 func slackMessage(addr string, m whatsapp.Message) (team string, input map[string]any, err error) {
 	team, user, ok := parseSlackAddr(addr)

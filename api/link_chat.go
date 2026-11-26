@@ -61,6 +61,10 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/typing", s.linkTyping)
 	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/forward", s.forwardLinkMessage)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/messages/{id}/hide", s.hideLinkMessage)
+	// Editing a sent message (message_edits.go); its earlier wordings are
+	// for those who read the audit log.
+	r.With(write, s.tenantWide).Patch("/link-chats/{link}/messages/{id}", s.editLinkMessage)
+	r.With(s.need(PermAuditRead)).Get("/link-chats/{link}/messages/{id}/edits", s.linkMessageEdits)
 	r.With(write, s.tenantWide, paced).Put("/link-chats/{link}/messages/{id}/reaction", s.reactLinkMessage)
 	r.With(write, s.tenantWide).Delete("/link-chats/{link}/messages/{id}/reaction", s.unreactLinkMessage)
 	r.With(s.tenantWide).Put("/link-chats/{link}/messages/{id}/star", s.starLinkMessage)

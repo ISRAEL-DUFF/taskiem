@@ -12642,6 +12642,92 @@ paths:
                     type: boolean
         default:
           $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}:
+    patch:
+      operationId: editLinkMessage
+      tags:
+      - Links
+      summary: Edit a message we sent
+      description: 'The words of a text, or a file''s caption, changed by the person who sent it, within 30 minutes of sending (docs/spec/chat-previews-and-editing.md §3). `edits` is the count of edits the message had when the client showed it: behind it, the answer is 409 `{stale: true}` (edited since on another device). Refused with 403 `{not_editable: reason}`: `not_yours`, `too_old`, `card`, `money`, `taskiem_acted`, `deleted`, `forwarded` or `voice`; 422 for words a new message could not have. Every copy changes at once, with its link preview made again when the first link changed; nobody is notified and the chat does not move up the list. By the member who sent it, not others of the business. The earlier wording is kept for this business''s audit log only (GET …/edits), never shown in the chat; the audit entry is `link.message.edit`. The other side''s people told on Telegram or Slack see it changed there; on WhatsApp they are sent "✏️ Edited: …" quoting it. `mentions` (optional) are its @ mentions now; a # tag cannot be added. Refused once the link has ended (409).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkMessageEdit'
+      responses:
+        '200':
+          description: The message as it is now
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}/edits:
+    get:
+      operationId: listLinkMessageEdits
+      tags:
+      - Links
+      summary: A message's earlier wordings
+      description: 'For the audit log: each earlier wording of one of this business''s own messages, who changed it and when, the oldest first. The other business keeps none of them, and the chat never shows them.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: audit.read
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The earlier wordings
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [edits]
+                properties:
+                  edits:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessageEarlier'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/messages/{id}/hide:
     post:
       operationId: hideLinkMessage
@@ -13722,6 +13808,48 @@ paths:
                 $ref: '#/components/schemas/CustomerMessage'
         '201':
           description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/messages/{message}:
+    patch:
+      operationId: editCustomerMessage
+      tags:
+      - Customers
+      summary: Edit a reply you sent to a customer
+      description: 'The words of a text, or a file''s caption, changed by the person who sent it, within 30 minutes of sending (docs/spec/chat-previews-and-editing.md §3). `edits` is the count of edits the message had when the client showed it: behind it, the answer is 409 `{stale: true}` (edited since on another device). Refused with 403 `{not_editable: reason}`: `not_yours`, `too_old`, `card`, `money`, `taskiem_acted`, `deleted`, `forwarded` or `voice`; 422 for words a new message could not have. Every copy changes at once, with its link preview made again when the first link changed; nobody is notified and the chat does not move up the list. By the member who wrote it. The audit entry is `customer_chat.message.edit`. In the app the customer''s copy changes; on WhatsApp, where a message cannot be changed, the customer is sent "✏️ Edited: …". An order''s or Taskiem''s own words, cards and offers are not edited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageEdit'
+      responses:
+        '200':
+          description: The message as it is now
           content:
             application/json:
               schema:
@@ -26267,6 +26395,46 @@ paths:
                 $ref: '#/components/schemas/PersonMessage'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/messages/{message}:
+    patch:
+      operationId: editMyChatMessage
+      tags:
+      - You
+      summary: Edit a message you sent to a business
+      description: 'The words of a text, or a file''s caption, changed by the person who sent it, within 30 minutes of sending (docs/spec/chat-previews-and-editing.md §3). `edits` is the count of edits the message had when the client showed it: behind it, the answer is 409 `{stale: true}` (edited since on another device). Refused with 403 `{not_editable: reason}`: `not_yours`, `too_old`, `card`, `money`, `taskiem_acted`, `deleted`, `forwarded` or `voice`; 422 for words a new message could not have. Every copy changes at once, with its link preview made again when the first link changed; nobody is notified and the chat does not move up the list. Your copy and the business''s change; a message the business read an order from keeps its words (`taskiem_acted`), and one sent on WhatsApp cannot be changed here (`elsewhere`).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageEdit'
+      responses:
+        '200':
+          description: The message as it is now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonMessage'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/chats/{id}/files:
     post:
       operationId: sendMyChatFile
@@ -29526,6 +29694,45 @@ paths:
           description: Deleted
         default:
           $ref: '#/components/responses/Error'
+    patch:
+      operationId: editGroupMessage
+      tags:
+      - People
+      summary: Edit a message you sent to a group
+      description: 'The words of a text, or a file''s caption, changed by the person who sent it, within 30 minutes of sending (docs/spec/chat-previews-and-editing.md §3). `edits` is the count of edits the message had when the client showed it: behind it, the answer is 409 `{stale: true}` (edited since on another device). Refused with 403 `{not_editable: reason}`: `not_yours`, `too_old`, `card`, `money`, `taskiem_acted`, `deleted`, `forwarded` or `voice`; 422 for words a new message could not have. Every copy changes at once, with its link preview made again when the first link changed; nobody is notified and the chat does not move up the list. While you are in the group. `mentions` (optional) are the members it mentions now, by id (only @ mentions exist in groups). Sealed again under the group''s key; no audit entry is written.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupMessageEdit'
+      responses:
+        '200':
+          description: The message as it is now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMessage'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/groups/{id}/messages/{message}/info:
     get:
       operationId: groupMessageInfo
@@ -31393,6 +31600,45 @@ paths:
       responses:
         '204':
           description: Done
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: editPeopleMessage
+      tags:
+      - People
+      summary: Edit a message you sent
+      description: 'The words of a text, or a file''s caption, changed by the person who sent it, within 30 minutes of sending (docs/spec/chat-previews-and-editing.md §3). `edits` is the count of edits the message had when the client showed it: behind it, the answer is 409 `{stale: true}` (edited since on another device). Refused with 403 `{not_editable: reason}`: `not_yours`, `too_old`, `card`, `money`, `taskiem_acted`, `deleted`, `forwarded` or `voice`; 422 for words a new message could not have. Every copy changes at once, with its link preview made again when the first link changed; nobody is notified and the chat does not move up the list. Both copies are sealed again, each under its owner''s key, and searched by the new words only; no audit entry is written.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageEdit'
+      responses:
+        '200':
+          description: The message as it is now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleMessage'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/people/{id}/messages/{message}/paid:
@@ -54679,6 +54925,14 @@ components:
       additionalProperties: false
       required: [id, mine, kind, body, read_at, created_at]
       properties:
+        edited_at:
+          type: string
+          format: date-time
+          description: When its sender last changed its words; shown as "Edited" (docs/spec/chat-previews-and-editing.md §3).
+        edits:
+          type: integer
+          minimum: 0
+          description: How many times it was edited; an edit names the count it saw.
         id:
           type: string
           format: uuid
@@ -54980,6 +55234,14 @@ components:
       required: [id, group_id, mine, sender_id, sender, kind, body, created_at]
       description: One message of a group as a member sees it.
       properties:
+        edited_at:
+          type: string
+          format: date-time
+          description: When its sender last changed its words; shown as "Edited" (docs/spec/chat-previews-and-editing.md §3).
+        edits:
+          type: integer
+          minimum: 0
+          description: How many times it was edited; an edit names the count it saw.
         id:
           type: string
           format: uuid
@@ -55685,6 +55947,14 @@ components:
       required: [id, mine, kind, body, read_at, created_at]
       description: One message of the person's copy of a people chat, opened.
       properties:
+        edited_at:
+          type: string
+          format: date-time
+          description: When its sender last changed its words; shown as "Edited" (docs/spec/chat-previews-and-editing.md §3).
+        edits:
+          type: integer
+          minimum: 0
+          description: How many times it was edited; an edit names the count it saw.
         id:
           type: string
           format: uuid
@@ -56735,6 +57005,14 @@ components:
       additionalProperties: false
       required: [id, mine, kind, body, read_at, created_at]
       properties:
+        edited_at:
+          type: string
+          format: date-time
+          description: When its sender last changed its words; shown as "Edited" (docs/spec/chat-previews-and-editing.md §3).
+        edits:
+          type: integer
+          minimum: 0
+          description: How many times it was edited; an edit names the count it saw.
         id:
           type: string
           format: uuid
@@ -56935,6 +57213,79 @@ components:
               type: integer
             h:
               type: integer
+    MessageEdit:
+      type: object
+      additionalProperties: false
+      required: [text, edits]
+      description: An edit of a sent message (docs/spec/chat-previews-and-editing.md §3).
+      properties:
+        text:
+          type: string
+          maxLength: 4000
+          description: The new words (or caption; may be empty for a file).
+        edits:
+          type: integer
+          minimum: 0
+          description: The count of edits the message had when the client showed it (`edits` on the message).
+    LinkMessageEdit:
+      type: object
+      additionalProperties: false
+      required: [text, edits]
+      description: An edit of a message to a linked business.
+      properties:
+        text:
+          type: string
+          maxLength: 4000
+        edits:
+          type: integer
+          minimum: 0
+        mentions:
+          type: array
+          maxItems: 10
+          description: "Its @ mentions of linked businesses now, each {kind: business, link}; left out, those still named in the words are kept. A # tag cannot be added by editing."
+          items:
+            type: object
+    GroupMessageEdit:
+      type: object
+      additionalProperties: false
+      required: [text, edits]
+      description: An edit of a group message.
+      properties:
+        text:
+          type: string
+          maxLength: 4000
+        edits:
+          type: integer
+          minimum: 0
+        mentions:
+          type: array
+          maxItems: 256
+          description: The members it mentions now; left out, those it mentioned are kept.
+          items:
+            type: string
+            format: uuid
+    LinkMessageEarlier:
+      type: object
+      additionalProperties: false
+      required: [id, edited_by, edited_at, message]
+      description: An earlier wording of a message, kept for the audit log.
+      properties:
+        id:
+          type: string
+          format: uuid
+        message:
+          type: string
+          format: uuid
+        edited_by:
+          type: string
+          description: The member who changed it (their actor id).
+        edited_at:
+          type: string
+          format: date-time
+        words_before:
+          type: string
+        caption_before:
+          type: string
     LinkPreviewChoice:
       description: >-
         What a message is sent with: the card the composer showed ({id}, from POST /v1/link-preview), or false when the person
@@ -56954,6 +57305,14 @@ components:
       additionalProperties: false
       required: [id, link, mine, kind, created_at]
       properties:
+        edited_at:
+          type: string
+          format: date-time
+          description: When its sender last changed its words; shown as "Edited" (docs/spec/chat-previews-and-editing.md §3).
+        edits:
+          type: integer
+          minimum: 0
+          description: How many times it was edited; an edit names the count it saw.
         id:
           type: string
           format: uuid

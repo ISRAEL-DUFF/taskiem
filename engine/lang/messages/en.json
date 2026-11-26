@@ -8939,6 +8939,11 @@
       "reviewed": true,
       "context": "The person may not write in conversations with linked businesses"
     },
+    "chat.link.edited": {
+      "text": "✏️ Edited: {words}",
+      "reviewed": true,
+      "context": "Sent after a message already on someone's phone was edited in Taskiem; {words} is the new message, quoted where WhatsApp allows"
+    },
     "chat.link.ask_what": {
       "text": "What do you want to say to *{name}*? Send *ask {name}* and your message.",
       "reviewed": true,

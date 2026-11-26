@@ -249,6 +249,36 @@ class TaskiemApi {
     return PreviewLinkResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Edit a message we sent (`PATCH /v1/link-chats/{link}/messages/{id}`)
+  Future<EditLinkMessageResponse> editLinkMessage({required LinkMessageEdit body, required String link, required String id}) async {
+    final j = await _t.send('PATCH', '/v1/link-chats/${Uri.encodeComponent(link)}/messages/${Uri.encodeComponent(id)}', body: body.toJson());
+    return EditLinkMessageResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Edit a message you sent (`PATCH /v1/me/people/{id}/messages/{message}`)
+  Future<PeopleMessage> editPeopleMessage({required MessageEdit body, required String id, required String message}) async {
+    final j = await _t.send('PATCH', '/v1/me/people/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', body: body.toJson());
+    return PeopleMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Edit a message you sent to a group (`PATCH /v1/me/groups/{id}/messages/{message}`)
+  Future<GroupMessage> editGroupMessage({required GroupMessageEdit body, required String id, required String message}) async {
+    final j = await _t.send('PATCH', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', body: body.toJson());
+    return GroupMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Edit a message you sent to a business (`PATCH /v1/me/chats/{id}/messages/{message}`)
+  Future<PersonMessage> editMyChatMessage({required MessageEdit body, required String id, required String message}) async {
+    final j = await _t.send('PATCH', '/v1/me/chats/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', body: body.toJson());
+    return PersonMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Edit a reply you sent to a customer (`PATCH /v1/customer-chats/{id}/messages/{message}`)
+  Future<CustomerMessage> editCustomerMessage({required MessageEdit body, required String id, required String message}) async {
+    final j = await _t.send('PATCH', '/v1/customer-chats/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', body: body.toJson());
+    return CustomerMessage.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Your conversation with Taskiem (`GET /v1/taskiem-chat`)
   Future<TaskiemChat> taskiemHistory({String? before, String? after}) async {
     final j = await _t.send('GET', '/v1/taskiem-chat', query: {'before': ?before, 'after': ?after});
@@ -3778,7 +3808,7 @@ class LinkConversation {
 }
 
 class LinkMessage {
-  const LinkMessage({this.asked, this.attachment, this.batch, this.body, this.card, required this.createdAt, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.payment, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
+  const LinkMessage({this.asked, this.attachment, this.batch, this.body, this.card, required this.createdAt, this.editedAt, this.edits, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.payment, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
 
   /// On a taskiem note, the words asked of Taskiem
   final String? asked;
@@ -3790,6 +3820,11 @@ class LinkMessage {
   final String? body;
   final LinkDocCard? card;
   final DateTime createdAt;
+  /// When its sender last changed its words; shown as "Edited"
+  /// (docs/spec/chat-previews-and-editing.md §3).
+  final DateTime? editedAt;
+  /// How many times it was edited; an edit names the count it saw.
+  final int? edits;
   /// Forwarded from another conversation
   final bool? forwarded;
   /// The message, the same in both businesses
@@ -3821,6 +3856,8 @@ class LinkMessage {
         body: j['body'] == null ? null : j['body'] as String,
         card: j['card'] == null ? null : LinkDocCard.fromJson(j['card'] as Map<String, dynamic>),
         createdAt: DateTime.parse(j['created_at'] as String),
+        editedAt: j['edited_at'] == null ? null : DateTime.parse(j['edited_at'] as String),
+        edits: j['edits'] == null ? null : (j['edits'] as num).toInt(),
         forwarded: j['forwarded'] == null ? null : j['forwarded'] as bool,
         id: j['id'] as String,
         kind: j['kind'] as String,
@@ -3843,6 +3880,8 @@ class LinkMessage {
         'body': ?body,
         'card': ?card?.toJson(),
         'created_at': createdAt.toUtc().toIso8601String(),
+        'edited_at': ?editedAt?.toUtc().toIso8601String(),
+        'edits': ?edits,
         'forwarded': ?forwarded,
         'id': id,
         'kind': kind,
@@ -5211,6 +5250,724 @@ class PreviewLinkResponseImage {
       };
 }
 
+/// An edit of a message to a linked business.
+class LinkMessageEdit {
+  const LinkMessageEdit({required this.edits, this.mentions, required this.text});
+
+  final int edits;
+  /// Its @ mentions of linked businesses now, each {kind: business, link}; left
+  /// out, those still named in the words are kept. A # tag cannot be added by
+  /// editing.
+  final List<Map<String, dynamic>>? mentions;
+  final String text;
+
+  factory LinkMessageEdit.fromJson(Map<String, dynamic> j) => LinkMessageEdit(
+        edits: (j['edits'] as num).toInt(),
+        mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => e as Map<String, dynamic>).toList(),
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'edits': edits,
+        'mentions': ?mentions?.map((e) => e).toList(),
+        'text': text,
+      };
+}
+
+class EditLinkMessageResponse {
+  const EditLinkMessageResponse({required this.message});
+
+  final LinkMessage message;
+
+  factory EditLinkMessageResponse.fromJson(Map<String, dynamic> j) => EditLinkMessageResponse(
+        message: LinkMessage.fromJson(j['message'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'message': message.toJson(),
+      };
+}
+
+/// An edit of a sent message (docs/spec/chat-previews-and-editing.md §3).
+class MessageEdit {
+  const MessageEdit({required this.edits, required this.text});
+
+  /// The count of edits the message had when the client showed it (`edits` on
+  /// the message).
+  final int edits;
+  /// The new words (or caption; may be empty for a file).
+  final String text;
+
+  factory MessageEdit.fromJson(Map<String, dynamic> j) => MessageEdit(
+        edits: (j['edits'] as num).toInt(),
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'edits': edits,
+        'text': text,
+      };
+}
+
+/// One message of the person's copy of a people chat, opened.
+class PeopleMessage {
+  const PeopleMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.editedAt, this.edits, this.forwarded, this.forwardedMany, required this.id, required this.kind, this.location, required this.mine, this.myReaction, this.preview, this.readAt, this.replyTo, this.starred, this.status, this.theirReaction, this.warn, this.warnTransfer});
+
+  final ChatAttachment? attachment;
+  /// The words, a file's caption, or "This message was deleted" (`deleted`).
+  final String body;
+  final PeopleCard? card;
+  final DateTime createdAt;
+  final bool? deleted;
+  /// When its sender last changed its words; shown as "Edited"
+  /// (docs/spec/chat-previews-and-editing.md §3).
+  final DateTime? editedAt;
+  /// How many times it was edited; an edit names the count it saw.
+  final int? edits;
+  final bool? forwarded;
+  /// Forwarded five or more times on its way here; it can be forwarded to one
+  /// chat at a time.
+  final bool? forwardedMany;
+  final String id;
+  final String kind;
+  final PeopleLocation? location;
+  final bool mine;
+  final String? myReaction;
+  final LinkPreview? preview;
+  final Object? readAt;
+  final String? replyTo;
+  final bool? starred;
+  /// Your own messages: sent (one tick: not delivered, as while they block
+  /// you), delivered, read (only once the chat is accepted).
+  final String? status;
+  final String? theirReaction;
+  /// The safety checks found it looks like a scam or spam.
+  final bool? warn;
+  /// Their message asks for a transfer to an account; warn before paying.
+  final bool? warnTransfer;
+
+  factory PeopleMessage.fromJson(Map<String, dynamic> j) => PeopleMessage(
+        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        body: j['body'] as String,
+        card: j['card'] == null ? null : PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        deleted: j['deleted'] == null ? null : j['deleted'] as bool,
+        editedAt: j['edited_at'] == null ? null : DateTime.parse(j['edited_at'] as String),
+        edits: j['edits'] == null ? null : (j['edits'] as num).toInt(),
+        forwarded: j['forwarded'] == null ? null : j['forwarded'] as bool,
+        forwardedMany: j['forwarded_many'] == null ? null : j['forwarded_many'] as bool,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
+        mine: j['mine'] as bool,
+        myReaction: j['my_reaction'] == null ? null : j['my_reaction'] as String,
+        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
+        readAt: j['read_at'],
+        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
+        starred: j['starred'] == null ? null : j['starred'] as bool,
+        status: j['status'] == null ? null : j['status'] as String,
+        theirReaction: j['their_reaction'] == null ? null : j['their_reaction'] as String,
+        warn: j['warn'] == null ? null : j['warn'] as bool,
+        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
+        'body': body,
+        'card': ?card?.toJson(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'deleted': ?deleted,
+        'edited_at': ?editedAt?.toUtc().toIso8601String(),
+        'edits': ?edits,
+        'forwarded': ?forwarded,
+        'forwarded_many': ?forwardedMany,
+        'id': id,
+        'kind': kind,
+        'location': ?location?.toJson(),
+        'mine': mine,
+        'my_reaction': ?myReaction,
+        'preview': ?preview?.toJson(),
+        'read_at': ?readAt,
+        'reply_to': ?replyTo,
+        'starred': ?starred,
+        'status': ?status,
+        'their_reaction': ?theirReaction,
+        'warn': ?warn,
+        'warn_transfer': ?warnTransfer,
+      };
+}
+
+class ChatAttachment {
+  const ChatAttachment({this.doc, this.h, required this.kind, this.name, this.pages, this.preview, this.protected, required this.size, required this.type, this.w});
+
+  /// A document's family, for its icon
+  final String? doc;
+  /// A photo's, or the PDF picture's, height in pixels
+  final int? h;
+  final String kind;
+  final String? name;
+  /// A PDF's page count, once its picture is drawn
+  final int? pages;
+  /// The picture of a PDF's first page, from its file route with ?preview=1 -
+  /// ready, none (a protected PDF) or failed; missing while it is drawn, and on
+  /// files sent before pictures were drawn
+  final String? preview;
+  /// A password-protected PDF (no page count, no picture)
+  final bool? protected;
+  final int size;
+  final String type;
+  /// A photo's, or the PDF picture's, width in pixels
+  final int? w;
+
+  factory ChatAttachment.fromJson(Map<String, dynamic> j) => ChatAttachment(
+        doc: j['doc'] == null ? null : j['doc'] as String,
+        h: j['h'] == null ? null : (j['h'] as num).toInt(),
+        kind: j['kind'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        pages: j['pages'] == null ? null : (j['pages'] as num).toInt(),
+        preview: j['preview'] == null ? null : j['preview'] as String,
+        protected: j['protected'] == null ? null : j['protected'] as bool,
+        size: (j['size'] as num).toInt(),
+        type: j['type'] as String,
+        w: j['w'] == null ? null : (j['w'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'doc': ?doc,
+        'h': ?h,
+        'kind': kind,
+        'name': ?name,
+        'pages': ?pages,
+        'preview': ?preview,
+        'protected': ?protected,
+        'size': size,
+        'type': type,
+        'w': ?w,
+      };
+}
+
+/// A card in a people chat (people-chatting §10.1, §11 A), carrying only what
+/// is needed to show and open it: a product (business, item, its price when
+/// shared), a business, an order or a delivery (business, reference, state, the
+/// rider's progress when shared), or a share (amount, what for, the account to
+/// pay to, paid).
+class PeopleCard {
+  const PeopleCard({this.amountKobo, this.area, this.basketId, this.business, this.businessId, this.delivery, this.for_, this.forId, this.itemId, this.paid, this.paidAt, this.paidByMe, this.payTo, this.priceKobo, this.reference, this.saved, this.state, required this.title, required this.type, this.what});
+
+  final int? amountKobo;
+  final String? area;
+  /// A shared basket (5b C): made by the server; GET /v1/me/baskets/{basket_id}
+  /// reads it.
+  final String? basketId;
+  final String? business;
+  final String? businessId;
+  final DeliveryProgress? delivery;
+  final String? for_;
+  /// A share sent from a basket, in a group: who it is for.
+  final String? forId;
+  final String? itemId;
+  final bool? paid;
+  final DateTime? paidAt;
+  final bool? paidByMe;
+  final PayoutAccount? payTo;
+  final int? priceKobo;
+  final String? reference;
+  final SavedCard? saved;
+  final String? state;
+  final String title;
+  final String type;
+  final String? what;
+
+  factory PeopleCard.fromJson(Map<String, dynamic> j) => PeopleCard(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        area: j['area'] == null ? null : j['area'] as String,
+        basketId: j['basket_id'] == null ? null : j['basket_id'] as String,
+        business: j['business'] == null ? null : j['business'] as String,
+        businessId: j['business_id'] == null ? null : j['business_id'] as String,
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        for_: j['for'] == null ? null : j['for'] as String,
+        forId: j['for_id'] == null ? null : j['for_id'] as String,
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        paid: j['paid'] == null ? null : j['paid'] as bool,
+        paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
+        paidByMe: j['paid_by_me'] == null ? null : j['paid_by_me'] as bool,
+        payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
+        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedCard.fromJson(j['saved'] as Map<String, dynamic>),
+        state: j['state'] == null ? null : j['state'] as String,
+        title: j['title'] as String,
+        type: j['type'] as String,
+        what: j['what'] == null ? null : j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'area': ?area,
+        'basket_id': ?basketId,
+        'business': ?business,
+        'business_id': ?businessId,
+        'delivery': ?delivery?.toJson(),
+        'for': ?for_,
+        'for_id': ?forId,
+        'item_id': ?itemId,
+        'paid': ?paid,
+        'paid_at': ?paidAt?.toUtc().toIso8601String(),
+        'paid_by_me': ?paidByMe,
+        'pay_to': ?payTo?.toJson(),
+        'price_kobo': ?priceKobo,
+        'reference': ?reference,
+        'saved': ?saved?.toJson(),
+        'state': ?state,
+        'title': title,
+        'type': type,
+        'what': ?what,
+      };
+}
+
+/// A delivery as its customer follows it, once a rider holds it; nothing of the
+/// rider is shown.
+class DeliveryProgress {
+  const DeliveryProgress({this.acceptedAt, this.arrivedAt, this.deliveredAt, required this.line, this.pickedUpAt, required this.status});
+
+  final DateTime? acceptedAt;
+  final DateTime? arrivedAt;
+  final DateTime? deliveredAt;
+  /// "A rider is going to collect it", "On its way to you", "The rider is at
+  /// your address", "Delivered"
+  final String line;
+  final DateTime? pickedUpAt;
+  final String status;
+
+  factory DeliveryProgress.fromJson(Map<String, dynamic> j) => DeliveryProgress(
+        acceptedAt: j['accepted_at'] == null ? null : DateTime.parse(j['accepted_at'] as String),
+        arrivedAt: j['arrived_at'] == null ? null : DateTime.parse(j['arrived_at'] as String),
+        deliveredAt: j['delivered_at'] == null ? null : DateTime.parse(j['delivered_at'] as String),
+        line: j['line'] as String,
+        pickedUpAt: j['picked_up_at'] == null ? null : DateTime.parse(j['picked_up_at'] as String),
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'accepted_at': ?acceptedAt?.toUtc().toIso8601String(),
+        'arrived_at': ?arrivedAt?.toUtc().toIso8601String(),
+        'delivered_at': ?deliveredAt?.toUtc().toIso8601String(),
+        'line': line,
+        'picked_up_at': ?pickedUpAt?.toUtc().toIso8601String(),
+        'status': status,
+      };
+}
+
+/// A person's own bank account for being paid back, as they typed it; never
+/// checked by Taskiem, which moves no money.
+class PayoutAccount {
+  const PayoutAccount({required this.accountName, required this.accountNumber, required this.bank});
+
+  final String accountName;
+  /// Ten digits (spaces and dashes are taken out).
+  final String accountNumber;
+  final String bank;
+
+  factory PayoutAccount.fromJson(Map<String, dynamic> j) => PayoutAccount(
+        accountName: j['account_name'] as String,
+        accountNumber: j['account_number'] as String,
+        bank: j['bank'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': accountName,
+        'account_number': accountNumber,
+        'bank': bank,
+      };
+}
+
+class PeopleLocation {
+  const PeopleLocation({this.label, required this.lat, required this.lng});
+
+  final String? label;
+  final double lat;
+  final double lng;
+
+  factory PeopleLocation.fromJson(Map<String, dynamic> j) => PeopleLocation(
+        label: j['label'] == null ? null : j['label'] as String,
+        lat: (j['lat'] as num).toDouble(),
+        lng: (j['lng'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': ?label,
+        'lat': lat,
+        'lng': lng,
+      };
+}
+
+/// An edit of a group message.
+class GroupMessageEdit {
+  const GroupMessageEdit({required this.edits, this.mentions, required this.text});
+
+  final int edits;
+  /// The members it mentions now; left out, those it mentioned are kept.
+  final List<String>? mentions;
+  final String text;
+
+  factory GroupMessageEdit.fromJson(Map<String, dynamic> j) => GroupMessageEdit(
+        edits: (j['edits'] as num).toInt(),
+        mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => e as String).toList(),
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'edits': edits,
+        'mentions': ?mentions?.map((e) => e).toList(),
+        'text': text,
+      };
+}
+
+/// One message of a group as a member sees it.
+class GroupMessage {
+  const GroupMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.editedAt, this.edits, this.event, this.forwarded, this.forwardedMany, required this.groupId, required this.id, required this.kind, this.location, this.mentions, this.mentionsMe, required this.mine, this.myReaction, this.preview, this.reactions, this.replyTo, required this.sender, this.senderId, this.starred, this.status, this.warn, this.warnTransfer});
+
+  final ChatAttachment? attachment;
+  /// The words, a caption, an event in words ("Ada added Bola"), or "This
+  /// message was deleted".
+  final String body;
+  final PeopleCard? card;
+  final DateTime createdAt;
+  final bool? deleted;
+  /// When its sender last changed its words; shown as "Edited"
+  /// (docs/spec/chat-previews-and-editing.md §3).
+  final DateTime? editedAt;
+  /// How many times it was edited; an edit names the count it saw.
+  final int? edits;
+  final GroupMessageEvent? event;
+  final bool? forwarded;
+  final bool? forwardedMany;
+  final String groupId;
+  final String id;
+  final String kind;
+  final PeopleLocation? location;
+  final List<String>? mentions;
+  final bool? mentionsMe;
+  final bool mine;
+  final String? myReaction;
+  final LinkPreview? preview;
+  final List<GroupMessageReactionsItem>? reactions;
+  final String? replyTo;
+  /// Who wrote it, as you see them ("You"; "Deleted account" once their account
+  /// was deleted, §17 Q17).
+  final String sender;
+  final Object? senderId;
+  final bool? starred;
+  /// Your own messages (A6): delivered once every member now in the group has
+  /// it; read once every one of them with read ticks on (theirs and yours) has
+  /// read it.
+  final String? status;
+  /// Taskiem's checks found it looks like a scam (in a new group, or from
+  /// someone who joined by its link in the last day, B1), and you haven't added
+  /// its sender: show "Never send money to someone you have not met". A share
+  /// card naming an account from someone you haven't added warns too.
+  final bool? warn;
+  /// It asks for a transfer to an account (words that ask, or a share card from
+  /// someone you have not added); warn before paying.
+  final bool? warnTransfer;
+
+  factory GroupMessage.fromJson(Map<String, dynamic> j) => GroupMessage(
+        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        body: j['body'] as String,
+        card: j['card'] == null ? null : PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        deleted: j['deleted'] == null ? null : j['deleted'] as bool,
+        editedAt: j['edited_at'] == null ? null : DateTime.parse(j['edited_at'] as String),
+        edits: j['edits'] == null ? null : (j['edits'] as num).toInt(),
+        event: j['event'] == null ? null : GroupMessageEvent.fromJson(j['event'] as Map<String, dynamic>),
+        forwarded: j['forwarded'] == null ? null : j['forwarded'] as bool,
+        forwardedMany: j['forwarded_many'] == null ? null : j['forwarded_many'] as bool,
+        groupId: j['group_id'] as String,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
+        mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => e as String).toList(),
+        mentionsMe: j['mentions_me'] == null ? null : j['mentions_me'] as bool,
+        mine: j['mine'] as bool,
+        myReaction: j['my_reaction'] == null ? null : j['my_reaction'] as String,
+        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
+        reactions: j['reactions'] == null ? null : (j['reactions'] as List).map((e) => GroupMessageReactionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
+        sender: j['sender'] as String,
+        senderId: j['sender_id'],
+        starred: j['starred'] == null ? null : j['starred'] as bool,
+        status: j['status'] == null ? null : j['status'] as String,
+        warn: j['warn'] == null ? null : j['warn'] as bool,
+        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
+        'body': body,
+        'card': ?card?.toJson(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'deleted': ?deleted,
+        'edited_at': ?editedAt?.toUtc().toIso8601String(),
+        'edits': ?edits,
+        'event': ?event?.toJson(),
+        'forwarded': ?forwarded,
+        'forwarded_many': ?forwardedMany,
+        'group_id': groupId,
+        'id': id,
+        'kind': kind,
+        'location': ?location?.toJson(),
+        'mentions': ?mentions?.map((e) => e).toList(),
+        'mentions_me': ?mentionsMe,
+        'mine': mine,
+        'my_reaction': ?myReaction,
+        'preview': ?preview?.toJson(),
+        'reactions': ?reactions?.map((e) => e.toJson()).toList(),
+        'reply_to': ?replyTo,
+        'sender': sender,
+        'sender_id': ?senderId,
+        'starred': ?starred,
+        'status': ?status,
+        'warn': ?warn,
+        'warn_transfer': ?warnTransfer,
+      };
+}
+
+class GroupMessageEvent {
+  const GroupMessageEvent({required this.actorId, this.targetId, required this.type});
+
+  final String actorId;
+  final String? targetId;
+  /// The taskiem_ events are Taskiem's moderators' (sender "Taskiem", actor the
+  /// nil id): the group closed, reopened, its link turned off or allowed again.
+  final String type;
+
+  factory GroupMessageEvent.fromJson(Map<String, dynamic> j) => GroupMessageEvent(
+        actorId: j['actor_id'] as String,
+        targetId: j['target_id'] == null ? null : j['target_id'] as String,
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'actor_id': actorId,
+        'target_id': ?targetId,
+        'type': type,
+      };
+}
+
+class GroupMessageReactionsItem {
+  const GroupMessageReactionsItem({required this.count, required this.reaction});
+
+  final int count;
+  final String reaction;
+
+  factory GroupMessageReactionsItem.fromJson(Map<String, dynamic> j) => GroupMessageReactionsItem(
+        count: (j['count'] as num).toInt(),
+        reaction: j['reaction'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'reaction': reaction,
+      };
+}
+
+class PersonMessage {
+  const PersonMessage({this.attachment, required this.body, this.card, required this.createdAt, this.editedAt, this.edits, required this.id, required this.kind, this.line, required this.mine, this.offer, this.preview, this.readAt, this.senderName, this.warnTransfer});
+
+  final ChatAttachment? attachment;
+  final String body;
+  final CustomerCard? card;
+  final DateTime createdAt;
+  /// When its sender last changed its words; shown as "Edited"
+  /// (docs/spec/chat-previews-and-editing.md §3).
+  final DateTime? editedAt;
+  /// How many times it was edited; an edit names the count it saw.
+  final int? edits;
+  /// The message, the same id on the business's copy.
+  final String id;
+  final String kind;
+  /// In the app, or on WhatsApp: a message between you and the business on its
+  /// own WhatsApp number, shown here since it was yours (§11). Show it marked
+  /// "on WhatsApp"; it cannot be answered there from here. A business's reply
+  /// that went as WhatsApp's template shows the template's words, as WhatsApp
+  /// delivered them; replies WhatsApp never took are not shown.
+  final String? line;
+  /// You sent it.
+  final bool mine;
+  /// An offer (marked Offer, with Stop offers under it).
+  final bool? offer;
+  final LinkPreview? preview;
+  final Object? readAt;
+  /// Who wrote it on the business's side (a first name), when someone did.
+  final String? senderName;
+  /// The business's message asks for a transfer to an account (ten digits
+  /// standing alone with a banking word): warn that paying is only ever through
+  /// Taskiem's pay links (§15).
+  final bool? warnTransfer;
+
+  factory PersonMessage.fromJson(Map<String, dynamic> j) => PersonMessage(
+        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        body: j['body'] as String,
+        card: j['card'] == null ? null : CustomerCard.fromJson(j['card'] as Map<String, dynamic>),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        editedAt: j['edited_at'] == null ? null : DateTime.parse(j['edited_at'] as String),
+        edits: j['edits'] == null ? null : (j['edits'] as num).toInt(),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
+        mine: j['mine'] as bool,
+        offer: j['offer'] == null ? null : j['offer'] as bool,
+        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
+        readAt: j['read_at'],
+        senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
+        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
+        'body': body,
+        'card': ?card?.toJson(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'edited_at': ?editedAt?.toUtc().toIso8601String(),
+        'edits': ?edits,
+        'id': id,
+        'kind': kind,
+        'line': ?line,
+        'mine': mine,
+        'offer': ?offer,
+        'preview': ?preview?.toJson(),
+        'read_at': ?readAt,
+        'sender_name': ?senderName,
+        'warn_transfer': ?warnTransfer,
+      };
+}
+
+/// A card in an app conversation: an order (what, total, its state), a pay link
+/// (`url`), a booking (or a booking offer, by service), a product, an invoice
+/// (`invoice_id`, its number in `reference`, what is due in `total_kobo`, its
+/// pay page in `url` while something is due), or a delivery (the rider's
+/// progress in `delivery`, as it was when sent).
+class CustomerCard {
+  const CustomerCard({this.delivery, this.invoiceId, this.itemId, this.line, this.minutes, this.reference, this.saved, this.serviceId, this.status, required this.title, this.totalKobo, required this.type, this.url});
+
+  final DeliveryProgress? delivery;
+  final String? invoiceId;
+  final String? itemId;
+  final String? line;
+  final int? minutes;
+  final String? reference;
+  final SavedCard? saved;
+  final String? serviceId;
+  final String? status;
+  final String title;
+  final int? totalKobo;
+  final String type;
+  final String? url;
+
+  factory CustomerCard.fromJson(Map<String, dynamic> j) => CustomerCard(
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        invoiceId: j['invoice_id'] == null ? null : j['invoice_id'] as String,
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
+        minutes: j['minutes'] == null ? null : (j['minutes'] as num).toInt(),
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedCard.fromJson(j['saved'] as Map<String, dynamic>),
+        serviceId: j['service_id'] == null ? null : j['service_id'] as String,
+        status: j['status'] == null ? null : j['status'] as String,
+        title: j['title'] as String,
+        totalKobo: j['total_kobo'] == null ? null : (j['total_kobo'] as num).toInt(),
+        type: j['type'] as String,
+        url: j['url'] == null ? null : j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'delivery': ?delivery?.toJson(),
+        'invoice_id': ?invoiceId,
+        'item_id': ?itemId,
+        'line': ?line,
+        'minutes': ?minutes,
+        'reference': ?reference,
+        'saved': ?saved?.toJson(),
+        'service_id': ?serviceId,
+        'status': ?status,
+        'title': title,
+        'total_kobo': ?totalKobo,
+        'type': type,
+        'url': ?url,
+      };
+}
+
+class CustomerMessage {
+  const CustomerMessage({this.attachment, required this.body, this.card, required this.createdAt, this.delivery, this.editedAt, this.edits, this.failure, required this.id, required this.kind, this.line, required this.mine, this.offer, this.preview, this.readAt, this.senderName, this.sentAs});
+
+  final ChatAttachment? attachment;
+  final String body;
+  final CustomerCard? card;
+  final DateTime createdAt;
+  /// A reply's way to the customer, as WhatsApp reports it.
+  final String? delivery;
+  /// When its sender last changed its words; shown as "Edited"
+  /// (docs/spec/chat-previews-and-editing.md §3).
+  final DateTime? editedAt;
+  /// How many times it was edited; an edit names the count it saw.
+  final int? edits;
+  /// Why WhatsApp could not deliver it (failed).
+  final String? failure;
+  final String id;
+  final String kind;
+  /// Where the message went: on WhatsApp (the business's own number) or in the
+  /// app; a thread with both lines holds both, in time order (§11).
+  final String? line;
+  /// From the business.
+  final bool mine;
+  /// An offer to a customer who agreed to offers (app, §15).
+  final bool? offer;
+  final LinkPreview? preview;
+  final Object? readAt;
+  final String? senderName;
+  final String? sentAs;
+
+  factory CustomerMessage.fromJson(Map<String, dynamic> j) => CustomerMessage(
+        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        body: j['body'] as String,
+        card: j['card'] == null ? null : CustomerCard.fromJson(j['card'] as Map<String, dynamic>),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        delivery: j['delivery'] == null ? null : j['delivery'] as String,
+        editedAt: j['edited_at'] == null ? null : DateTime.parse(j['edited_at'] as String),
+        edits: j['edits'] == null ? null : (j['edits'] as num).toInt(),
+        failure: j['failure'] == null ? null : j['failure'] as String,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
+        mine: j['mine'] as bool,
+        offer: j['offer'] == null ? null : j['offer'] as bool,
+        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
+        readAt: j['read_at'],
+        senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
+        sentAs: j['sent_as'] == null ? null : j['sent_as'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
+        'body': body,
+        'card': ?card?.toJson(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'delivery': ?delivery,
+        'edited_at': ?editedAt?.toUtc().toIso8601String(),
+        'edits': ?edits,
+        'failure': ?failure,
+        'id': id,
+        'kind': kind,
+        'line': ?line,
+        'mine': mine,
+        'offer': ?offer,
+        'preview': ?preview?.toJson(),
+        'read_at': ?readAt,
+        'sender_name': ?senderName,
+        'sent_as': ?sentAs,
+      };
+}
+
 class TaskiemChat {
   const TaskiemChat({required this.messages});
 
@@ -5899,205 +6656,6 @@ class ListCustomerMessagesResponse {
       };
 }
 
-class CustomerMessage {
-  const CustomerMessage({this.attachment, required this.body, this.card, required this.createdAt, this.delivery, this.failure, required this.id, required this.kind, this.line, required this.mine, this.offer, this.preview, this.readAt, this.senderName, this.sentAs});
-
-  final ChatAttachment? attachment;
-  final String body;
-  final CustomerCard? card;
-  final DateTime createdAt;
-  /// A reply's way to the customer, as WhatsApp reports it.
-  final String? delivery;
-  /// Why WhatsApp could not deliver it (failed).
-  final String? failure;
-  final String id;
-  final String kind;
-  /// Where the message went: on WhatsApp (the business's own number) or in the
-  /// app; a thread with both lines holds both, in time order (§11).
-  final String? line;
-  /// From the business.
-  final bool mine;
-  /// An offer to a customer who agreed to offers (app, §15).
-  final bool? offer;
-  final LinkPreview? preview;
-  final Object? readAt;
-  final String? senderName;
-  final String? sentAs;
-
-  factory CustomerMessage.fromJson(Map<String, dynamic> j) => CustomerMessage(
-        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
-        body: j['body'] as String,
-        card: j['card'] == null ? null : CustomerCard.fromJson(j['card'] as Map<String, dynamic>),
-        createdAt: DateTime.parse(j['created_at'] as String),
-        delivery: j['delivery'] == null ? null : j['delivery'] as String,
-        failure: j['failure'] == null ? null : j['failure'] as String,
-        id: j['id'] as String,
-        kind: j['kind'] as String,
-        line: j['line'] == null ? null : j['line'] as String,
-        mine: j['mine'] as bool,
-        offer: j['offer'] == null ? null : j['offer'] as bool,
-        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
-        readAt: j['read_at'],
-        senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
-        sentAs: j['sent_as'] == null ? null : j['sent_as'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'attachment': ?attachment?.toJson(),
-        'body': body,
-        'card': ?card?.toJson(),
-        'created_at': createdAt.toUtc().toIso8601String(),
-        'delivery': ?delivery,
-        'failure': ?failure,
-        'id': id,
-        'kind': kind,
-        'line': ?line,
-        'mine': mine,
-        'offer': ?offer,
-        'preview': ?preview?.toJson(),
-        'read_at': ?readAt,
-        'sender_name': ?senderName,
-        'sent_as': ?sentAs,
-      };
-}
-
-class ChatAttachment {
-  const ChatAttachment({this.doc, this.h, required this.kind, this.name, this.pages, this.preview, this.protected, required this.size, required this.type, this.w});
-
-  /// A document's family, for its icon
-  final String? doc;
-  /// A photo's, or the PDF picture's, height in pixels
-  final int? h;
-  final String kind;
-  final String? name;
-  /// A PDF's page count, once its picture is drawn
-  final int? pages;
-  /// The picture of a PDF's first page, from its file route with ?preview=1 -
-  /// ready, none (a protected PDF) or failed; missing while it is drawn, and on
-  /// files sent before pictures were drawn
-  final String? preview;
-  /// A password-protected PDF (no page count, no picture)
-  final bool? protected;
-  final int size;
-  final String type;
-  /// A photo's, or the PDF picture's, width in pixels
-  final int? w;
-
-  factory ChatAttachment.fromJson(Map<String, dynamic> j) => ChatAttachment(
-        doc: j['doc'] == null ? null : j['doc'] as String,
-        h: j['h'] == null ? null : (j['h'] as num).toInt(),
-        kind: j['kind'] as String,
-        name: j['name'] == null ? null : j['name'] as String,
-        pages: j['pages'] == null ? null : (j['pages'] as num).toInt(),
-        preview: j['preview'] == null ? null : j['preview'] as String,
-        protected: j['protected'] == null ? null : j['protected'] as bool,
-        size: (j['size'] as num).toInt(),
-        type: j['type'] as String,
-        w: j['w'] == null ? null : (j['w'] as num).toInt(),
-      );
-
-  Map<String, dynamic> toJson() => {
-        'doc': ?doc,
-        'h': ?h,
-        'kind': kind,
-        'name': ?name,
-        'pages': ?pages,
-        'preview': ?preview,
-        'protected': ?protected,
-        'size': size,
-        'type': type,
-        'w': ?w,
-      };
-}
-
-/// A card in an app conversation: an order (what, total, its state), a pay link
-/// (`url`), a booking (or a booking offer, by service), a product, an invoice
-/// (`invoice_id`, its number in `reference`, what is due in `total_kobo`, its
-/// pay page in `url` while something is due), or a delivery (the rider's
-/// progress in `delivery`, as it was when sent).
-class CustomerCard {
-  const CustomerCard({this.delivery, this.invoiceId, this.itemId, this.line, this.minutes, this.reference, this.saved, this.serviceId, this.status, required this.title, this.totalKobo, required this.type, this.url});
-
-  final DeliveryProgress? delivery;
-  final String? invoiceId;
-  final String? itemId;
-  final String? line;
-  final int? minutes;
-  final String? reference;
-  final SavedCard? saved;
-  final String? serviceId;
-  final String? status;
-  final String title;
-  final int? totalKobo;
-  final String type;
-  final String? url;
-
-  factory CustomerCard.fromJson(Map<String, dynamic> j) => CustomerCard(
-        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
-        invoiceId: j['invoice_id'] == null ? null : j['invoice_id'] as String,
-        itemId: j['item_id'] == null ? null : j['item_id'] as String,
-        line: j['line'] == null ? null : j['line'] as String,
-        minutes: j['minutes'] == null ? null : (j['minutes'] as num).toInt(),
-        reference: j['reference'] == null ? null : j['reference'] as String,
-        saved: j['saved'] == null ? null : SavedCard.fromJson(j['saved'] as Map<String, dynamic>),
-        serviceId: j['service_id'] == null ? null : j['service_id'] as String,
-        status: j['status'] == null ? null : j['status'] as String,
-        title: j['title'] as String,
-        totalKobo: j['total_kobo'] == null ? null : (j['total_kobo'] as num).toInt(),
-        type: j['type'] as String,
-        url: j['url'] == null ? null : j['url'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'delivery': ?delivery?.toJson(),
-        'invoice_id': ?invoiceId,
-        'item_id': ?itemId,
-        'line': ?line,
-        'minutes': ?minutes,
-        'reference': ?reference,
-        'saved': ?saved?.toJson(),
-        'service_id': ?serviceId,
-        'status': ?status,
-        'title': title,
-        'total_kobo': ?totalKobo,
-        'type': type,
-        'url': ?url,
-      };
-}
-
-/// A delivery as its customer follows it, once a rider holds it; nothing of the
-/// rider is shown.
-class DeliveryProgress {
-  const DeliveryProgress({this.acceptedAt, this.arrivedAt, this.deliveredAt, required this.line, this.pickedUpAt, required this.status});
-
-  final DateTime? acceptedAt;
-  final DateTime? arrivedAt;
-  final DateTime? deliveredAt;
-  /// "A rider is going to collect it", "On its way to you", "The rider is at
-  /// your address", "Delivered"
-  final String line;
-  final DateTime? pickedUpAt;
-  final String status;
-
-  factory DeliveryProgress.fromJson(Map<String, dynamic> j) => DeliveryProgress(
-        acceptedAt: j['accepted_at'] == null ? null : DateTime.parse(j['accepted_at'] as String),
-        arrivedAt: j['arrived_at'] == null ? null : DateTime.parse(j['arrived_at'] as String),
-        deliveredAt: j['delivered_at'] == null ? null : DateTime.parse(j['delivered_at'] as String),
-        line: j['line'] as String,
-        pickedUpAt: j['picked_up_at'] == null ? null : DateTime.parse(j['picked_up_at'] as String),
-        status: j['status'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'accepted_at': ?acceptedAt?.toUtc().toIso8601String(),
-        'arrived_at': ?arrivedAt?.toUtc().toIso8601String(),
-        'delivered_at': ?deliveredAt?.toUtc().toIso8601String(),
-        'line': line,
-        'picked_up_at': ?pickedUpAt?.toUtc().toIso8601String(),
-        'status': status,
-      };
-}
-
 class PutCustomerChatRequest {
   const PutCustomerChatRequest({this.archived, this.muted});
 
@@ -6520,68 +7078,6 @@ class ListMyChatMessagesResponse {
   Map<String, dynamic> toJson() => {
         'messages': messages.map((e) => e.toJson()).toList(),
         'more': more,
-      };
-}
-
-class PersonMessage {
-  const PersonMessage({this.attachment, required this.body, this.card, required this.createdAt, required this.id, required this.kind, this.line, required this.mine, this.offer, this.preview, this.readAt, this.senderName, this.warnTransfer});
-
-  final ChatAttachment? attachment;
-  final String body;
-  final CustomerCard? card;
-  final DateTime createdAt;
-  /// The message, the same id on the business's copy.
-  final String id;
-  final String kind;
-  /// In the app, or on WhatsApp: a message between you and the business on its
-  /// own WhatsApp number, shown here since it was yours (§11). Show it marked
-  /// "on WhatsApp"; it cannot be answered there from here. A business's reply
-  /// that went as WhatsApp's template shows the template's words, as WhatsApp
-  /// delivered them; replies WhatsApp never took are not shown.
-  final String? line;
-  /// You sent it.
-  final bool mine;
-  /// An offer (marked Offer, with Stop offers under it).
-  final bool? offer;
-  final LinkPreview? preview;
-  final Object? readAt;
-  /// Who wrote it on the business's side (a first name), when someone did.
-  final String? senderName;
-  /// The business's message asks for a transfer to an account (ten digits
-  /// standing alone with a banking word): warn that paying is only ever through
-  /// Taskiem's pay links (§15).
-  final bool? warnTransfer;
-
-  factory PersonMessage.fromJson(Map<String, dynamic> j) => PersonMessage(
-        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
-        body: j['body'] as String,
-        card: j['card'] == null ? null : CustomerCard.fromJson(j['card'] as Map<String, dynamic>),
-        createdAt: DateTime.parse(j['created_at'] as String),
-        id: j['id'] as String,
-        kind: j['kind'] as String,
-        line: j['line'] == null ? null : j['line'] as String,
-        mine: j['mine'] as bool,
-        offer: j['offer'] == null ? null : j['offer'] as bool,
-        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
-        readAt: j['read_at'],
-        senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
-        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'attachment': ?attachment?.toJson(),
-        'body': body,
-        'card': ?card?.toJson(),
-        'created_at': createdAt.toUtc().toIso8601String(),
-        'id': id,
-        'kind': kind,
-        'line': ?line,
-        'mine': mine,
-        'offer': ?offer,
-        'preview': ?preview?.toJson(),
-        'read_at': ?readAt,
-        'sender_name': ?senderName,
-        'warn_transfer': ?warnTransfer,
       };
 }
 
@@ -11966,207 +12462,6 @@ class ForwardPeopleMessageResponseSentItem {
       };
 }
 
-/// One message of the person's copy of a people chat, opened.
-class PeopleMessage {
-  const PeopleMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.forwarded, this.forwardedMany, required this.id, required this.kind, this.location, required this.mine, this.myReaction, this.preview, this.readAt, this.replyTo, this.starred, this.status, this.theirReaction, this.warn, this.warnTransfer});
-
-  final ChatAttachment? attachment;
-  /// The words, a file's caption, or "This message was deleted" (`deleted`).
-  final String body;
-  final PeopleCard? card;
-  final DateTime createdAt;
-  final bool? deleted;
-  final bool? forwarded;
-  /// Forwarded five or more times on its way here; it can be forwarded to one
-  /// chat at a time.
-  final bool? forwardedMany;
-  final String id;
-  final String kind;
-  final PeopleLocation? location;
-  final bool mine;
-  final String? myReaction;
-  final LinkPreview? preview;
-  final Object? readAt;
-  final String? replyTo;
-  final bool? starred;
-  /// Your own messages: sent (one tick: not delivered, as while they block
-  /// you), delivered, read (only once the chat is accepted).
-  final String? status;
-  final String? theirReaction;
-  /// The safety checks found it looks like a scam or spam.
-  final bool? warn;
-  /// Their message asks for a transfer to an account; warn before paying.
-  final bool? warnTransfer;
-
-  factory PeopleMessage.fromJson(Map<String, dynamic> j) => PeopleMessage(
-        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
-        body: j['body'] as String,
-        card: j['card'] == null ? null : PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
-        createdAt: DateTime.parse(j['created_at'] as String),
-        deleted: j['deleted'] == null ? null : j['deleted'] as bool,
-        forwarded: j['forwarded'] == null ? null : j['forwarded'] as bool,
-        forwardedMany: j['forwarded_many'] == null ? null : j['forwarded_many'] as bool,
-        id: j['id'] as String,
-        kind: j['kind'] as String,
-        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
-        mine: j['mine'] as bool,
-        myReaction: j['my_reaction'] == null ? null : j['my_reaction'] as String,
-        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
-        readAt: j['read_at'],
-        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
-        starred: j['starred'] == null ? null : j['starred'] as bool,
-        status: j['status'] == null ? null : j['status'] as String,
-        theirReaction: j['their_reaction'] == null ? null : j['their_reaction'] as String,
-        warn: j['warn'] == null ? null : j['warn'] as bool,
-        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'attachment': ?attachment?.toJson(),
-        'body': body,
-        'card': ?card?.toJson(),
-        'created_at': createdAt.toUtc().toIso8601String(),
-        'deleted': ?deleted,
-        'forwarded': ?forwarded,
-        'forwarded_many': ?forwardedMany,
-        'id': id,
-        'kind': kind,
-        'location': ?location?.toJson(),
-        'mine': mine,
-        'my_reaction': ?myReaction,
-        'preview': ?preview?.toJson(),
-        'read_at': ?readAt,
-        'reply_to': ?replyTo,
-        'starred': ?starred,
-        'status': ?status,
-        'their_reaction': ?theirReaction,
-        'warn': ?warn,
-        'warn_transfer': ?warnTransfer,
-      };
-}
-
-/// A card in a people chat (people-chatting §10.1, §11 A), carrying only what
-/// is needed to show and open it: a product (business, item, its price when
-/// shared), a business, an order or a delivery (business, reference, state, the
-/// rider's progress when shared), or a share (amount, what for, the account to
-/// pay to, paid).
-class PeopleCard {
-  const PeopleCard({this.amountKobo, this.area, this.basketId, this.business, this.businessId, this.delivery, this.for_, this.forId, this.itemId, this.paid, this.paidAt, this.paidByMe, this.payTo, this.priceKobo, this.reference, this.saved, this.state, required this.title, required this.type, this.what});
-
-  final int? amountKobo;
-  final String? area;
-  /// A shared basket (5b C): made by the server; GET /v1/me/baskets/{basket_id}
-  /// reads it.
-  final String? basketId;
-  final String? business;
-  final String? businessId;
-  final DeliveryProgress? delivery;
-  final String? for_;
-  /// A share sent from a basket, in a group: who it is for.
-  final String? forId;
-  final String? itemId;
-  final bool? paid;
-  final DateTime? paidAt;
-  final bool? paidByMe;
-  final PayoutAccount? payTo;
-  final int? priceKobo;
-  final String? reference;
-  final SavedCard? saved;
-  final String? state;
-  final String title;
-  final String type;
-  final String? what;
-
-  factory PeopleCard.fromJson(Map<String, dynamic> j) => PeopleCard(
-        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
-        area: j['area'] == null ? null : j['area'] as String,
-        basketId: j['basket_id'] == null ? null : j['basket_id'] as String,
-        business: j['business'] == null ? null : j['business'] as String,
-        businessId: j['business_id'] == null ? null : j['business_id'] as String,
-        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
-        for_: j['for'] == null ? null : j['for'] as String,
-        forId: j['for_id'] == null ? null : j['for_id'] as String,
-        itemId: j['item_id'] == null ? null : j['item_id'] as String,
-        paid: j['paid'] == null ? null : j['paid'] as bool,
-        paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
-        paidByMe: j['paid_by_me'] == null ? null : j['paid_by_me'] as bool,
-        payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
-        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
-        reference: j['reference'] == null ? null : j['reference'] as String,
-        saved: j['saved'] == null ? null : SavedCard.fromJson(j['saved'] as Map<String, dynamic>),
-        state: j['state'] == null ? null : j['state'] as String,
-        title: j['title'] as String,
-        type: j['type'] as String,
-        what: j['what'] == null ? null : j['what'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'amount_kobo': ?amountKobo,
-        'area': ?area,
-        'basket_id': ?basketId,
-        'business': ?business,
-        'business_id': ?businessId,
-        'delivery': ?delivery?.toJson(),
-        'for': ?for_,
-        'for_id': ?forId,
-        'item_id': ?itemId,
-        'paid': ?paid,
-        'paid_at': ?paidAt?.toUtc().toIso8601String(),
-        'paid_by_me': ?paidByMe,
-        'pay_to': ?payTo?.toJson(),
-        'price_kobo': ?priceKobo,
-        'reference': ?reference,
-        'saved': ?saved?.toJson(),
-        'state': ?state,
-        'title': title,
-        'type': type,
-        'what': ?what,
-      };
-}
-
-/// A person's own bank account for being paid back, as they typed it; never
-/// checked by Taskiem, which moves no money.
-class PayoutAccount {
-  const PayoutAccount({required this.accountName, required this.accountNumber, required this.bank});
-
-  final String accountName;
-  /// Ten digits (spaces and dashes are taken out).
-  final String accountNumber;
-  final String bank;
-
-  factory PayoutAccount.fromJson(Map<String, dynamic> j) => PayoutAccount(
-        accountName: j['account_name'] as String,
-        accountNumber: j['account_number'] as String,
-        bank: j['bank'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'account_name': accountName,
-        'account_number': accountNumber,
-        'bank': bank,
-      };
-}
-
-class PeopleLocation {
-  const PeopleLocation({this.label, required this.lat, required this.lng});
-
-  final String? label;
-  final double lat;
-  final double lng;
-
-  factory PeopleLocation.fromJson(Map<String, dynamic> j) => PeopleLocation(
-        label: j['label'] == null ? null : j['label'] as String,
-        lat: (j['lat'] as num).toDouble(),
-        lng: (j['lng'] as num).toDouble(),
-      );
-
-  Map<String, dynamic> toJson() => {
-        'label': ?label,
-        'lat': lat,
-        'lng': lng,
-      };
-}
-
 class PutPeopleChatRequest {
   const PutPeopleChatRequest({this.archived, this.muted});
 
@@ -12893,145 +13188,6 @@ class GroupFound {
         'message': message.toJson(),
         'snippet': ?snippet,
         'starred_at': ?starredAt?.toUtc().toIso8601String(),
-      };
-}
-
-/// One message of a group as a member sees it.
-class GroupMessage {
-  const GroupMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.event, this.forwarded, this.forwardedMany, required this.groupId, required this.id, required this.kind, this.location, this.mentions, this.mentionsMe, required this.mine, this.myReaction, this.preview, this.reactions, this.replyTo, required this.sender, this.senderId, this.starred, this.status, this.warn, this.warnTransfer});
-
-  final ChatAttachment? attachment;
-  /// The words, a caption, an event in words ("Ada added Bola"), or "This
-  /// message was deleted".
-  final String body;
-  final PeopleCard? card;
-  final DateTime createdAt;
-  final bool? deleted;
-  final GroupMessageEvent? event;
-  final bool? forwarded;
-  final bool? forwardedMany;
-  final String groupId;
-  final String id;
-  final String kind;
-  final PeopleLocation? location;
-  final List<String>? mentions;
-  final bool? mentionsMe;
-  final bool mine;
-  final String? myReaction;
-  final LinkPreview? preview;
-  final List<GroupMessageReactionsItem>? reactions;
-  final String? replyTo;
-  /// Who wrote it, as you see them ("You"; "Deleted account" once their account
-  /// was deleted, §17 Q17).
-  final String sender;
-  final Object? senderId;
-  final bool? starred;
-  /// Your own messages (A6): delivered once every member now in the group has
-  /// it; read once every one of them with read ticks on (theirs and yours) has
-  /// read it.
-  final String? status;
-  /// Taskiem's checks found it looks like a scam (in a new group, or from
-  /// someone who joined by its link in the last day, B1), and you haven't added
-  /// its sender: show "Never send money to someone you have not met". A share
-  /// card naming an account from someone you haven't added warns too.
-  final bool? warn;
-  /// It asks for a transfer to an account (words that ask, or a share card from
-  /// someone you have not added); warn before paying.
-  final bool? warnTransfer;
-
-  factory GroupMessage.fromJson(Map<String, dynamic> j) => GroupMessage(
-        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
-        body: j['body'] as String,
-        card: j['card'] == null ? null : PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
-        createdAt: DateTime.parse(j['created_at'] as String),
-        deleted: j['deleted'] == null ? null : j['deleted'] as bool,
-        event: j['event'] == null ? null : GroupMessageEvent.fromJson(j['event'] as Map<String, dynamic>),
-        forwarded: j['forwarded'] == null ? null : j['forwarded'] as bool,
-        forwardedMany: j['forwarded_many'] == null ? null : j['forwarded_many'] as bool,
-        groupId: j['group_id'] as String,
-        id: j['id'] as String,
-        kind: j['kind'] as String,
-        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
-        mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => e as String).toList(),
-        mentionsMe: j['mentions_me'] == null ? null : j['mentions_me'] as bool,
-        mine: j['mine'] as bool,
-        myReaction: j['my_reaction'] == null ? null : j['my_reaction'] as String,
-        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
-        reactions: j['reactions'] == null ? null : (j['reactions'] as List).map((e) => GroupMessageReactionsItem.fromJson(e as Map<String, dynamic>)).toList(),
-        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
-        sender: j['sender'] as String,
-        senderId: j['sender_id'],
-        starred: j['starred'] == null ? null : j['starred'] as bool,
-        status: j['status'] == null ? null : j['status'] as String,
-        warn: j['warn'] == null ? null : j['warn'] as bool,
-        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'attachment': ?attachment?.toJson(),
-        'body': body,
-        'card': ?card?.toJson(),
-        'created_at': createdAt.toUtc().toIso8601String(),
-        'deleted': ?deleted,
-        'event': ?event?.toJson(),
-        'forwarded': ?forwarded,
-        'forwarded_many': ?forwardedMany,
-        'group_id': groupId,
-        'id': id,
-        'kind': kind,
-        'location': ?location?.toJson(),
-        'mentions': ?mentions?.map((e) => e).toList(),
-        'mentions_me': ?mentionsMe,
-        'mine': mine,
-        'my_reaction': ?myReaction,
-        'preview': ?preview?.toJson(),
-        'reactions': ?reactions?.map((e) => e.toJson()).toList(),
-        'reply_to': ?replyTo,
-        'sender': sender,
-        'sender_id': ?senderId,
-        'starred': ?starred,
-        'status': ?status,
-        'warn': ?warn,
-        'warn_transfer': ?warnTransfer,
-      };
-}
-
-class GroupMessageEvent {
-  const GroupMessageEvent({required this.actorId, this.targetId, required this.type});
-
-  final String actorId;
-  final String? targetId;
-  /// The taskiem_ events are Taskiem's moderators' (sender "Taskiem", actor the
-  /// nil id): the group closed, reopened, its link turned off or allowed again.
-  final String type;
-
-  factory GroupMessageEvent.fromJson(Map<String, dynamic> j) => GroupMessageEvent(
-        actorId: j['actor_id'] as String,
-        targetId: j['target_id'] == null ? null : j['target_id'] as String,
-        type: j['type'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'actor_id': actorId,
-        'target_id': ?targetId,
-        'type': type,
-      };
-}
-
-class GroupMessageReactionsItem {
-  const GroupMessageReactionsItem({required this.count, required this.reaction});
-
-  final int count;
-  final String reaction;
-
-  factory GroupMessageReactionsItem.fromJson(Map<String, dynamic> j) => GroupMessageReactionsItem(
-        count: (j['count'] as num).toInt(),
-        reaction: j['reaction'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'count': count,
-        'reaction': reaction,
       };
 }
 

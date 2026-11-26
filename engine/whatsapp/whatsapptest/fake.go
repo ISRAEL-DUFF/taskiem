@@ -42,6 +42,8 @@ type Sent struct {
 	FlowScreen string
 	FlowData   map[string]any
 	FlowAction string
+	// ReplyTo is the message a reply quotes (context.message_id).
+	ReplyTo string
 }
 
 // Graph is the fake Graph API.
@@ -406,9 +408,12 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var m struct {
-		To    string                `json:"to"`
-		Type  string                `json:"type"`
-		Text  struct{ Body string } `json:"text"`
+		To      string                `json:"to"`
+		Type    string                `json:"type"`
+		Text    struct{ Body string } `json:"text"`
+		Context struct {
+			MessageID string `json:"message_id"`
+		} `json:"context"`
 		Image struct {
 			Link    string `json:"link"`
 			Caption string `json:"caption"`
@@ -474,7 +479,7 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusBadRequest, fail, "refused by the fake")
 		return
 	}
-	s := Sent{From: pnid, To: m.To, Type: m.Type}
+	s := Sent{From: pnid, To: m.To, Type: m.Type, ReplyTo: m.Context.MessageID}
 	switch m.Type {
 	case "text":
 		s.Text = m.Text.Body

@@ -91,6 +91,7 @@ func (s *Server) peopleChatRoutes(r chi.Router) {
 	r.Get("/me/people/{id}/previews/{message}", s.peoplePreviewImage)
 	r.Put("/me/people/{id}/messages/{message}", s.markPeopleMessage)
 	r.Delete("/me/people/{id}/messages/{message}", s.deletePeopleMessage)
+	r.Patch("/me/people/{id}/messages/{message}", s.editPeopleMessage)
 	r.Post("/me/people/{id}/messages/{message}/paid", s.markSplitPaid)
 	r.Get("/me/people/{id}/messages/{message}/card", s.openPeopleCard)
 	r.Get("/me/payout-account", s.getPayoutAccount)
@@ -102,7 +103,7 @@ func (s *Server) peopleChatRoutes(r chi.Router) {
 // reaches (personalAllowed).
 var peopleChatPersonRoutes = regexp.MustCompile(`^(GET /v1/me/(conversations|live)|(GET|POST) /v1/me/people|GET /v1/me/people/(requests|blocked|search|starred)|POST /v1/me/people/forward|` +
 	`(GET|PUT|DELETE) /v1/me/people/[^/]+|POST /v1/me/people/[^/]+/(accept|decline|block|report|read|typing|messages|files)|DELETE /v1/me/people/[^/]+/block|` +
-	`GET /v1/me/people/[^/]+/(messages|files/[^/]+|previews/[^/]+|messages/[^/]+/card)|(PUT|DELETE) /v1/me/people/[^/]+/messages/[^/]+|POST /v1/me/people/[^/]+/messages/[^/]+/paid|` +
+	`GET /v1/me/people/[^/]+/(messages|files/[^/]+|previews/[^/]+|messages/[^/]+/card)|(PUT|PATCH|DELETE) /v1/me/people/[^/]+/messages/[^/]+|POST /v1/me/people/[^/]+/messages/[^/]+/paid|` +
 	`(GET|PUT|DELETE) /v1/me/payout-account)$`)
 
 // keys seal each person's copy under their own key.

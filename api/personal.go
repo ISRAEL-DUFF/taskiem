@@ -31,7 +31,7 @@ var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/
 	`GET /v1/me/invitations|POST /v1/me/invitations/[^/]+/(accept|decline)|POST /v1/auth/logout|` +
 	// A person's chats with businesses (customer_door.go, stage 2).
 	`(GET|POST) /v1/me/chats|(GET|PUT) /v1/me/chats/[^/]+|GET /v1/me/chats/[^/]+/(messages|files/[^/]+|previews/[^/]+|shop|services|services/[^/]+/times|orders|orders/[^/]+/pay)|` +
-	`POST /v1/me/chats/[^/]+/(messages|files|read|typing|block|report|orders|bookings)|DELETE /v1/me/chats/[^/]+/block|` +
+	`POST /v1/me/chats/[^/]+/(messages|files|read|typing|block|report|orders|bookings)|DELETE /v1/me/chats/[^/]+/block|PATCH /v1/me/chats/[^/]+/messages/[^/]+|` +
 	`(GET|POST) /v1/me/chats/[^/]+/invoices/[^/]+/transfer|` +
 	// The composer's link previews (link_preview_chats.go).
 	`POST /v1/link-preview|GET /v1/link-preview/[^/]+/image|` +
