@@ -815,7 +815,7 @@ function GroupBubble({
         </span>
       )}
       {card && <PeopleCardView card={card} onOpen={card.type !== "split" ? () => onSheet("card") : undefined} mine={m.mine} onPaid={card.type === "split" && live && current ? onPaid : undefined} busy={busy} />}
-      {m.attachment && !m.deleted && <AppAttachmentView a={m.attachment} src={m.local ? undefined : fileURL} preview={m.localPreview} who={who} mine={m.mine} />}
+      {m.attachment && !m.deleted && <AppAttachmentView a={m.attachment} at={m.created_at} src={m.local ? undefined : fileURL} preview={m.localPreview} who={who} mine={m.mine} />}
       {m.location && !m.deleted && <PlaceView place={m.location} />}
       {m.preview && !m.deleted && !m.local && <LinkCard p={m.preview} src={previewURL} />}
       {caption && (

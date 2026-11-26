@@ -322,13 +322,14 @@ test("a pasted picture and a dropped file wait for a caption, as a photo to send
   await buyer.keyboard.press("Escape");
   await expect(pane.getByTestId("chat-attaching")).toHaveCount(0);
 
-  // Something that is not a photo, a PDF or a voice note is refused kindly.
+  // Something that is not a photo, a document or a voice note is refused
+  // kindly (chat-previews §1.1): a ZIP.
   await pane.getByTestId("chat-file").setInputFiles({
-    name: "notes.txt",
-    mimeType: "text/plain",
-    buffer: Buffer.from("hi"),
+    name: "notes.zip",
+    mimeType: "application/zip",
+    buffer: Buffer.from("PK"),
   });
-  await expect(pane.getByText(/Send a photo/)).toBeVisible();
+  await expect(pane.getByText(/Taskiem can send photos, voice notes, PDFs/)).toBeVisible();
 });
 
 test("the clip offers a photo, a document and the camera, and the camera works on a computer", async ({
@@ -371,9 +372,10 @@ test("the clip offers a photo, a document and the camera, and the camera works o
   const chooser2 = buyer.waitForEvent("filechooser");
   await menu.getByRole("button", { name: "Document" }).click();
   await chooser2;
+  // A PDF or a Word, Excel, PowerPoint or text document (§1.1).
   await expect(pane.getByTestId("chat-file")).toHaveAttribute(
     "accept",
-    "application/pdf",
+    /^application\/pdf,.*\.docx.*\.xlsx.*\.pptx.*text\/plain$/,
   );
 
   // The camera: a sheet with what it sees, and Take photo.

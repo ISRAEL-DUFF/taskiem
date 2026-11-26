@@ -555,7 +555,8 @@ for (const width of [390, 360])
     await page.keyboard.press("Escape");
 
     // A file from the business is its own copy.
-    await expect(page.getByRole("link", { name: /Menu\.pdf/ })).toHaveAttribute("href", "/v1/me/chats/c1/files/m7");
+    // A PDF opens in Taskiem's viewer (chat-previews §1.1), from the person's own copy.
+    await expect(page.getByRole("button", { name: /Menu\.pdf/ })).toBeVisible();
   });
 
 test("a link that no longer works, and a business not taking chats, pass axe in both themes", async ({ page }) => {

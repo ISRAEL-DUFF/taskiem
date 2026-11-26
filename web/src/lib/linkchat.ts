@@ -7,6 +7,7 @@ import { cmpTime } from "./stamp";
 import { whenWords } from "./time";
 import type { DealCard } from "./deals";
 import type { Mention } from "./mentions";
+import type { FileFacts } from "./chatfiles";
 
 export type DocKind = "order" | "purchase" | "invoice" | "bill" | "delivery" | "dispatch";
 
@@ -83,9 +84,10 @@ export interface Quote {
   attachment?: Attachment;
 }
 
-/** A photo, a PDF or a voice note sent with a message; each business
- * keeps its own copy, streamed by fileURL. */
-export interface Attachment {
+/** A photo, a PDF, a document or a voice note sent with a message; each
+ * business keeps its own copy, streamed by fileURL. Its facts (a PDF's
+ * pages and picture, a photo's size, a document's family) are FileFacts'. */
+export interface Attachment extends FileFacts {
   kind: "photo" | "file" | "voice";
   type: string;
   size: number;

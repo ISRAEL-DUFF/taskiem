@@ -33,6 +33,7 @@ import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
 import { PayChip, PayFromMessages, PayListBar, PhotoAccountItems } from "./PayChip";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES } from "./ChatComposer";
+import { chatFileOK } from "../lib/chatfiles";
 import { ChatHead } from "./ChatHead";
 import { useConfirm } from "./ConfirmSheet";
 import { CardSheet } from "./CustomerCards";
@@ -778,6 +779,7 @@ export function CustomerPane({
                 src={m.local ? undefined : `/v1/customer-chats/${encodeURIComponent(id)}/files/${encodeURIComponent(m.id)}`}
                 who={c ? customerTitle(c) : "the customer"}
                 mine={m.mine}
+                at={m.created_at}
               />
             )}
             {m.preview && !m.local && <LinkCard p={m.preview} src={`/v1/customer-chats/${encodeURIComponent(id)}/previews/${encodeURIComponent(m.id)}`} />}
@@ -879,8 +881,8 @@ export function CustomerPane({
                   const f = e.target.files?.[0];
                   e.target.value = "";
                   if (!f) return;
-                  if (f.size > BUSINESS_FILES.max || !BUSINESS_FILES.types.test(f.type)) {
-                    setSendError(new Error(f.size > BUSINESS_FILES.max ? `${f.name} is larger than ${BUSINESS_FILES.maxWords}.` : BUSINESS_FILES.typesMessage));
+                  if (f.size > BUSINESS_FILES.max || !chatFileOK(f)) {
+                    setSendError(new Error(f.size > BUSINESS_FILES.max ? `This file is larger than ${BUSINESS_FILES.maxWords}.` : BUSINESS_FILES.typesMessage));
                     return;
                   }
                   send({ file: f });

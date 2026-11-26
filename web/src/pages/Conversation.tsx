@@ -104,6 +104,8 @@ import {
 } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
 import { PayDiaryState } from "./PayDiary";
+import { FileCard } from "./ChatFiles";
+import { frameOf } from "../lib/chatfiles";
 
 // The conversation with a linked business (business links L3; §5.5): the
 // stream of bubbles, theirs on the left and ours on the right, grouped by
@@ -396,6 +398,7 @@ function AttachmentView({
           <img src={m.localPreview} alt="Your photo" />
         </span>
       );
+    if (a.kind === "file") return <FileCard a={a} />;
     return (
       <span className="chat-file">
         <Icon name="file" />
@@ -405,16 +408,21 @@ function AttachmentView({
     );
   }
   const src = fileURL(m);
-  if (a.kind === "photo")
+  if (a.kind === "photo") {
+    // At its own proportions before it has loaded (§1.1).
+    const frame = frameOf(a);
     return (
       <a href={src} target="_blank" rel="noopener" className="chat-photo">
         <img
           src={src}
           alt={m.mine ? "Your photo" : `Photo from ${other}`}
           loading="lazy"
+          width={frame?.width}
+          height={frame?.height}
         />
       </a>
     );
+  }
   if (a.kind === "voice")
     return (
       <audio
@@ -426,11 +434,12 @@ function AttachmentView({
       />
     );
   return (
-    <a href={src} download={a.name || true} className="chat-file">
-      <Icon name="file" />
-      <span className="name">{attachmentLabel(a)}</span>
-      <span className="hint">{fileSize(a.size)}</span>
-    </a>
+    <FileCard
+      a={a}
+      src={src}
+      who={m.mine ? "You" : m.sender_name ? `${m.sender_name}, ${other}` : other}
+      at={m.created_at}
+    />
   );
 }
 

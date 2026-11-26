@@ -58,6 +58,7 @@ type ToolStart = {
 import { useAuth } from "../auth";
 import { categoryTag } from "../lib/tools";
 import { useMediaQuery, usePresence } from "../kit";
+import { CHAT_DOCUMENTS_ACCEPT, CHAT_FILES_REFUSED, chatFileOK } from "../lib/chatfiles";
 
 // The composer of every conversation (a business's and Taskiem's): the box
 // that grows, emoji, a photo (and, where it is taken, a PDF), the camera,
@@ -77,6 +78,9 @@ export type FileRules = {
   max: number;
   maxWords: string;
   types: RegExp;
+  /** Whether a file may be sent, where its type alone does not say (a
+   * document, whose type a browser may not know). */
+  ok?: (f: File) => boolean;
   typesMessage: string;
   /** The clip's menu offers a document. */
   documents: boolean;
@@ -85,13 +89,14 @@ export type FileRules = {
 };
 
 export const BUSINESS_FILES: FileRules = {
-  accept: "image/jpeg,image/png,image/webp,application/pdf",
+  accept: `image/jpeg,image/png,image/webp,${CHAT_DOCUMENTS_ACCEPT}`,
   max: 25 * 1024 * 1024,
   maxWords: "25 MB",
   types: /^(image\/(jpeg|png|webp)|application\/pdf|audio\/)/,
-  typesMessage: "Send a photo (JPEG, PNG or WebP), a PDF or a voice note.",
+  ok: chatFileOK,
+  typesMessage: CHAT_FILES_REFUSED,
   documents: true,
-  dropWords: "Drop a photo or a PDF to send it",
+  dropWords: "Drop a photo or a document to send it",
   manyWords:
     "Only one file can be sent at a time: the first was taken. Send the others after it.",
 };
@@ -390,10 +395,10 @@ export function useComposer<R>(o: ComposerOptions<R>) {
       }
     }
     if (f.size > o.rules.max) {
-      setFileError(new Error(`${f.name} is larger than ${o.rules.maxWords}.`));
+      setFileError(new Error(`This file is larger than ${o.rules.maxWords}.`));
       return;
     }
-    if (!o.rules.types.test(f.type)) {
+    if (!(o.rules.ok ? o.rules.ok(f) : o.rules.types.test(f.type))) {
       setFileError(new Error(o.rules.typesMessage));
       return;
     }
@@ -412,7 +417,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     const el = pick.current;
     if (!el) return;
     el.accept =
-      what === "photo" ? "image/jpeg,image/png,image/webp" : "application/pdf";
+      what === "photo" ? "image/jpeg,image/png,image/webp" : CHAT_DOCUMENTS_ACCEPT;
     el.click();
   };
   const addEmoji = (c: string) => {

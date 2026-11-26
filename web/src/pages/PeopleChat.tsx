@@ -738,7 +738,7 @@ export function PeopleChatPage() {
                   busy={act.busy}
                 />
               )}
-              {m.attachment && !m.deleted && <AppAttachmentView a={m.attachment} src={m.local ? undefined : peopleFileURL(id, m.id)} preview={m.localPreview} who={name} mine={m.mine} />}
+              {m.attachment && !m.deleted && <AppAttachmentView a={m.attachment} at={m.created_at} src={m.local ? undefined : peopleFileURL(id, m.id)} preview={m.localPreview} who={name} mine={m.mine} />}
               {m.location && !m.deleted && <PlaceView place={m.location} />}
               {m.preview && !m.deleted && !m.local && <LinkCard p={m.preview} src={peoplePreviewURL(id, m.id)} />}
               {caption && (

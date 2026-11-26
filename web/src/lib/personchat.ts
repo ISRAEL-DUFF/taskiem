@@ -1,4 +1,5 @@
 import type { LinkPreview } from "./linkchat";
+import type { FileFacts } from "./chatfiles";
 // A person's chats with businesses (docs/spec/taskiem-for-everyone.md §8,
 // §9, §15): what the person's side of the API answers (GET /v1/me/chats…,
 // GET /v1/chat-links/{code}, GET /v1/me/storefront-orders), and the words
@@ -44,8 +45,9 @@ export interface AppCard {
   url?: string;
 }
 
-/** A photo, voice note or file of an app message. */
-export interface AppAttachment {
+/** A photo, voice note or file of an app message, with its facts
+ * (chatfiles.ts). */
+export interface AppAttachment extends FileFacts {
   kind: "photo" | "voice" | "file";
   type: string;
   size: number;

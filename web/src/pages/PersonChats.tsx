@@ -858,7 +858,7 @@ export function PersonChatPage() {
                   }
                 />
               )}
-              {m.attachment && <AppAttachmentView a={m.attachment} src={m.local ? undefined : personFileURL(id, m.id)} preview={m.localPreview} who={name} mine={m.mine} />}
+              {m.attachment && <AppAttachmentView a={m.attachment} at={m.created_at} src={m.local ? undefined : personFileURL(id, m.id)} preview={m.localPreview} who={name} mine={m.mine} />}
               {m.preview && !m.local && <LinkCard p={m.preview} src={`/v1/me/chats/${encodeURIComponent(id)}/previews/${encodeURIComponent(m.id)}`} />}
               {caption && (
                 <span className="text">
