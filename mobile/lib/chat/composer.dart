@@ -170,8 +170,22 @@ const _slideCancel = 80.0;
 const _lift = [BoxShadow(color: Color(0x140E1A14), offset: Offset(0, 1), blurRadius: 2)];
 
 /// The box to write in.
+/// A message of ours being edited (chat-previews-and-editing.md §3.2): its
+/// id, its words, the count of edits it had, and whether its words are a
+/// file's caption (which may be emptied).
+class EditDraft {
+  const EditDraft({required this.id, required this.text, required this.edits, this.caption = false});
+  final String id;
+  final String text;
+  final int edits;
+  final bool caption;
+}
+
 class Composer extends StatefulWidget {
   const Composer({
+    this.editing,
+    this.onSaveEdit,
+    this.onCancelEdit,
     super.key,
     required this.text,
     required this.onSend,
@@ -194,6 +208,12 @@ class Composer extends StatefulWidget {
   /// A link typed: its card above the box (chat-previews-and-editing.md
   /// §2.1); none without it.
   final ComposerPreview? linkPreview;
+
+  /// A message of ours being edited: its words are in the box, the strip
+  /// "Editing message" above it, and Send is a tick that saves.
+  final EditDraft? editing;
+  final void Function(EditDraft d, String text)? onSaveEdit;
+  final VoidCallback? onCancelEdit;
 
   /// The message being answered, in a line (ChatComposer's replyLine).
   final String? replying;
@@ -306,6 +326,14 @@ class ComposerState extends State<Composer> {
   }
 
   void _send([PickedFile? held]) {
+    final edit = widget.editing;
+    if (edit != null && held == null) {
+      final words = widget.text.text.trim();
+      if (words.isEmpty && !edit.caption) return;
+      widget.text.clear();
+      widget.onSaveEdit?.call(edit, words);
+      return;
+    }
     final f = held ?? _file;
     final words = held != null ? '' : widget.text.text.trim();
     if (words.isEmpty && f == null) return;
@@ -401,7 +429,8 @@ class ComposerState extends State<Composer> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_error != null) Container(color: t.panel, padding: const EdgeInsets.symmetric(horizontal: 12), child: TkErrorBox(_error!)),
-        if (widget.replying != null && !recording) _Replying(line: widget.replying!, onCancel: widget.onCancelReply),
+        if (widget.editing != null && !recording) EditingStrip(was: widget.editing!.text, onCancel: widget.onCancelEdit)
+        else if (widget.replying != null && !recording) _Replying(line: widget.replying!, onCancel: widget.onCancelReply),
         if (file == null && !recording && widget.linkPreview != null) ComposerLinkCard(preview: widget.linkPreview!),
         if (file != null && !recording) _Pending(file: file, onRemove: () => setState(() => _file = null)),
         Container(
@@ -430,7 +459,8 @@ class ComposerState extends State<Composer> {
         ),
       ),
     );
-    final sendable = words || file != null;
+    final editing = widget.editing;
+    final sendable = words || file != null || editing != null;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -509,7 +539,13 @@ class ComposerState extends State<Composer> {
           ),
         ),
         const SizedBox(width: 8),
-        if (sendable)
+        if (editing != null)
+          TapArea(child: Semantics(
+            button: true,
+            label: 'Save the edit',
+            child: TkPress(onTap: widget.busy || (!words && !editing.caption) ? null : _send, child: _round(t, dark, 'check')),
+          ))
+        else if (sendable)
           TapArea(child: Semantics(
             button: true,
             label: 'Send',
@@ -845,6 +881,65 @@ class _AttachMenu extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// `.composer-editing`: "Editing message" with the old words, and ✕.
+class EditingStrip extends StatelessWidget {
+  const EditingStrip({super.key, required this.was, this.onCancel});
+  final String was;
+  final VoidCallback? onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+        decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(16)),
+        child: Row(
+          children: [
+            TkIcon('pencil', size: 18, color: t.muted),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.only(left: 9),
+                decoration: BoxDecoration(border: Border(left: BorderSide(color: look.lime, width: 3))),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Editing message', style: tkText(size: 13, weight: 600, color: t.text)),
+                    if (was.isNotEmpty) Text(was, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 13, lineHeight: 1.35, color: t.muted)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TapArea(
+              child: Semantics(
+                button: true,
+                label: 'Cancel the edit',
+                onTap: onCancel,
+                excludeSemantics: true,
+                child: TkPress(
+                  onTap: onCancel,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: look.ground, shape: BoxShape.circle),
+                    child: TkIcon('b-x', size: 16, stroke: 2.2, color: t.text),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

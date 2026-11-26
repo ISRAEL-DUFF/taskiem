@@ -41,6 +41,7 @@ import 'approve.dart' show TkTextBox;
 import 'attachments.dart';
 import 'cards.dart' show CardButton, cardDecoration;
 import 'composer.dart';
+import 'edits.dart';
 import 'door.dart' show doorFileMessage, doorFiles;
 import 'menu.dart';
 import 'my_chat.dart' show OpenMyChat, sayFailure;
@@ -592,6 +593,20 @@ class PeopleChatData extends ChangeNotifier {
     }
   }
 
+  /// Edits one of ours (chat-previews-and-editing.md §3.2): the new words
+  /// and "Edited" at once, put back if the server refuses; the refusal is
+  /// answered (null when saved).
+  Future<Object?> edit(PeopleMessage m, String text) async {
+    _replace(PeopleMessage.fromJson({...m.toJson(), 'body': text, 'edited_at': DateTime.now().toUtc().toIso8601String(), 'edits': (m.edits ?? 0) + 1}));
+    try {
+      _replace(await api.editPeopleMessage(id: id, message: m.id, body: MessageEdit(text: text, edits: m.edits ?? 0)));
+      return null;
+    } on Object catch (e) {
+      _replace(m);
+      return e;
+    }
+  }
+
   void _replace(PeopleMessage m) {
     if (_disposed) return;
     messages = _merge(messages ?? const [], [PeopleLine(m)]);
@@ -1028,6 +1043,29 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     await d.send('', file: f, reply: reply);
   }
 
+  /// One of ours being edited (chat-previews-and-editing.md §3.2).
+  EditDraft? _editing;
+
+  void _startEdit(PeopleMessage m) {
+    setState(() {
+      _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: m.attachment != null);
+      _reply = null;
+    });
+    _text.text = m.body;
+    _text.selection = TextSelection.collapsed(offset: m.body.length);
+  }
+
+  Future<void> _saveEdit(EditDraft e, String words) async {
+    setState(() => _editing = null);
+    if (words == e.text.trim()) return;
+    final m = d.messages?.where((x) => x.id == e.id).firstOrNull?.m;
+    if (m == null) return;
+    final err = await d.edit(m, words);
+    if (err == null || !mounted) return;
+    showTkToast(context, editRefusal(err), error: true);
+    if (refusedForTime(err) && _text.text.isEmpty) _text.text = words;
+  }
+
   Future<void> _hold(PeopleMessage m, Rect at) async {
     if (m.id.startsWith('local-')) return;
     final c = d.chat;
@@ -1042,6 +1080,19 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
       items: [
         if (write && m.deleted != true) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
         if (m.deleted != true && m.card == null && m.body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.body)), done: 'Copied'),
+        if (write &&
+            editBlock(
+                  mine: m.mine,
+                  kind: m.kind,
+                  createdAt: m.createdAt,
+                  now: DateTime.now(),
+                  deleted: m.deleted == true,
+                  forwarded: m.forwarded == true,
+                  card: m.card != null,
+                  fileKind: m.attachment?.kind,
+                ) ==
+                null)
+          MenuItem('pencil', 'Edit', () => _startEdit(m)),
         if (m.deleted != true && m.card == null && m.body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, d.auth, m.body)),
         // A photo (reading account details from photos): read on the phone.
         if (m.deleted != true && m.card == null && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/'))
@@ -1219,6 +1270,12 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                       recorder: widget.recorder,
                       replying: _reply == null ? null : (_reply!.mine ? 'your message: ' : '$name: ') + peopleLine(_reply!),
                       onCancelReply: () => setState(() => _reply = null),
+                      editing: _editing,
+                      onSaveEdit: _saveEdit,
+                      onCancelEdit: () {
+                        setState(() => _editing = null);
+                        _text.clear();
+                      },
                       onTools: _tools,
                       linkPreview: _linkPreview,
                       onSend: (text, file) {
@@ -1326,6 +1383,7 @@ class PeopleBubble extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (m.starred == true) ...[Semantics(label: 'Starred', child: TkIcon('star', size: 12, stroke: 2, color: meta)), const SizedBox(width: 3)],
+        ...editedMark(deleted ? null : m.editedAt, meta),
         Text(clock(m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
         if (mine) ...[const SizedBox(width: 4), PeopleTicks(sending: line.local, status: m.status, readTicks: readTicks, meta: meta)],
       ],

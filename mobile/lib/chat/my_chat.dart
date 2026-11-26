@@ -43,6 +43,7 @@ import 'book_sheet.dart' show showBookSheet;
 import 'cards.dart' show CardButton;
 import 'chats.dart' show ChatRow;
 import 'composer.dart';
+import 'edits.dart';
 import 'discover.dart' show DiscoverProfileScreen;
 import 'door.dart';
 import 'link_preview.dart' show ComposerPreview;
@@ -59,7 +60,7 @@ import 'save_as.dart' show saveAsItems, saveNamed;
 import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 import 'words.dart';
 import 'saved_files.dart' show attachSavedFile;
-import 'menu.dart' show showMessageMenu;
+import 'menu.dart' show MenuItem, showMessageMenu;
 import 'pay_collect.dart' show PayListBar;
 
 
@@ -786,6 +787,26 @@ class MyChatData extends ChangeNotifier {
     }
   }
 
+  /// Edits one of ours (chat-previews-and-editing.md §3.2): the new words
+  /// and "Edited" at once, put back if the business's side refuses (an
+  /// order read from it, its time over); the refusal answered, null when
+  /// saved.
+  Future<Object?> editMessage(PersonMessage m, String text) async {
+    void put(PersonMessage x) {
+      messages = _merge(messages ?? const [], [MyLine(x)]);
+      _changed();
+    }
+
+    put(PersonMessage.fromJson({...m.toJson(), 'body': text, 'edited_at': DateTime.now().toUtc().toIso8601String(), 'edits': (m.edits ?? 0) + 1}));
+    try {
+      put(await api.editMyChatMessage(id: id, message: m.id, body: MessageEdit(text: text, edits: m.edits ?? 0)));
+      return null;
+    } on Object catch (e) {
+      put(m);
+      return e;
+    }
+  }
+
   void _changed() {
     if (!_disposed) notifyListeners();
   }
@@ -962,6 +983,20 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
   /// delivery, your orders with them.
   /// A message's menu (saved objects S1): Copy and Save as… on its words,
   /// Save as… on a photo or document.
+  /// One of ours being edited (chat-previews-and-editing.md §3.2).
+  EditDraft? _editing;
+
+  Future<void> _saveEdit(EditDraft e, String words) async {
+    setState(() => _editing = null);
+    if (words == e.text.trim()) return;
+    final m = d.messages?.where((x) => x.m.id == e.id).firstOrNull?.m;
+    if (m == null) return;
+    final err = await d.editMessage(m, words);
+    if (err == null || !mounted) return;
+    showTkToast(context, editRefusal(err), error: true);
+    if (refusedForTime(err) && _text.text.isEmpty) _text.text = words;
+  }
+
   Future<void> _hold(MyLine x, Rect at) async {
     final m = x.m;
     final a = m.attachment;
@@ -976,6 +1011,18 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
       fileType: a?.type ?? '',
       from: (kind: 'person', chat: d.id, message: m.id, from: m.mine ? '' : d.name),
     );
+    final c = d.chat;
+    if (!x.local &&
+        c != null &&
+        !c.blocked &&
+        !c.blockedYou &&
+        editBlock(mine: m.mine, kind: m.kind, createdAt: m.createdAt, now: DateTime.now(), card: m.card != null, fileKind: a?.kind, line: m.line) == null) {
+      items.insert(items.isEmpty ? 0 : 1, MenuItem('pencil', 'Edit', () {
+        setState(() => _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: a != null));
+        _text.text = m.body;
+        _text.selection = TextSelection.collapsed(offset: m.body.length);
+      }));
+    }
     if (items.isEmpty) return;
     await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
   }
@@ -1128,6 +1175,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 if (m.line == 'whatsapp') LineMark(line: m.line, color: meta),
+                                ...editedMark(m.editedAt, meta),
                                 Text(clock(m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
                                 if (m.mine) ...[const SizedBox(width: 4), DoorTicks(sending: x.local, read: m.readAt != null, meta: meta)],
                               ],
@@ -1156,6 +1204,12 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                       pickers: widget.pickers,
                       recorder: widget.recorder,
                       onTools: () => showMyChatTools(context, d),
+                      editing: _editing,
+                      onSaveEdit: _saveEdit,
+                      onCancelEdit: () {
+                        setState(() => _editing = null);
+                        _text.clear();
+                      },
                       linkPreview: _linkPreview,
                       onSend: (text, file) {
                         final preview = file == null ? _linkPreview.choice(text) : null;

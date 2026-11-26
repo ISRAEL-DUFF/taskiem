@@ -41,6 +41,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'composer.dart';
+import 'edits.dart';
 import 'door.dart' show doorFiles;
 import 'group_info.dart';
 import 'groups.dart';
@@ -606,6 +607,20 @@ class GroupChatData extends ChangeNotifier {
     }
   }
 
+  /// Edits one of ours (chat-previews-and-editing.md §3.2): the new words
+  /// and "Edited" at once, put back if the server refuses; the refusal is
+  /// answered (null when saved). Its @ mentions stay as they were.
+  Future<Object?> editMessage(GroupMessage m, String text) async {
+    _replace(GroupMessage.fromJson({...m.toJson(), 'body': text, 'edited_at': DateTime.now().toUtc().toIso8601String(), 'edits': (m.edits ?? 0) + 1}));
+    try {
+      _replace(await api.editGroupMessage(id: id, message: m.id, body: GroupMessageEdit(text: text, edits: m.edits ?? 0)));
+      return null;
+    } on Object catch (e) {
+      _replace(m);
+      return e;
+    }
+  }
+
   void _replace(GroupMessage m) {
     if (_disposed) return;
     messages = _merge(messages ?? const [], [GroupLine(m)]);
@@ -1065,6 +1080,29 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
     }
   }
 
+  /// One of ours being edited (chat-previews-and-editing.md §3.2).
+  EditDraft? _editing;
+
+  void _startEdit(GroupMessage m) {
+    setState(() {
+      _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: m.attachment != null);
+      _reply = null;
+    });
+    _text.text = m.body;
+    _text.selection = TextSelection.collapsed(offset: m.body.length);
+  }
+
+  Future<void> _saveEdit(EditDraft e, String words) async {
+    setState(() => _editing = null);
+    if (words == e.text.trim()) return;
+    final m = d.messages?.where((x) => x.id == e.id).firstOrNull?.m;
+    if (m == null) return;
+    final err = await d.editMessage(m, words);
+    if (err == null || !mounted) return;
+    showTkToast(context, editRefusal(err), error: true);
+    if (refusedForTime(err) && _text.text.isEmpty) _text.text = words;
+  }
+
   Future<void> _hold(GroupMessage m, Rect at) async {
     if (m.id.startsWith('local-') || m.kind == 'event') return;
     final write = d.canSend;
@@ -1079,6 +1117,19 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       items: [
         if (write && live) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
         if (live && m.card == null && m.body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.body)), done: 'Copied'),
+        if (write &&
+            editBlock(
+                  mine: m.mine,
+                  kind: m.kind,
+                  createdAt: m.createdAt,
+                  now: DateTime.now(),
+                  deleted: m.deleted == true,
+                  forwarded: m.forwarded == true,
+                  card: m.card != null,
+                  fileKind: m.attachment?.kind,
+                ) ==
+                null)
+          MenuItem('pencil', 'Edit', () => _startEdit(m)),
         if (live && m.card == null && m.body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, d.auth, m.body)),
         // A photo (reading account details from photos): read on the phone.
         if (live && m.card == null && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/'))
@@ -1378,6 +1429,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                       recorder: widget.recorder,
                       replying: _reply == null ? null : (_reply!.mine ? 'your message: ' : '${_reply!.sender}: ') + groupLine(_reply!),
                       onCancelReply: () => setState(() => _reply = null),
+                      editing: _editing,
+                      onSaveEdit: _saveEdit,
+                      onCancelEdit: () {
+                        setState(() => _editing = null);
+                        _text.clear();
+                      },
                       onTools: _tools,
                       linkPreview: _linkPreview,
                       onSend: (t, f) => unawaited(_send(t, f)),

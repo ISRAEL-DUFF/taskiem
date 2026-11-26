@@ -42,6 +42,7 @@ import 'tool_forms.dart' show toolDetail;
 import '../app/store.dart' show KeptOut;
 import '../kit/sheet.dart' show TkCta, TkSheet, showTkSheet;
 import 'composer.dart';
+import 'edits.dart';
 import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'tool_sheet.dart';
 import 'storefront_orders_page.dart' show openStorefrontOrder;
@@ -77,10 +78,17 @@ const _every = Duration(seconds: 3);
 /// not sent, with Retry and Delete. Its client id makes a retry the same
 /// message to the server, never a second one.
 class Outgoing {
-  Outgoing(this.clientId, this.body, this.at, {this.file, this.reply, this.tags = const [], this.preview});
+  Outgoing(this.clientId, this.body, this.at, {this.file, this.reply, this.tags = const [], this.preview, this.editOf, this.edits = 0});
   final String clientId;
-  final String body;
+
+  /// Its words: changed while it waits (Edit on a message not yet sent).
+  String body;
   final DateTime at;
+
+  /// An edit of one of our messages, not a new one (chat-previews-and-
+  /// editing.md §3.3): its id, and the count of edits it had when edited.
+  final String? editOf;
+  final int edits;
 
   /// The link's card shown in the box ({id}) or closed (false), as it is
   /// sent; null: the server makes it.
@@ -111,6 +119,7 @@ class Outgoing {
       if (tags.isNotEmpty) 'tags': [for (final t in tags) t.toJson()],
       if (file != null) 'file': {'name': file!.name, 'type': file!.type},
       'preview': ?preview,
+      if (editOf != null) 'edit': {'message': editOf, 'edits': edits},
     },
     file: file?.bytes,
   );
@@ -119,10 +128,13 @@ class Outgoing {
   static Outgoing fromKept(KeptOut k) {
     final j = k.json;
     final f = j['file'] is Map ? (j['file'] as Map).cast<String, dynamic>() : null;
+    final edit = j['edit'] is Map ? (j['edit'] as Map).cast<String, dynamic>() : null;
     return Outgoing(
       k.id,
       j['text'] as String? ?? '',
       k.at,
+      editOf: edit?['message'] as String?,
+      edits: (edit?['edits'] as num?)?.toInt() ?? 0,
       reply: j['reply'] is Map ? LinkMessage.fromJson((j['reply'] as Map).cast<String, dynamic>()) : null,
       tags: [for (final t in (j['tags'] as List? ?? const [])) SendLinkMessageRequestMentionsItem.fromJson((t as Map).cast<String, dynamic>())],
       preview: j['preview'],
@@ -209,11 +221,20 @@ class ConversationData extends ChangeNotifier {
     return null;
   }
 
-  List<ThreadMessage> get thread => [
-    for (final m in messages ?? const <LinkMessage>[]) ThreadMessage(m),
-    // Not after a window away from the newest page.
+  List<ThreadMessage> get thread {
+    // An edit on its way shows at once on its message, marked Edited.
+    final editing = {for (final o in outbox) if (o.editOf != null && !o.failed) o.editOf!: o};
+    return [
+    for (final m in messages ?? const <LinkMessage>[])
+      ThreadMessage(switch (editing[m.id]) {
+        null => m,
+        final o => LinkMessage.fromJson({...m.toJson(), 'body': o.body, 'edited_at': o.at.toUtc().toIso8601String(), 'edits': (m.edits ?? 0) + 1}),
+      }),
+    // Not after a window away from the newest page. A refused edit shows
+    // as a note of its own, with Send as a new message.
     if (!detached)
       for (final o in outbox)
+        if (o.editOf == null || o.failed)
         ThreadMessage(
           LinkMessage(
             id: 'local-${o.clientId}',
@@ -228,6 +249,7 @@ class ConversationData extends ChangeNotifier {
           out: o,
         ),
   ];
+  }
 
   /// The conversation's price list and whose it is ("ours" or "theirs");
   /// our own services and stock (chat tools, each only to those who may
@@ -509,7 +531,7 @@ class ConversationData extends ChangeNotifier {
       // Ours, sent from here, told by the stream before the send's answer
       // came: the outbox's copy gives way to it.
       if (m.mine) {
-        final i = outbox.indexWhere((o) => !o.failed && o.file == null && m.attachment == null && o.body == (m.body ?? '').trim());
+        final i = outbox.indexWhere((o) => o.editOf == null && !o.failed && o.file == null && m.attachment == null && o.body == (m.body ?? '').trim());
         if (i >= 0) outbox.removeAt(i);
       }
       _changed();
@@ -692,6 +714,32 @@ class ConversationData extends ChangeNotifier {
     await _send(o);
   }
 
+  /// Edits one of our messages (chat-previews-and-editing.md §3.3): shown
+  /// at once, kept in the outbox like a message, so one made offline goes
+  /// when the connection is back, after what was waiting before it.
+  Future<void> edit(LinkMessage m, String text) async {
+    final o = Outgoing(uuid4(), text.trim(), chats.now(), editOf: m.id, edits: m.edits ?? 0);
+    outbox.add(o);
+    chats.auth.local?.keepOut(o.kept(conv.link));
+    _changed();
+    await _send(o);
+  }
+
+  /// Edits a message still waiting to send: the waiting copy changes, so
+  /// one message goes, with the final words.
+  void editWaiting(Outgoing o, String text) {
+    if (o.sending) return;
+    o.body = text.trim();
+    chats.auth.local?.keepOut(o.kept(conv.link));
+    _changed();
+  }
+
+  /// A refused edit's words, sent as a new message.
+  Future<void> sendAsNew(Outgoing o) async {
+    discard(o);
+    await send(o.body);
+  }
+
   Future<void> retry(Outgoing o) async {
     o.failed = false;
     o.error = null;
@@ -711,7 +759,11 @@ class ConversationData extends ChangeNotifier {
     try {
       final f = o.file;
       final LinkMessage sent;
-      if (f != null) {
+      if (o.editOf != null) {
+        // PATCH /v1/link-chats/{link}/messages/{id}: the new words, and the
+        // count of edits seen (409 when edited since elsewhere).
+        sent = (await api.editLinkMessage(link: conv.link, id: o.editOf!, body: LinkMessageEdit(text: o.body, edits: o.edits))).message;
+      } else if (f != null) {
         // POST /v1/link-chats/{link}/files: the file, its caption, the client id.
         final j = await chats.auth.transport.upload(
           '/v1/link-chats/${Uri.encodeComponent(conv.link)}/files',
@@ -735,8 +787,14 @@ class ConversationData extends ChangeNotifier {
       unawaited(chats.load());
     } on ApiError catch (e) {
       o.failed = true;
-      // lib/outbox.ts sendError.
-      o.error = e.status == 429 ? 'You are sending too fast. Wait a moment and tap Retry.' : (e.message.isEmpty ? 'It could not be sent.' : e.message);
+      // lib/outbox.ts sendError; a refused edit says why, and its message
+      // shows the server's words again.
+      o.error = o.editOf != null
+          ? editRefusal(e)
+          : e.status == 429
+          ? 'You are sending too fast. Wait a moment and tap Retry.'
+          : (e.message.isEmpty ? 'It could not be sent.' : e.message);
+      if (o.editOf != null && e.has('stale')) unawaited(openNewest());
     } on Offline {
       // Kept with its clock: it goes by itself when the connection is back.
       o.error = null;
@@ -1349,6 +1407,37 @@ class _ConversationScreenState extends State<ConversationScreen> {
   bool _picking = false;
   LinkMessage? _reply;
 
+  /// One of ours being edited (chat-previews-and-editing.md §3.2).
+  EditDraft? _editing;
+
+  void _startEdit(EditDraft e) {
+    setState(() {
+      _editing = e;
+      _reply = null;
+    });
+    _text.text = e.text;
+    _text.selection = TextSelection.collapsed(offset: e.text.length);
+  }
+
+  /// Whether the menu offers Edit: our own words, within their 30 minutes.
+  bool _canEdit(ThreadMessage x) {
+    final m = x.m;
+    final o = x.out;
+    if (o != null) return _write && o.editOf == null && !o.failed && !o.sending;
+    return _write &&
+        editBlock(
+              mine: m.mine,
+              kind: m.kind,
+              createdAt: m.createdAt,
+              now: _d.chats.now(),
+              forwarded: m.forwarded == true,
+              money: m.payment != null || m.batch != null,
+              tags: [for (final t in m.mentions ?? const <LinkMention>[]) t.kind],
+              fileKind: m.attachment?.kind,
+            ) ==
+            null;
+  }
+
   ConversationData get _d => widget.data;
   bool get _trades => _d.chats.auth.can('chat.trade');
 
@@ -1376,12 +1465,20 @@ class _ConversationScreenState extends State<ConversationScreen> {
       mine: m.mine,
       what: card != null ? cardLine(card, m.mine, other) : previewLine(m, other),
       mineEmoji: mineEmoji,
-      onReact: _write ? (e) => _d.react(m, e) : null,
+      onReact: _write && x.out == null ? (e) => _d.react(m, e) : null,
       onPicking: () => setState(() => _picking = true),
-      items: [
+      // A message waiting to send: its words, and changing them before it goes.
+      items: x.out != null
+          ? [
+              if (body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: body)), done: 'Copied'),
+              if (_canEdit(x)) MenuItem('pencil', 'Edit', () => _startEdit(EditDraft(id: m.id, text: body, edits: 0, caption: m.attachment != null))),
+            ]
+          : [
         MenuItem('info', 'Message info', () => _info(m)),
         if (_write) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
         if (card == null && body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: body)), done: 'Copied'),
+        if (_canEdit(x))
+          MenuItem('pencil', 'Edit', () => _startEdit(EditDraft(id: m.id, text: body, edits: m.edits ?? 0, caption: m.attachment != null))),
         // Save as… (saved objects S1, part 4): the business's for whoever may manage them.
         if (card == null && body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, _d.chats.auth, body, business: true)),
         // A photo (reading account details from photos): read on the phone.
@@ -1625,6 +1722,22 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 text: _text,
                 replying: _reply == null ? null : previewLine(_reply!, c.name),
                 onCancelReply: () => setState(() => _reply = null),
+                editing: _editing,
+                onCancelEdit: () {
+                  setState(() => _editing = null);
+                  _text.clear();
+                },
+                onSaveEdit: (e, words) {
+                  setState(() => _editing = null);
+                  if (words == e.text.trim()) return;
+                  if (e.id.startsWith('local-')) {
+                    final o = d.outbox.where((o) => 'local-${o.clientId}' == e.id).firstOrNull;
+                    if (o != null) d.editWaiting(o, words);
+                    return;
+                  }
+                  final m = d.messages?.where((m) => m.id == e.id).firstOrNull;
+                  if (m != null) unawaited(d.edit(m, words));
+                },
                 linkPreview: _linkPreview,
                 onSend: (words, file) async {
                   final r = _reply;
@@ -1762,7 +1875,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             acts: _acts,
             changed: () => setState(() {}),
             files: d.chats.files,
-            onRetry: m.out == null ? null : () => d.retry(m.out!),
+            onRetry: m.out == null ? null : () => m.out!.editOf != null ? d.sendAsNew(m.out!) : d.retry(m.out!),
             onDiscard: m.out == null ? null : () => d.discard(m.out!),
             menuOpen: _menuFor == m.id && !_picking,
             onHold: (at) => _menu(m, at),
@@ -1973,7 +2086,8 @@ class _Bubble extends StatelessWidget {
     final card = msg.kind == 'card' ? msg.card : null;
     // A saved thing's card under the words: the time goes under it.
     final savedCards = (msg.mentions ?? const <LinkMention>[]).any((x) => x.kind == 'saved' && x.saved != null);
-    final inline = card == null && body.isNotEmpty && !failed && !savedCards;
+    // An edited message's longer stamp goes under its words.
+    final inline = card == null && body.isNotEmpty && !failed && !savedCards && msg.editedAt == null;
     final reacted = (msg.reactions?.isNotEmpty ?? false) && out == null;
     // A voice note alone: its time ends its row (as drawn).
     final voiceOnly = msg.attachment?.kind == 'voice' && body.isEmpty && msg.preview == null;
@@ -1987,6 +2101,7 @@ class _Bubble extends StatelessWidget {
           ),
           const SizedBox(width: 4),
         ],
+        ...editedMark(msg.editedAt, meta),
         Text(
           clock(msg.createdAt),
           style: tkText(size: 11, lineHeight: 16 / 11, color: meta),
@@ -2239,7 +2354,8 @@ class _Bubble extends StatelessWidget {
     );
     final held = BubbleHold(
       label: mine ? 'Your message' : 'Message from $other',
-      onHold: out == null ? onHold : null,
+      // A message waiting to send opens its menu too, to edit it there.
+      onHold: out == null || (!failed && out.editOf == null) ? onHold : null,
       onReply: out == null ? onReply : null,
       child: bubble,
     );
@@ -2267,6 +2383,34 @@ class _Bubble extends StatelessWidget {
             ],
           );
     if (!failed) return placed;
+    if (out?.editOf != null) {
+      // A refused edit: why, and its words as a new message, or away.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          placed,
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 40),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(out?.error ?? '', textAlign: TextAlign.right, style: tkText(size: 12, lineHeight: 1.4, color: t.danger)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              alignment: WrapAlignment.end,
+              children: [
+                TkSmallButton(label: 'Delete', danger: true, onPressed: onDiscard),
+                TkSmallButton(label: 'Send as a new message', primary: true, onPressed: onRetry),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [

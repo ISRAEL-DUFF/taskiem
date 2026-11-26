@@ -42,7 +42,8 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'chats.dart';
 import 'attachments.dart';
-import 'composer.dart' show Pickers;
+import 'composer.dart' show EditDraft, EditingStrip, Pickers;
+import 'edits.dart';
 import 'customer_app.dart';
 import 'customer_orders.dart' show CustomerOrders;
 import 'door.dart';
@@ -50,7 +51,7 @@ import 'link_preview.dart' show ComposerLinkCard, ComposerPreview;
 import 'thread.dart';
 import 'words.dart';
 import 'saved_files.dart' show attachSavedFile;
-import 'menu.dart' show showMessageMenu;
+import 'menu.dart' show MenuItem, showMessageMenu;
 import 'pay_collect.dart' show MessageFrom, PayListBar;
 
 // --- words (lib/customerchat.ts) ---
@@ -399,6 +400,26 @@ class CustomerData extends ChangeNotifier {
   ///
   /// To a customer on both lines, [line] chooses where it goes (`whatsapp`,
   /// `app`); left out, the thread's reply line. An offer goes in the app.
+  /// Edits a reply of ours (chat-previews-and-editing.md §3.2): the new
+  /// words and "Edited" at once, put back if refused; the refusal
+  /// answered, null when saved. On WhatsApp the customer is sent
+  /// "✏️ Edited: …" by the server.
+  Future<Object?> editMessage(CustomerMessage m, String text) async {
+    void put(CustomerMessage x) {
+      messages = mergeCustomer(messages ?? const [], [CustomerLine(x)]);
+      _changed();
+    }
+
+    put(CustomerMessage.fromJson({...m.toJson(), 'body': text, 'edited_at': DateTime.now().toUtc().toIso8601String(), 'edits': (m.edits ?? 0) + 1}));
+    try {
+      put(await api.editCustomerMessage(id: id, message: m.id, body: MessageEdit(text: text, edits: m.edits ?? 0)));
+      return null;
+    } on Object catch (e) {
+      put(m);
+      return e;
+    }
+  }
+
   Future<void> send(String text, {bool offer = false, String? line, Object? preview}) async {
     final words = text.trim();
     if (words.isEmpty || (offer && offerRefused() != null)) return;
@@ -683,7 +704,29 @@ class _CustomerScreenState extends State<CustomerScreen> {
     super.dispose();
   }
 
+  /// One of our replies being edited (chat-previews-and-editing.md §3.2).
+  EditDraft? _editing;
+
+  Future<void> _saveEdit(EditDraft e, String words) async {
+    setState(() => _editing = null);
+    if (words == e.text.trim()) return;
+    final m = widget.data.messages?.where((x) => x.m.id == e.id).firstOrNull?.m;
+    if (m == null) return;
+    final err = await widget.data.editMessage(m, words);
+    if (err == null || !mounted) return;
+    showTkToast(context, editRefusal(err), error: true);
+    if (refusedForTime(err) && _text.text.isEmpty) _text.text = words;
+  }
+
   void _send() {
+    final edit = _editing;
+    if (edit != null) {
+      final words = _text.text.trim();
+      if (words.isEmpty && !edit.caption) return;
+      _text.clear();
+      unawaited(_saveEdit(edit, words));
+      return;
+    }
     final words = _text.text;
     if (words.trim().isEmpty) return;
     final preview = _appLine ? _linkPreview.choice(words) : null;
@@ -722,6 +765,15 @@ class _CustomerScreenState extends State<CustomerScreen> {
     final file = a != null && a.kind != 'voice';
     final auth = widget.data.chats.auth;
     final items = saveAsItems(context, auth, words: words, filePath: file ? '/v1/customer-chats/${widget.data.id}/files/${m.id}' : '', fileName: a?.name ?? 'File', fileType: a?.type ?? '', business: true, from: _from(m));
+    if (!x.local &&
+        editBlock(mine: m.mine, kind: m.kind, createdAt: m.createdAt, now: DateTime.now(), card: m.card != null, fileKind: a?.kind) == null &&
+        m.offer != true) {
+      items.insert(items.isEmpty ? 0 : 1, MenuItem('pencil', 'Edit', () {
+        setState(() => _editing = EditDraft(id: m.id, text: m.body, edits: m.edits ?? 0, caption: a != null));
+        _text.text = m.body;
+        _text.selection = TextSelection.collapsed(offset: m.body.length);
+      }));
+    }
     if (items.isEmpty) return;
     await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
   }
@@ -907,6 +959,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         if (marked) LineMark(line: line, color: meta),
+                                        ...editedMark(m.m.editedAt, meta),
                                         Text(clock(m.m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
                                         if (m.m.mine) ...[const SizedBox(width: 4), _Delivery(x: m, meta: meta)],
                                       ],
@@ -962,8 +1015,17 @@ class _CustomerScreenState extends State<CustomerScreen> {
                   PayListBar(auth: d.chats.auth, follow: d.follow),
                   if (canSend) _saved.plain(),
                   if (canSend && _appLine) ComposerLinkCard(preview: _linkPreview),
+                  if (canSend && _editing != null)
+                    EditingStrip(
+                      was: _editing!.text,
+                      onCancel: () {
+                        setState(() => _editing = null);
+                        _text.clear();
+                      },
+                    ),
                   if (canSend)
                     _ReplyBox(
+                      editing: _editing != null,
                       text: _text,
                       onSend: d.busy || tooLong ? null : _send,
                       bottom: pad.bottom,
@@ -1010,6 +1072,7 @@ class _CustomerBubble extends StatelessWidget {
           ),
           const SizedBox(width: 4),
         ],
+        ...editedMark(m.editedAt, meta),
         Text(clock(m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
         if (m.mine) ...[const SizedBox(width: 4), _Delivery(x: x, meta: meta)],
       ],
@@ -1021,7 +1084,7 @@ class _CustomerBubble extends StatelessWidget {
       stamp: stamp,
       // A stamp with its line or a template's words is too long to sit over
       // the end of the last line: under the words instead.
-      inline: line == null && !(m.mine && m.sentAs == 'template'),
+      inline: line == null && !(m.mine && m.sentAs == 'template') && m.editedAt == null,
       children: [
         if (m.mine && first && (m.senderName ?? '').isNotEmpty) Text(m.senderName!, style: tkText(size: 12, weight: 600, color: t.tintText)),
         Text.rich(
@@ -1190,8 +1253,11 @@ class _Note extends StatelessWidget {
 
 /// CustomerPane's box: the round box alone, and Send.
 class _ReplyBox extends StatelessWidget {
-  const _ReplyBox({required this.text, required this.onSend, required this.bottom, required this.label, this.hint = 'Reply', this.onMore});
+  const _ReplyBox({required this.text, required this.onSend, required this.bottom, required this.label, this.hint = 'Reply', this.onMore, this.editing = false});
   final TextEditingController text;
+
+  /// A reply of ours being edited: Send is a tick that saves.
+  final bool editing;
   final VoidCallback? onSend;
   final double bottom;
   final String label;
@@ -1267,7 +1333,7 @@ class _ReplyBox extends StatelessWidget {
           TapArea(child: Semantics(
             button: true,
             enabled: ready,
-            label: 'Send',
+            label: editing ? 'Save the edit' : 'Send',
             child: TkPress(
               onTap: ready ? onSend : null,
               child: Container(
@@ -1275,7 +1341,7 @@ class _ReplyBox extends StatelessWidget {
                 height: 46,
                 decoration: BoxDecoration(color: dark ? t.brandDark : t.brand, shape: BoxShape.circle),
                 alignment: Alignment.center,
-                child: TkIcon('arrow-up', size: 22, stroke: 2.4, color: dark ? t.brandDarkText : t.brandDark),
+                child: TkIcon(editing ? 'check' : 'arrow-up', size: 22, stroke: 2.4, color: dark ? t.brandDarkText : t.brandDark),
               ),
             ),
           )),

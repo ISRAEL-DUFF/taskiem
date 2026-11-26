@@ -925,6 +925,15 @@ Widget flashRing(BuildContext context, String id, BorderRadius radius, Widget ch
   );
 }
 
+/// "Edited" before a message's time, once its sender changed its words
+/// (chat-previews-and-editing.md §3): in the stamp's own colour.
+List<Widget> editedMark(DateTime? at, Color meta) => at == null
+    ? const []
+    : [
+        Text('Edited', style: tkText(size: 11, lineHeight: 16 / 11, color: meta).copyWith(fontStyle: FontStyle.italic)),
+        const SizedBox(width: 4),
+      ];
+
 /// A flex column's `gap`.
 List<Widget> gapped(List<Widget> list, double gap) => [
   for (var i = 0; i < list.length; i++) ...[if (i > 0) SizedBox(height: gap), list[i]],
