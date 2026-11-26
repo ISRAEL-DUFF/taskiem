@@ -118,18 +118,12 @@ func (s *Server) previewCache() *lru.Cache[string, *madePreview] {
 	return s.previews
 }
 
-// linkPreview is the preview of the first link in text for a business's
-// message, or nil (no link, no guard, this person past their previews
-// for the minute, or a page that did not answer with a title). What was
-// fetched is remembered per business, so one business's fetch never
-// answers another's.
-func (s *Server) linkPreview(ctx context.Context, p *Principal, text string) *madePreview {
-	return s.makePreview(ctx, "t:"+p.TenantID.String(), p.Actor(), p.TenantID.String(), previewURL(text, s.previewAnyPort))
-}
-
 // makePreview makes the preview of raw for scope (a business, "t:…", or a
 // person, "p:…"), counted against actor; label names whose fetch it is in
-// the egress log.
+// the egress log. Nil: no link, no guard, this person past their previews
+// for the minute, or a page that did not answer with a title. What was
+// fetched is remembered per business or person, so one's fetch never
+// answers another's.
 func (s *Server) makePreview(ctx context.Context, scope, actor, label, raw string) *madePreview {
 	if raw == "" {
 		return nil
@@ -432,11 +426,11 @@ type previewChoice struct {
 // UnmarshalJSON reads false or {"id": "…"}.
 func (c *previewChoice) UnmarshalJSON(b []byte) error {
 	s := strings.TrimSpace(string(b))
-	switch {
-	case s == "null" || s == "true":
+	switch s {
+	case "null", "true":
 		*c = previewChoice{}
 		return nil
-	case s == "false":
+	case "false":
 		*c = previewChoice{off: true}
 		return nil
 	}

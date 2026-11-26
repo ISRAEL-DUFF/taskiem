@@ -120,6 +120,8 @@ test("a link opens in a new tab and its card's picture comes from Taskiem", asyn
   await tab.waitForLoadState();
   expect(tab.url()).toBe("https://jumia.example/phones");
   await tab.close();
+  // Away from the bubble: its hover chevron is not part of the page at rest.
+  await buyer.mouse.move(1, 1);
   await axeBoth(buyer, "a message with a link and its card");
   await fits(buyer, "a message with a link and its card");
 });

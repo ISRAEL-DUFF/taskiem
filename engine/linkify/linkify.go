@@ -156,7 +156,7 @@ func validHost(h string) bool {
 		return false
 	}
 	for _, r := range h {
-		if !(isWordRune(r) || r == '.' || r == '-') || r == '_' {
+		if r == '_' || (!isWordRune(r) && r != '.' && r != '-') {
 			return false
 		}
 	}
