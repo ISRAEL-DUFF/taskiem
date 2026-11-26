@@ -277,6 +277,15 @@ Built 26 November 2026; the whole of it is in [chat previews and editing](chat-p
 - **While typing**, the card shows above the box (`POST /v1/link-preview`, chat `people:{id}` or `group:{id}`); ✕ sends without it.
 - **Delete for everyone** removes the card and its picture with the words.
 
+## Editing a message in people chats and groups
+
+Built 26 November 2026; the whole of it is in [chat previews and editing](chat-previews-and-editing.md) §3 and §6.3.
+
+- **Your own message, within 30 minutes**: its words, or a file's caption (`PATCH /v1/me/people/{id}/messages/{message}`, `PATCH /v1/me/groups/{id}/messages/{message}`, `{text, edits}`). Not a card, a place, a voice note, a forwarded message or a deleted one; in a group, only while you are in it.
+- **Every copy is sealed again**: both people's copies, each under its owner's key (the other's through the reach, unless they blocked you), or the group's one copy under the group's key. The search tokens are made again from the new words, and the link's card (and its sealed picture) when the first link changed.
+- **A group's @ mentions** can be changed with the words (`mentions`, members now in the group).
+- **Nothing earlier is kept**, as delete for everyone keeps nothing; no audit entry, no push. `edited_at` and `edits` on each copy; the live connection carries the change.
+
 ## As built: stage 5a, server (finding people)
 
 Built on branch `stage5a-finding`, on 093b2f44 (stages 1 to 4, decision 0069 accepted): the server of §5 (finding people and the privacy settings), presence (§13), the automated checks on strangers' messages (§8.4) and their part of deleting an account (§14). The chats between people, requests and person blocks are stream A (`stage5a-chats`, migrations 00471 to 00474). This stream is migration `00475_people_finding.sql` and the package `engine/people`. The web and app screens are later streams.

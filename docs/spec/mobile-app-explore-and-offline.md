@@ -180,7 +180,7 @@ What is kept holds a business's conversations, customers' names and amounts of m
 | --- | --- |
 | K-S1 | The chat list answers only what changed since a time (`?since=`), with ids of conversations gone |
 | K-S2 | `ETag` and `If-None-Match` on the pages' answers (Today, Money, Orders, the tools' lists), so an unchanged page costs a `304` and no body |
-| K-S3 | Messages deleted or edited since a time, so the kept copies follow (the stream tells of them live; this is for while the app was closed) |
+| K-S3 | Messages deleted or edited since a time, so the kept copies follow (the stream tells of them live; this is for while the app was closed). **Edited is now real** (26 November 2026, [chat previews and editing](chat-previews-and-editing.md) §3, §6.3): an edit moves the message's `updated_at` / `changed_at`, so `/v1/link-chats/changes` and the people chats' live connection carry it as a changed message, with `edited_at` and `edits` |
 | K-S4 | Pictures and files served with long cache lifetimes, keyed by their version |
 
 Messages already page by `before`/`after`, and the stream already tells of changes live.
@@ -207,7 +207,7 @@ Messages already page by `before`/`after`, and the stream already tells of chang
 | X4 | Popular, and Recently viewed (on the phone) | Small |
 | K1 | The file cache for photos, voice notes, PDFs and logos on the phone (the biggest win for the least work) | Small |
 | K2 | The local database, encrypted, with the chat list and messages; the app opening at once on them; wiping on sign-out | Large |
-| K3 | Only what changed: the chat list's `since`, messages `after`, deleted and edited since | Medium, server and app |
+| K3 | Only what changed: the chat list's `since`, messages `after`, deleted and edited since (edited since: real from §3 of [chat previews and editing](chat-previews-and-editing.md); an edit made offline waits in the outbox, K5) | Medium, server and app |
 | K4 | Today, Money, Orders and the tools' lists kept, with `ETag` | Medium |
 | K5 | The outbox: messages written offline sent when back | Medium |
 

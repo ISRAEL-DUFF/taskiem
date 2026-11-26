@@ -1,6 +1,6 @@
 # Chats: file previews, link previews and editing a sent message
 
-Date: 26 November 2026 · Branch `claude/taskiem-chat-business-4gjlfs` · Status: **§2 (links) and §1 (files) built; §3 planned**
+Date: 26 November 2026 · Branch `claude/taskiem-chat-business-4gjlfs` · Status: **§2 (links), §1 (files) and §3 (editing) built**
 
 Three things people expect from WhatsApp that Taskiem's chats do not do yet:
 
@@ -446,3 +446,36 @@ Each part also adds:
 - **No testing manual was found in the repository.** Its checks are not added.
 
 **Tests.** Go: `api/link_preview_test.go` (pictures, refusals, redirects, site, Taskiem links, `preview: false`, the composer with its limit and its 30 minutes, sealed people previews, delete for everyone), `TestLinkPreviewGuarded`, `engine/linkify`, `engine/whatsapp` `TestSendTextPreviewURL`. Web: `src/lib/linkify.test.ts`, `e2e/link-chat-links.spec.ts`. App: `test/linkify_test.dart`, `test/link_preview_test.dart`, with pictures in light and dark.
+
+### 6.3 Editing (§3), built 26 November 2026
+
+**What people see now.**
+- **Edit** in a message's menu, after Copy, only where the rules allow: our own words or a file's caption, within 30 minutes; never a card, a diary line or Taskiem's note, money (a payment, a payout list, a # tag of a price, invoice or order), a voice note, a forwarded message, a deleted one, or one sent on WhatsApp. Web: **More**, then **Edit**; app: hold the message.
+- **The box takes its words** under an "Editing message" strip with the old words and ✕. Web: Enter or the tick saves, Escape cancels, and the up arrow in an empty box edits our last message. App: the tick saves, ✕ cancels.
+- **"Edited"** by the time, in italics, at once; the stamp then goes under the words. If the server refuses, the bubble goes back and the reason shows (a toast); refused for its time, the words stay in the box (web, and the app's people chats, groups and customer chats) to send as a new message.
+- **App, business chats (the outbox, K5):** an edit is kept in the outbox like a message (`{edit: {message, edits}}`), shown at once, and sent when the connection is back. Refused when it reaches the server, the message shows the server's words, and a note under the refused words says "Your edit was not saved: the message can only be edited for 30 minutes after it was sent", with **Send as a new message** and **Delete**. Edit on a message still waiting to send changes the waiting copy, so one message goes.
+- **WhatsApp:** someone told of a business message on WhatsApp gets "✏️ Edited: *…*", quoting what they were sent (`context.message_id`). On **Telegram** the message is changed in place (`editMessageText`, or the caption); on **Slack** too (`chat.update`, in the conversation `conversations.open` names). When changing it fails, the follow-up goes instead. A customer on the business's WhatsApp line gets the follow-up as a reply of the business's.
+
+**How it is built.**
+- **Migration** `00790_message_edits.sql`: `edited_at` and `edits` on `link_messages`, `people_messages`, `group_messages`, `customer_messages` and `person_messages`; `acted_at` on `link_messages` and `customer_messages`; `link_message_edits` (the sending business's side only, row-level security as `link_messages`, removed with its message); `taskiem_customer_reach` takes `customer_chat.message.edit`.
+- **The routes** (`api/message_edits.go`): `PATCH` on the five message routes of §3.3, body `{text, edits}` (business chats and groups also `mentions`). 200 with the message (a business chat's under `message`), `409 {stale: true}`, `403 {not_editable}`, `422`. The time is the server's clock (`s.now()`, which tests set).
+- **Business to business** (`engine/links/edits.go`, `EditTx`): our copy locked, the rules, the history row (`words_before` or `caption_before`), our copy, then the other's through the door (`link.message.edit`, audited on both sides with the history's id), in one transaction. The preview is made again when the first link changed (each side's picture in its own storage; the replaced pictures removed). Search reads the words as they are, so nothing is rebuilt. The earlier wordings are read by `GET /v1/link-chats/{link}/messages/{id}/edits` (`audit.read`), never by the chat.
+- **People chats and groups:** each copy opened and sealed again under its owner's key (the other's through the reach, unless they blocked the sender), or the group's one copy under the group's key; `people_search` and `group_search` tokens deleted and made again; the link's sealed picture replaced when the first link changed. No audit entry.
+- **A person and a business:** the person's edit goes through the door (`customer.chat`, with `edit: true` in the business's chain), the business's copy sealed again under the customer's subject. A member's edit of a reply in the app reaches the person's copy through `taskiem_customer_reach` (`customer_chat.message.edit`); on the WhatsApp line it is audited as `customer_chat.message.edit` and the follow-up sent.
+- **Taskiem acting:** an order read from a customer's message sets its `acted_at`; a message older than this is judged by `order_drafts.message_id`.
+- **The bridge** (`tellLinkEdit`): after the edit commits, the other side's `link_chat_sent` rows for the message, matched to its people's addresses by their keyed hash; each channel through `editOnPhone`.
+- **Live and offline:** nothing new in the streams. Every message carries `edited_at` and `edits` (OpenAPI, the generated app client, the web's types by hand).
+- **Words:** `chat.link.edited` in `engine/lang/messages/` (drafts in ha, ig, pcm and yo).
+
+**Where this differs from §3, and why.**
+- **`edits` is on every chat's messages**, not only `link_messages`, so each route can answer 409 when stale; `person_messages` (the person's side of a chat with a business) has `edited_at` too.
+- **One more reason, `elsewhere`:** a person's message to a business sent on WhatsApp (shown in the app as theirs) cannot be changed by Taskiem there.
+- **`acted_at` is set only where an order is read from a customer's message.** In business chats Taskiem never acts on a message sent to the other side: a "@Taskiem" is never sent, and its note is not editable (a kind other than text). Menu answers are in the Taskiem chat, not these. `chat_pay_quotes` names messages on WhatsApp, Telegram and Slack, not chat messages, so nothing reads it here.
+- **Mentions:** a business chat's edit may name its `@` businesses (`mentions`); left out, those still named in the words are kept; any `#` tag is refused (422). A group's `mentions` are member ids, as when sending.
+- **A customer chat's replaced link picture** stays in the business's storage until the customer's files go (erasure), as it is sealed with the old preview; business-to-business ones are removed.
+- **Edit is offered on any of our business's messages** on the web and in the app, as clients do not know which member sent one; the server refuses another member's (`not_yours`).
+- **Only the app's business chats have an outbox** (K5). Elsewhere in the app, as on the web, an edit is made online: the bubble shows it at once and goes back, with a toast, when refused.
+- **The earlier wordings' route has no screen yet**; the audit log shows `link.message.edit` with the history's id.
+- **No testing manual was found in the repository** (as for §1 and §2); its checks are not added.
+
+**Tests.** Go: `api/message_edits_test.go` (business chats: within 29:59 and refused at 30:01, the other business and another member refused, each `not_editable` reason, both copies, 409, a `#` tag refused, the history on the sender's side only and unreadable from the other's scope, the audit entries, no push or notice, `/changes`, the WhatsApp follow-up quoting the original; people chats and groups: both copies sealed again, search finds the new words and not the old, the preview made again, each reason, a group's mentions; a person and a business: both sides, `taskiem_acted`, the audit entry; `editOnPhone`: Telegram and Slack in place, the follow-up when that fails, WhatsApp quoting), `engine/telegram` `TestEditMessage`, `engine/whatsapp` `TestSendTextReplyContext`, `engine/db` `TestMessageEditsMigrationUpDownUp`. Web: `src/lib/edits.test.ts`, `e2e/chat-editing.spec.ts` (Edit from More, Escape, the up arrow, Enter, "Edited" on the other side live, refused after time with the words kept, axe in both themes, 390 and 360 px). App: `test/message_edit_test.dart` (the rules; Edit only where allowed; the strip, ✕ and the tick; refused after time with Send as a new message; an offline edit kept and sent; editing a waiting message; pictures in light and dark).
