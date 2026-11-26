@@ -26,6 +26,7 @@ import 'package:taskiem/app/route.dart';
 import 'package:taskiem/chat/book_sheet.dart' show forgetServices;
 import 'package:taskiem/chat/door.dart';
 import 'package:taskiem/chat/my_chat.dart';
+import 'package:taskiem/chat/shop.dart' show ShopBag;
 import 'package:taskiem/kit/sheet.dart' show TkKitField;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/screens/chat_link.dart';
@@ -344,13 +345,22 @@ void main() {
     await press(t, find.bySemanticsLabel('Chat tools'));
     expect(find.text('With Mama’s Kitchen', findRichText: true), findsOneWidget);
     await press(t, find.text('Their shop'));
-    expect(find.text('₦2,500 · Only 3 left'), findsOneWidget);
-    expect(find.text('M · Red'), findsOneWidget);
-    expect(find.text('Sold out'), findsOneWidget, reason: 'L is gone');
+    // The shop's screen: the items as photos, their marks and prices.
+    expect(find.bySemanticsLabel('Jollof rice, ₦2,500, Only 3 left'), findsOneWidget);
+    expect(find.bySemanticsLabel('Ankara shirt, ₦15,000'), findsOneWidget);
+    await press(t, find.bySemanticsLabel('Add Jollof rice to the bag'));
     await press(t, find.bySemanticsLabel('One more Jollof rice'));
-    await press(t, find.bySemanticsLabel('One more Jollof rice'));
-    expect(find.text('2 items'), findsOneWidget);
-    await press(t, find.text('Review order'));
+    expect(find.bySemanticsLabel('View bag: 2 items · ₦5,000'), findsOneWidget);
+    // Sizes are chosen on the item's own screen: L is gone.
+    await press(t, find.bySemanticsLabel('Ankara shirt, ₦15,000'));
+    expect(find.text('M · Red · ₦15,000'), findsOneWidget);
+    expect(find.text('L · Red · ₦15,000'), findsOneWidget);
+    expect(find.bySemanticsLabel('Add to bag'), findsOneWidget);
+    await press(t, find.bySemanticsLabel('Back to the shop'));
+    await press(t, find.bySemanticsLabel('View bag: 2 items · ₦5,000'));
+    expect(find.text('Your bag'), findsOneWidget);
+    expect(find.text('₦2,500 each'), findsOneWidget);
+    await press(t, find.bySemanticsLabel('Check out, ₦5,000'));
     expect(find.text('2 × Jollof rice'), findsOneWidget);
     expect(find.text('You pay once Mama’s Kitchen accepts your order. They’ll send the pay link here.'), findsOneWidget);
     await press(t, find.text('Deliver it to me'));
@@ -373,6 +383,12 @@ void main() {
       'address': '12 Herbert Macaulay Way',
     });
     expect(find.text('Order MK-1050 sent to Mama’s Kitchen'), findsOneWidget);
+    // Placed: the bag emptied, and back to the chat.
+    await t.pump(const Duration(seconds: 3));
+    await t.pumpAndSettle();
+    expect(find.text('Your bag'), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('^View bag')), findsNothing);
+    expect(ShopBag.of('c1').count, 0);
     await drain(t);
   });
 

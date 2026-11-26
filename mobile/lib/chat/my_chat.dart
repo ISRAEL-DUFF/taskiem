@@ -48,6 +48,7 @@ import 'door.dart';
 import 'pay_transfer.dart' show payMyInvoice;
 import 'made_tools.dart' show MadeRun;
 import 'my_chat_their_tools.dart' show TheirAnswer, TheirRuns;
+import 'shop.dart' show openShop;
 import 'my_chat_tools.dart';
 import 'people.dart' show PersonFace;
 import 'groups.dart' show groupListLine;
@@ -519,6 +520,10 @@ class MyChatData extends ChangeNotifier {
   /// business comes first on Pay.
   final Prefs? prefs;
 
+  /// The chat's screen, open: puts words in its box (the shop's Ask about
+  /// this, shop.dart). None while it is not open.
+  ValueChanged<String>? onAsk;
+
   /// Read again every few seconds while seen (the screen polls).
   final bool follow;
   final DateTime Function() now;
@@ -877,7 +882,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
       opening.then((_) {
         if (!mounted || d.chat == null) return;
         if (tool == 'shop') {
-          showShopSheet(context, d);
+          openShop(context, d);
         } else if (tool == 'book') {
           showBookSheet(context, auth: d.auth, link: '', business: d.name, customer: d.base, onBooked: (_) => d.refresh());
         }
@@ -891,11 +896,17 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     _back = d.givenBack.listen((w) {
       if (_text.text.isEmpty) _text.text = w;
     });
+    // The shop's Ask about this: its question begun in the box.
+    d.onAsk = (words) {
+      _text.text = words;
+      _text.selection = TextSelection.collapsed(offset: words.length);
+    };
   }
 
   @override
   void dispose() {
     widget.notify?.unshow(this);
+    d.onAsk = null;
     _back?.cancel();
     _saved.dispose();
     _text.dispose();
@@ -997,7 +1008,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     ),
     'invoice' when (c.url ?? '').isNotEmpty => ((c.totalKobo ?? 0) > 0 && c.status != 'paid' ? 'Pay' : 'See the invoice', () => _openUrl(c.url!, 'The invoice didn’t open. Try again.')),
     'booking' => ('Book', () => showBookSheet(context, auth: d.auth, link: '', business: d.name, customer: d.base, service: c.serviceId, onBooked: (_) => d.refresh())),
-    'product' => ('See in their shop', () => showShopSheet(context, d)),
+    'product' => ('See in their shop', () => openShop(context, d, item: c.itemId)),
     'order' => ('View order', () => showMyOrdersSheet(context, d)),
     'delivery' => ('View delivery', () => showMyOrdersSheet(context, d)),
     'saved' when c.saved != null => ('Save this', () => saveSavedCard(context, d.auth, c.saved!)),
@@ -1039,6 +1050,10 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                       child: ChatHeadBar(
                         onBack: widget.onBack,
                         onMore: c == null ? null : _menu,
+                        // Their shop, to browse (shop.dart).
+                        actions: [
+                          if (c != null) ChatHeadBar.headButton('Their shop', TkIcon('b-store', size: 22, stroke: 2, color: t.text), () => openShop(context, d)),
+                        ],
                         // As a people chat's head opens their info: the
                         // business's profile (its photos, hours, shop).
                         onAvatar: c == null
