@@ -1,18 +1,26 @@
 // The shop (docs/spec/mobile-app-look.md, "The shop"): a business's items to
-// browse as a window is shopped, from a person's chat with it. A screen of
-// its own: the items as photos two across, searched and filtered by their
-// categories, the ones saved with the heart and the ones looked at lately;
-// an item's own screen (its photo, sizes, Ask about this, Share); and the
-// bag, which checks out in the shop's sheet (my_chat_tools.dart ShopSheet,
-// pickup or delivery). The bag stays while the app runs, as the chat does;
-// the hearts and what was looked at are kept on the phone (Prefs), the
-// server keeping neither yet.
+// browse as a window is shopped. A screen of its own: the items as photos
+// two across, searched and filtered by their categories, the ones saved
+// with the heart and the ones looked at lately; an item's own screen (its
+// photo, sizes, Ask about this, Share); and the bag.
+//
+// Two shops are drawn by it, each a [ShopSource]: a person's, from their
+// chat with a business ([PersonShop]: its storefront at its prices, checked
+// out in the shop's sheet, my_chat_tools.dart ShopSheet, pickup or
+// delivery); and a business's, from its conversation with a linked
+// supplier (business_shop.dart: their prices for the link, quantity prices,
+// sizes typed in a grid, checked out as a purchase order in the order
+// sheet's review). The bag stays while the app runs, as the chat does; the
+// hearts and what was looked at are kept on the phone (Prefs), the server
+// keeping neither yet.
 
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
+import '../api/transport.dart' show Transport;
 import '../app/prefs.dart';
 import '../app/session.dart' show MemoryKeyStore;
+import '../kit/api_image.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart';
@@ -23,6 +31,7 @@ import '../kit/sheet.dart';
 import '../kit/tap_area.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
+import 'buyer.dart' show Break;
 import 'cards.dart' show CardPill;
 import 'door.dart' show BusinessFace;
 import 'my_chat.dart';
@@ -33,7 +42,10 @@ import 'words.dart';
 
 /// Opens the shop of [d]'s business; at [item] when a card in the chat
 /// named one.
-Future<void> openShop(BuildContext context, MyChatData d, {String? item}) => Navigator.of(context).push<void>(ShopRoute(ShopScreen(d: d, item: item)));
+Future<void> openShop(BuildContext context, MyChatData d, {String? item}) => openShopOf(context, PersonShop(d), item: item);
+
+/// Opens a shop; at [item] when a card in the chat named one.
+Future<void> openShopOf(BuildContext context, ShopSource source, {String? item}) => Navigator.of(context).push<void>(ShopRoute(ShopScreen(source: source, item: item)));
 
 /// A screen of the shop: back to the chat closes them all at once.
 class ShopRoute<T> extends TkRoute<T> {
@@ -41,7 +53,8 @@ class ShopRoute<T> extends TkRoute<T> {
 }
 
 /// Back to the chat the shop was opened from.
-void _toChat(BuildContext context) => Navigator.of(context).popUntil((r) => r is! ShopRoute);
+void shopToChat(BuildContext context) => Navigator.of(context).popUntil((r) => r is! ShopRoute);
+void _toChat(BuildContext context) => shopToChat(context);
 
 /// Another screen of the shop, over this one.
 Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push<void>(ShopRoute(page));
@@ -63,6 +76,14 @@ class ShopBag extends ChangeNotifier {
     } else {
       lines[id] = n;
     }
+    notifyListeners();
+  }
+
+  /// The whole bag at once (the plain list changed it).
+  void setAll(Map<String, int> all) {
+    lines
+      ..clear()
+      ..addAll({for (final e in all.entries) if (e.value > 0) e.key: e.value});
     notifyListeners();
   }
 
@@ -103,8 +124,11 @@ class ShopThing {
   String get sizeWords => size == null ? '' : variantWords(size!.variant);
 }
 
-Map<String, ShopThing> shopThings(MyChatShopResponse s) => {
-  for (final i in s.items)
+Map<String, ShopThing> shopThings(MyChatShopResponse s) => thingsOf(s.items);
+
+/// What the bag can hold of [items]: each item, or each of its sizes.
+Map<String, ShopThing> thingsOf(List<ShopItem> items) => {
+  for (final i in items)
     if ((i.sizes ?? const []).isEmpty)
       i.id: ShopThing(id: i.id, item: i, price: i.priceKobo, left: i.fewLeft, available: i.available)
     else
@@ -119,18 +143,157 @@ int? fromPrice(ShopItem i) {
   return prices.first;
 }
 
-/// The hearts and what was looked at: on the phone (Prefs), or, where the
-/// chat was opened without them (a test), while its chat is open.
-Prefs _kept(MyChatData d) => d.prefs ?? (_memory[d] ??= Prefs(MemoryKeyStore()));
-final _memory = Expando<Prefs>('shop');
+/// What a shop shows as it is read: its items and whether it takes orders.
+class ShopData {
+  const ShopData({required this.items, required this.open, this.closed, required this.ways, required this.next});
+  final List<ShopItem> items;
 
-String _business(MyChatData d) => (d.chat?.business ?? '').isNotEmpty ? d.chat!.business : d.id;
+  /// It takes orders now (a supplier's: from those who may place them).
+  final bool open;
+
+  /// Why it takes none, when it says.
+  final String? closed;
+
+  /// The head's line under the name: "Open · Delivery and pickup".
+  final String ways;
+
+  /// The bag's line under its total: what comes after it.
+  final String next;
+}
+
+/// The quantity terms of a supplier's item (business_shop.dart): its unit,
+/// its minimum, and its lower prices from a quantity up, its sizes counted
+/// together.
+class ShopTerms {
+  const ShopTerms({this.unit = '', this.min = 1, this.breaks = const [], this.sized = false});
+  final String unit;
+  final int min;
+  final List<Break> breaks;
+  final bool sized;
+}
+
+/// What a shop reads and how it orders. The screens are one; what differs
+/// is here.
+abstract class ShopSource {
+  /// Whose bag: one a chat.
+  String get bagKey;
+
+  /// Whose hearts and lately-seen items, kept on the phone.
+  String get keptKey;
+
+  /// The business shopped.
+  String get name;
+  Widget avatar();
+  Prefs get prefs;
+
+  Future<ShopData> load();
+
+  /// Ask about this: the question begun in the chat's box.
+  ValueChanged<String>? get onAsk;
+
+  /// Share an item with someone, where it can be.
+  void Function(BuildContext context, ShopItem item)? get share;
+
+  /// Photos read from the API (a supplier's, through the link).
+  Transport? get photos => null;
+
+  /// What one of [th] costs with [lines] in the bag: a quantity price
+  /// reached counts.
+  int? priceIn(ShopThing th, Map<String, int> lines) => th.price;
+
+  /// The bag's total.
+  int totalOf(ShopData s, Map<String, int> lines) {
+    final things = thingsOf(s.items);
+    return lines.entries.fold(0, (a, e) => a + (things[e.key] == null ? 0 : (priceIn(things[e.key]!, lines) ?? 0) * e.value));
+  }
+
+  /// − or + on a thing: one at a time, unless a minimum says.
+  int stepped(ShopThing th, int n, int dir) => n + dir < 0 ? 0 : n + dir;
+
+  /// An item's quantity terms (a supplier's), if any.
+  ShopTerms? termsOf(ShopItem item) => null;
+
+  /// An item's sizes typed in a grid (a supplier's), in place of a size
+  /// picked and Add to bag.
+  Widget? sizesGrid(BuildContext context, ShopItem item, ShopBag bag) => null;
+
+  /// What stops the bag going on, said (a product under its minimum).
+  String? stops(Map<String, int> lines) => null;
+
+  /// Whether it has a bag (a supplier's: for those who may order).
+  bool get bags => true;
+
+  /// The bag's button.
+  String get checkoutWords => 'Check out';
+
+  /// The plain list of the same (a supplier's, for fast reorders).
+  Future<void> Function(BuildContext context, ShopBag bag)? get list => null;
+
+  /// Checks the bag out; true once the order went.
+  Future<bool> checkout(BuildContext context, Map<String, int> lines);
+}
+
+/// A person's shop: the business's storefront, from their chat with it.
+class PersonShop extends ShopSource {
+  PersonShop(this.d);
+  final MyChatData d;
+
+  @override
+  String get bagKey => d.id;
+  @override
+  String get keptKey => (d.chat?.business ?? '').isNotEmpty ? d.chat!.business : d.id;
+  @override
+  String get name => d.name;
+  @override
+  Widget avatar() => BusinessFace(name: d.name, urls: d.chat?.photo?.urls, size: 40, letterSize: 15);
+
+  @override
+  Prefs get prefs => keptPrefs(d.prefs, d);
+
+  @override
+  ValueChanged<String>? get onAsk => d.onAsk;
+
+  @override
+  void Function(BuildContext, ShopItem)? get share => (d.chat?.business ?? '').isEmpty
+      ? null
+      : (context, i) => shareWithPeople(context, d.auth, SendPeopleMessageRequestCard(type: 'product', businessId: d.chat!.business, itemId: i.id), what: i.name);
+
+  @override
+  Future<ShopData> load() async {
+    final s = await d.api.myChatShop(id: d.id);
+    String ways() {
+      if (!s.open) return 'Not taking orders now';
+      final how = s.pickup && s.delivery ? 'Delivery and pickup' : (s.delivery ? 'Delivery' : (s.pickup ? 'Pickup' : ''));
+      return how.isEmpty ? 'Open' : 'Open · $how';
+    }
+
+    return ShopData(
+      items: s.items,
+      open: s.open,
+      closed: s.closed,
+      ways: ways(),
+      next: s.delivery ? 'How you get it, and delivery if you want it, come next.' : 'How you get it comes next.',
+    );
+  }
+
+  @override
+  Future<bool> checkout(BuildContext context, Map<String, int> lines) async {
+    var placed = false;
+    await showTkSheet<void>(context, (_) => ShopSheet(d: d, bag: {...lines}, onPlaced: () => placed = true));
+    return placed;
+  }
+}
+
+/// The hearts and what was looked at: [prefs] on the phone, or, where the
+/// chat was opened without them (a test), kept while [owner] is.
+Prefs keptPrefs(Prefs? prefs, Object owner) => prefs ?? (_memory[owner] ??= Prefs(MemoryKeyStore()));
+final _memory = Expando<Prefs>('shop');
 
 // --- the shop ---
 
 class ShopScreen extends StatefulWidget {
-  const ShopScreen({super.key, required this.d, this.item});
-  final MyChatData d;
+  ShopScreen({super.key, MyChatData? d, ShopSource? source, this.item}) : src = source ?? PersonShop(d!);
+  final ShopSource src;
 
   /// Opened on this item (a product card in the chat).
   final String? item;
@@ -140,14 +303,14 @@ class ShopScreen extends StatefulWidget {
 }
 
 class _ShopScreenState extends State<ShopScreen> {
-  MyChatShopResponse? _shop;
+  ShopData? _shop;
   String? _error;
   final _search = TextEditingController();
   String _filter = 'all';
-  late final ShopBag _bag = ShopBag.of(d.id);
+  late final ShopBag _bag = ShopBag.of(src.bagKey);
 
-  MyChatData get d => widget.d;
-  Prefs get _prefs => _kept(d);
+  ShopSource get src => widget.src;
+  Prefs get _prefs => src.prefs;
 
   @override
   void initState() {
@@ -164,11 +327,11 @@ class _ShopScreenState extends State<ShopScreen> {
   Future<void> _load() async {
     setState(() => _error = null);
     try {
-      final s = await d.api.myChatShop(id: d.id);
+      final s = await src.load();
       if (!mounted) return;
       setState(() => _shop = s);
       // Kept while the app ran: what is gone since, out of the bag, said.
-      if (_bag.keepTo(shopThings(s)) && mounted) showTkToast(context, 'Your bag changed: something in it is no longer for sale, or fewer are left');
+      if (_bag.keepTo(thingsOf(s.items)) && mounted) showTkToast(context, 'Your bag changed: something in it is no longer for sale, or fewer are left');
       final start = s.items.where((i) => i.id == widget.item).firstOrNull;
       if (start != null) await _open(start);
     } on Object catch (e) {
@@ -184,15 +347,15 @@ class _ShopScreenState extends State<ShopScreen> {
     super.dispose();
   }
 
-  Future<void> _open(ShopItem i) => _push(context, ShopItemScreen(d: d, shop: _shop!, item: i));
+  Future<void> _open(ShopItem i) => _push(context, ShopItemScreen(src: src, shop: _shop!, item: i));
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final s = _shop;
     final pad = MediaQuery.paddingOf(context);
-    final c = d.chat;
-    final saved = _prefs.shopSaved[_business(d)] ?? const <String>[];
+    final saved = _prefs.shopSaved[src.keptKey] ?? const <String>[];
+    final list = src.list;
     return TkAppLook(
       child: ColoredBox(
         color: TkLook.of(context).ground,
@@ -203,17 +366,18 @@ class _ShopScreenState extends State<ShopScreen> {
               child: Padding(
                 padding: EdgeInsets.only(top: pad.top),
                 child: ChatHeadBar(
-                  avatar: BusinessFace(name: d.name, urls: c?.photo?.urls, size: 40, letterSize: 15),
-                  title: d.name,
-                  subtitle: s == null ? 'Their shop' : _ways(s),
+                  avatar: src.avatar(),
+                  title: src.name,
+                  subtitle: s == null ? 'Their shop' : s.ways,
                   onBack: () => Navigator.of(context).maybePop(),
                   actions: [
+                    if (list != null) ChatHeadBar.headButton('List view: their prices as a list', TkIcon('b-bars', size: 22, stroke: 2, color: t.text), s == null ? null : () => list(context, _bag)),
                     ChatHeadBar.headButton(
                       _filter == 'saved' ? 'Show all of the shop' : 'Show what you saved',
                       TkIcon('b-heart', size: 22, stroke: 2, color: _filter == 'saved' ? t.danger : t.text, fill: _filter == 'saved'),
                       () => setState(() => _filter = _filter == 'saved' ? 'all' : 'saved'),
                     ),
-                    _BagButton(count: _bag.count, onTap: s == null ? null : () => _openBag(s)),
+                    if (src.bags) _BagButton(count: _bag.count, onTap: s == null ? null : () => _openBag(s)),
                   ],
                 ),
               ),
@@ -232,18 +396,12 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  String _ways(MyChatShopResponse s) {
-    if (!s.open) return 'Not taking orders now';
-    final how = s.pickup && s.delivery ? 'Delivery and pickup' : (s.delivery ? 'Delivery' : (s.pickup ? 'Pickup' : ''));
-    return how.isEmpty ? 'Open' : 'Open · $how';
-  }
+  Future<void> _openBag(ShopData s) => _push(context, ShopBagScreen(src: src, shop: s));
 
-  Future<void> _openBag(MyChatShopResponse s) => _push(context, ShopBagScreen(d: d, shop: s));
-
-  Widget _body(BuildContext context, MyChatShopResponse s, List<String> saved) {
+  Widget _body(BuildContext context, ShopData s, List<String> saved) {
     final t = TkTheme.tokens(context);
     if (s.items.isEmpty) {
-      return ListView(children: [TkEmpty(icon: 'b-box', title: '${d.name} has nothing in their shop yet', line: 'Ask them in the chat.')]);
+      return ListView(children: [TkEmpty(icon: 'b-box', title: '${src.name} has nothing in their shop yet', line: 'Ask them in the chat.')]);
     }
     final cats = <String>[];
     for (final i in s.items) {
@@ -258,7 +416,7 @@ class _ShopScreenState extends State<ShopScreen> {
       return '${i.name} ${i.description ?? ''} ${i.category ?? ''}'.toLowerCase().contains(q);
     }).toList();
     final byId = {for (final i in s.items) i.id: i};
-    final recent = [for (final id in _prefs.shopRecent[_business(d)] ?? const <String>[]) ?byId[id]];
+    final recent = [for (final id in _prefs.shopRecent[src.keptKey] ?? const <String>[]) ?byId[id]];
     final scale = MediaQuery.textScalerOf(context).scale(1);
     return Stack(
       children: [
@@ -275,7 +433,7 @@ class _ShopScreenState extends State<ShopScreen> {
                     padding: const EdgeInsets.only(top: 12),
                     child: TkSearchBox(
                       controller: _search,
-                      hint: 'Search ${d.name}',
+                      hint: 'Search ${src.name}',
                       label: 'Search their shop',
                       margin: const EdgeInsets.fromLTRB(14, 0, 14, 0),
                       onChanged: (_) => setState(() {}),
@@ -323,7 +481,7 @@ class _ShopScreenState extends State<ShopScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      ShopPhoto(item: i, size: 64, radius: 14),
+                                      ShopPhoto(item: i, size: 64, radius: 14, api: src.photos),
                                       const SizedBox(height: 6),
                                       Text(i.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 11.5, lineHeight: 1.3, color: t.muted)),
                                     ],
@@ -352,13 +510,13 @@ class _ShopScreenState extends State<ShopScreen> {
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: gap, crossAxisSpacing: gap, mainAxisExtent: tall),
                       delegate: SliverChildBuilderDelegate(
                         (context, k) => _ItemCard(
-                          d: d,
+                          src: src,
                           shop: s,
                           item: shown[k],
                           saved: saved.contains(shown[k].id),
                           bag: _bag,
                           onOpen: () => _open(shown[k]),
-                          onHeart: () => _prefs.toggleShopSaved(_business(d), shown[k].id),
+                          onHeart: () => _prefs.toggleShopSaved(src.keptKey, shown[k].id),
                         ),
                         childCount: shown.length,
                       ),
@@ -368,20 +526,15 @@ class _ShopScreenState extends State<ShopScreen> {
             );
           },
         ),
-        if (_bag.count > 0)
+        if (_bag.count > 0 && src.bags)
           Positioned(
             left: 12,
             right: 12,
             bottom: 12 + MediaQuery.paddingOf(context).bottom,
-            child: ShopBagBar(count: _bag.count, total: _total(s), onTap: () => _openBag(s)),
+            child: ShopBagBar(count: _bag.count, total: src.totalOf(s, _bag.lines), onTap: () => _openBag(s)),
           ),
       ],
     );
-  }
-
-  int _total(MyChatShopResponse s) {
-    final things = shopThings(s);
-    return _bag.lines.entries.fold(0, (a, e) => a + (things[e.key]?.price ?? 0) * e.value);
   }
 }
 
@@ -467,8 +620,11 @@ class ShopBagBar extends StatelessWidget {
 /// An item's photo, square; its first letter on a soft tint where it has
 /// none (or it cannot be read).
 class ShopPhoto extends StatelessWidget {
-  const ShopPhoto({super.key, required this.item, this.size, this.radius = 14});
+  const ShopPhoto({super.key, required this.item, this.size, this.radius = 14, this.api});
   final ShopItem item;
+
+  /// Where a photo named by its API path ("/v1/…") is read, signed in.
+  final Transport? api;
 
   /// The side; null: as wide as there is room, square.
   final double? size;
@@ -487,7 +643,9 @@ class ShopPhoto extends StatelessWidget {
       child: Text(item.name.isEmpty ? '?' : item.name.characters.first.toUpperCase(), style: tkDisplay(size: side * 0.36, color: TkTheme.tokens(context).text.withValues(alpha: 0.55))),
     );
     final url = item.photo;
-    Widget pic(double side) => url == null || !url.startsWith(RegExp('https?://'))
+    Widget pic(double side) => url != null && url.startsWith('/v1/') && api != null
+        ? ApiImage(transport: api!, path: url, width: side, height: side, placeholder: letter(side))
+        : url == null || !url.startsWith(RegExp('https?://'))
         ? letter(side)
         : Image.network(
             url,
@@ -557,9 +715,9 @@ class _PhotoMark extends StatelessWidget {
 /// One item on the shop's grid: its photo with the heart and its marks,
 /// its name, its price, and + (− n + once in the bag).
 class _ItemCard extends StatelessWidget {
-  const _ItemCard({required this.d, required this.shop, required this.item, required this.saved, required this.bag, required this.onOpen, required this.onHeart});
-  final MyChatData d;
-  final MyChatShopResponse shop;
+  const _ItemCard({required this.src, required this.shop, required this.item, required this.saved, required this.bag, required this.onOpen, required this.onHeart});
+  final ShopSource src;
+  final ShopData shop;
   final ShopItem item;
   final bool saved;
   final ShopBag bag;
@@ -576,21 +734,22 @@ class _ItemCard extends StatelessWidget {
     final n = sizes.isEmpty ? bag.of(item.id) : sizes.fold(0, (a, z) => a + bag.of(z.id));
     final sold = !item.available || (sizes.isNotEmpty && sizes.every((z) => !z.available));
     final few = sizes.isEmpty ? item.fewLeft : null;
+    final th = sizes.isEmpty ? thingsOf([item])[item.id] : null;
     Widget add;
     if (sold || !shop.open) {
       add = const SizedBox.shrink();
-    } else if (sizes.isNotEmpty) {
+    } else if (sizes.isNotEmpty || th == null) {
       // Sizes are chosen on the item's own screen.
       add = _RoundAdd(label: 'Choose a size of ${item.name}', onTap: onOpen, count: n);
     } else if (n > 0) {
       add = _MiniStepper(
         name: item.name,
         n: n,
-        onLess: () => bag.set(item.id, n - 1),
-        onMore: few == null || n < few ? () => bag.set(item.id, n + 1) : null,
+        onLess: () => bag.set(item.id, src.stepped(th, n, -1)),
+        onMore: few == null || n < few ? () => bag.set(item.id, src.stepped(th, n, 1)) : null,
       );
     } else {
-      add = _RoundAdd(label: 'Add ${item.name} to the bag', onTap: () => bag.set(item.id, 1));
+      add = _RoundAdd(label: 'Add ${item.name} to the bag', onTap: () => bag.set(item.id, src.stepped(th, 0, 1)));
     }
     return Opacity(
       opacity: sold ? 0.55 : 1,
@@ -799,12 +958,13 @@ class ShopQty extends StatelessWidget {
   }
 }
 
+
 // --- an item ---
 
 class ShopItemScreen extends StatefulWidget {
-  const ShopItemScreen({super.key, required this.d, required this.shop, required this.item});
-  final MyChatData d;
-  final MyChatShopResponse shop;
+  const ShopItemScreen({super.key, required this.src, required this.shop, required this.item});
+  final ShopSource src;
+  final ShopData shop;
   final ShopItem item;
 
   @override
@@ -812,14 +972,23 @@ class ShopItemScreen extends StatefulWidget {
 }
 
 class _ShopItemScreenState extends State<ShopItemScreen> {
-  late final ShopBag _bag = ShopBag.of(d.id);
+  late final ShopBag _bag = ShopBag.of(src.bagKey);
   String? _size;
-  int _n = 1;
+  late int _n = _first();
 
-  MyChatData get d => widget.d;
+  ShopSource get src => widget.src;
   ShopItem get i => widget.item;
   List<ShopItemSizesItem> get _sizes => i.sizes ?? const [];
-  Prefs get _prefs => _kept(d);
+  Prefs get _prefs => src.prefs;
+  ShopTerms? get _terms => src.termsOf(i);
+
+  /// How many Add to bag starts at: a supplier's minimum, until some are in
+  /// the bag.
+  int _first() {
+    final min = _terms?.min ?? 1;
+    final th = _thing;
+    return th != null && _bag.of(th.id) == 0 && min > 1 ? min : 1;
+  }
 
   @override
   void initState() {
@@ -827,7 +996,7 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
     _size = _sizes.where((z) => z.available).firstOrNull?.id;
     // Looked at: first of what was seen lately (once drawn: the shop under
     // it redraws its strip).
-    WidgetsBinding.instance.addPostFrameCallback((_) => _prefs.viewedShopItem(_business(d), i.id));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _prefs.viewedShopItem(src.keptKey, i.id));
     _prefs.addListener(_changed);
     _bag.addListener(_changed);
   }
@@ -843,7 +1012,9 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
     super.dispose();
   }
 
-  ShopThing? get _thing => shopThings(widget.shop)[_sizes.isEmpty ? i.id : (_size ?? '')];
+  ShopThing? get _thing => thingsOf([i])[_sizes.isEmpty ? i.id : (_size ?? '')];
+
+  void _bagScreen() => _push(context, ShopBagScreen(src: src, shop: widget.shop));
 
   void _add() {
     final th = _thing;
@@ -851,16 +1022,16 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
     final now = _bag.of(th.id);
     final n = th.left == null ? now + _n : (now + _n).clamp(0, th.left!);
     _bag.set(th.id, n);
-    showTkToast(context, '${_n == 1 ? '' : '$_n × '}${i.name}${th.sizeWords.isEmpty ? '' : ' (${th.sizeWords})'} is in your bag', action: 'View bag', onAction: () => _push(context, ShopBagScreen(d: d, shop: widget.shop)));
+    showTkToast(context, '${_n == 1 ? '' : '$_n × '}${i.name}${th.sizeWords.isEmpty ? '' : ' (${th.sizeWords})'} is in your bag', action: 'View bag', onAction: _bagScreen);
     setState(() => _n = 1);
   }
 
   /// Back to the chat, the question begun in its box (the person sends it,
   /// changed or not).
-  void _ask() {
-    final th = _thing;
+  void _ask(Widget? grid) {
+    final th = grid == null ? _thing : null;
     final what = [i.name, if (th != null && th.sizeWords.isNotEmpty) th.sizeWords, if ((th?.price ?? i.priceKobo) != null) naira((th?.price ?? i.priceKobo)!)].join(', ');
-    d.onAsk?.call('About $what: is it still available?');
+    src.onAsk?.call('About $what: is it still available?');
     _toChat(context);
   }
 
@@ -869,17 +1040,25 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     final pad = MediaQuery.paddingOf(context);
-    final saved = (_prefs.shopSaved[_business(d)] ?? const <String>[]).contains(i.id);
+    final saved = (_prefs.shopSaved[src.keptKey] ?? const <String>[]).contains(i.id);
+    final terms = _terms;
+    final grid = widget.shop.open ? src.sizesGrid(context, i, _bag) : null;
     final th = _thing;
     final sold = th == null ? !i.available : !th.available;
     final left = th?.left;
     final price = th?.price ?? i.priceKobo;
+    // What one costs as Add to bag would leave the bag: a quantity price
+    // reached counts.
+    final each = th == null ? price : src.priceIn(th, {..._bag.lines, th.id: _bag.of(th.id) + _n});
+    // The product in the bag, its sizes together: the quantity price reached.
+    final have = _sizes.isEmpty ? _bag.of(i.id) : _sizes.fold(0, (a, z) => a + _bag.of(z.id));
     final more = [
       ...widget.shop.items.where((x) => x.id != i.id && (x.category ?? '') == (i.category ?? '') && (i.category ?? '').isNotEmpty),
       ...widget.shop.items.where((x) => x.id != i.id && ((x.category ?? '') != (i.category ?? '') || (i.category ?? '').isEmpty)),
     ].take(8).toList();
-    final canShare = (d.chat?.business ?? '').isNotEmpty;
+    final share = src.share;
     final ink = TkTheme.of(context).mode == TkMode.dark ? t.brandDarkText : const Color(0xFFFFFFFF);
+    final total = src.totalOf(widget.shop, _bag.lines);
     return TkAppLook(
       child: ColoredBox(
         color: look.ground,
@@ -891,7 +1070,7 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
                 children: [
                   Stack(
                     children: [
-                      AspectRatio(aspectRatio: 1, child: ShopPhoto(item: i, radius: 0)),
+                      AspectRatio(aspectRatio: 1, child: ShopPhoto(item: i, radius: 0, api: src.photos)),
                       Positioned(
                         top: pad.top + 8,
                         left: 12,
@@ -900,13 +1079,8 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
                           children: [
                             _OverPhoto(label: 'Back to the shop', icon: 'back', size: 40, onTap: () => Navigator.of(context).maybePop()),
                             const Spacer(),
-                            if (canShare) ...[
-                              _OverPhoto(
-                                label: 'Share ${i.name} with someone',
-                                icon: 'b-share',
-                                size: 40,
-                                onTap: () => shareWithPeople(context, d.auth, SendPeopleMessageRequestCard(type: 'product', businessId: d.chat!.business, itemId: i.id), what: i.name),
-                              ),
+                            if (share != null) ...[
+                              _OverPhoto(label: 'Share ${i.name} with someone', icon: 'b-share', size: 40, onTap: () => share(context, i)),
                               const SizedBox(width: 10),
                             ],
                             _OverPhoto(
@@ -915,7 +1089,7 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
                               size: 40,
                               color: saved ? _heartRed : const Color(0xFF0E1A14),
                               fill: saved,
-                              onTap: () => _prefs.toggleShopSaved(_business(d), i.id),
+                              onTap: () => _prefs.toggleShopSaved(src.keptKey, i.id),
                             ),
                           ],
                         ),
@@ -931,7 +1105,7 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            [if ((i.category ?? '').isNotEmpty) i.category!, d.name].join(' · ').toUpperCase(),
+                            [if ((i.category ?? '').isNotEmpty) i.category!, src.name].join(' · ').toUpperCase(),
                             style: tkText(size: 12, weight: 600, letterSpacing: 0.4, color: t.muted),
                           ),
                           const SizedBox(height: 4),
@@ -942,10 +1116,19 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
                             spacing: 10,
                             runSpacing: 6,
                             children: [
-                              if (price != null) Text(naira(price), style: tkDisplay(size: 22, color: t.text).copyWith(fontFeatures: tkTabular)),
-                              if (sold)
+                              if (price != null)
+                                Text.rich(
+                                  TextSpan(
+                                    text: naira(price),
+                                    children: [
+                                      if ((terms?.unit ?? '').isNotEmpty) TextSpan(text: ' a ${terms!.unit}', style: tkText(size: 15, weight: 500, color: t.muted)),
+                                    ],
+                                  ),
+                                  style: tkDisplay(size: 22, color: t.text).copyWith(fontFeatures: tkTabular),
+                                ),
+                              if (sold && grid == null)
                                 const CardPill('Sold out', CardTone.danger)
-                              else if (left != null)
+                              else if (left != null && grid == null)
                                 CardPill('Only $left left', CardTone.warn),
                             ],
                           ),
@@ -953,7 +1136,16 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
                             const SizedBox(height: 10),
                             Text(i.description!, style: tkText(size: 14.5, lineHeight: 1.5, color: t.muted)),
                           ],
-                          if (_sizes.isNotEmpty) ...[
+                          if (terms != null && (terms.breaks.isNotEmpty || terms.min > 1) && price != null) ...[
+                            const SizedBox(height: 16),
+                            ShopQuantityPrices(terms: terms, price: price, have: have),
+                          ],
+                          if (grid != null) ...[
+                            const SizedBox(height: 16),
+                            Semantics(header: true, child: Text('How many of each', style: tkDisplay(size: 16, color: t.text))),
+                            const SizedBox(height: 4),
+                            grid,
+                          ] else if (_sizes.isNotEmpty) ...[
                             const SizedBox(height: 16),
                             TkChips<String>(
                               label: 'Size',
@@ -970,23 +1162,18 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
                           const SizedBox(height: 14),
                           Row(
                             children: [
-                              Expanded(child: _CardButton(icon: 'b-chat', words: 'Ask about this', label: 'Ask ${d.name} about ${i.name} in the chat', onTap: d.onAsk == null ? null : _ask)),
-                              if (canShare) ...[
+                              Expanded(child: _CardButton(icon: 'b-chat', words: 'Ask about this', label: 'Ask ${src.name} about ${i.name} in the chat', onTap: src.onAsk == null ? null : () => _ask(grid))),
+                              if (share != null) ...[
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: _CardButton(
-                                    icon: 'b-share',
-                                    words: 'Share with a friend',
-                                    label: 'Share ${i.name} with a friend',
-                                    onTap: () => shareWithPeople(context, d.auth, SendPeopleMessageRequestCard(type: 'product', businessId: d.chat!.business, itemId: i.id), what: i.name),
-                                  ),
+                                  child: _CardButton(icon: 'b-share', words: 'Share with a friend', label: 'Share ${i.name} with a friend', onTap: () => share(context, i)),
                                 ),
                               ],
                             ],
                           ),
                           if (more.isNotEmpty) ...[
                             const SizedBox(height: 18),
-                            Semantics(header: true, child: Text('More from ${d.name}', style: tkDisplay(size: 16, color: t.text))),
+                            Semantics(header: true, child: Text('More from ${src.name}', style: tkDisplay(size: 16, color: t.text))),
                             const SizedBox(height: 10),
                             SizedBox(
                               height: 110 + 8 + 16 * MediaQuery.textScalerOf(context).scale(1),
@@ -996,20 +1183,21 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
                                 separatorBuilder: (_, _) => const SizedBox(width: 10),
                                 itemBuilder: (context, k) {
                                   final x = more[k];
+                                  void go() => Navigator.of(context).pushReplacement(ShopRoute(ShopItemScreen(src: src, shop: widget.shop, item: x)));
                                   return TapArea(
                                     child: Semantics(
                                       button: true,
                                       label: x.name,
-                                      onTap: () => Navigator.of(context).pushReplacement(ShopRoute(ShopItemScreen(d: d, shop: widget.shop, item: x))),
+                                      onTap: go,
                                       excludeSemantics: true,
                                       child: TkPress(
-                                        onTap: () => Navigator.of(context).pushReplacement(ShopRoute(ShopItemScreen(d: d, shop: widget.shop, item: x))),
+                                        onTap: go,
                                         child: SizedBox(
                                           width: 110,
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              ShopPhoto(item: x, size: 110, radius: 14),
+                                              ShopPhoto(item: x, size: 110, radius: 14, api: src.photos),
                                               const SizedBox(height: 6),
                                               Text(x.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.3, color: t.muted)),
                                             ],
@@ -1036,8 +1224,15 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
               padding: EdgeInsets.fromLTRB(14, 12, 14, 12 + pad.bottom),
               child: !widget.shop.open
                   ? Text(
-                      (widget.shop.closed ?? '').isNotEmpty ? widget.shop.closed! : '${d.name} is not taking orders right now. Ask them in the chat.',
+                      (widget.shop.closed ?? '').isNotEmpty ? widget.shop.closed! : '${src.name} is not taking orders right now. Ask them in the chat.',
                       style: tkText(size: 13.5, lineHeight: 1.4, color: t.muted),
+                    )
+                  : grid != null
+                  // Sizes typed in the grid go in the bag as they are typed:
+                  // the foot goes to it.
+                  ? _FootButton(
+                      label: _bag.count == 0 ? 'Type how many of each size' : 'View bag · ${naira(total)}',
+                      onTap: _bag.count == 0 ? null : _bagScreen,
                     )
                   : Row(
                       children: [
@@ -1063,7 +1258,7 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(color: sold || th == null ? t.tkSoft : look.on, borderRadius: BorderRadius.circular(999)),
                                   child: Text(
-                                    sold ? 'Sold out' : (th == null ? 'Choose a size' : 'Add to bag${price == null ? '' : ' · ${naira(price * _n)}'}'),
+                                    sold ? 'Sold out' : (th == null ? 'Choose a size' : 'Add to bag${each == null ? '' : ' · ${naira(each * _n)}'}'),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: tkText(size: 15, weight: 700, color: sold || th == null ? t.muted : ink).copyWith(fontFeatures: tkTabular),
@@ -1079,6 +1274,135 @@ class _ShopItemScreenState extends State<ShopItemScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A foot's one button, pine (lime in the dark); soft while it cannot be
+/// pressed.
+class _FootButton extends StatelessWidget {
+  const _FootButton({required this.label, this.onTap});
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final ink = TkTheme.of(context).mode == TkMode.dark ? t.brandDarkText : const Color(0xFFFFFFFF);
+    return TapArea(
+      child: Semantics(
+        button: true,
+        enabled: onTap != null,
+        label: label,
+        onTap: onTap,
+        excludeSemantics: true,
+        child: TkPress(
+          onTap: onTap ?? () {},
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 50),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: onTap == null ? t.tkSoft : look.on, borderRadius: BorderRadius.circular(999)),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: tkText(size: 15.5, weight: 700, color: onTap == null ? t.muted : ink).copyWith(fontFeatures: tkTabular),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _units(String unit, int n) => unit.isEmpty ? '' : (n == 1 || unit.endsWith('s') ? unit : '${unit}s');
+
+/// A supplier's quantity prices, as rows: "1 to 9 bags  ₦45,000 each",
+/// "10 bags and more  ₦40,000 each"; the one the bag has reached marked,
+/// and the minimum said. A product's sizes count together.
+class ShopQuantityPrices extends StatelessWidget {
+  const ShopQuantityPrices({super.key, required this.terms, required this.price, required this.have});
+  final ShopTerms terms;
+  final int price;
+
+  /// How many are in the bag (its sizes together).
+  final int have;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final from = terms.min < 1 ? 1 : terms.min;
+    final steps = <({int from, int? to, int price})>[];
+    final breaks = [for (final b in terms.breaks) if (b.min > from) b]..sort((a, b) => a.min - b.min);
+    var at = from;
+    var p = price;
+    for (final b in terms.breaks.where((b) => b.min <= from)) {
+      p = b.price;
+    }
+    for (final b in breaks) {
+      steps.add((from: at, to: b.min - 1, price: p));
+      at = b.min;
+      p = b.price;
+    }
+    steps.add((from: at, to: null, price: p));
+    final reached = steps.lastIndexWhere((s) => have >= s.from);
+    String range(({int from, int? to, int price}) s) {
+      final u = _units(terms.unit, s.to ?? s.from);
+      if (s.to == null) return '${s.from}${u.isEmpty ? '' : ' $u'} and more';
+      if (s.to == s.from) return '${s.from}${u.isEmpty ? '' : ' $u'}';
+      return '${s.from} to ${s.to}${u.isEmpty ? '' : ' $u'}';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(header: true, child: Text('Quantity prices', style: tkDisplay(size: 16, color: t.text))),
+        if (terms.sized && breaks.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              'Its sizes count together: ${breaks.last.min}${terms.unit.isEmpty ? '' : ' ${_units(terms.unit, breaks.last.min)}'} across sizes get the ${breaks.last.min}${terms.unit.isEmpty ? '' : '-${terms.unit}'} price.',
+              style: tkText(size: 13.5, lineHeight: 1.4, color: t.muted),
+            ),
+          ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(16)),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Column(
+            children: [
+              for (final (k, s) in steps.indexed)
+                Semantics(
+                  container: true,
+                  label: '${range(s)}: ${naira(s.price)} each${k == reached ? ', your price now' : ''}',
+                  excludeSemantics: true,
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(border: k == steps.length - 1 ? null : Border(bottom: BorderSide(color: look.line))),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(range(s), style: tkText(size: 14.5, weight: k == reached ? 700 : 500, color: t.text))),
+                        if (k == reached && have > 0) ...[const CardPill('Your price', CardTone.lime), const SizedBox(width: 8)],
+                        Text('${naira(s.price)} each', style: tkText(size: 14.5, weight: 700, color: t.text).copyWith(fontFeatures: tkTabular)),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (from > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'At least $from${terms.unit.isEmpty ? '' : ' ${_units(terms.unit, from)}'} an order${terms.sized ? ', its sizes together' : ''}.',
+              style: tkText(size: 13.5, lineHeight: 1.4, color: t.muted),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1124,16 +1448,17 @@ class _CardButton extends StatelessWidget {
 // --- the bag ---
 
 class ShopBagScreen extends StatefulWidget {
-  const ShopBagScreen({super.key, required this.d, required this.shop});
-  final MyChatData d;
-  final MyChatShopResponse shop;
+  const ShopBagScreen({super.key, required this.src, required this.shop});
+  final ShopSource src;
+  final ShopData shop;
 
   @override
   State<ShopBagScreen> createState() => _ShopBagScreenState();
 }
 
 class _ShopBagScreenState extends State<ShopBagScreen> {
-  late final ShopBag _bag = ShopBag.of(widget.d.id);
+  late final ShopBag _bag = ShopBag.of(widget.src.bagKey);
+  ShopSource get src => widget.src;
 
   @override
   void initState() {
@@ -1152,8 +1477,7 @@ class _ShopBagScreenState extends State<ShopBagScreen> {
   }
 
   Future<void> _checkout() async {
-    var placed = false;
-    await showTkSheet<void>(context, (_) => ShopSheet(d: widget.d, bag: {..._bag.lines}, onPlaced: () => placed = true));
+    final placed = await src.checkout(context, {..._bag.lines});
     if (!placed || !mounted) return;
     _bag.clear();
     // The order is in the chat: back to it.
@@ -1165,9 +1489,10 @@ class _ShopBagScreenState extends State<ShopBagScreen> {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     final pad = MediaQuery.paddingOf(context);
-    final things = shopThings(widget.shop);
+    final things = thingsOf(widget.shop.items);
     final lines = [for (final e in _bag.lines.entries) if (things[e.key] != null) (things[e.key]!, e.value)];
-    final total = lines.fold(0, (a, l) => a + (l.$1.price ?? 0) * l.$2);
+    final total = src.totalOf(widget.shop, _bag.lines);
+    final stops = lines.isEmpty ? null : src.stops(_bag.lines);
     final ink = TkTheme.of(context).mode == TkMode.dark ? t.brandDarkText : const Color(0xFFFFFFFF);
     return TkAppLook(
       child: ColoredBox(
@@ -1182,7 +1507,7 @@ class _ShopBagScreenState extends State<ShopBagScreen> {
                   ChatHeadBar.headButton('Back to the shop', TkIcon('back', size: 24, stroke: 2, color: t.text), () => Navigator.of(context).maybePop()),
                   const SizedBox(width: 4),
                   Expanded(child: Semantics(header: true, child: Text('Your bag', style: tkDisplay(size: 19, color: t.text)))),
-                  Flexible(child: Text(widget.d.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 13.5, weight: 600, color: t.muted))),
+                  Flexible(child: Text(src.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 13.5, weight: 600, color: t.muted))),
                 ],
               ),
             ),
@@ -1201,32 +1526,38 @@ class _ShopBagScreenState extends State<ShopBagScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(vertical: 10),
                                   decoration: BoxDecoration(border: k == lines.length - 1 ? null : Border(bottom: BorderSide(color: look.line))),
-                                  child: Row(
-                                    children: [
-                                      ShopPhoto(item: th.item, size: 60, radius: 12),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(th.item.name, style: tkText(size: 14.5, weight: 600, lineHeight: 1.3, color: t.text)),
-                                            Text(
-                                              [if (th.sizeWords.isNotEmpty) th.sizeWords, if (th.price != null) '${naira(th.price!)} each'].join(' · '),
-                                              style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted).copyWith(fontFeatures: tkTabular),
+                                  child: Builder(
+                                    builder: (context) {
+                                      final each = src.priceIn(th, _bag.lines);
+                                      final less = each != null && th.price != null && each < th.price!;
+                                      return Row(
+                                        children: [
+                                          ShopPhoto(item: th.item, size: 60, radius: 12, api: src.photos),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(th.item.name, style: tkText(size: 14.5, weight: 600, lineHeight: 1.3, color: t.text)),
+                                                Text(
+                                                  [if (th.sizeWords.isNotEmpty) th.sizeWords, if (each != null) '${naira(each)} each', if (less) 'quantity price'].join(' · '),
+                                                  style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted).copyWith(fontFeatures: tkTabular),
+                                                ),
+                                                if (each != null) Text(naira(each * n), style: tkDisplay(size: 14.5, lineHeight: 1.35, color: t.text).copyWith(fontFeatures: tkTabular)),
+                                              ],
                                             ),
-                                            if (th.price != null) Text(naira(th.price! * n), style: tkDisplay(size: 14.5, lineHeight: 1.35, color: t.text).copyWith(fontFeatures: tkTabular)),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      ShopQty(
-                                        small: true,
-                                        name: th.item.name,
-                                        n: n,
-                                        onLess: () => _bag.set(th.id, n - 1),
-                                        onMore: th.left == null || n < th.left! ? () => _bag.set(th.id, n + 1) : null,
-                                      ),
-                                    ],
+                                          ),
+                                          const SizedBox(width: 8),
+                                          ShopQty(
+                                            small: true,
+                                            name: th.item.name,
+                                            n: n,
+                                            onLess: () => _bag.set(th.id, src.stepped(th, n, -1)),
+                                            onMore: th.left == null || n < th.left! ? () => _bag.set(th.id, src.stepped(th, n, 1)) : null,
+                                          ),
+                                        ],
+                                      );
+                                    },
                                   ),
                                 ),
                             ],
@@ -1245,17 +1576,14 @@ class _ShopBagScreenState extends State<ShopBagScreen> {
                         ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
-                          child: Text(
-                            widget.shop.delivery ? 'How you get it, and delivery if you want it, come next.' : 'How you get it comes next.',
-                            style: tkText(size: 13, lineHeight: 1.4, color: t.muted),
-                          ),
+                          child: Text(stops ?? widget.shop.next, style: tkText(size: 13, lineHeight: 1.4, color: stops != null ? t.text : t.muted)),
                         ),
                         const SizedBox(height: 14),
-                        if (widget.d.onAsk != null)
+                        if (src.onAsk != null)
                           _CardButton(
                             icon: 'b-chat',
-                            words: 'Have a question? Ask ${widget.d.name} in the chat',
-                            label: 'Ask ${widget.d.name} in the chat',
+                            words: 'Have a question? Ask ${src.name} in the chat',
+                            label: 'Ask ${src.name} in the chat',
                             onTap: () => _toChat(context),
                           ),
                       ],
@@ -1268,16 +1596,20 @@ class _ShopBagScreenState extends State<ShopBagScreen> {
                 child: TapArea(
                   child: Semantics(
                     button: true,
-                    label: 'Check out, ${naira(total)}',
-                    onTap: _checkout,
+                    enabled: stops == null,
+                    label: '${src.checkoutWords}, ${naira(total)}',
+                    onTap: stops == null ? _checkout : null,
                     excludeSemantics: true,
                     child: TkPress(
-                      onTap: _checkout,
+                      onTap: stops == null ? _checkout : () {},
                       child: Container(
                         height: 50,
                         alignment: Alignment.center,
-                        decoration: BoxDecoration(color: look.on, borderRadius: BorderRadius.circular(999)),
-                        child: Text('Check out · ${naira(total)}', style: tkText(size: 15.5, weight: 700, color: ink).copyWith(fontFeatures: tkTabular)),
+                        decoration: BoxDecoration(color: stops == null ? look.on : t.tkSoft, borderRadius: BorderRadius.circular(999)),
+                        child: Text(
+                          '${src.checkoutWords} · ${naira(total)}',
+                          style: tkText(size: 15.5, weight: 700, color: stops == null ? ink : t.muted).copyWith(fontFeatures: tkTabular),
+                        ),
                       ),
                     ),
                   ),
