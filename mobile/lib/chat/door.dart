@@ -17,6 +17,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'bookings_page.dart' show orderStatus;
+import 'link_preview.dart' show LinkPreviewCard, LinkedText;
 import 'cards.dart' show CardButton, CardPill, CardProgress, CardViewRow, cardDecoration;
 import 'chats.dart' show ChatAvatar;
 import 'saved_card.dart' show SavedCardView;
@@ -246,7 +247,14 @@ class DoorBubble extends StatelessWidget {
     this.under,
     this.local,
     this.warn = false,
+    this.preview,
+    this.previewPath,
   });
+
+  /// The first link's card, and where its picture is (the side's previews
+  /// route).
+  final LinkPreview? preview;
+  final String? previewPath;
 
   final String id;
   final bool mine;
@@ -305,7 +313,7 @@ class DoorBubble extends StatelessWidget {
                   SavedCardView(card: c.saved!, mine: mine, onSave: onCard)
                 else
                   DoorCard(card: c, action: cardAction, onAction: onCard),
-                if (words.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(words, style: tkText(size: 15, lineHeight: 1.4, color: t.text))),
+                if (words.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: LinkedText(words, style: tkText(size: 15, lineHeight: 1.4, color: t.text))),
                 Padding(padding: const EdgeInsets.only(top: 4), child: Align(alignment: Alignment.centerRight, child: stamp)),
               ],
             ),
@@ -326,9 +334,11 @@ class DoorBubble extends StatelessWidget {
             children: [
               ?name,
               if (offer) const OfferMark(),
+              // The first link's card, at the top as on WhatsApp.
+              if (preview != null && local == null) LinkPreviewCard(preview: preview!, transport: files.transport, path: previewPath),
               if (a != null) AttachmentView(m: doorFileMessage(id: id, mine: mine, a: a, at: at), files: files, other: other, room: room, local: local),
               if (c != null) Padding(padding: const EdgeInsets.only(top: 4), child: DoorCard(card: c, action: cardAction, onAction: onCard)),
-              if (words.isNotEmpty) Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: ink)),
+              if (words.isNotEmpty) LinkedText(words, style: tkText(size: 16, lineHeight: 23 / 16, color: ink)),
             ],
           );
         },

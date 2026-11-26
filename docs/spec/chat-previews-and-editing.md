@@ -1,6 +1,6 @@
 # Chats: file previews, link previews and editing a sent message
 
-Date: 26 November 2026 · Branch `claude/taskiem-chat-business-4gjlfs` · Status: **planned, not built**
+Date: 26 November 2026 · Branch `claude/taskiem-chat-business-4gjlfs` · Status: **§2 (links) built; §1 and §3 planned**
 
 Three things people expect from WhatsApp that Taskiem's chats do not do yet:
 
@@ -372,4 +372,41 @@ Each part also adds:
 
 ## 6. As built
 
-Nothing yet.
+### 6.2 Links (§2), built 26 November 2026
+
+**What people see now.**
+- **Links can be tapped** in every chat: business to business, people, groups, a person's chat with a business (both sides), and the Taskiem assistant's chat on the web.
+  - Web: a new tab, `target="_blank" rel="noopener noreferrer nofollow"`, in the bubble's link colour (the read ticks' blue), long ones shortened in the middle.
+  - App: Taskiem's browser tab (`openInBrowser`). Holding a link opens a menu with **Open**, **Copy link** and **Share**, before the message's own menu.
+  - Tags (`@`, `#`) keep their chips; only the words between them are searched for links.
+- **The card** sits at the top of the bubble: the picture across it when it is wide (at least 400 pixels and 1.3 times wider than tall), else a 76-pixel square on its left; the title and the words, two lines each; the site's name, or its host. Tapping it opens the link. A page with no title gives no card.
+- **While typing**, the card shows above the box half a second after the person stops, with ✕ ("Send without the preview"). "Loading preview…" shows while it is made.
+- **Taskiem's own links** show a plain card: a link mark, "Taskiem · Order link" (or Invoice, Payment, Form, Chat, Store link), and "Taskiem".
+
+**How it is built.**
+- **One rule for finding links**: `engine/linkify` (Go), `web/src/lib/linkify.ts`, `mobile/lib/chat/linkify.dart`. All three read the same cases, `web/src/lib/linkify.cases.json`. A bare address must start with `www.` or end in a common ending (`.com`, `.ng`, `.org` and others); this keeps "file.txt" and "index.html" as words.
+- **The server** (`api/link_preview.go`, `api/link_preview_chats.go`):
+  - fetches the page and its picture through the egress guard, following at most three redirects itself, each checked again (a redirect to another site is allowed, as for short links, but a private address is not);
+  - reads `og:title`, `og:description`, `og:site_name`, `og:image`, then the `twitter:` ones, then `<title>` and the description;
+  - takes the picture only if it is at most 2 MB and a JPEG, PNG or WebP by its bytes, and cleans it as a chat photo (`media.CleanLinkImage`: upright, no metadata, 800 and 320 pixels on its longest side);
+  - asks as `TaskiemBot/1.0 (+https://taskiem.com/bot)`, with no cookies;
+  - remembers what it fetched for an hour, per business or per person, at most 256 pages.
+- **Where it is kept.**
+  - Business to business: `link_messages.preview` gains `site`, `taskiem` and `image {w, h}`. Each business keeps its own copy of the picture, at 800 and 320 pixels, in its own storage, served by `GET /v1/link-chats/{link}/previews/{id}` (`?size=small`). The paths are never sent to clients.
+  - People chats and groups: the card is sealed with the words. Its picture is in `people_files` and `group_files` with `kind = 'link_image'`. It is served by `GET /v1/me/people/{id}/previews/{message}` and `GET /v1/me/groups/{id}/previews/{message}`.
+  - A person's chat with a business: on the business's side, `customer_messages.preview` holds the card sealed under the customer's subject, as the words are, and the picture's place in its storage. On the person's side, `person_messages.preview` holds the card, and `person_files` (`kind = 'link_image'`) the picture. They are served by `GET /v1/customer-chats/{id}/previews/{message}` and `GET /v1/me/chats/{id}/previews/{message}`. When a customer is erased, the pictures go with their files.
+  - Delete for everyone (people chats and groups) removes the card and its picture with the words.
+- **The composer**: `POST /v1/link-preview {url, chat}`. `chat` is `link:…`, `customer:…`, `people:…`, `group:…` or `door:…`. It answers `{id, url, host, site, title, description, taskiem, image: {id, w, h}}`, or 204, and 403 for a chat the person cannot write in. The picture is at `GET /v1/link-preview/{id}/image`. A send carries `preview: {id}` or `preview: false`. Without it, the server makes the card as before.
+- **WhatsApp**: a text sent by Taskiem with a link asks for WhatsApp's own preview (`preview_url: true`). A customer's message from WhatsApp, on a business's own number, gets its card on arrival, in the background; it shows the next time the chat is read.
+- **Migration** `00770_link_previews.sql`.
+
+**Where this differs from §2, and why.**
+- **The composer's card is held in the server's memory**, not in a table, for 30 minutes. Its picture is never stored unless a message is sent with it. With more than one server, a send that reaches another one makes the card again: the same result, one more fetch.
+- **People chats, groups and the person's side of a chat with a business keep the picture once, at 800 pixels.** Each copy has a single file of `kind = 'link_image'`. Business copies keep 800 and 320.
+- **Taskiem's own links always show the plain card.** They do not show the reference card (G6) yet: the link would have to be matched to a document the reader may see.
+- **Cards on a customer's chat are made for messages in the app**, and for the customer's WhatsApp messages on arrival. A reply a business sends on WhatsApp has no card in Taskiem; WhatsApp draws its own.
+- **Telegram and Slack**: messages from members there reach business chats through the usual send, so they get cards as if sent in Taskiem. No other path from Telegram or Slack into a chat exists today.
+- **The web has no generated API client** (`web/src/api/gen` does not exist). Its types (`LinkPreview` in `web/src/lib/linkchat.ts`, and the message types) were changed by hand.
+- **No testing manual was found in the repository.** Its checks are not added.
+
+**Tests.** Go: `api/link_preview_test.go` (pictures, refusals, redirects, site, Taskiem links, `preview: false`, the composer with its limit and its 30 minutes, sealed people previews, delete for everyone), `TestLinkPreviewGuarded`, `engine/linkify`, `engine/whatsapp` `TestSendTextPreviewURL`. Web: `src/lib/linkify.test.ts`, `e2e/link-chat-links.spec.ts`. App: `test/linkify_test.dart`, `test/link_preview_test.dart`, with pictures in light and dark.

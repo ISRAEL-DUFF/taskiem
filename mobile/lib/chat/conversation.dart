@@ -10,7 +10,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
-import '../app/links.dart';
 import '../app/auth.dart';
 import '../app/sound.dart';
 import '../api/transport.dart';
@@ -23,6 +22,7 @@ import '../kit/mobile.dart' show tkInitials;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
+import 'link_preview.dart' show ComposerPreview, LinkPreviewCard, LinkTapsOwner, linkSpans;
 import 'cards.dart';
 import 'menu_card.dart' show MenuCard, MenuMessage, formOf, runActionHere;
 import 'chat_link_page.dart' show showCustomersSheet;
@@ -77,10 +77,14 @@ const _every = Duration(seconds: 3);
 /// not sent, with Retry and Delete. Its client id makes a retry the same
 /// message to the server, never a second one.
 class Outgoing {
-  Outgoing(this.clientId, this.body, this.at, {this.file, this.reply, this.tags = const []});
+  Outgoing(this.clientId, this.body, this.at, {this.file, this.reply, this.tags = const [], this.preview});
   final String clientId;
   final String body;
   final DateTime at;
+
+  /// The link's card shown in the box ({id}) or closed (false), as it is
+  /// sent; null: the server makes it.
+  final Object? preview;
 
   /// The things and businesses it tags (a message of words only).
   final List<SendLinkMessageRequestMentionsItem> tags;
@@ -106,6 +110,7 @@ class Outgoing {
       if (reply != null) 'reply': reply!.toJson(),
       if (tags.isNotEmpty) 'tags': [for (final t in tags) t.toJson()],
       if (file != null) 'file': {'name': file!.name, 'type': file!.type},
+      'preview': ?preview,
     },
     file: file?.bytes,
   );
@@ -120,6 +125,7 @@ class Outgoing {
       k.at,
       reply: j['reply'] is Map ? LinkMessage.fromJson((j['reply'] as Map).cast<String, dynamic>()) : null,
       tags: [for (final t in (j['tags'] as List? ?? const [])) SendLinkMessageRequestMentionsItem.fromJson((t as Map).cast<String, dynamic>())],
+      preview: j['preview'],
       file: f == null || k.file == null
           ? null
           : PickedFile(bytes: k.file!, name: f['name'] as String? ?? 'file', type: f['type'] as String? ?? 'application/octet-stream'),
@@ -673,10 +679,10 @@ class ConversationData extends ChangeNotifier {
 
   /// Sent at once: it shows with a clock, then the server's copy takes its place.
   /// Sent at once with a clock; a file with its caption.
-  Future<void> send(String text, {PickedFile? file, LinkMessage? reply, List<SendLinkMessageRequestMentionsItem> tags = const []}) async {
+  Future<void> send(String text, {PickedFile? file, LinkMessage? reply, List<SendLinkMessageRequestMentionsItem> tags = const [], Object? preview}) async {
     final body = text.trim();
     if (body.isEmpty && file == null) return;
-    final o = Outgoing(uuid4(), body, chats.now(), file: file, reply: reply, tags: file == null ? tags : const []);
+    final o = Outgoing(uuid4(), body, chats.now(), file: file, reply: reply, tags: file == null ? tags : const [], preview: file == null ? preview : null);
     // Sent from away from the newest page: back to it, where it shows.
     if (detached) unawaited(openNewest());
     outbox.add(o);
@@ -718,7 +724,7 @@ class ConversationData extends ChangeNotifier {
       } else {
         sent = (await api.sendLinkMessage(
           link: conv.link,
-          body: SendLinkMessageRequest(text: o.body, clientId: o.clientId, replyTo: o.reply?.id, mentions: o.tags.isEmpty ? null : o.tags),
+          body: SendLinkMessageRequest(text: o.body, clientId: o.clientId, replyTo: o.reply?.id, mentions: o.tags.isEmpty ? null : o.tags, preview: o.preview),
         )).message;
       }
       outbox.remove(o);
@@ -858,6 +864,9 @@ class ConversationScreen extends StatefulWidget {
 class _ConversationScreenState extends State<ConversationScreen> {
   final _text = TextEditingController();
 
+  /// A link typed: its card above the box (chat-previews-and-editing.md §2.1).
+  late final _linkPreview = ComposerPreview(api: widget.data.chats.auth.api, transport: widget.data.chats.auth.transport, chat: 'link:${widget.data.conv.link}');
+
   /// The box to write in (a test hands it a file, as a picker would).
   final composerKey = GlobalKey<ComposerState>();
   late final CardActs _acts = CardActs(
@@ -898,6 +907,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _tags.dispose();
     _tools.dispose();
     _text.dispose();
+    _linkPreview.dispose();
     super.dispose();
   }
 
@@ -1615,6 +1625,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 text: _text,
                 replying: _reply == null ? null : previewLine(_reply!, c.name),
                 onCancelReply: () => setState(() => _reply = null),
+                linkPreview: _linkPreview,
                 onSend: (words, file) async {
                   final r = _reply;
                   final tags = await _withYes(_tags.take(words));
@@ -1630,7 +1641,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   }
                   if (!mounted) return;
                   setState(() => _reply = null);
-                  d.send(words, file: file, reply: r, tags: tags);
+                  final preview = file == null ? _linkPreview.choice(words) : null;
+                  _linkPreview.reset();
+                  d.send(words, file: file, reply: r, tags: tags, preview: preview);
                 },
                 bottom: pad.bottom,
                 pickers: widget.pickers,
@@ -1960,7 +1973,7 @@ class _Bubble extends StatelessWidget {
     final card = msg.kind == 'card' ? msg.card : null;
     // A saved thing's card under the words: the time goes under it.
     final savedCards = (msg.mentions ?? const <LinkMention>[]).any((x) => x.kind == 'saved' && x.saved != null);
-    final inline = card == null && body.isNotEmpty && msg.preview == null && !failed && !savedCards;
+    final inline = card == null && body.isNotEmpty && !failed && !savedCards;
     final reacted = (msg.reactions?.isNotEmpty ?? false) && out == null;
     // A voice note alone: its time ends its row (as drawn).
     final voiceOnly = msg.attachment?.kind == 'voice' && body.isEmpty && msg.preview == null;
@@ -2008,15 +2021,17 @@ class _Bubble extends StatelessWidget {
     // line is as tall as both, 22.7 px; Flutter draws whole pixels a line.
     // ReadMore.tsx: a long message folded, "… Read more" unfolding it.
     final fold = reveal(body, taps);
-    Widget text = TapsOwner(
+    Widget text = LinkTapsOwner(
+      builder: (context, link) => TapsOwner(
       builder: (context, tap) => Text.rich(
         TextSpan(
           children: [
             // Mentions.tsx MentionText: a business (its conversation), an
             // item with its price; `.bubble .mention`: 600, the tint's ink.
+            // Web addresses open in the browser tab; a tag keeps its chip.
             for (final p in tagParts(fold.shown, msg.mentions))
               if (p.tag == null)
-                TextSpan(text: p.text)
+                ...linkSpans(context, p.text, link)
               else
                 // A tag as a chip (docs/spec/mobile-app-look.md): a product
                 // with its small square and price, a business with its face;
@@ -2049,6 +2064,7 @@ class _Bubble extends StatelessWidget {
         ),
         style: tkText(size: 15, lineHeight: 1.38, color: t.text),
       ),
+    ),
     );
     if (fold.folded) {
       text = Semantics(
@@ -2147,6 +2163,13 @@ class _Bubble extends StatelessWidget {
                                     style: tkText(size: 12, color: t.muted).copyWith(fontStyle: FontStyle.italic),
                                   ),
                                 if (msg.reply != null) _Quote(reply: msg.reply!, mine: mine, other: other),
+                                // The first link's card, at the top as on WhatsApp.
+                                if (msg.preview != null && out == null)
+                                  LinkPreviewCard(
+                                    preview: msg.preview!,
+                                    transport: files.transport,
+                                    path: '/v1/link-chats/${Uri.encodeComponent(msg.link)}/previews/${Uri.encodeComponent(msg.id)}',
+                                  ),
                                 if (msg.attachment != null) AttachmentView(m: msg, files: files, other: other, room: max - 24, local: out?.file, stamp: voiceOnly ? stamp : null),
                                 if (body.isNotEmpty) text,
                                 // Conversation.tsx: the invoices, bills and orders it
@@ -2172,7 +2195,6 @@ class _Bubble extends StatelessWidget {
                                         onSave: refs == null ? null : () => saveSavedCard(context, refs!.auth, x.saved!, mine: false),
                                       ),
                                     ),
-                                if (msg.preview != null) _PreviewCard(p: msg.preview!),
                                 if (!inline && !voiceOnly)
                                   Padding(
                                     // `.stamp { margin-top: 1px }`, which collapses
@@ -2286,58 +2308,6 @@ class _Bubble extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Conversation.tsx PreviewCard (`.bubble .chat-preview`): a link's page,
-/// its host, title and words, opening it in the phone's browser tab.
-class _PreviewCard extends StatelessWidget {
-  const _PreviewCard({required this.p});
-  final LinkMessagePreview p;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final desc = p.description ?? '';
-    return Semantics(
-      link: true,
-      button: true,
-      label: '${p.title}, ${p.host}',
-      onTap: () async {
-        final url = Uri.tryParse(p.url);
-        final ok = url != null && await openInBrowser(url);
-        if (!ok && context.mounted) showTkToast(context, 'That link could not be opened.', error: true);
-      },
-      excludeSemantics: true,
-      child: GestureDetector(
-        onTap: () async {
-          // The address came in the other party's message: one that is
-          // not an address is not opened, and says so.
-          final url = Uri.tryParse(p.url);
-          final ok = url != null && await openInBrowser(url);
-          if (!ok && context.mounted) showTkToast(context, 'That link could not be opened.', error: true);
-        },
-        child: Container(
-          // `margin: 4px 0; padding: 6px 8px; border-left: 3px solid var(--accent); border-radius: 6px`
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-          decoration: BoxDecoration(
-            color: t.panel2,
-            borderRadius: BorderRadius.circular(6),
-            border: Border(left: BorderSide(color: t.accent, width: 3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(p.host, style: tkText(size: 12, color: t.muted)),
-              const SizedBox(height: 2),
-              Text(p.title, style: tkText(size: 14, weight: 600, color: t.text)),
-              if (desc.isNotEmpty) ...[const SizedBox(height: 2), Text(desc, style: tkText(size: 13, color: t.muted))],
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

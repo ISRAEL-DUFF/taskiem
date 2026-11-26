@@ -46,6 +46,7 @@ import 'composer.dart' show Pickers;
 import 'customer_app.dart';
 import 'customer_orders.dart' show CustomerOrders;
 import 'door.dart';
+import 'link_preview.dart' show ComposerLinkCard, ComposerPreview;
 import 'thread.dart';
 import 'words.dart';
 import 'saved_files.dart' show attachSavedFile;
@@ -398,13 +399,13 @@ class CustomerData extends ChangeNotifier {
   ///
   /// To a customer on both lines, [line] chooses where it goes (`whatsapp`,
   /// `app`); left out, the thread's reply line. An offer goes in the app.
-  Future<void> send(String text, {bool offer = false, String? line}) async {
+  Future<void> send(String text, {bool offer = false, String? line, Object? preview}) async {
     final words = text.trim();
     if (words.isEmpty || (offer && offerRefused() != null)) return;
     final on = !both ? null : (offer ? 'app' : line);
     await _reply(
       CustomerMessage(id: '', mine: true, kind: 'text', body: words, offer: offer ? true : null, line: on ?? (both ? chat?.replyLine : null), createdAt: chats.now()),
-      (client) => api.replyCustomer(id: id, body: ReplyCustomerRequest(text: words, clientId: client, offer: offer ? true : null, line: offer ? null : on)),
+      (client) => api.replyCustomer(id: id, body: ReplyCustomerRequest(text: words, clientId: client, offer: offer ? true : null, line: offer ? null : on, preview: offer ? null : preview)),
       words: words,
       line: on,
       same: 'words:${offer ? 'offer:' : ''}${on ?? ''}:$words',
@@ -596,6 +597,11 @@ class CustomerScreen extends StatefulWidget {
 
 class _CustomerScreenState extends State<CustomerScreen> {
   final _text = TextEditingController();
+
+  /// A link typed for the app: its card above the box (WhatsApp draws its
+  /// own); [_appLine] whether the reply goes in the app.
+  late final _linkPreview = ComposerPreview(api: widget.data.chats.auth.api, transport: widget.data.chats.auth.transport, chat: 'customer:${widget.data.id}');
+  bool _appLine = false;
   // Saved texts by @name (saved objects S1): their words into the box.
   late final _saved = savedTextBox(
     text: _text,
@@ -634,6 +640,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
     _text.text = d.chats.draft(_draftKey);
     _text.addListener(_saved.typed);
     _text.addListener(() {
+      _linkPreview.typed(_text.text);
       d.chats.setDraft(_draftKey, _text.text);
       final writing = _text.text.trim().isNotEmpty;
       if (writing) d.typing(line: _on);
@@ -679,8 +686,10 @@ class _CustomerScreenState extends State<CustomerScreen> {
   void _send() {
     final words = _text.text;
     if (words.trim().isEmpty) return;
+    final preview = _appLine ? _linkPreview.choice(words) : null;
+    _linkPreview.reset();
     _text.clear();
-    widget.data.send(words, line: _on);
+    widget.data.send(words, line: _on, preview: preview);
   }
 
   /// A message's menu (saved objects S1): Copy and Save as… on its words,
@@ -744,6 +753,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
             if (wanted != null && on != wanted && _text.text.trim().isNotEmpty) moved = movedWords(on, wanted);
           }
           _on = on;
+          _appLine = on == 'app' || (on == null && app);
           final onLine = c == null || on == null ? null : lineOf(c, on);
           final note = c == null ? null : (onLine != null ? lineNote(onLine) : replyNote(c));
           final canSend = c != null && d.reaches(on);
@@ -891,6 +901,8 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                     attachment: m.m.attachment,
                                     offer: m.m.offer == true,
                                     local: m.file,
+                                    preview: m.m.preview,
+                                    previewPath: '/v1/customer-chats/${Uri.encodeComponent(d.id)}/previews/${Uri.encodeComponent(m.id)}',
                                     stamp: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -949,6 +961,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                   // The people to pay collected from messages (pay_collect.dart).
                   PayListBar(auth: d.chats.auth, follow: d.follow),
                   if (canSend) _saved.plain(),
+                  if (canSend && _appLine) ComposerLinkCard(preview: _linkPreview),
                   if (canSend)
                     _ReplyBox(
                       text: _text,

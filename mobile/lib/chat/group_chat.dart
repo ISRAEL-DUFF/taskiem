@@ -49,6 +49,7 @@ import 'my_chat.dart' show OpenMyChat, sayFailure;
 import 'people.dart';
 import 'basket.dart';
 import 'people_cards.dart';
+import 'link_preview.dart' show ComposerPreview;
 import 'people_chat.dart' show PeopleBubble, PeopleLine, deleteForEveryoneNote, deleteForEveryoneWithin, sendFailure, typingBeat;
 import 'people_find.dart' show OpenPeopleChat;
 import 'people_live.dart';
@@ -107,6 +108,7 @@ PeopleMessage asPeopleMessage(GroupMessage g) => PeopleMessage(
   starred: g.starred,
   warn: g.warn,
   warnTransfer: g.warnTransfer,
+  preview: g.preview,
 );
 
 /// [m] with another status (its ticks moved on the live connection).
@@ -493,7 +495,7 @@ class GroupChatData extends ChangeNotifier {
   /// Words, or a file with its caption, answering [reply], mentioning
   /// [mentions] (member ids): shown at once with a clock, then the
   /// server's copy; not sent, the words come back to the box.
-  Future<bool> send(String text, {PickedFile? file, GroupMessage? reply, List<String> mentions = const []}) async {
+  Future<bool> send(String text, {PickedFile? file, GroupMessage? reply, List<String> mentions = const [], Object? preview}) async {
     final words = text.trim();
     if (words.isEmpty && file == null) return false;
     _typingAt = null;
@@ -530,7 +532,7 @@ class GroupChatData extends ChangeNotifier {
         sent = GroupMessage.fromJson((j as Map).cast<String, dynamic>());
         unawaited(files.keep(sent.id, Uint8List.fromList(file.bytes)));
       } else {
-        sent = await api.sendGroupMessage(id: id, body: SendGroupMessageRequest(text: words, clientId: client, replyTo: reply?.id, mentions: mentions.isEmpty ? null : mentions));
+        sent = await api.sendGroupMessage(id: id, body: SendGroupMessageRequest(text: words, clientId: client, replyTo: reply?.id, mentions: mentions.isEmpty ? null : mentions, preview: preview));
       }
       if (_disposed) return true;
       messages = _merge((messages ?? const []).where((m) => m != mine).toList(), [GroupLine(sent)]);
@@ -847,6 +849,9 @@ class GroupChatScreen extends StatefulWidget {
 
 class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
   final _text = TextEditingController();
+
+  /// A link typed: its card above the box (chat-previews-and-editing.md §2.1).
+  late final _linkPreview = ComposerPreview(api: widget.data.auth.api, transport: widget.data.auth.transport, chat: 'group:${widget.data.id}');
   // Saved texts by @name (saved objects S1): their words into the box.
   late final _saved = savedTextBox(
     text: _text,
@@ -934,6 +939,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
     d.stopTyping();
     _saved.dispose();
     _text.dispose();
+    _linkPreview.dispose();
     d.dispose();
     super.dispose();
   }
@@ -1048,7 +1054,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       _at = null;
     });
     _mentions.clear();
-    final sent = await d.send(text, file: file, reply: reply, mentions: mentions);
+    final preview = file == null ? _linkPreview.choice(text) : null;
+    _linkPreview.reset();
+    final sent = await d.send(text, file: file, reply: reply, mentions: mentions, preview: preview);
     // Not sent: the words come back to the box, and their picks with them.
     if (!sent && mounted) {
       for (final p in picked) {
@@ -1182,6 +1190,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       quoteName: quoted == null ? null : (quoted.mine ? 'You' : quoted.sender),
       head: head,
       files: d.files,
+      previewPath: '${d.base}/previews/${Uri.encodeComponent(m.id)}',
       quote: quoted == null ? null : asPeopleMessage(quoted),
       quoteMissing: m.replyTo != null && quoted == null,
       busy: _paying == m.id,
@@ -1370,6 +1379,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                       replying: _reply == null ? null : (_reply!.mine ? 'your message: ' : '${_reply!.sender}: ') + groupLine(_reply!),
                       onCancelReply: () => setState(() => _reply = null),
                       onTools: _tools,
+                      linkPreview: _linkPreview,
                       onSend: (t, f) => unawaited(_send(t, f)),
                     )
                   else

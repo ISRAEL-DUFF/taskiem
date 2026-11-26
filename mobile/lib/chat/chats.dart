@@ -271,6 +271,7 @@ class ChatsData extends ChangeNotifier {
                 replyTo: reply,
                 mentions: [for (final t in (j['tags'] as List? ?? const [])) SendLinkMessageRequestMentionsItem.fromJson((t as Map).cast<String, dynamic>())]
                     .let((l) => l.isEmpty ? null : l),
+                preview: j['preview'],
               ),
             );
           }

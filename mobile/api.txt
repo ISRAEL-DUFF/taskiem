@@ -52,6 +52,8 @@ linkMessages
 sendLinkMessage
 readLinkChat
 linkTyping
+# A link typed in any chat's box: its card (chat-previews-and-editing.md §2)
+previewLink
 
 # Taskiem's conversation (M3)
 taskiemHistory

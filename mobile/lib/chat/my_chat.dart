@@ -45,6 +45,7 @@ import 'chats.dart' show ChatRow;
 import 'composer.dart';
 import 'discover.dart' show DiscoverProfileScreen;
 import 'door.dart';
+import 'link_preview.dart' show ComposerPreview;
 import 'pay_transfer.dart' show payMyInvoice;
 import 'made_tools.dart' show MadeRun;
 import 'my_chat_their_tools.dart' show TheirAnswer, TheirRuns;
@@ -673,7 +674,7 @@ class MyChatData extends ChangeNotifier {
 
   /// Words, or a file with its caption: shown at once with a clock, then
   /// the server's copy; not sent, the words come back to the box.
-  Future<void> send(String text, {PickedFile? file}) async {
+  Future<void> send(String text, {PickedFile? file, Object? preview}) async {
     final words = text.trim();
     if (words.isEmpty && file == null) return;
     // The same words again after an answer that never came: the same id.
@@ -702,7 +703,7 @@ class MyChatData extends ChangeNotifier {
         sent = PersonMessage.fromJson((j as Map).cast<String, dynamic>());
         unawaited(files.keep(sent.id, Uint8List.fromList(file.bytes)));
       } else {
-        sent = await api.sendMyChatMessage(id: id, body: SendMyChatMessageRequest(text: words, clientId: client));
+        sent = await api.sendMyChatMessage(id: id, body: SendMyChatMessageRequest(text: words, clientId: client, preview: preview));
       }
       if (_disposed) return;
       messages = _merge((messages ?? const []).where((m) => m != mine).toList(), [MyLine(sent)]);
@@ -843,6 +844,9 @@ class MyChatScreen extends StatefulWidget {
 
 class _MyChatScreenState extends State<MyChatScreen> with Polling {
   late final _text = TextEditingController(text: widget.draft);
+
+  /// A link typed: its card above the box (chat-previews-and-editing.md §2.1).
+  late final _linkPreview = ComposerPreview(api: widget.data.auth.api, transport: widget.data.auth.transport, chat: 'door:${widget.data.id}');
   // Saved things by @name (saved objects S1): a text's words into the box;
   // the rest of one's own shared with the business as cards.
   late final _saved = savedTextBox(
@@ -899,6 +903,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     _back?.cancel();
     _saved.dispose();
     _text.dispose();
+    _linkPreview.dispose();
     // The screen owns its conversation: closed, it stops reading.
     d.dispose();
     super.dispose();
@@ -1110,6 +1115,8 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                             card: m.card,
                             attachment: m.attachment,
                             local: x.file,
+                            preview: m.preview,
+                            previewPath: '${d.base}/previews/${Uri.encodeComponent(m.id)}',
                             offer: m.offer == true,
                             warn: !m.mine && m.warnTransfer == true,
                             cardAction: act?.$1,
@@ -1149,7 +1156,12 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                       pickers: widget.pickers,
                       recorder: widget.recorder,
                       onTools: () => showMyChatTools(context, d),
-                      onSend: (text, file) => d.send(text, file: file),
+                      linkPreview: _linkPreview,
+                      onSend: (text, file) {
+                        final preview = file == null ? _linkPreview.choice(text) : null;
+                        _linkPreview.reset();
+                        d.send(text, file: file, preview: preview);
+                      },
                     )
                   else
                     SizedBox(height: pad.bottom),

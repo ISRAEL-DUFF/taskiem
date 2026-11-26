@@ -30,6 +30,9 @@ Kept up to date by hand, as of 12 November 2026.
 | Message info: sent, read, who reacted | `link-chat-reactions.spec.ts` Info shows when a message was sent and read | `menu_test` Message info and Forward |
 | Pin, typing, forward, delete for me | `link-chat.spec.ts` pin, the typing line, forward and delete for me | `contact_test` Pin, Mute and Archive; `gaps_test` G3 typing; `menu_test` Delete for me, Message info and Forward |
 | The menu on a long press, within the screen | `link-chat-popover.spec.ts` on a phone a long press opens it within the screen | `menu_test` (each opens it by a long press) |
+| A link in a message opens (web: a new tab; app: the browser tab, held: Open, Copy link, Share) | `link-chat-links.spec.ts` a link opens in a new tab | `link_preview_test` tapping a link opens the browser tab; holding it offers Open, Copy link and Share |
+| A link's card: the page's picture from Taskiem, wide or a square; a Taskiem link's plain card | `link-chat-links.spec.ts` its card's picture comes from Taskiem | `link_preview_test` the card's two layouts (light, dark) |
+| The card above the box while a link is typed; ✕ sends without it | `link-chat-links.spec.ts` the card shows above the box | `link_preview_test` the card above the box (light, dark) |
 | Photos, PDFs and voice notes; a caption | `link-chat-files.spec.ts` a photo with a caption, a PDF and a voice note | `files_test` (all) |
 | A photo that did not go is sent again without a second copy | `link-chat-composer.spec.ts` a photo that was not sent can be sent again | `files_test` a photo from the clip waits for its caption, then goes with it and the client id |
 | An unsent message is kept per conversation and shown in the list | `link-chat-composer.spec.ts` an unsent message is kept per conversation | `gaps_test` G4 (both) |

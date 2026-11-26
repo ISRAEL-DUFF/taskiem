@@ -258,6 +258,16 @@ All settled by the founder on 17 November 2026; decision [0069](../decisions/006
 
 Questions 2, 10 and 11 of the first draft fell away with B (push carries the words as the person's setting says; no backup step; the web works without a phone).
 
+## Link previews in people chats and groups
+
+Built 26 November 2026; the whole of it is in [chat previews and editing](chat-previews-and-editing.md) §2 and §6.2.
+
+- **Links in the words can be tapped**, on the web and in the app. In the app, holding one offers Open, Copy link and Share.
+- **The first link gets a card** with the page's picture, title, words and site. The server makes it as it seals the words, and nowhere else. The card is sealed with the words (`p` in the sealed message). Its picture, cleaned and at most 800 pixels, is a sealed file of each copy (`people_files`, `group_files`, `kind = 'link_image'`). It is read through `GET /v1/me/people/{id}/previews/{message}` and `GET /v1/me/groups/{id}/previews/{message}`. Nothing about the link is kept unsealed.
+- **What was fetched is remembered per person**, never shared with another person or a business. It counts against the same ten pages a minute as business chats.
+- **While typing**, the card shows above the box (`POST /v1/link-preview`, chat `people:{id}` or `group:{id}`); ✕ sends without it.
+- **Delete for everyone** removes the card and its picture with the words.
+
 ## As built: stage 5a, server (finding people)
 
 Built on branch `stage5a-finding`, on 093b2f44 (stages 1 to 4, decision 0069 accepted): the server of §5 (finding people and the privacy settings), presence (§13), the automated checks on strangers' messages (§8.4) and their part of deleting an account (§14). The chats between people, requests and person blocks are stream A (`stage5a-chats`, migrations 00471 to 00474). This stream is migration `00475_people_finding.sql` and the package `engine/people`. The web and app screens are later streams.

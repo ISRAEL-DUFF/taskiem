@@ -22,6 +22,8 @@ To be found by name or by what you sell, turn on **Let other businesses find us*
 
 **Chat** works like WhatsApp Web: your conversations on the left, one per linked business, the open one on the right. Type and press Enter; reply to a message by swiping it or pressing **Reply**; attach a photo or a PDF, or hold the microphone for a voice note. Mute, archive or pin a conversation from its menu. Search in a conversation from the box above it.
 
+**Links.** A web address in a message can be tapped. On the web it opens in a new tab; on your phone it opens in Taskiem, and holding it lets you copy or share it. The first link in a message shows a card with the page's picture, title and site. As you type a link, its card shows above the message box: tap ✕ to send the message without it. Taskiem fetches the page and its picture for you, so the other business's site never learns who read your chat. The same works in your chats with people and in groups.
+
 Everything between the two businesses is in the conversation: your messages, and every order, bill, delivery and payment as a card at the moment it happened. A card has what you can do with it: **Accept** or **Decline** on a new order, **Pay** on a bill, **All came** on a delivery. Reply to a card to talk about that document; the reply shows on the document's page too.
 
 As you type, **@** suggests your linked businesses and **#** the items on a linked supplier's price list, with the price. In the **Taskiem** conversation at the top of the list (your own chat with Taskiem, the same one you have on WhatsApp), *Buy 400 bags of cement from @Dangote and 20 blocks from @Cherry* reads back as two orders, and one **Yes** sends both.

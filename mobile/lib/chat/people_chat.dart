@@ -60,6 +60,7 @@ import 'pick_problem.dart';
 import 'save_as.dart' show photoAccountItems, saveFromWords, saveNamed;
 import 'saved_files.dart' show attachSavedFile;
 import 'pay_collect.dart' show PayListBar;
+import 'link_preview.dart' show ComposerPreview, LinkPreviewCard, LinkedText;
 
 /// How often an open chat reads again.
 const _poll = Duration(seconds: 4);
@@ -448,7 +449,7 @@ class PeopleChatData extends ChangeNotifier {
   /// Words, or a file with its caption, answering [reply] when given:
   /// shown at once with a clock, then the server's copy; not sent, the
   /// words come back to the box and the reason is said.
-  Future<void> send(String text, {PickedFile? file, PeopleMessage? reply}) async {
+  Future<void> send(String text, {PickedFile? file, PeopleMessage? reply, Object? preview}) async {
     final words = text.trim();
     if (words.isEmpty && file == null) return;
     // A message ends typing on the server: the next key says it again.
@@ -482,7 +483,7 @@ class PeopleChatData extends ChangeNotifier {
         sent = PeopleMessage.fromJson((j as Map).cast<String, dynamic>());
         unawaited(files.keep(sent.id, Uint8List.fromList(file.bytes)));
       } else {
-        sent = await api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(text: words, clientId: client, replyTo: reply?.id));
+        sent = await api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(text: words, clientId: client, replyTo: reply?.id, preview: preview));
       }
       if (_disposed) return;
       messages = _merge((messages ?? const []).where((m) => m != mine).toList(), [PeopleLine(sent)]);
@@ -781,6 +782,9 @@ class PeopleChatScreen extends StatefulWidget {
 
 class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
   final _text = TextEditingController();
+
+  /// A link typed: its card above the box (chat-previews-and-editing.md §2.1).
+  late final _linkPreview = ComposerPreview(api: widget.data.auth.api, transport: widget.data.auth.transport, chat: 'people:${widget.data.id}');
   // Saved texts by @name (saved objects S1): their words into the box.
   late final _saved = savedTextBox(
     text: _text,
@@ -849,6 +853,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     // Closed with words in the box: they no longer see "typing…".
     d.stopTyping();
     _text.dispose();
+    _linkPreview.dispose();
     d.dispose();
     super.dispose();
   }
@@ -1169,6 +1174,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                                     last: last,
                                     other: name,
                                     files: d.files,
+                                    previewPath: '${d.base}/previews/${Uri.encodeComponent(m.id)}',
                                     quote: quoted,
                                     quoteMissing: m.replyTo != null && quoted == null,
                                     readTicks: d.readTicks,
@@ -1214,10 +1220,13 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                       replying: _reply == null ? null : (_reply!.mine ? 'your message: ' : '$name: ') + peopleLine(_reply!),
                       onCancelReply: () => setState(() => _reply = null),
                       onTools: _tools,
+                      linkPreview: _linkPreview,
                       onSend: (text, file) {
                         final reply = _reply;
                         setState(() => _reply = null);
-                        d.send(text, file: file, reply: reply);
+                        final preview = file == null ? _linkPreview.choice(text) : null;
+                        _linkPreview.reset();
+                        d.send(text, file: file, reply: reply, preview: preview);
                       },
                     )
                   else
@@ -1272,8 +1281,12 @@ class PeopleBubble extends StatelessWidget {
     this.head,
     this.quoteName,
     this.spans,
+    this.previewPath,
   });
   final PeopleLine line;
+
+  /// Where its link card's picture is (the chat's previews route).
+  final String? previewPath;
 
   /// Over the rest inside the bubble: who wrote it (a group's sender).
   final Widget? head;
@@ -1365,6 +1378,8 @@ class PeopleBubble extends StatelessWidget {
               ?head,
               ?forwarded,
               ?q,
+              // The first link's card, at the top as on WhatsApp.
+              if (m.preview != null && !deleted && !line.local) LinkPreviewCard(preview: m.preview!, transport: files.transport, path: previewPath),
               if (a != null) AttachmentView(m: doorFileMessage(id: m.id, mine: mine, a: a, at: m.createdAt), files: files, other: other, room: room, local: line.file),
               if (place != null)
                 // Opens in the phone's own map app.
@@ -1394,9 +1409,8 @@ class PeopleBubble extends StatelessWidget {
               if (deleted)
                 Text('This message was deleted', style: tkText(size: 15, lineHeight: 23 / 16, color: meta).copyWith(fontStyle: FontStyle.italic))
               else if (words.isNotEmpty)
-                spans == null
-                    ? Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: ink))
-                    : Text.rich(spans!(words, tkText(size: 16, lineHeight: 23 / 16, color: ink))),
+                // Web addresses open in the browser tab; @mentions keep their mark.
+                LinkedText(words, style: tkText(size: 16, lineHeight: 23 / 16, color: ink), plain: spans),
             ],
           );
         },

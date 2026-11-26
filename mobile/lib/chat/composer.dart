@@ -26,6 +26,7 @@ import '../kit/tap_area.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
+import 'link_preview.dart' show ComposerLinkCard, ComposerPreview;
 import 'tools_panel.dart';
 import 'pick_problem.dart';
 
@@ -185,9 +186,14 @@ class Composer extends StatefulWidget {
     this.onCancelReply,
     this.tools,
     this.onTools,
+    this.linkPreview,
   });
 
   final TextEditingController text;
+
+  /// A link typed: its card above the box (chat-previews-and-editing.md
+  /// §2.1); none without it.
+  final ComposerPreview? linkPreview;
 
   /// The message being answered, in a line (ChatComposer's replyLine).
   final String? replying;
@@ -255,7 +261,10 @@ class ComposerState extends State<Composer> {
     super.dispose();
   }
 
-  void _typed() => setState(() {});
+  void _typed() {
+    widget.linkPreview?.typed(widget.text.text);
+    setState(() {});
+  }
 
   /// A message not sent after all (its sender said no): its file back
   /// above the box, unless another was chosen since.
@@ -393,6 +402,7 @@ class ComposerState extends State<Composer> {
       children: [
         if (_error != null) Container(color: t.panel, padding: const EdgeInsets.symmetric(horizontal: 12), child: TkErrorBox(_error!)),
         if (widget.replying != null && !recording) _Replying(line: widget.replying!, onCancel: widget.onCancelReply),
+        if (file == null && !recording && widget.linkPreview != null) ComposerLinkCard(preview: widget.linkPreview!),
         if (file != null && !recording) _Pending(file: file, onRemove: () => setState(() => _file = null)),
         Container(
           // On the chat's wallpaper, as WhatsApp's (`.chat-pane .composer` on a

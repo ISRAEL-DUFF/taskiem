@@ -243,6 +243,12 @@ class TaskiemApi {
     await _t.send('POST', '/v1/link-chats/${Uri.encodeComponent(link)}/typing');
   }
 
+  /// Preview a link being typed (`POST /v1/link-preview`)
+  Future<PreviewLinkResponse> previewLink({required PreviewLinkRequest body}) async {
+    final j = await _t.send('POST', '/v1/link-preview', body: body.toJson());
+    return PreviewLinkResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Your conversation with Taskiem (`GET /v1/taskiem-chat`)
   Future<TaskiemChat> taskiemHistory({String? before, String? after}) async {
     final j = await _t.send('GET', '/v1/taskiem-chat', query: {'before': ?before, 'after': ?after});
@@ -3798,8 +3804,7 @@ class LinkMessage {
   final bool mine;
   /// The payment a diary line on our side is about (shown as it stands)
   final String? payment;
-  /// The first link's preview, fetched by the sender's side when it was sent
-  final LinkMessagePreview? preview;
+  final LinkPreview? preview;
   final List<LinkReaction>? reactions;
   /// On theirs, when we read it; on ours, when they did
   final DateTime? readAt;
@@ -3823,7 +3828,7 @@ class LinkMessage {
         mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => LinkMention.fromJson(e as Map<String, dynamic>)).toList(),
         mine: j['mine'] as bool,
         payment: j['payment'] == null ? null : j['payment'] as String,
-        preview: j['preview'] == null ? null : LinkMessagePreview.fromJson(j['preview'] as Map<String, dynamic>),
+        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
         reactions: j['reactions'] == null ? null : (j['reactions'] as List).map((e) => LinkReaction.fromJson(e as Map<String, dynamic>)).toList(),
         readAt: j['read_at'] == null ? null : DateTime.parse(j['read_at'] as String),
         reply: j['reply'] == null ? null : LinkMessageReply.fromJson(j['reply'] as Map<String, dynamic>),
@@ -4075,18 +4080,32 @@ class SavedCardLinesItem {
       };
 }
 
-/// The first link's preview, fetched by the sender's side when it was sent
-class LinkMessagePreview {
-  const LinkMessagePreview({this.description, required this.host, required this.title, required this.url});
+/// The first link's preview (docs/spec/chat-previews-and-editing.md §2), made
+/// by Taskiem's server when the message was sent and kept with it. Its picture,
+/// when it has one, is Taskiem's own copy, at the chat's previews route; never
+/// the page's site.
+class LinkPreview {
+  const LinkPreview({this.description, required this.host, this.image, this.site, this.taskiem, required this.title, required this.url});
 
   final String? description;
   final String host;
+  /// The page's picture, its size; wide pictures go across the card, small or
+  /// square ones in a square on the left
+  final LinkPreviewImage? image;
+  /// The site's own name, when it gives one
+  final String? site;
+  /// A link to Taskiem itself, not fetched as a page; shown as a plain card
+  /// ("Taskiem · Order link")
+  final String? taskiem;
   final String title;
   final String url;
 
-  factory LinkMessagePreview.fromJson(Map<String, dynamic> j) => LinkMessagePreview(
+  factory LinkPreview.fromJson(Map<String, dynamic> j) => LinkPreview(
         description: j['description'] == null ? null : j['description'] as String,
         host: j['host'] as String,
+        image: j['image'] == null ? null : LinkPreviewImage.fromJson(j['image'] as Map<String, dynamic>),
+        site: j['site'] == null ? null : j['site'] as String,
+        taskiem: j['taskiem'] == null ? null : j['taskiem'] as String,
         title: j['title'] as String,
         url: j['url'] as String,
       );
@@ -4094,8 +4113,30 @@ class LinkMessagePreview {
   Map<String, dynamic> toJson() => {
         'description': ?description,
         'host': host,
+        'image': ?image?.toJson(),
+        'site': ?site,
+        'taskiem': ?taskiem,
         'title': title,
         'url': url,
+      };
+}
+
+/// The page's picture, its size; wide pictures go across the card, small or
+/// square ones in a square on the left
+class LinkPreviewImage {
+  const LinkPreviewImage({required this.h, required this.w});
+
+  final int h;
+  final int w;
+
+  factory LinkPreviewImage.fromJson(Map<String, dynamic> j) => LinkPreviewImage(
+        h: (j['h'] as num).toInt(),
+        w: (j['w'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'h': h,
+        'w': w,
       };
 }
 
@@ -4926,7 +4967,7 @@ class LinkMessagesResponse {
 }
 
 class SendLinkMessageRequest {
-  const SendLinkMessageRequest({this.clientId, this.mentions, this.replyTo, required this.text});
+  const SendLinkMessageRequest({this.clientId, this.mentions, this.preview, this.replyTo, required this.text});
 
   final String? clientId;
   /// Each a business you are linked with ({kind: business, link}), an item of
@@ -4940,12 +4981,14 @@ class SendLinkMessageRequest {
   /// (its error the question) until `saved.confirm` when it holds what is
   /// sensitive.
   final List<SendLinkMessageRequestMentionsItem>? mentions;
+  final Object? preview;
   final String? replyTo;
   final String text;
 
   factory SendLinkMessageRequest.fromJson(Map<String, dynamic> j) => SendLinkMessageRequest(
         clientId: j['client_id'] == null ? null : j['client_id'] as String,
         mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => SendLinkMessageRequestMentionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        preview: j['preview'],
         replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
         text: j['text'] as String,
       );
@@ -4953,6 +4996,7 @@ class SendLinkMessageRequest {
   Map<String, dynamic> toJson() => {
         'client_id': ?clientId,
         'mentions': ?mentions?.map((e) => e.toJson()).toList(),
+        'preview': ?preview,
         'reply_to': ?replyTo,
         'text': text,
       };
@@ -5037,6 +5081,81 @@ class ReadLinkChatResponse {
 
   Map<String, dynamic> toJson() => {
         'read': read,
+      };
+}
+
+class PreviewLinkRequest {
+  const PreviewLinkRequest({required this.chat, required this.url});
+
+  final String chat;
+  final String url;
+
+  factory PreviewLinkRequest.fromJson(Map<String, dynamic> j) => PreviewLinkRequest(
+        chat: j['chat'] as String,
+        url: j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat': chat,
+        'url': url,
+      };
+}
+
+class PreviewLinkResponse {
+  const PreviewLinkResponse({this.description, required this.host, required this.id, this.image, this.site, this.taskiem, required this.title, required this.url});
+
+  final String? description;
+  final String host;
+  /// What the message is sent with: preview {id}
+  final String id;
+  /// Its picture, at GET /v1/link-preview/{id}/image
+  final PreviewLinkResponseImage? image;
+  final String? site;
+  final String? taskiem;
+  final String title;
+  final String url;
+
+  factory PreviewLinkResponse.fromJson(Map<String, dynamic> j) => PreviewLinkResponse(
+        description: j['description'] == null ? null : j['description'] as String,
+        host: j['host'] as String,
+        id: j['id'] as String,
+        image: j['image'] == null ? null : PreviewLinkResponseImage.fromJson(j['image'] as Map<String, dynamic>),
+        site: j['site'] == null ? null : j['site'] as String,
+        taskiem: j['taskiem'] == null ? null : j['taskiem'] as String,
+        title: j['title'] as String,
+        url: j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'description': ?description,
+        'host': host,
+        'id': id,
+        'image': ?image?.toJson(),
+        'site': ?site,
+        'taskiem': ?taskiem,
+        'title': title,
+        'url': url,
+      };
+}
+
+/// Its picture, at GET /v1/link-preview/{id}/image
+class PreviewLinkResponseImage {
+  const PreviewLinkResponseImage({required this.h, required this.id, required this.w});
+
+  final int h;
+  final String id;
+  final int w;
+
+  factory PreviewLinkResponseImage.fromJson(Map<String, dynamic> j) => PreviewLinkResponseImage(
+        h: (j['h'] as num).toInt(),
+        id: j['id'] as String,
+        w: (j['w'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'h': h,
+        'id': id,
+        'w': w,
       };
 }
 
@@ -5729,7 +5848,7 @@ class ListCustomerMessagesResponse {
 }
 
 class CustomerMessage {
-  const CustomerMessage({this.attachment, required this.body, this.card, required this.createdAt, this.delivery, this.failure, required this.id, required this.kind, this.line, required this.mine, this.offer, this.readAt, this.senderName, this.sentAs});
+  const CustomerMessage({this.attachment, required this.body, this.card, required this.createdAt, this.delivery, this.failure, required this.id, required this.kind, this.line, required this.mine, this.offer, this.preview, this.readAt, this.senderName, this.sentAs});
 
   final ChatAttachment? attachment;
   final String body;
@@ -5748,6 +5867,7 @@ class CustomerMessage {
   final bool mine;
   /// An offer to a customer who agreed to offers (app, §15).
   final bool? offer;
+  final LinkPreview? preview;
   final Object? readAt;
   final String? senderName;
   final String? sentAs;
@@ -5764,6 +5884,7 @@ class CustomerMessage {
         line: j['line'] == null ? null : j['line'] as String,
         mine: j['mine'] as bool,
         offer: j['offer'] == null ? null : j['offer'] as bool,
+        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
         readAt: j['read_at'],
         senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
         sentAs: j['sent_as'] == null ? null : j['sent_as'] as String,
@@ -5781,6 +5902,7 @@ class CustomerMessage {
         'line': ?line,
         'mine': mine,
         'offer': ?offer,
+        'preview': ?preview?.toJson(),
         'read_at': ?readAt,
         'sender_name': ?senderName,
         'sent_as': ?sentAs,
@@ -5916,7 +6038,7 @@ class PutCustomerChatRequest {
 }
 
 class ReplyCustomerRequest {
-  const ReplyCustomerRequest({this.card, this.clientId, this.line, this.offer, this.text});
+  const ReplyCustomerRequest({this.card, this.clientId, this.line, this.offer, this.preview, this.text});
 
   final ReplyCustomerRequestCard? card;
   final String? clientId;
@@ -5926,6 +6048,7 @@ class ReplyCustomerRequest {
   /// says. 409 when the customer has no such line.
   final String? line;
   final bool? offer;
+  final Object? preview;
   final String? text;
 
   factory ReplyCustomerRequest.fromJson(Map<String, dynamic> j) => ReplyCustomerRequest(
@@ -5933,6 +6056,7 @@ class ReplyCustomerRequest {
         clientId: j['client_id'] == null ? null : j['client_id'] as String,
         line: j['line'] == null ? null : j['line'] as String,
         offer: j['offer'] == null ? null : j['offer'] as bool,
+        preview: j['preview'],
         text: j['text'] == null ? null : j['text'] as String,
       );
 
@@ -5941,6 +6065,7 @@ class ReplyCustomerRequest {
         'client_id': ?clientId,
         'line': ?line,
         'offer': ?offer,
+        'preview': ?preview,
         'text': ?text,
       };
 }
@@ -6321,7 +6446,7 @@ class ListMyChatMessagesResponse {
 }
 
 class PersonMessage {
-  const PersonMessage({this.attachment, required this.body, this.card, required this.createdAt, required this.id, required this.kind, this.line, required this.mine, this.offer, this.readAt, this.senderName, this.warnTransfer});
+  const PersonMessage({this.attachment, required this.body, this.card, required this.createdAt, required this.id, required this.kind, this.line, required this.mine, this.offer, this.preview, this.readAt, this.senderName, this.warnTransfer});
 
   final ChatAttachment? attachment;
   final String body;
@@ -6340,6 +6465,7 @@ class PersonMessage {
   final bool mine;
   /// An offer (marked Offer, with Stop offers under it).
   final bool? offer;
+  final LinkPreview? preview;
   final Object? readAt;
   /// Who wrote it on the business's side (a first name), when someone did.
   final String? senderName;
@@ -6358,6 +6484,7 @@ class PersonMessage {
         line: j['line'] == null ? null : j['line'] as String,
         mine: j['mine'] as bool,
         offer: j['offer'] == null ? null : j['offer'] as bool,
+        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
         readAt: j['read_at'],
         senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
         warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
@@ -6373,6 +6500,7 @@ class PersonMessage {
         'line': ?line,
         'mine': mine,
         'offer': ?offer,
+        'preview': ?preview?.toJson(),
         'read_at': ?readAt,
         'sender_name': ?senderName,
         'warn_transfer': ?warnTransfer,
@@ -6380,21 +6508,24 @@ class PersonMessage {
 }
 
 class SendMyChatMessageRequest {
-  const SendMyChatMessageRequest({this.card, this.clientId, this.text});
+  const SendMyChatMessageRequest({this.card, this.clientId, this.preview, this.text});
 
   final SendMyChatMessageRequestCard? card;
   final String? clientId;
+  final Object? preview;
   final String? text;
 
   factory SendMyChatMessageRequest.fromJson(Map<String, dynamic> j) => SendMyChatMessageRequest(
         card: j['card'] == null ? null : SendMyChatMessageRequestCard.fromJson(j['card'] as Map<String, dynamic>),
         clientId: j['client_id'] == null ? null : j['client_id'] as String,
+        preview: j['preview'],
         text: j['text'] == null ? null : j['text'] as String,
       );
 
   Map<String, dynamic> toJson() => {
         'card': ?card?.toJson(),
         'client_id': ?clientId,
+        'preview': ?preview,
         'text': ?text,
       };
 }
@@ -11759,7 +11890,7 @@ class ForwardPeopleMessageResponseSentItem {
 
 /// One message of the person's copy of a people chat, opened.
 class PeopleMessage {
-  const PeopleMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.forwarded, this.forwardedMany, required this.id, required this.kind, this.location, required this.mine, this.myReaction, this.readAt, this.replyTo, this.starred, this.status, this.theirReaction, this.warn, this.warnTransfer});
+  const PeopleMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.forwarded, this.forwardedMany, required this.id, required this.kind, this.location, required this.mine, this.myReaction, this.preview, this.readAt, this.replyTo, this.starred, this.status, this.theirReaction, this.warn, this.warnTransfer});
 
   final ChatAttachment? attachment;
   /// The words, a file's caption, or "This message was deleted" (`deleted`).
@@ -11776,6 +11907,7 @@ class PeopleMessage {
   final PeopleLocation? location;
   final bool mine;
   final String? myReaction;
+  final LinkPreview? preview;
   final Object? readAt;
   final String? replyTo;
   final bool? starred;
@@ -11801,6 +11933,7 @@ class PeopleMessage {
         location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
         mine: j['mine'] as bool,
         myReaction: j['my_reaction'] == null ? null : j['my_reaction'] as String,
+        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
         readAt: j['read_at'],
         replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
         starred: j['starred'] == null ? null : j['starred'] as bool,
@@ -11823,6 +11956,7 @@ class PeopleMessage {
         'location': ?location?.toJson(),
         'mine': mine,
         'my_reaction': ?myReaction,
+        'preview': ?preview?.toJson(),
         'read_at': ?readAt,
         'reply_to': ?replyTo,
         'starred': ?starred,
@@ -12079,7 +12213,7 @@ class PeopleMessagesResponse {
 }
 
 class SendPeopleMessageRequest {
-  const SendPeopleMessageRequest({this.card, this.clientId, this.location, this.replyTo, this.text});
+  const SendPeopleMessageRequest({this.card, this.clientId, this.location, this.preview, this.replyTo, this.text});
 
   /// What to share. product: business_id and item_id (from its shop); business:
   /// business_id; order or delivery: business_id and reference of one of your
@@ -12088,6 +12222,7 @@ class SendPeopleMessageRequest {
   final SendPeopleMessageRequestCard? card;
   final String? clientId;
   final PeopleLocation? location;
+  final Object? preview;
   final String? replyTo;
   final String? text;
 
@@ -12095,6 +12230,7 @@ class SendPeopleMessageRequest {
         card: j['card'] == null ? null : SendPeopleMessageRequestCard.fromJson(j['card'] as Map<String, dynamic>),
         clientId: j['client_id'] == null ? null : j['client_id'] as String,
         location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
+        preview: j['preview'],
         replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
         text: j['text'] == null ? null : j['text'] as String,
       );
@@ -12103,6 +12239,7 @@ class SendPeopleMessageRequest {
         'card': ?card?.toJson(),
         'client_id': ?clientId,
         'location': ?location?.toJson(),
+        'preview': ?preview,
         'reply_to': ?replyTo,
         'text': ?text,
       };
@@ -12683,7 +12820,7 @@ class GroupFound {
 
 /// One message of a group as a member sees it.
 class GroupMessage {
-  const GroupMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.event, this.forwarded, this.forwardedMany, required this.groupId, required this.id, required this.kind, this.location, this.mentions, this.mentionsMe, required this.mine, this.myReaction, this.reactions, this.replyTo, required this.sender, this.senderId, this.starred, this.status, this.warn, this.warnTransfer});
+  const GroupMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.event, this.forwarded, this.forwardedMany, required this.groupId, required this.id, required this.kind, this.location, this.mentions, this.mentionsMe, required this.mine, this.myReaction, this.preview, this.reactions, this.replyTo, required this.sender, this.senderId, this.starred, this.status, this.warn, this.warnTransfer});
 
   final ChatAttachment? attachment;
   /// The words, a caption, an event in words ("Ada added Bola"), or "This
@@ -12703,6 +12840,7 @@ class GroupMessage {
   final bool? mentionsMe;
   final bool mine;
   final String? myReaction;
+  final LinkPreview? preview;
   final List<GroupMessageReactionsItem>? reactions;
   final String? replyTo;
   /// Who wrote it, as you see them ("You"; "Deleted account" once their account
@@ -12740,6 +12878,7 @@ class GroupMessage {
         mentionsMe: j['mentions_me'] == null ? null : j['mentions_me'] as bool,
         mine: j['mine'] as bool,
         myReaction: j['my_reaction'] == null ? null : j['my_reaction'] as String,
+        preview: j['preview'] == null ? null : LinkPreview.fromJson(j['preview'] as Map<String, dynamic>),
         reactions: j['reactions'] == null ? null : (j['reactions'] as List).map((e) => GroupMessageReactionsItem.fromJson(e as Map<String, dynamic>)).toList(),
         replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
         sender: j['sender'] as String,
@@ -12767,6 +12906,7 @@ class GroupMessage {
         'mentions_me': ?mentionsMe,
         'mine': mine,
         'my_reaction': ?myReaction,
+        'preview': ?preview?.toJson(),
         'reactions': ?reactions?.map((e) => e.toJson()).toList(),
         'reply_to': ?replyTo,
         'sender': sender,
@@ -13231,12 +13371,13 @@ class GroupMediaResponse {
 }
 
 class SendGroupMessageRequest {
-  const SendGroupMessageRequest({this.card, this.clientId, this.location, this.mentions, this.replyTo, this.text});
+  const SendGroupMessageRequest({this.card, this.clientId, this.location, this.mentions, this.preview, this.replyTo, this.text});
 
   final SendGroupMessageRequestCard? card;
   final String? clientId;
   final PeopleLocation? location;
   final List<String>? mentions;
+  final Object? preview;
   final String? replyTo;
   final String? text;
 
@@ -13245,6 +13386,7 @@ class SendGroupMessageRequest {
         clientId: j['client_id'] == null ? null : j['client_id'] as String,
         location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
         mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => e as String).toList(),
+        preview: j['preview'],
         replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
         text: j['text'] == null ? null : j['text'] as String,
       );
@@ -13254,6 +13396,7 @@ class SendGroupMessageRequest {
         'client_id': ?clientId,
         'location': ?location?.toJson(),
         'mentions': ?mentions?.map((e) => e).toList(),
+        'preview': ?preview,
         'reply_to': ?replyTo,
         'text': ?text,
       };
