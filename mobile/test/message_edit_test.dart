@@ -110,7 +110,7 @@ void main() {
   }
 
   Future<void> closeMenu(WidgetTester t) async {
-    await t.tapAt(const Offset(195, 60));
+    await t.tap(find.bySemanticsLabel('Close the selection'));
     await t.pumpAndSettle();
   }
 
@@ -145,22 +145,21 @@ void main() {
   testWidgets('Edit is in the menu only where it is allowed', (t) async {
     await open(t);
     await hold(t, 'Rice is 45,000 a bag');
-    expect(find.text('Edit'), findsOneWidget);
-    expect(find.text('Copy'), findsOneWidget);
+    expect(heldActions(t), containsAll(['Edit', 'Copy']));
     await closeMenu(t);
     await hold(t, 'Is the rice in?');
-    expect(find.text('Copy'), findsOneWidget);
-    expect(find.text('Edit'), findsNothing);
+    expect(heldActions(t), contains('Copy'));
+    expect(heldActions(t), isNot(contains('Edit')));
     await closeMenu(t);
     await hold(t, 'We open at eight');
-    expect(find.text('Copy'), findsOneWidget);
-    expect(find.text('Edit'), findsNothing, reason: 'past its 30 minutes');
+    expect(heldActions(t), contains('Copy'));
+    expect(heldActions(t), isNot(contains('Edit')), reason: 'past its 30 minutes');
   });
 
   testWidgets('the strip, ✕ to cancel, the tick to save, and Edited on the bubble', (t) async {
     final s = await open(t);
     await hold(t, 'Rice is 45,000 a bag');
-    await t.tap(find.text('Edit'));
+    await chooseHeld(t, 'Edit');
     await t.pumpAndSettle();
     expect(find.text('Editing message'), findsOneWidget);
     expect(find.bySemanticsLabel('Save the edit'), findsOneWidget);
@@ -172,7 +171,7 @@ void main() {
     expect(s.edits, isEmpty);
 
     await hold(t, 'Rice is 45,000 a bag');
-    await t.tap(find.text('Edit'));
+    await chooseHeld(t, 'Edit');
     await t.pumpAndSettle();
     await t.enterText(find.byType(EditableText).last, 'Rice is 44,000 a bag');
     await t.pump();
@@ -194,7 +193,7 @@ void main() {
       edit: (_) => answer({'error': 'This message can no longer be edited: messages can be edited for 30 minutes after they are sent.', 'not_editable': 'too_old'}, 403),
     );
     await hold(t, 'Rice is 45,000 a bag');
-    await t.tap(find.text('Edit'));
+    await chooseHeld(t, 'Edit');
     await t.pumpAndSettle();
     await t.enterText(find.byType(EditableText).last, 'Rice is 44,000 a bag');
     await t.pump();
@@ -215,7 +214,7 @@ void main() {
     final s = await open(t, offline: () => down);
     down = true;
     await hold(t, 'Rice is 45,000 a bag');
-    await t.tap(find.text('Edit'));
+    await chooseHeld(t, 'Edit');
     await t.pumpAndSettle();
     await t.enterText(find.byType(EditableText).last, 'Rice is 44,000 a bag');
     await t.pump();
@@ -246,7 +245,7 @@ void main() {
     await settle(t);
     expect(s.data.outbox.single.body, 'Delivery on Monday');
     await hold(t, 'Delivery on Monday');
-    await t.tap(find.text('Edit'));
+    await chooseHeld(t, 'Edit');
     await t.pumpAndSettle();
     await t.enterText(find.byType(EditableText).last, 'Delivery on Tuesday');
     await t.pump();
@@ -268,7 +267,7 @@ void main() {
       await open(t, mode: mode);
       await hold(t, 'Rice is 45,000 a bag');
       await snap(t, 'edit-menu-${mode.name}');
-      await t.tap(find.text('Edit'));
+      await chooseHeld(t, 'Edit');
       await t.pumpAndSettle();
       await t.enterText(find.byType(EditableText).last, 'Rice is 44,000 a bag, this week only');
       await t.pump();
@@ -281,7 +280,7 @@ void main() {
     testWidgets('pictures, refused, ${mode.name}', (t) async {
       await open(t, mode: mode, edit: (_) => answer({'error': 'too old', 'not_editable': 'too_old'}, 403));
       await hold(t, 'Rice is 45,000 a bag');
-      await t.tap(find.text('Edit'));
+      await chooseHeld(t, 'Edit');
       await t.pumpAndSettle();
       await t.enterText(find.byType(EditableText).last, 'Rice is 44,000 a bag');
       await t.pump();

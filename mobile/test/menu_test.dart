@@ -13,6 +13,7 @@ import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/chat/emoji_panel.dart';
+import 'package:taskiem/chat/menu.dart' show SelectionBar;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -99,14 +100,13 @@ void main() {
     await hold(t);
     await t.tap(find.bySemanticsLabel('More reactions'));
     await t.pumpAndSettle();
-    expect(find.bySemanticsLabel('Options for Good morning ma, tomatoes are cheaper today. ₦28,000 a basket.'), findsNothing,
-        reason: 'the card goes while picking');
+    expect(find.bySemanticsLabel('React with heart'), findsNothing, reason: 'every emoji in the reactions\' place');
     // The kind's tab, and its emoji named after it.
     expect(find.bySemanticsLabel('Smileys and emotion'), findsNWidgets(2));
     await t.tap(find.bySemanticsLabel('Food and drink'));
     await t.pump();
     expect(find.bySemanticsLabel('grapes'), findsOneWidget);
-    await t.enterText(find.byType(EditableText).last, 'fire');
+    await t.enterText(find.descendant(of: find.byType(EmojiPanel), matching: find.byType(EditableText)), 'fire');
     await t.pump();
     expect(find.bySemanticsLabel('Kinds of emoji'), findsNothing, reason: 'no kinds while searching');
     await t.tap(find.bySemanticsLabel('fire'));
@@ -144,19 +144,19 @@ void main() {
   testWidgets('a star, shown by the time', (t) async {
     final calls = await open(t);
     await hold(t);
-    await t.tap(find.bySemanticsLabel('Star'));
+    await chooseHeld(t, 'Star');
     await settle(t);
     expect((calls.single.$1, calls.single.$2), ('PUT', '/v1/link-chats/$_link/messages/$_first/star'));
     // Said with the message (its sender's words around it).
     expect(find.bySemanticsLabel(RegExp('Starred')), findsOneWidget);
     await hold(t);
-    expect(find.bySemanticsLabel('Unstar'), findsOneWidget);
+    expect(heldActions(t), contains('Unstar'));
   });
 
   testWidgets('a reply: the bar over the box, the quote in what is sent, reply_to', (t) async {
     final calls = await open(t);
     await hold(t);
-    await t.tap(find.bySemanticsLabel('Reply'));
+    await chooseHeld(t, 'Reply');
     await t.pumpAndSettle();
     expect(find.text('Replying to Good morning ma, tomatoes are cheaper today. ₦28,000 a basket.'), findsOneWidget);
     await t.enterText(find.byType(EditableText), 'Send 4 baskets');
@@ -184,23 +184,24 @@ void main() {
     });
     await open(t);
     await hold(t);
-    await t.tap(find.bySemanticsLabel('Copy'));
-    await t.pump();
+    await chooseHeld(t, 'Copy');
     expect(copied, 'Good morning ma, tomatoes are cheaper today. ₦28,000 a basket.');
-    expect(find.bySemanticsLabel('Copied'), findsOneWidget);
+    expect(find.text('Copied'), findsOneWidget);
+    expect(find.byType(SelectionBar), findsNothing, reason: 'done: the selection ends');
+    await t.pump(const Duration(seconds: 5));
   });
 
   testWidgets('Delete for me: asked first, then gone, said in a toast', (t) async {
     final calls = await open(t);
     await hold(t);
-    await t.tap(find.bySemanticsLabel('Delete for me'));
+    await chooseHeld(t, 'Delete');
     await t.pumpAndSettle();
     expect(find.text('Delete this message?'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Cancel'));
     await t.pumpAndSettle();
     expect(calls, isEmpty);
     await hold(t);
-    await t.tap(find.bySemanticsLabel('Delete for me'));
+    await chooseHeld(t, 'Delete');
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Delete for me').last);
     await settle(t);
@@ -213,14 +214,14 @@ void main() {
   testWidgets('Message info and Forward', (t) async {
     final calls = await open(t);
     await hold(t);
-    await t.tap(find.bySemanticsLabel('Message info'));
+    await chooseHeld(t, 'Message info');
     await t.pumpAndSettle();
     expect(find.text('Received'), findsOneWidget);
     expect(find.text('Read by you'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Close'));
     await t.pumpAndSettle();
     await hold(t);
-    await t.tap(find.bySemanticsLabel('Forward'));
+    await chooseHeld(t, 'Forward');
     await t.pumpAndSettle();
     expect(find.text('Forward to'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Bayo Rice Mills'));

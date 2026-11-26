@@ -478,9 +478,10 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   String _split = 'foot';
   int _splitAt = 0;
 
-  /// Where the anchor sits in the view: 1 at its bottom (opened at the
-  /// newest), 0 at its top (the unread), ½ in the middle (a message).
-  double _anchor = 1;
+  /// Where the anchor sits in the view: always its top (the viewport's
+  /// anchor 0: Flutter reveals a widget, ensureVisible, only rightly with
+  /// it), the place where it opens given by the scroll's offset instead.
+  static const double _anchor = 0;
   _Open _open = _Open.end;
 
   /// Placed where it opens (in the first layout with messages).
@@ -511,6 +512,9 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   final _moving = ValueNotifier<bool>(false);
   Timer? _rest;
   bool _loadingOlder = false;
+
+  /// Messages arrived with this build (until its frame is drawn).
+  bool _arrived = false;
 
   /// How tall a day chip is, as last measured.
   double _chipHeight = 26;
@@ -674,8 +678,13 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     final arrived = items.where((m) => of.at(m).isAfter(prev)).toList();
     if (arrived.isEmpty) return;
     final stick = _atNewest;
-    final held = _atEnd && _keep;
+    // With nothing after the messages, one arriving at the bottom is
+    // followed in the layout itself ([_wanted]); with Taskiem's cards
+    // after them, the newest is brought into sight here instead.
+    final held = _atEnd && _keep && widget.tail == null;
+    _arrived = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _arrived = false;
       if (!mounted || !scroll.hasClients) return;
       if (stick || arrived.any(of.mine)) {
         // The newest message in view, not what follows it (Taskiem's
@@ -805,16 +814,13 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
       if (focus != null && _index.containsKey('m:$focus')) {
         _open = _Open.focus;
         _split = 'm:$focus';
-        _anchor = 0.5;
       } else if (unread != null && _index.containsKey('m:$unread')) {
         _open = _Open.unread;
         _split = 'm:$unread';
-        _anchor = 0;
       } else {
         _open = _Open.end;
         // Under the newest there is now: what comes later lands below it.
         _split = _entries[_entries.length - 2].key;
-        _anchor = 1;
       }
     }
     final at = _index[_split];
@@ -846,7 +852,7 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   /// [_ThreadPosition]: where the view must be now, in the layout, given
   /// the ends it is about to take: where it opens, the first time; the
   /// bottom while the reader is held there.
-  double? _wanted(double min, double max, {required bool dragging, required bool grew}) {
+  double? _wanted(double min, double max, {required double view, required bool dragging, required bool grew}) {
     if (!_placed) {
       if (widget.items == null) return null;
       _placed = true;
@@ -862,11 +868,10 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
 
       switch (_open) {
         case _Open.end:
-          // The newest message at the bottom of the view, the stream's
-          // 8 px under it; with Taskiem's cards after it, 16 px under it
-          // and the cards below (toNewest). Kept there as what is below
-          // arrives.
-          want = widget.tail == null ? max : 16;
+          // The end of the thread at the bottom of the view (the newest
+          // message, or Taskiem's cards after it); kept there as what is
+          // below arrives.
+          want = max;
           _keep = true;
           _atEnd = true;
         case _Open.unread:
@@ -875,7 +880,7 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
         case _Open.focus:
           // scrollIntoView({ block: "center" }): the message's middle at
           // the view's.
-          want = within(_focusKey, (b) => ((b as _RenderMeasured).measured?.height ?? 0) / 2) ?? 0;
+          want = (within(_focusKey, (b) => ((b as _RenderMeasured).measured?.height ?? 0) / 2) ?? 0) - view / 2;
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -886,8 +891,10 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
       });
       return want.clamp(min, max);
     }
-    // What is below grew (a message, a picture loaded, the typing dots).
-    if (grew && _keep && _atEnd && !dragging) return max;
+    // What is below grew (a message, a picture loaded, the typing dots);
+    // a message with Taskiem's cards after it is brought into sight by
+    // [_follow] instead, the cards left below it.
+    if (grew && _keep && _atEnd && !dragging && !(_arrived && widget.tail != null)) return max;
     return null;
   }
 
@@ -1014,7 +1021,6 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
               child: CustomScrollView(
                 controller: scroll,
                 center: _center,
-                anchor: _anchor,
                 // What is in view and a screen's height round it.
                 scrollCacheExtent: const ScrollCacheExtent.viewport(1),
                 slivers: [
@@ -1127,7 +1133,7 @@ class _ThreadPosition extends ScrollPositionWithSingleContext {
     final (lo, hi) = _thread._extents(viewportDimension, minScrollExtent, maxScrollExtent);
     final last = _lastEnd;
     _lastEnd = hi;
-    var want = _thread._wanted(lo, hi, dragging: _dragging, grew: last != null && (hi - last).abs() > 0.5);
+    var want = _thread._wanted(lo, hi, view: viewportDimension, dragging: _dragging, grew: last != null && (hi - last).abs() > 0.5);
     // Its ends moved past it (a page gone): back within them, at once
     // rather than sprung back.
     if (want == null && !_dragging && (pixels < lo - 0.5 || pixels > hi + 0.5)) want = pixels.clamp(lo, hi);

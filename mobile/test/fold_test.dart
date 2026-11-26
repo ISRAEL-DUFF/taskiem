@@ -54,7 +54,7 @@ void main() {
     expect(find.textContaining('Line 30 of', findRichText: true), findsOneWidget, reason: 'twenty more');
     expect(find.textContaining('Line 31 of', findRichText: true), findsNothing);
     // Taller than the screen now: down to its end, where "Read more" is.
-    await t.drag(find.byType(SingleChildScrollView).first, const Offset(0, -2000));
+    await t.drag(find.byType(CustomScrollView).first, const Offset(0, -2000));
     await t.pump();
     final words = find.textContaining('… Read more', findRichText: true);
     await t.tapAt(t.getBottomLeft(words) + const Offset(40, -10));

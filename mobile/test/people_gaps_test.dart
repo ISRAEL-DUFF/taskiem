@@ -38,7 +38,7 @@ import 'package:taskiem/screens/you.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'people_test.dart';
-import 'support.dart' show loadFonts;
+import 'support.dart' show loadFonts, chooseHeld;
 
 /// A stand-in live connection: each open is a controller the test writes to.
 class _Streams {
@@ -625,7 +625,8 @@ void main() {
     await openPeople(t, api);
     await t.longPress(find.text('Bring the cake'));
     await settle(t);
-    await press(t, find.text('Delete'));
+    await chooseHeld(t, 'Delete');
+    await settle(t);
     expect(find.text(deleteForEveryoneNote), findsOneWidget);
     expect(deleteForEveryoneNote, contains('screenshots they made before stay'));
     expect(find.text('Delete for everyone'), findsOneWidget);
@@ -633,7 +634,8 @@ void main() {
     await settle(t);
     await t.longPress(find.text('Yes, see you at 6').last);
     await settle(t);
-    await press(t, find.text('Delete'));
+    await chooseHeld(t, 'Delete');
+    await settle(t);
     expect(find.text('Delete for everyone'), findsNothing, reason: 'theirs: for me only');
     expect(find.text(deleteForEveryoneNote), findsNothing);
     await drain(t);

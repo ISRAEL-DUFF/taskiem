@@ -371,15 +371,17 @@ class _SelectionScopeState extends State<SelectionScope> {
             Positioned.fill(child: widget.child),
             if (one != null && one.acts.onReact != null)
               Positioned.fill(
-                child: CustomSingleChildLayout(
+                child: Flow(
                   delegate: _Over(find: () => _find(one.id), mine: one.acts.mine, moved: _moved),
-                  child: _picking
+                  children: [
+                    _picking
                       ? _Picker(onPick: sel.react)
                       : _Reactions(
                           mine: one.acts.mineEmoji,
                           onPick: sel.react,
                           onMore: () => setState(() => _picking = true),
                         ),
+                  ],
                 ),
               ),
           ],
@@ -393,20 +395,25 @@ class _SelectionScopeState extends State<SelectionScope> {
 /// above, against the bubble's own side, kept 8 px inside the thread; with
 /// room neither above nor below (a long message), at the top of the
 /// thread over the message. Away while the message is out of sight.
-class _Over extends SingleChildLayoutDelegate {
-  _Over({required this.find, required this.mine, required Listenable moved}) : super(relayout: moved);
+class _Over extends FlowDelegate {
+  _Over({required this.find, required this.mine, required Listenable moved}) : super(repaint: moved);
   final Rect? Function() find;
   final bool mine;
 
   @override
-  BoxConstraints getConstraintsForChild(BoxConstraints constraints) => BoxConstraints.loose(Size(constraints.maxWidth - 16, (constraints.maxHeight - 16).clamp(0.0, double.infinity)));
+  BoxConstraints getConstraintsForChild(int i, BoxConstraints constraints) =>
+      BoxConstraints.loose(Size((constraints.maxWidth - 16).clamp(0.0, double.infinity), (constraints.maxHeight - 16).clamp(0.0, double.infinity)));
 
+  // Placed as it is drawn, once the thread is laid out: where the message
+  // is now.
   @override
-  Offset getPositionForChild(Size size, Size child) {
+  void paintChildren(FlowPaintingContext context) {
+    final size = context.size;
+    final child = context.getChildSize(0);
     final r = find();
+    // Out of sight: not drawn.
+    if (child == null || r == null || r.bottom < 0 || r.top > size.height) return;
     const gap = 6.0, edge = 8.0;
-    // Out of sight: out of the way (drawn, but off the thread).
-    if (r == null || r.bottom < 0 || r.top > size.height) return Offset(0, size.height + 1000);
     final most = (size.width - child.width - edge).clamp(edge, double.infinity);
     final x = (mine ? r.right - child.width : r.left).clamp(edge, most);
     var y = r.top - child.height - gap;
@@ -414,11 +421,11 @@ class _Over extends SingleChildLayoutDelegate {
       y = r.bottom + gap;
       if (y + child.height > size.height - edge) y = (r.top - child.height - gap).clamp(edge, (size.height - child.height - edge).clamp(edge, double.infinity));
     }
-    return Offset(x, y);
+    context.paintChild(0, transform: Matrix4.translationValues(x, y, 0));
   }
 
   @override
-  bool shouldRelayout(_Over old) => true;
+  bool shouldRepaint(_Over old) => true;
 }
 
 /// `.pop-pill`: the reactions in a pill, "+" for any emoji.

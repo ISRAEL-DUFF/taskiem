@@ -10,7 +10,7 @@ import 'package:taskiem/chat/saved_accounts.dart';
 import 'looks.dart';
 import 'people_test.dart' show adaChat, answer, drain, openPeople, phone, press, settle;
 import 'saved_picks_test.dart' show thing;
-import 'support.dart' show loadFonts;
+import 'support.dart' show loadFonts, chooseHeld;
 
 Map<String, dynamic> mumCard({bool mine = false, String id = 'c1'}) => {
   'id': id,
@@ -122,7 +122,8 @@ void main() {
     await openPeople(t, api);
     await t.longPress(find.text(words));
     await settle(t);
-    await press(t, find.text('Save as…'));
+    await chooseHeld(t, 'Save as…');
+    await settle(t);
     expect(find.byType(SavedAccountSheet), findsOneWidget);
     final fields = [for (final e in t.widgetList<EditableText>(find.descendant(of: find.byType(SavedAccountSheet), matching: find.byType(EditableText)))) e.controller.text];
     expect(fields, containsAll(['', 'Ngozi Obi', '2034567891']));

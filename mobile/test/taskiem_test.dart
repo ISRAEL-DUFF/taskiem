@@ -86,11 +86,16 @@ void main() {
 
   testWidgets('its history: diary lines, Taskiem named on its answer, the chart', (t) async {
     await open(t);
+    // The thread builds what is near the view, as WhatsApp's: each looked
+    // for where it is.
+    await seeInThread(t, find.textContaining('Sent invoice INV-0003', findRichText: true));
     expect(find.textContaining('Sent invoice INV-0003', findRichText: true), findsOneWidget);
     expect(find.text('Taskiem'), findsWidgets);
+    await seeInThread(t, find.text('SALES, THE LAST 7 DAYS'));
     expect(find.text('SALES, THE LAST 7 DAYS'), findsOneWidget);
     expect(find.text('₦2,871,000'), findsOneWidget);
     expect(find.text('Up 17% on the week before'), findsOneWidget);
+    await seeInThread(t, find.bySemanticsLabel('Read'));
     expect(find.bySemanticsLabel('Read'), findsOneWidget, reason: 'answered: its ticks blue');
   });
 
@@ -99,6 +104,8 @@ void main() {
     await t.enterText(find.byType(EditableText), 'status');
     await t.pump();
     await t.tap(find.bySemanticsLabel('Send'));
+    await t.pump();
+    // Brought into sight over Taskiem's cards as it is drawn.
     await t.pump();
     expect(find.bySemanticsLabel('Sending'), findsOneWidget);
     expect(find.text('typing…'), findsOneWidget, reason: 'Taskiem preparing an answer');
@@ -168,6 +175,7 @@ void main() {
     )..load();
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false))));
     await settle(t);
+    await seeInThread(t, find.textContaining('Which branch?', findRichText: true));
     expect(find.textContaining('Which branch?', findRichText: true), findsOneWidget);
     await t.ensureVisible(find.bySemanticsLabel('Yaba branch'));
     await t.tap(find.bySemanticsLabel('Yaba branch'));
@@ -182,7 +190,8 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Send'));
     await settle(t);
-    expect(find.text('Taskiem could not answer just now.'), findsOneWidget);
+    // Said over the thread, at its top (built as the reader goes there).
+    expect(t.widget<ThreadView<TaskiemLine>>(find.byType(ThreadView<TaskiemLine>)).errors, ['Taskiem could not answer just now.']);
     expect(t.widget<EditableText>(find.byType(EditableText)).controller.text, 'orders today');
   });
 
@@ -222,17 +231,20 @@ void main() {
     await settle(t);
     final later = find.bySemanticsLabel('Later: A payment of ₦37,500 is not matched yet');
     await t.ensureVisible(later);
+    await t.pump();
     await t.tap(later);
     await settle(t);
     expect(posts['/v1/chat-alerts/later']!.single, {'key': 'unmatched:2d7bbc40-0d31-460b-af3e-9a833cc5cae8'});
     final remind = find.bySemanticsLabel('Send reminder: Invoice INV-0002 is overdue');
     await t.ensureVisible(remind);
+    await t.pump();
     await t.tap(remind);
     await settle(t);
     expect(posts['/v1/invoices/a3da21d9-9d94-4443-bade-0a95d57bf3f4/send'], hasLength(1));
     expect(posts['/v1/chat-alerts/later']!.last, {'key': 'overdue:a3da21d9-9d94-4443-bade-0a95d57bf3f4', 'hours': 24});
     final gotIt = find.bySemanticsLabel('Got it: put the briefing away for today');
     await t.ensureVisible(gotIt);
+    await t.pump();
     await t.tap(gotIt);
     await settle(t);
     expect(posts['/v1/chat-alerts/later']!.last, {'key': 'briefing:2026-11-11', 'hours': 24});
@@ -403,14 +415,14 @@ void main() {
     });
     await screen(t);
     final said = find.textContaining('how did we do this week?', findRichText: true);
-    await t.ensureVisible(said);
+    await seeInThread(t, said);
     await t.pumpAndSettle();
     await t.longPress(said);
     await t.pumpAndSettle();
-    await t.tap(find.bySemanticsLabel('Copy'));
-    await t.pump();
+    await chooseHeld(t, 'Copy');
     expect(copied, 'how did we do this week?');
-    expect(find.bySemanticsLabel('Copied'), findsOneWidget);
+    expect(find.text('Copied'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
   });
 
   testWidgets('G10: "briefing" typed brings the card back, put away or not, and is not sent', (t) async {
@@ -420,6 +432,7 @@ void main() {
     );
     final gotIt = find.bySemanticsLabel('Got it: put the briefing away for today');
     await t.ensureVisible(gotIt);
+    await t.pump();
     await t.tap(gotIt);
     await settle(t);
     expect(find.text('Got it'), findsNothing, reason: 'put away');

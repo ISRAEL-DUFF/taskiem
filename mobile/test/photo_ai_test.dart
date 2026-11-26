@@ -35,7 +35,7 @@ import 'package:taskiem/screens/signed_in.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'lock_test.dart' show FakeUnlocker;
-import 'support.dart' show Fixture, loadFonts, snap;
+import 'support.dart' show Fixture, loadFonts, snap, chooseHeld, heldActions;
 
 const _json = {'content-type': 'application/json; charset=utf-8'};
 
@@ -610,8 +610,7 @@ void main() {
     expect(photo, findsOneWidget);
     await t.longPress(photo, warnIfMissed: false);
     await settle(t);
-    expect(find.text('Pay this account'), findsOneWidget);
-    expect(find.text('Save the account'), findsOneWidget);
+    expect(heldActions(t), containsAll(['Pay this account', 'Save the account']));
     await snap(t, 'ai-link-chat-menu');
 
     // Save the account: fetched with the session, read on the phone, the
@@ -638,7 +637,7 @@ void main() {
     reader.words = '';
     await t.longPress(photo, warnIfMissed: false);
     await settle(t);
-    await t.tap(find.text('Pay this account'));
+    await chooseHeld(t, 'Pay this account');
     await settle(t);
     await settle(t);
     expect(find.text('This phone read no words in it'), findsOneWidget);

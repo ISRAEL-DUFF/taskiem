@@ -238,7 +238,7 @@ final screens = <String, Screen>{
     drive: (t) async {
       await _loaded(t);
       // As the web half scrolls the thread to its end.
-      final s = t.widget<SingleChildScrollView>(find.byType(SingleChildScrollView)).controller!;
+      final s = t.state<ThreadViewState<ThreadMessage>>(find.byType(ThreadView<ThreadMessage>)).scroll;
       s.jumpTo(s.position.maxScrollExtent);
       await t.pumpAndSettle();
     },
@@ -380,7 +380,7 @@ final screens = <String, Screen>{
       await _loaded(t);
       // As the web half: the thread alone scrolled, the briefing at its top.
       final thread = t.state<ThreadViewState<TaskiemLine>>(find.byType(ThreadView<TaskiemLine>));
-      final view = t.renderObject<RenderBox>(find.byType(SingleChildScrollView));
+      final view = t.renderObject<RenderBox>(find.descendant(of: find.byType(ThreadView<TaskiemLine>), matching: find.byType(CustomScrollView)));
       final card = t.renderObject<RenderBox>(find.byType(BriefingCard));
       final top = card.localToGlobal(Offset.zero, ancestor: view).dy;
       thread.scroll.jumpTo(thread.scroll.offset + top);
@@ -396,7 +396,7 @@ final screens = <String, Screen>{
     drive: (t) async {
       await _loaded(t);
       final thread = t.state<ThreadViewState<TaskiemLine>>(find.byType(ThreadView<TaskiemLine>));
-      final view = t.renderObject<RenderBox>(find.byType(SingleChildScrollView));
+      final view = t.renderObject<RenderBox>(find.descendant(of: find.byType(ThreadView<TaskiemLine>), matching: find.byType(CustomScrollView)));
       final card = t.renderObject<RenderBox>(find.bySemanticsLabel(RegExp('^Needs your OK')));
       final top = card.localToGlobal(Offset.zero, ancestor: view).dy;
       thread.scroll.jumpTo(thread.scroll.offset + top);
@@ -413,7 +413,7 @@ final screens = <String, Screen>{
       await _loaded(t);
       // As the web half: the approval at the thread's top, then Approve.
       final thread = t.state<ThreadViewState<TaskiemLine>>(find.byType(ThreadView<TaskiemLine>));
-      final view = t.renderObject<RenderBox>(find.byType(SingleChildScrollView));
+      final view = t.renderObject<RenderBox>(find.descendant(of: find.byType(ThreadView<TaskiemLine>), matching: find.byType(CustomScrollView)));
       final card = t.renderObject<RenderBox>(find.bySemanticsLabel(RegExp('^Needs your OK')));
       thread.scroll.jumpTo(thread.scroll.offset + card.localToGlobal(Offset.zero, ancestor: view).dy);
       await t.pumpAndSettle();
@@ -525,7 +525,7 @@ final screens = <String, Screen>{
     build: () => _conversation('chat-tunde', "Mama Tunde's Market"),
     drive: (t) async {
       await _hold(t);
-      await t.tap(find.bySemanticsLabel('Reply'));
+      await chooseHeld(t, 'Reply');
       await t.pumpAndSettle();
     },
   ),
@@ -533,7 +533,7 @@ final screens = <String, Screen>{
     build: () => _conversation('chat-tunde', "Mama Tunde's Market"),
     drive: (t) async {
       await _hold(t);
-      await t.tap(find.bySemanticsLabel('Delete for me'));
+      await chooseHeld(t, 'Delete');
       await t.pumpAndSettle();
     },
   ),
@@ -741,9 +741,6 @@ Future<void> _loaded(WidgetTester t) async {
 Future<void> _hold(WidgetTester t) async {
   await _loaded(t);
   await t.longPress(find.textContaining('Good morning ma', findRichText: true));
-  await t.pumpAndSettle();
-  // The reactions' pill is placed once the menu is measured.
-  await t.pump(const Duration(milliseconds: 50));
   await t.pumpAndSettle();
 }
 
