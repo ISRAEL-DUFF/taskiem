@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- The app lock opens with the phone's own fingerprint, face or PIN. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <!-- A voice note to a business (lib/chat/composer.dart). -->
@@ -22,6 +23,13 @@
          refused, every place that takes a photo says so with the way to
          the phone's settings (lib/chat/pick_problem.dart). -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- open_filex asks to read the phone's photos, videos and music; the app
+         opens only its own kept copy of a chat's document (lib/chat/file_card.dart),
+         through the plugin's file provider, so none of these is needed. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove"/>
     <application
         android:label="Taskiem"
         android:name=".TaskiemApplication"

@@ -26,6 +26,7 @@ import '../kit/tap_area.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
+import 'file_card.dart' show FileTypeTile, documentTypeGroups, documentTypeOf, fileFamily, fileLine;
 import 'link_preview.dart' show ComposerLinkCard, ComposerPreview;
 import 'tools_panel.dart';
 import 'pick_problem.dart';
@@ -67,15 +68,14 @@ class Pickers {
     return PickedFile(bytes: bytes, name: name, type: name.endsWith('.png') ? 'image/png' : 'image/jpeg');
   }
 
-  /// A PDF from the phone's files.
+  /// A PDF or a Word, Excel, PowerPoint, OpenDocument, CSV or text
+  /// document from the phone's files (docs/spec/chat-previews-and-editing.md
+  /// §1.1); its type by its name, the server reading the real one.
   Future<PickedFile?> document() async {
-    final x = await stepOut(() => openFile(
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'PDF', extensions: ['pdf'], mimeTypes: ['application/pdf'], uniformTypeIdentifiers: ['com.adobe.pdf']),
-      ],
-    ));
+    final x = await stepOut(() => openFile(acceptedTypeGroups: documentTypeGroups));
     if (x == null) return null;
-    return PickedFile(bytes: await x.readAsBytes(), name: x.name, type: 'application/pdf');
+    final type = documentTypeOf(x.name);
+    return PickedFile(bytes: await x.readAsBytes(), name: x.name, type: type.isNotEmpty ? type : (x.mimeType ?? 'application/octet-stream'));
   }
 }
 
@@ -679,7 +679,7 @@ class _Pending extends StatelessWidget {
             ? 'Voice note'
             : file.photo
             ? 'Photo: ${file.name}'
-            : file.name} · ${fileSize(file.bytes.length)}';
+            : file.name} · ${file.voice || file.photo ? fileSize(file.bytes.length) : fileLine(file.attachment)}';
     return Container(
       decoration: BoxDecoration(
         color: t.panel,
@@ -701,14 +701,18 @@ class _Pending extends StatelessWidget {
           ],
           Row(
             children: [
-              if (!file.photo) ...[
+              if (file.voice) ...[
                 Container(
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(color: t.tint, borderRadius: BorderRadius.circular(8)),
                   alignment: Alignment.center,
-                  child: TkIcon(file.voice ? 'mic' : 'file', size: 20, color: t.tintText),
+                  child: TkIcon('mic', size: 20, color: t.tintText),
                 ),
+                const SizedBox(width: 10),
+              ] else if (!file.photo) ...[
+                // The card the chat will show: the type's icon and line.
+                FileTypeTile(fileFamily(type: file.type, name: file.name)),
                 const SizedBox(width: 10),
               ],
               Expanded(

@@ -70,6 +70,13 @@ dependencies:
   # check, that signs the server's words for one payment (lib/app/pay_key.dart;
   # docs/spec/fingerprint-key.md). MIT; R8 rules ship with it.
   biometric_signature: 13.3.0
+  # Taskiem's PDF viewer: pages to swipe and pinch, from the kept copy
+  # (lib/chat/file_card.dart; docs/spec/chat-previews-and-editing.md §1.3).
+  # MIT; PDFium itself, BSD-3-Clause and Apache-2.0, through FFI (no R8 rules needed).
+  pdfrx: 3.0.0
+  # A Word, Excel or other document opened in another app on the phone
+  # ("Open with"), from the kept copy (lib/chat/file_card.dart). BSD-3-Clause.
+  open_filex: 5.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

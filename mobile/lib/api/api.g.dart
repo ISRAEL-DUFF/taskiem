@@ -3782,8 +3782,8 @@ class LinkMessage {
 
   /// On a taskiem note, the words asked of Taskiem
   final String? asked;
-  /// A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id}
-  /// streams it
+  /// A photo, a PDF, a document or a voice note; GET
+  /// /v1/link-chats/{link}/files/{id} streams it
   final LinkMessageAttachment? attachment;
   /// The batch of payments a diary line on our side is about
   final String? batch;
@@ -3859,28 +3859,54 @@ class LinkMessage {
       };
 }
 
-/// A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id} streams
-/// it
+/// A photo, a PDF, a document or a voice note; GET
+/// /v1/link-chats/{link}/files/{id} streams it
 class LinkMessageAttachment {
-  const LinkMessageAttachment({required this.kind, this.name, required this.size, required this.type});
+  const LinkMessageAttachment({this.doc, this.h, required this.kind, this.name, this.pages, this.preview, this.protected, required this.size, required this.type, this.w});
 
+  /// A document's family, for its icon
+  final String? doc;
+  /// A photo's, or the PDF picture's, height in pixels
+  final int? h;
   final String kind;
   final String? name;
+  /// A PDF's page count, once its picture is drawn
+  final int? pages;
+  /// The picture of a PDF's first page, from its file route with ?preview=1 -
+  /// ready, none (a protected PDF) or failed; missing while it is drawn, and on
+  /// files sent before pictures were drawn
+  final String? preview;
+  /// A password-protected PDF (no page count, no picture)
+  final bool? protected;
   final int size;
   final String type;
+  /// A photo's, or the PDF picture's, width in pixels
+  final int? w;
 
   factory LinkMessageAttachment.fromJson(Map<String, dynamic> j) => LinkMessageAttachment(
+        doc: j['doc'] == null ? null : j['doc'] as String,
+        h: j['h'] == null ? null : (j['h'] as num).toInt(),
         kind: j['kind'] as String,
         name: j['name'] == null ? null : j['name'] as String,
+        pages: j['pages'] == null ? null : (j['pages'] as num).toInt(),
+        preview: j['preview'] == null ? null : j['preview'] as String,
+        protected: j['protected'] == null ? null : j['protected'] as bool,
         size: (j['size'] as num).toInt(),
         type: j['type'] as String,
+        w: j['w'] == null ? null : (j['w'] as num).toInt(),
       );
 
   Map<String, dynamic> toJson() => {
+        'doc': ?doc,
+        'h': ?h,
         'kind': kind,
         'name': ?name,
+        'pages': ?pages,
+        'preview': ?preview,
+        'protected': ?protected,
         'size': size,
         'type': type,
+        'w': ?w,
       };
 }
 
@@ -4197,25 +4223,51 @@ class LinkMessageReply {
 }
 
 class LinkMessageReplyAttachment {
-  const LinkMessageReplyAttachment({required this.kind, this.name, required this.size, required this.type});
+  const LinkMessageReplyAttachment({this.doc, this.h, required this.kind, this.name, this.pages, this.preview, this.protected, required this.size, required this.type, this.w});
 
+  /// A document's family, for its icon
+  final String? doc;
+  /// A photo's, or the PDF picture's, height in pixels
+  final int? h;
   final String kind;
   final String? name;
+  /// A PDF's page count, once its picture is drawn
+  final int? pages;
+  /// The picture of a PDF's first page, from its file route with ?preview=1 -
+  /// ready, none (a protected PDF) or failed; missing while it is drawn, and on
+  /// files sent before pictures were drawn
+  final String? preview;
+  /// A password-protected PDF (no page count, no picture)
+  final bool? protected;
   final int size;
   final String type;
+  /// A photo's, or the PDF picture's, width in pixels
+  final int? w;
 
   factory LinkMessageReplyAttachment.fromJson(Map<String, dynamic> j) => LinkMessageReplyAttachment(
+        doc: j['doc'] == null ? null : j['doc'] as String,
+        h: j['h'] == null ? null : (j['h'] as num).toInt(),
         kind: j['kind'] as String,
         name: j['name'] == null ? null : j['name'] as String,
+        pages: j['pages'] == null ? null : (j['pages'] as num).toInt(),
+        preview: j['preview'] == null ? null : j['preview'] as String,
+        protected: j['protected'] == null ? null : j['protected'] as bool,
         size: (j['size'] as num).toInt(),
         type: j['type'] as String,
+        w: j['w'] == null ? null : (j['w'] as num).toInt(),
       );
 
   Map<String, dynamic> toJson() => {
+        'doc': ?doc,
+        'h': ?h,
         'kind': kind,
         'name': ?name,
+        'pages': ?pages,
+        'preview': ?preview,
+        'protected': ?protected,
         'size': size,
         'type': type,
+        'w': ?w,
       };
 }
 
@@ -5910,25 +5962,51 @@ class CustomerMessage {
 }
 
 class ChatAttachment {
-  const ChatAttachment({required this.kind, this.name, required this.size, required this.type});
+  const ChatAttachment({this.doc, this.h, required this.kind, this.name, this.pages, this.preview, this.protected, required this.size, required this.type, this.w});
 
+  /// A document's family, for its icon
+  final String? doc;
+  /// A photo's, or the PDF picture's, height in pixels
+  final int? h;
   final String kind;
   final String? name;
+  /// A PDF's page count, once its picture is drawn
+  final int? pages;
+  /// The picture of a PDF's first page, from its file route with ?preview=1 -
+  /// ready, none (a protected PDF) or failed; missing while it is drawn, and on
+  /// files sent before pictures were drawn
+  final String? preview;
+  /// A password-protected PDF (no page count, no picture)
+  final bool? protected;
   final int size;
   final String type;
+  /// A photo's, or the PDF picture's, width in pixels
+  final int? w;
 
   factory ChatAttachment.fromJson(Map<String, dynamic> j) => ChatAttachment(
+        doc: j['doc'] == null ? null : j['doc'] as String,
+        h: j['h'] == null ? null : (j['h'] as num).toInt(),
         kind: j['kind'] as String,
         name: j['name'] == null ? null : j['name'] as String,
+        pages: j['pages'] == null ? null : (j['pages'] as num).toInt(),
+        preview: j['preview'] == null ? null : j['preview'] as String,
+        protected: j['protected'] == null ? null : j['protected'] as bool,
         size: (j['size'] as num).toInt(),
         type: j['type'] as String,
+        w: j['w'] == null ? null : (j['w'] as num).toInt(),
       );
 
   Map<String, dynamic> toJson() => {
+        'doc': ?doc,
+        'h': ?h,
         'kind': kind,
         'name': ?name,
+        'pages': ?pages,
+        'preview': ?preview,
+        'protected': ?protected,
         'size': size,
         'type': type,
+        'w': ?w,
       };
 }
 

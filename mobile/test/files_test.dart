@@ -17,6 +17,7 @@ import 'package:taskiem/chat/attachments.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/composer.dart';
 import 'package:taskiem/chat/conversation.dart';
+import 'package:taskiem/chat/file_card.dart' show PdfViewerScreen, pdfPages;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -147,15 +148,14 @@ void main() {
     expect(find.byType(InteractiveViewer), findsNothing);
   });
 
-  testWidgets('G5: a PDF goes to the phone\'s share sheet, to open or keep', (t) async {
-    final handed = <(int, String, String)>[];
-    final was = handOffFile;
-    handOffFile = (bytes, name, type, from) async => handed.add((bytes.length, name, type));
-    addTearDown(() => handOffFile = was);
+  testWidgets('G5: a PDF opens in Taskiem\'s viewer, from the file fetched once', (t) async {
+    final was = pdfPages;
+    pdfPages = (bytes, name, onPage) => Text(utf8.decode(bytes));
+    addTearDown(() => pdfPages = was);
     var down = true;
     await open(
       t,
-      also: (req) async => req.method == 'GET' && req.url.path.startsWith('/v1/link-chats/$_link/files/')
+      also: (req) async => req.method == 'GET' && req.url.path.startsWith('/v1/link-chats/$_link/files/') && !req.url.queryParameters.containsKey('preview')
           ? (down ? http.Response('{"error":"not found"}', 404) : http.Response.bytes(utf8.encode('%PDF-1.4 the list'), 200))
           : null,
     );
@@ -164,14 +164,17 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(pdf);
     await settle(t);
-    expect(handed, isEmpty);
+    expect(find.byType(PdfViewerScreen), findsNothing);
     expect(find.text('The file didn\'t load. Try again.'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
     await t.pumpAndSettle();
     down = false;
     await t.tap(pdf);
-    await settle(t);
-    expect(handed, [(17, 'Price list November.pdf', 'application/pdf')]);
+    for (var i = 0; i < 40 && find.byType(PdfViewerScreen).evaluate().isEmpty; i++) {
+      await settle(t);
+    }
+    expect(find.byType(PdfViewerScreen), findsOneWidget);
+    expect(find.text('%PDF-1.4 the list'), findsOneWidget);
   });
 
   testWidgets('a photo from the clip waits for its caption, then goes with it and the client id', (t) async {
@@ -204,7 +207,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Document'));
     await settle(t);
-    expect(find.text('List.pdf · 1 KB'), findsOneWidget);
+    expect(find.text('List.pdf · PDF · 10 B'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Send'));
     await settle(t);
     expect(sent.uploads.single.type, 'application/pdf');
@@ -281,7 +284,7 @@ void main() {
     expect(fileProblem(f('image/jpeg', 10)), isNull);
     expect(fileProblem(f('audio/mp4', 10)), isNull);
     expect(fileProblem(f('application/pdf', 10)), isNull);
-    expect(fileProblem(f('image/gif', 10)), contains('JPEG, PNG or WebP'));
+    expect(fileProblem(f('image/gif', 10)), contains('Taskiem can send photos, voice notes, PDFs'));
     expect(fileProblem(f('image/jpeg', 26 * 1024 * 1024)), contains('larger than 25 MB'));
     expect(fileSize(13050), '13 KB');
     expect(fileSize(1500000), '1.4 MB');

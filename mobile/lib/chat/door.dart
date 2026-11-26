@@ -79,7 +79,7 @@ LinkMessage doorFileMessage({required String id, required bool mine, required Ch
   mine: mine,
   kind: 'text',
   createdAt: at,
-  attachment: LinkMessageAttachment(kind: a.kind, name: a.name, size: a.size, type: a.type),
+  attachment: LinkMessageAttachment(kind: a.kind, name: a.name, size: a.size, type: a.type, pages: a.pages, protected: a.protected, preview: a.preview, w: a.w, h: a.h, doc: a.doc),
 );
 
 /// A card's kicker: what it is.
