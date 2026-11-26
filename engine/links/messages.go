@@ -231,12 +231,12 @@ type Message struct {
 	Kind   string    `json:"kind"`
 	Body   string    `json:"body,omitempty"`
 	// Asked is what was asked of Taskiem, on a note of kind taskiem.
-	Asked      string      `json:"asked,omitempty"`
-	SenderName string      `json:"sender_name,omitempty"`
+	Asked      string `json:"asked,omitempty"`
+	SenderName string `json:"sender_name,omitempty"`
 	// Sender is who of this business sent it (a member's user id, or a
 	// workflow or key), on this side's own messages only: the menu offers
 	// Edit to its sender alone, as the server allows.
-	Sender string `json:"sender,omitempty"`
+	Sender     string      `json:"sender,omitempty"`
 	Card       *DocCard    `json:"card,omitempty"`
 	Attachment *Attachment `json:"attachment,omitempty"`
 	Forwarded  bool        `json:"forwarded,omitempty"`

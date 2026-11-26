@@ -423,7 +423,7 @@ type customerMessageView struct {
 	// Sender is who of the business sent a reply (a member's user id), so
 	// the menu offers Edit to its sender alone.
 	Sender string `json:"sender,omitempty"`
-	SentAs     string    `json:"sent_as,omitempty"`
+	SentAs string `json:"sent_as,omitempty"`
 	// A reply's way to the customer: sending, sent, delivered, read or
 	// failed (with WhatsApp's reason).
 	Delivery  string     `json:"delivery,omitempty"`
