@@ -125,6 +125,10 @@ class TkTokens {
   final Color fieldFocus;
   /// `--on-photo`
   final Color onPhoto;
+  /// `--on-photo-warn`
+  final Color onPhotoWarn;
+  /// `--on-photo-danger`
+  final Color onPhotoDanger;
   /// `--tk-on-pine`
   final Color tkOnPine;
   /// `--tk-pine-ink`
@@ -257,6 +261,8 @@ class TkTokens {
     required this.fieldHover,
     required this.fieldFocus,
     required this.onPhoto,
+    required this.onPhotoWarn,
+    required this.onPhotoDanger,
     required this.tkOnPine,
     required this.tkPineInk,
     required this.tkSoft,
@@ -355,6 +361,8 @@ class TkTokens {
     Color? fieldHover,
     Color? fieldFocus,
     Color? onPhoto,
+    Color? onPhotoWarn,
+    Color? onPhotoDanger,
     Color? tkOnPine,
     Color? tkPineInk,
     Color? tkSoft,
@@ -451,6 +459,8 @@ class TkTokens {
         fieldHover: fieldHover ?? this.fieldHover,
         fieldFocus: fieldFocus ?? this.fieldFocus,
         onPhoto: onPhoto ?? this.onPhoto,
+        onPhotoWarn: onPhotoWarn ?? this.onPhotoWarn,
+        onPhotoDanger: onPhotoDanger ?? this.onPhotoDanger,
         tkOnPine: tkOnPine ?? this.tkOnPine,
         tkPineInk: tkPineInk ?? this.tkPineInk,
         tkSoft: tkSoft ?? this.tkSoft,
@@ -549,6 +559,8 @@ const tkLight = TkTokens(
   fieldHover: Color(0xFFE9EAEA),
   fieldFocus: Color(0xFFEEF1F0),
   onPhoto: Color(0xFFFFFFFF),
+  onPhotoWarn: Color(0xFFB54708),
+  onPhotoDanger: Color(0xFFB42318),
   tkOnPine: Color(0xFFFFFFFF),
   tkPineInk: Color(0xFF0D3B2E),
   tkSoft: Color(0xFFF1F4EF),
@@ -646,6 +658,8 @@ const tkDark = TkTokens(
   fieldHover: Color(0xFF282927),
   fieldFocus: Color(0xFF22251A),
   onPhoto: Color(0xFFFFFFFF),
+  onPhotoWarn: Color(0xFFB54708),
+  onPhotoDanger: Color(0xFFB42318),
   tkOnPine: Color(0xFFFFFFFF),
   tkPineInk: Color(0xFFEDEDEA),
   tkSoft: Color(0xFF1F2A26),

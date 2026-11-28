@@ -247,17 +247,20 @@ test("a tagged product is a live card; our own services are not offered in a bus
   await expect(card).toContainText("₦43,000 a bag · min 5 (was ₦41,000)");
   await expect(card).toContainText("Your stock: 4 bags left");
   await axeBoth(owner, "a live card");
-  // Order: their price list in a sheet, this item in the bag at their least.
+  // Order: their shop, at this item, its Add to bag at their least.
   await owner.route("**/v1/supplier-prices?*", (r) =>
     r.fulfill(json({ suppliers: [{ link, business: "b", name: "Rivers Foods", updated_at: at, items: [{ item_id: "i2", name: "Rice, 25kg bag", unit: "bag", price_kobo: 4_300_000, min_quantity: 5, available: true }] }] })),
   );
   await owner.route(`**/v1/item-links/${link}`, (r) => r.fulfill(json({ item_links: [] })));
   await card.getByRole("button", { name: "Order Rice, 25kg bag" }).click();
-  const order = owner.getByTestId("order-sheet");
-  await expect(order.getByRole("group", { name: "How many Rice, 25kg bag" })).toContainText("5");
-  await expect(order.getByTestId("order-bag")).toContainText("₦215,000");
-  await order.getByRole("button", { name: "Close" }).click();
-  await expect(order).toHaveCount(0);
+  const theirs = owner.getByTestId("shop");
+  await expect(theirs.getByRole("heading", { name: "Rice, 25kg bag" })).toBeVisible();
+  await expect(theirs.getByTestId("shop-add")).toHaveText("Add to bag · ₦215,000");
+  await theirs.getByTestId("shop-add").click();
+  await expect(theirs.getByTestId("shop-bag-button").first()).toHaveAccessibleName("Your bag, 5 items");
+  await theirs.getByRole("button", { name: "Back to the shop" }).click();
+  await theirs.getByRole("button", { name: "Back to the chat" }).click();
+  await expect(theirs).toHaveCount(0);
 
   // Our own services are not offered here (business-chat-tools.md §4):
   // what we offer them goes by Share my prices and Make an offer.

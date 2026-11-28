@@ -56,16 +56,19 @@ const remembering = (sent: Sent[]) => async (route: Route) => {
   sent.push({ method: r.method(), path: new URL(r.url()).pathname, body: r.postData() ? r.postDataJSON() : undefined });
 };
 
+/** Order with a supplier, from the plain list: their shop (the head's Their
+ * shop on a computer, the tools' Their shop on a phone), then its List. */
 async function openOrder(page: Page) {
   const pane = page.getByTestId("chat-pane");
   if ((page.viewportSize()?.width ?? 1440) >= 861) {
+    await expect(pane.getByTestId("chat-order")).toBeVisible();
     await pane.getByTestId("chat-order").click();
-    return;
+  } else {
+    await pane.getByRole("button", { name: "Open tools" }).click();
+    await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Their shop/ }).first().click();
   }
-  await pane.getByRole("button", { name: "Open tools" }).click();
-  await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Their shop/ }).first().click();
+  await page.getByTestId("shop").getByRole("button", { name: "List view: their prices as a list" }).click();
 }
-
 for (const [size, viewport] of [
   ["a phone", { width: 360, height: 780 }],
   ["a computer", { width: 1440, height: 900 }],

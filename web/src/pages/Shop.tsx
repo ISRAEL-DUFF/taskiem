@@ -7,29 +7,30 @@
 // ShopSheet, pickup or delivery). The bag stays while the page is open; the
 // hearts and what was looked at are kept in this browser (lib/shopkept.ts).
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { get } from "../api";
 import { Icon } from "../icons";
 import { KitEmpty, KitLoading } from "../kit";
 import { changeBasket, sizeWords, type BasketLine, type ShopItem, type TheirShop } from "../lib/personchat";
 import { categories, fromPrice, keepTo, pricesDiffer, recentItems, savedItems, shownItems, soldOut, toggleSaved, viewedItem } from "../lib/shopkept";
 import { formatPrice } from "../lib/storefront";
+import { inUnits, quantitySteps, type ShopTerms } from "../lib/businessshop";
 import { ErrorBox, useFocusTrap, useLoad } from "../ui";
 import { ChatAvatar } from "./ChatAvatar";
 
 // --- the bag: one a chat, while the page is open ---
 
-const bags = new Map<string, BasketLine[]>();
+const allBags = new Map<string, BasketLine[]>();
 const listeners = new Set<() => void>();
 function setBag(chat: string, lines: BasketLine[]) {
-  bags.set(chat, lines);
+  allBags.set(chat, lines);
   for (const l of listeners) l();
 }
 /** What is in the bag of [chat]'s shop, and how to change it. */
 export function useBag(chat: string): [BasketLine[], (lines: BasketLine[]) => void] {
   const lines = useSyncExternalStore(
     (on) => (listeners.add(on), () => void listeners.delete(on)),
-    () => bags.get(chat) ?? EMPTY,
+    () => allBags.get(chat) ?? EMPTY,
   );
   return [lines, (next) => setBag(chat, next)];
 }
@@ -45,7 +46,7 @@ const total = (lines: BasketLine[]) => lines.reduce((t, l) => t + l.price_kobo *
 const itemsSaid = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
 
 /** A line of the bag for an item, or one of its sizes. */
-function lineOf(it: ShopItem, size?: string): Omit<BasketLine, "quantity"> | undefined {
+export function lineOf(it: ShopItem, size?: string): Omit<BasketLine, "quantity"> | undefined {
   const z = it.sizes?.find((x) => x.id === size);
   const price = z ? (z.price_kobo ?? it.price_kobo) : it.price_kobo;
   if (price === undefined) return undefined;
@@ -54,16 +55,27 @@ function lineOf(it: ShopItem, size?: string): Omit<BasketLine, "quantity"> | und
 
 type View = { at: "grid" } | { at: "item"; id: string } | { at: "bag" };
 
+/** What a business's shop does otherwise than a person's (BusinessShop.tsx):
+ * its prices for a quantity, its minimum's steps, its items' terms, a
+ * product's sizes typed in a grid, what stops the bag, and the plain list. */
+export interface ShopTrade {
+  /** What one of a line's item costs with [lines] in the bag. */
+  priceIn: (id: string, lines: BasketLine[]) => number;
+  /** − or + from [n]: + from nothing to its minimum, − under it to none. */
+  step: (id: string, n: number, dir: 1 | -1) => number;
+  terms: (id: string) => ShopTerms | undefined;
+  /** An item's sizes as boxes to type how many in; undefined for none. */
+  sizes: (it: ShopItem, qty: (id: string) => number, set: (line: Omit<BasketLine, "quantity">, n: number) => void) => ReactNode | undefined;
+  stops: (lines: BasketLine[]) => string | undefined;
+  checkoutWords: string;
+  onList: () => void;
+}
+
+/** The person's shop: the business's storefront, from their chat with it. */
 export function ShopView({
   chat,
-  business,
   businessId,
-  logo,
-  startItem,
-  onClose,
-  onAsk,
-  onShare,
-  onCheckout,
+  ...rest
 }: {
   chat: string;
   business: string;
@@ -79,6 +91,46 @@ export function ShopView({
   onCheckout: (lines: BasketLine[]) => void;
 }) {
   const shop = useLoad(() => get<TheirShop>(`/v1/me/chats/${encodeURIComponent(chat)}/shop`), [chat]);
+  return <ShopFrame bagKey={chat} keptKey={businessId} shop={shop} {...rest} />;
+}
+
+/** The shop's views, whoever's shop it is: the grid, an item, the bag. */
+export function ShopFrame({
+  bagKey: chat,
+  keptKey: businessId,
+  shop,
+  business,
+  logo,
+  startItem,
+  sub,
+  next,
+  bags = true,
+  trade,
+  onClose,
+  onAsk,
+  onShare,
+  onCheckout,
+}: {
+  /** Whose bag: one a chat. */
+  bagKey: string;
+  /** Whose hearts and lately-seen items these are. */
+  keptKey: string;
+  shop: { data?: TheirShop; error?: unknown };
+  business: string;
+  logo?: string;
+  startItem?: string;
+  /** The head's line (else how it takes orders). */
+  sub?: string;
+  /** The bag's line under its total (else how it is got). */
+  next?: string;
+  /** It has a bag (a business's: for those who may order). */
+  bags?: boolean;
+  trade?: ShopTrade;
+  onClose: () => void;
+  onAsk: (words: string) => void;
+  onShare?: (it: { id: string; name: string }) => void;
+  onCheckout: (lines: BasketLine[]) => void;
+}) {
   const s = shop.data;
   const [view, setView] = useState<View>(() => (startItem ? { at: "item", id: startItem } : { at: "grid" }));
   const [bag, putBag] = useBag(chat);
@@ -102,7 +154,7 @@ export function ShopView({
   useEffect(() => {
     if (!s || kept.current) return;
     kept.current = true;
-    const was = bags.get(chat) ?? [];
+    const was = allBags.get(chat) ?? [];
     const k = keepTo(was, s);
     if (JSON.stringify(k.lines) !== JSON.stringify(was)) setBag(chat, k.lines);
     if (k.changed) setBagNote("Your bag changed: something in it is no longer for sale, or fewer are left.");
@@ -115,6 +167,13 @@ export function ShopView({
   };
   const change = (line: Omit<BasketLine, "quantity">, by: number) => putBag(changeBasket(bag, line, by));
   const qty = (id: string) => bag.find((l) => l.item_id === id)?.quantity ?? 0;
+  // − and +: one at a time, unless a supplier's minimum says.
+  const stepLine = (line: Omit<BasketLine, "quantity">, dir: 1 | -1) => {
+    const now = qty(line.item_id);
+    const to = trade ? trade.step(line.item_id, now, dir) : now + dir;
+    change(line, to - now);
+  };
+  const setLine = (line: Omit<BasketLine, "quantity">, n: number) => change(line, n - qty(line.item_id));
   const byId = useMemo(() => new Map((s?.items ?? []).map((i) => [i.id, i])), [s]);
   const item = view.at === "item" ? byId.get(view.id) : undefined;
 
@@ -144,11 +203,14 @@ export function ShopView({
           onBack={() => setView({ at: "grid" })}
           onOpen={open}
           qty={qty}
+          bag={bag}
           onAdd={(line, n) => change(line, n)}
+          onSet={setLine}
           onAsk={onAsk}
           onShare={onShare}
           onBag={() => setView({ at: "bag" })}
-          bagCount={count(bag)}
+          bagCount={bags ? count(bag) : undefined}
+          trade={trade}
         />
       ) : view.at === "bag" && s ? (
         <ShopBagView
@@ -156,8 +218,10 @@ export function ShopView({
           business={business}
           bag={bag}
           byId={byId}
+          next={next}
+          trade={trade}
           onBack={() => setView({ at: "grid" })}
-          onChange={change}
+          onStep={stepLine}
           onAsk={() => onClose()}
           onCheckout={() => onCheckout(bag)}
         />
@@ -170,8 +234,13 @@ export function ShopView({
             <ChatAvatar name={business} logo={logo} />
             <div className="chat-head-main">
               <h2>{business}</h2>
-              <span className="chat-sub">{s ? waysWords(s) : "Their shop"}</span>
+              <span className="chat-sub">{s ? (sub ?? waysWords(s)) : "Their shop"}</span>
             </div>
+            {trade && (
+              <button type="button" className="icon-button shop-head-list" aria-label="List view: their prices as a list" disabled={!s} onClick={trade.onList} data-testid="shop-list">
+                <Icon name="menu" />
+              </button>
+            )}
             <button
               type="button"
               className={`icon-button shop-head-heart${filter === "saved" ? " on" : ""}`}
@@ -181,7 +250,7 @@ export function ShopView({
             >
               <Icon name="heart" />
             </button>
-            <BagButton n={count(bag)} onClick={() => setView({ at: "bag" })} />
+            {bags && <BagButton n={count(bag)} onClick={() => setView({ at: "bag" })} />}
           </header>
           <div className="shop-body">
             {!s && !shop.error && <KitLoading label="Loading their shop…" />}
@@ -204,17 +273,19 @@ export function ShopView({
                 qty={qty}
                 onOpen={open}
                 onHeart={heart}
-                onChange={change}
+                onStep={stepLine}
               />
             )}
           </div>
-          {count(bag) > 0 && <BagBar lines={bag} onClick={() => setView({ at: "bag" })} />}
+          {bags && count(bag) > 0 && <BagBar lines={bag} total={trade ? tradeTotal(trade, bag) : total(bag)} onClick={() => setView({ at: "bag" })} />}
         </>
       )}
     </section>
   );
 }
 
+/** The bag's total at a supplier's prices for its quantities. */
+const tradeTotal = (trade: ShopTrade, lines: BasketLine[]) => lines.reduce((t, l) => t + trade.priceIn(l.item_id, lines) * l.quantity, 0);
 function waysWords(s: TheirShop): string {
   if (!s.open) return "Not taking orders now";
   const how = s.pickup && s.delivery ? "Delivery and pickup" : s.delivery ? "Delivery" : s.pickup ? "Pickup" : "";
@@ -234,8 +305,8 @@ function BagButton({ n, onClick }: { n: number; onClick: () => void }) {
   );
 }
 
-function BagBar({ lines, onClick }: { lines: BasketLine[]; onClick: () => void }) {
-  const said = `${itemsSaid(count(lines))} · ${formatPrice(total(lines))}`;
+function BagBar({ lines, total: sum, onClick }: { lines: BasketLine[]; total: number; onClick: () => void }) {
+  const said = `${itemsSaid(count(lines))} · ${formatPrice(sum)}`;
   return (
     <button type="button" className="shop-bag-bar" onClick={onClick} data-testid="shop-bag-bar">
       <Icon name="bag" />
@@ -270,7 +341,7 @@ function ShopGrid({
   qty,
   onOpen,
   onHeart,
-  onChange,
+  onStep,
 }: {
   shop: TheirShop;
   business: string;
@@ -283,7 +354,7 @@ function ShopGrid({
   qty: (id: string) => number;
   onOpen: (id: string) => void;
   onHeart: (id: string) => void;
-  onChange: (line: Omit<BasketLine, "quantity">, by: number) => void;
+  onStep: (line: Omit<BasketLine, "quantity">, dir: 1 | -1) => void;
 }) {
   const cats = categories(shop.items);
   const shown = shownItems(shop.items, filter, words, saved);
@@ -365,22 +436,22 @@ function ShopGrid({
                 <div className="shop-card-foot">
                   <span className="shop-price">{price}</span>
                   {!sold && shop.open && (sized ? (
-                    <button type="button" className="shop-add" aria-label={`Choose a size of ${it.name}${n ? ` (${n} in the bag)` : ""}`} onClick={() => onOpen(it.id)}>
+                    <button type="button" className="shop-add" aria-label={`Choose a size of ${it.name}${n ? `: ${n} in the bag` : ""}`} onClick={() => onOpen(it.id)}>
                       {n > 0 && <span>{n}</span>}
                       <Icon name="plus" />
                     </button>
                   ) : line && n > 0 ? (
                     <span className="shop-stepper on">
-                      <button type="button" aria-label={`One fewer ${it.name}`} onClick={() => onChange(line, -1)}>
+                      <button type="button" aria-label={`One fewer ${it.name}`} onClick={() => onStep(line, -1)}>
                         <Icon name="minus" />
                       </button>
                       <span>{n}</span>
-                      <button type="button" aria-label={`One more ${it.name}`} disabled={!!few && n >= few} onClick={() => onChange(line, 1)}>
+                      <button type="button" aria-label={`One more ${it.name}`} disabled={!!few && n >= few} onClick={() => onStep(line, 1)}>
                         <Icon name="plus" />
                       </button>
                     </span>
                   ) : line ? (
-                    <button type="button" className="shop-add" aria-label={`Add ${it.name} to the bag`} onClick={() => onChange(line, 1)}>
+                    <button type="button" className="shop-add" aria-label={`Add ${it.name} to the bag`} onClick={() => onStep(line, 1)}>
                       <Icon name="plus" />
                     </button>
                   ) : null)}
@@ -403,11 +474,14 @@ function ShopItemView({
   onBack,
   onOpen,
   qty,
+  bag,
   onAdd,
+  onSet,
   onAsk,
   onShare,
   onBag,
   bagCount,
+  trade,
 }: {
   shop: TheirShop;
   item: ShopItem;
@@ -417,27 +491,43 @@ function ShopItemView({
   onBack: () => void;
   onOpen: (id: string) => void;
   qty: (id: string) => number;
+  bag: BasketLine[];
   onAdd: (line: Omit<BasketLine, "quantity">, n: number) => void;
+  onSet: (line: Omit<BasketLine, "quantity">, n: number) => void;
   onAsk: (words: string) => void;
   onShare?: (it: { id: string; name: string }) => void;
   onBag: () => void;
-  bagCount: number;
+  /** How many are in the bag; none where there is no bag. */
+  bagCount?: number;
+  trade?: ShopTrade;
 }) {
   const sizes = it.sizes ?? [];
+  const terms = trade?.terms(it.id);
+  // How many Add to bag starts at: a supplier's minimum, until some are in.
+  const first = () => (terms && terms.min > 1 && qty(it.id) === 0 && !(it.sizes ?? []).length ? terms.min : 1);
   const [size, setSize] = useState(() => sizes.find((z) => z.available)?.id ?? "");
-  const [n, setN] = useState(1);
+  const [n, setN] = useState(first);
   const [added, setAdded] = useState("");
   useEffect(() => {
     setSize((it.sizes ?? []).find((z) => z.available)?.id ?? "");
-    setN(1);
+    setN(first());
     setAdded("");
   }, [it]);
+  // A supplier's product sold in sizes: how many of each, typed in its grid.
+  const grid = shop.open ? trade?.sizes(it, qty, onSet) : undefined;
   const z = sizes.find((x) => x.id === size);
   const line = sizes.length ? (z ? lineOf(it, z.id) : undefined) : lineOf(it);
   const sold = sizes.length ? !z || !z.available || !it.available : !it.available;
   const left = sizes.length ? z?.few_left : it.few_left;
-  const price = line?.price_kobo ?? it.price_kobo;
+  const price = grid ? it.price_kobo : (line?.price_kobo ?? it.price_kobo);
   const inBag = line ? qty(line.item_id) : 0;
+  // What one costs as Add to bag would leave the bag: a quantity price reached.
+  const each =
+    trade && line
+      ? trade.priceIn(line.item_id, changeBasket(bag, line, n))
+      : price;
+  // The product in the bag, its sizes together.
+  const have = sizes.length ? sizes.reduce((t, x) => t + qty(x.id), 0) : inBag + n;
   const more = [
     ...shop.items.filter((x) => x.id !== it.id && it.category && x.category === it.category),
     ...shop.items.filter((x) => x.id !== it.id && (!it.category || x.category !== it.category)),
@@ -449,7 +539,9 @@ function ShopItemView({
     setAdded(`${n === 1 ? "" : `${n} × `}${line.name} is in your bag`);
     setN(1);
   };
-  const ask = () => onAsk(`About ${[it.name, z ? sizeWords(z.variant) : "", price !== undefined ? formatPrice(price) : ""].filter(Boolean).join(", ")}: is it still available?`);
+  const ask = () =>
+    onAsk(`About ${[it.name, z && !grid ? sizeWords(z.variant) : "", price !== undefined ? formatPrice(price) : ""].filter(Boolean).join(", ")}: is it still available?`);
+  const bagTotal = trade ? tradeTotal(trade, bag) : total(bag);
   return (
     <>
       <div className="shop-body shop-item">
@@ -468,25 +560,38 @@ function ShopItemView({
             <button type="button" className={`shop-over shop-heart-big${saved ? " on" : ""}`} aria-pressed={saved} aria-label={saved ? `Saved: ${it.name}` : `Save ${it.name}`} onClick={onHeart}>
               <Icon name="heart" />
             </button>
-            <BagButton n={bagCount} onClick={onBag} />
+            {bagCount !== undefined && <BagButton n={bagCount} onClick={onBag} />}
           </div>
         </div>
         <div className="shop-item-sheet">
           <p className="shop-eyebrow">{[it.category, business].filter(Boolean).join(" · ")}</p>
           <h2 className="shop-item-name">{it.name}</h2>
           <p className="shop-item-price">
-            {price !== undefined && <strong>{formatPrice(price)}</strong>}
-            {sold ? <span className="tk-pill shop-pill danger">Sold out</span> : left ? <span className="tk-pill shop-pill warn">Only {left} left</span> : null}
+            {price !== undefined && (
+              <strong>
+                {formatPrice(price)}
+                {terms?.unit && <span className="shop-unit"> a {terms.unit}</span>}
+              </strong>
+            )}
+            {grid ? null : sold ? <span className="tk-pill shop-pill danger">Sold out</span> : left ? <span className="tk-pill shop-pill warn">Only {left} left</span> : null}
           </p>
           {it.description && <p className="shop-item-about">{it.description}</p>}
-          {sizes.length > 0 && (
-            <div className="tk-chips shop-sizes" role="group" aria-label="Size">
-              {sizes.map((x) => (
-                <button key={x.id} type="button" aria-pressed={size === x.id} disabled={!x.available} onClick={() => (setSize(x.id), setN(1))}>
-                  {[sizeWords(x.variant), sizePrice(x.price_kobo ?? it.price_kobo)].filter(Boolean).join(" · ")}
-                </button>
-              ))}
-            </div>
+          {terms && price !== undefined && (terms.breaks.length > 0 || terms.min > 1) && <QuantityPrices terms={terms} price={price} have={have} />}
+          {grid ? (
+            <>
+              <h3 className="shop-h">How many of each</h3>
+              {grid}
+            </>
+          ) : (
+            sizes.length > 0 && (
+              <div className="tk-chips shop-sizes" role="group" aria-label="Size">
+                {sizes.map((x) => (
+                  <button key={x.id} type="button" aria-pressed={size === x.id} disabled={!x.available} onClick={() => (setSize(x.id), setN(1))}>
+                    {[sizeWords(x.variant), sizePrice(x.price_kobo ?? it.price_kobo)].filter(Boolean).join(" · ")}
+                  </button>
+                ))}
+              </div>
+            )
           )}
           <div className="shop-item-actions">
             <button type="button" className="shop-card-button" onClick={ask}>
@@ -528,6 +633,10 @@ function ShopItemView({
       <footer className="shop-foot">
         {!shop.open ? (
           <p className="hint">{shop.closed || `${business} is not taking orders right now. Ask them in the chat.`}</p>
+        ) : grid ? (
+          <button type="button" className="tk-cta shop-add-bag" disabled={bag.length === 0} onClick={onBag} data-testid="shop-view-bag">
+            {bag.length === 0 ? "Type how many of each size" : `View bag · ${formatPrice(bagTotal)}`}
+          </button>
         ) : (
           <>
             <span className="shop-stepper">
@@ -540,7 +649,7 @@ function ShopItemView({
               </button>
             </span>
             <button type="button" className="tk-cta shop-add-bag" disabled={sold || !line} onClick={add} data-testid="shop-add">
-              {sold ? "Sold out" : !line ? (sizes.length ? "Choose a size" : "Ask them its price") : `Add to bag${price !== undefined ? ` · ${formatPrice(price * n)}` : ""}`}
+              {sold ? "Sold out" : !line ? (sizes.length ? "Choose a size" : "Ask them its price") : `Add to bag${each !== undefined ? ` · ${formatPrice(each * n)}` : ""}`}
             </button>
           </>
         )}
@@ -549,13 +658,50 @@ function ShopItemView({
   );
 }
 
+/** A supplier's quantity prices as rows ("2 to 9 bags · ₦45,000 each"), the
+ * one the bag has reached marked, and the minimum said; a product's sizes
+ * count together (the app's shop.dart ShopQuantityPrices). */
+export function QuantityPrices({ terms, price, have }: { terms: ShopTerms; price: number; have: number }) {
+  const { steps, reached, last } = quantitySteps(terms, price, have);
+  const from = Math.max(1, terms.min);
+  return (
+    <section className="shop-qty-prices" aria-labelledby="shop-qty-prices">
+      <h3 className="shop-h" id="shop-qty-prices">
+        Quantity prices
+      </h3>
+      {terms.sized && last !== undefined && (
+        <p className="hint">
+          Its sizes count together: {inUnits(terms, last)} across sizes get the {last}
+          {terms.unit ? `-${terms.unit}` : ""} price.
+        </p>
+      )}
+      <ul className="shop-qty-rows">
+        {steps.map((s, i) => (
+          <li key={s.words} className={i === reached ? "on" : undefined}>
+            <span className="grow">{s.words}</span>
+            {i === reached && have > 0 && <span className="tk-pill lime">Your price</span>}
+            <strong>{formatPrice(s.price)} each</strong>
+          </li>
+        ))}
+      </ul>
+      {from > 1 && (
+        <p className="hint">
+          At least {inUnits(terms, from)} an order{terms.sized ? ", its sizes together" : ""}.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function ShopBagView({
   shop,
   business,
   bag,
   byId,
+  next,
+  trade,
   onBack,
-  onChange,
+  onStep,
   onAsk,
   onCheckout,
 }: {
@@ -563,8 +709,10 @@ function ShopBagView({
   business: string;
   bag: BasketLine[];
   byId: Map<string, ShopItem>;
+  next?: string;
+  trade?: ShopTrade;
   onBack: () => void;
-  onChange: (line: Omit<BasketLine, "quantity">, by: number) => void;
+  onStep: (line: Omit<BasketLine, "quantity">, dir: 1 | -1) => void;
   onAsk: () => void;
   onCheckout: () => void;
 }) {
@@ -574,6 +722,9 @@ function ShopBagView({
     const it = itemOf(id);
     return it?.sizes?.find((z) => z.id === id)?.few_left ?? (it?.id === id ? it.few_left : undefined);
   };
+  const eachOf = (l: BasketLine) => (trade ? trade.priceIn(l.item_id, bag) : l.price_kobo);
+  const sum = trade ? tradeTotal(trade, bag) : total(bag);
+  const stops = bag.length && trade ? trade.stops(bag) : undefined;
   return (
     <>
       <header className="chat-head shop-head">
@@ -597,20 +748,21 @@ function ShopBagView({
                 const it = itemOf(l.item_id);
                 const left = leftOf(l.item_id);
                 const size = it && it.id !== l.item_id ? sizeWords(it.sizes?.find((z) => z.id === l.item_id)?.variant ?? {}) : "";
+                const each = eachOf(l);
                 return (
                   <li key={l.item_id}>
                     {it ? <Photo it={it} /> : <span className="shop-photo" aria-hidden="true" />}
                     <span className="grow">
                       <strong>{it?.name ?? l.name}</strong>
-                      <span className="hint">{[size, `${formatPrice(l.price_kobo)} each`].filter(Boolean).join(" · ")}</span>
-                      <span className="shop-price">{formatPrice(l.price_kobo * l.quantity)}</span>
+                      <span className="hint">{[size, `${formatPrice(each)} each`, each < l.price_kobo ? "quantity price" : ""].filter(Boolean).join(" · ")}</span>
+                      <span className="shop-price">{formatPrice(each * l.quantity)}</span>
                     </span>
                     <span className="shop-stepper">
-                      <button type="button" aria-label={`One fewer ${it?.name ?? l.name}`} onClick={() => onChange(l, -1)}>
+                      <button type="button" aria-label={`One fewer ${it?.name ?? l.name}`} onClick={() => onStep(l, -1)}>
                         <Icon name="minus" />
                       </button>
                       <span>{l.quantity}</span>
-                      <button type="button" aria-label={`One more ${it?.name ?? l.name}`} disabled={!!left && l.quantity >= left} onClick={() => onChange(l, 1)}>
+                      <button type="button" aria-label={`One more ${it?.name ?? l.name}`} disabled={!!left && l.quantity >= left} onClick={() => onStep(l, 1)}>
                         <Icon name="plus" />
                       </button>
                     </span>
@@ -620,9 +772,11 @@ function ShopBagView({
             </ul>
             <p className="shop-bag-total">
               <span className="grow">Items</span>
-              <strong>{formatPrice(total(bag))}</strong>
+              <strong>{formatPrice(sum)}</strong>
             </p>
-            <p className="hint">{shop.delivery ? "How you get it, and delivery if you want it, come next." : "How you get it comes next."}</p>
+            <p className={stops ? "shop-bag-stops" : "hint"} role={stops ? "status" : undefined}>
+              {stops ?? next ?? (shop.delivery ? "How you get it, and delivery if you want it, come next." : "How you get it comes next.")}
+            </p>
             <button type="button" className="shop-card-button" onClick={onAsk}>
               <Icon name="chat" />
               Have a question? Ask {business} in the chat
@@ -632,8 +786,8 @@ function ShopBagView({
       </div>
       {bag.length > 0 && shop.open && (
         <footer className="shop-foot">
-          <button type="button" className="tk-cta" onClick={onCheckout} data-testid="shop-checkout">
-            Check out · {formatPrice(total(bag))}
+          <button type="button" className="tk-cta" disabled={!!stops} onClick={onCheckout} data-testid="shop-checkout">
+            {trade?.checkoutWords ?? "Check out"} · {formatPrice(sum)}
           </button>
         </footer>
       )}

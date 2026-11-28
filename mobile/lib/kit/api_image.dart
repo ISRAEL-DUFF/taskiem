@@ -13,11 +13,15 @@ import '../theme/theme.dart';
 /// linked business's product photos); the ground shows until it comes,
 /// and stays when it cannot be read.
 class ApiImage extends StatefulWidget {
-  const ApiImage({super.key, required this.transport, required this.path, this.width, this.height});
+  const ApiImage({super.key, required this.transport, required this.path, this.width, this.height, this.placeholder});
   final Transport transport;
   final String path;
   final double? width;
   final double? height;
+
+  /// Shown until the picture is read, and when it cannot be (else the
+  /// soft ground).
+  final Widget? placeholder;
 
   @override
   State<ApiImage> createState() => _ApiImageState();
@@ -70,7 +74,7 @@ class _ApiImageState extends State<ApiImage> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final b = _bytes;
-    if (b == null) return Container(width: widget.width, height: widget.height, color: t.tkSoft);
+    if (b == null) return widget.placeholder ?? Container(width: widget.width, height: widget.height, color: t.tkSoft);
     return Image.memory(b, width: widget.width, height: widget.height, fit: BoxFit.cover, gaplessPlayback: true, excludeFromSemantics: true);
   }
 }

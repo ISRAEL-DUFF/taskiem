@@ -37,7 +37,7 @@ import 'words.dart' show naira;
 /// Where the sheet starts: an item in the bag, a past order's lines, a
 /// category picked in "@", or Make an offer from its tile.
 class OrderStart {
-  const OrderStart({this.itemId, this.last, this.category, this.offer = false, this.qty});
+  const OrderStart({this.itemId, this.last, this.category, this.offer = false, this.qty, this.review = false});
   final String? itemId;
 
   /// What goes in the bag at first (an alert's Reorder: the low item, or
@@ -48,6 +48,10 @@ class OrderStart {
   final Map<String, dynamic>? last;
   final String? category;
   final bool offer;
+
+  /// Straight to the review, with [qty] (the shop's bag checked out): back
+  /// closes the sheet, to the bag.
+  final bool review;
 }
 
 /// Opens the order sheet; the future ends with what was sent, said.
@@ -59,13 +63,14 @@ Future<String?> showOrderSheet(
   OrderStart? start,
   bool browse = false,
   void Function(String words)? onSent,
+  ValueChanged<Map<String, int>>? onQty,
 }) => showTkSheet<String>(
   context,
-  (_) => OrderSheet(chats: chats, link: link, business: business, start: start, browse: browse, onSent: onSent),
+  (_) => OrderSheet(chats: chats, link: link, business: business, start: start, browse: browse, onSent: onSent, onQty: onQty),
 );
 
 class OrderSheet extends StatefulWidget {
-  const OrderSheet({super.key, required this.chats, required this.link, required this.business, this.start, this.browse = false, this.onSent});
+  const OrderSheet({super.key, required this.chats, required this.link, required this.business, this.start, this.browse = false, this.onSent, this.onQty});
   final ChatsData chats;
   final String link;
   final String business;
@@ -78,6 +83,9 @@ class OrderSheet extends StatefulWidget {
   /// Sent (an order, an offer, a quote asked), with its words: told even
   /// when the sheet was closed while it was sending.
   final void Function(String words)? onSent;
+
+  /// The bag changed (opened from the shop, whose bag it is too).
+  final ValueChanged<Map<String, int>>? onQty;
 
   @override
   State<OrderSheet> createState() => _OrderSheetState();
@@ -102,9 +110,15 @@ class _OrderSheetState extends State<OrderSheet> {
   bool _stockOff = false;
 
   // What the person does.
-  late Map<String, int> _qty = {...?widget.start?.qty};
+  late Map<String, int> _bag = {...?widget.start?.qty};
+  Map<String, int> get _qty => _bag;
+  set _qty(Map<String, int> q) {
+    _bag = q;
+    widget.onQty?.call(q);
+  }
+
   bool _seeded = false;
-  bool _review = false;
+  late bool _review = widget.start?.review ?? false;
   final _search = TextEditingController();
   String? _chip;
   final _note = TextEditingController();
@@ -437,7 +451,7 @@ class _OrderSheetState extends State<OrderSheet> {
       title: _review ? 'Review your order' : (widget.browse ? '$_biz\'s shop' : 'Order from $_biz'),
       lead: _review ? null : ChatAvatar(name: _biz, size: 48, letterSize: 16),
       sub: _review ? null : (storefront ? 'Their storefront prices · $updated' : 'Your prices · $updated'),
-      onBack: _review ? () => setState(() => _review = false) : null,
+      onBack: !_review ? null : (widget.start?.review ?? false) ? () => Navigator.of(context).maybePop() : () => setState(() => _review = false),
       bareFooter: !_review,
       footer: widget.browse
           ? null
@@ -746,34 +760,49 @@ class _OrderSheetState extends State<OrderSheet> {
     );
   }
 
-  Widget _sizesGrid(TkTokens t, PriceItem product) {
-    final taken = product.sizes.fold<int>(0, (a, z) => a + (_qty[z.id] ?? 0));
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('${product.min > 1 ? 'At least ${product.min} in all. ' : ''}${taken > 0 ? '$taken so far.' : ''}', style: tkText(size: 14, color: t.muted)),
-          const SizedBox(height: 6),
-          LayoutBuilder(
-            builder: (context, box) {
-              final cols = math.max(1, ((box.maxWidth + 8) / (84 + 8)).floor());
-              final w = (box.maxWidth - 8 * (cols - 1)) / cols;
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final z in product.sizes)
-                    SizedBox(
-                      width: w,
-                      child: _SizeCell(size: z, qty: _qty[z.id] ?? 0, onQty: (n) => setState(() => _qty = {..._qty, z.id: n})),
-                    ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
+  Widget _sizesGrid(TkTokens t, PriceItem product) => Padding(
+    padding: const EdgeInsets.only(top: 8),
+    child: SizesGrid(product: product, qty: _qty, onQty: (id, n) => setState(() => _qty = {..._qty, id: n})),
+  );
+}
+
+/// `.tk-order-sizes`: a product's sizes and colours to order by, a box each
+/// (how many), those off sale greyed; its minimum and how many so far
+/// above. The order sheet's, and the shop's item screen for a supplier's
+/// product (shop.dart).
+class SizesGrid extends StatelessWidget {
+  const SizesGrid({super.key, required this.product, required this.qty, required this.onQty});
+  final PriceItem product;
+  final Map<String, int> qty;
+  final void Function(String size, int n) onQty;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final taken = product.sizes.fold<int>(0, (a, z) => a + (qty[z.id] ?? 0));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('${product.min > 1 ? 'At least ${product.min} in all. ' : ''}${taken > 0 ? '$taken so far.' : ''}', style: tkText(size: 14, color: t.muted)),
+        const SizedBox(height: 6),
+        LayoutBuilder(
+          builder: (context, box) {
+            final cols = math.max(1, ((box.maxWidth + 8) / (84 + 8)).floor());
+            final w = (box.maxWidth - 8 * (cols - 1)) / cols;
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final z in product.sizes)
+                  SizedBox(
+                    width: w,
+                    child: _SizeCell(size: z, qty: qty[z.id] ?? 0, onQty: (n) => onQty(z.id, n)),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }

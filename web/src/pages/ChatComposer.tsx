@@ -174,6 +174,10 @@ export type ComposerOptions<R> = {
   diaryWhere?: string;
   /** A tool saved a change: what is newer is shown. */
   onDiary?: (line: unknown) => void;
+  /** Their shop (BusinessShop.tsx): the tools panel's Their shop and the head
+   * open it; an Order sheet asked with a start (New order, a reorder, "@") stays
+   * the plain list. */
+  onShop?: () => void;
   /** A business's conversation: its orders and bills only, and, when they
    * share prices with us, ordering from them. */
   scope?: { link: string; name: string; supplies: boolean };
@@ -291,6 +295,10 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   };
   const openTool = (k: ToolKey, from?: DOMRect, start?: ToolStart) => {
     closeTools();
+    if (k === "order" && !start && o.onShop) {
+      o.onShop();
+      return;
+    }
     setTool({ key: k, from, start });
   };
   const openMade = (command: string, from?: DOMRect, words?: string) => {
@@ -764,7 +772,9 @@ export function ComposerView<R>({
                 : undefined
             }
             onNewOrder={
-              c.o.scope?.supplies ? () => c.openTool("order") : undefined
+              c.o.scope?.supplies
+                ? () => c.openTool("order", undefined, { order: {} })
+                : undefined
             }
             onClose={() => c.setTool(undefined)}
             onTools={() => {

@@ -887,11 +887,13 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .shop-letter::before { content: attr(data-letter); font-weight: 700; color: color-mix(in srgb, var(--text) 55%, transparent); font-size: clamp(18px, 9vw, 52px); }
 .shop-grid { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 10px; }
 .shop-card { position: relative; display: flex; flex-direction: column; padding: 6px; border-radius: 18px; background: var(--panel); }
-.shop-card.sold .shop-photo, .shop-card.sold .shop-card-name, .shop-card.sold .shop-price { opacity: 0.55; }
+/* Sold out: the photo faded; the words muted, still readable. */
+.shop-card.sold .shop-photo { opacity: 0.55; }
+.shop-card.sold .shop-card-name, .shop-card.sold .shop-price { color: var(--muted); }
 .shop-card-open { position: relative; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; padding: 0; border: 0; background: transparent; box-shadow: none; text-align: left; color: var(--text); cursor: pointer; }
 .shop-card-name { display: block; text-align: left; margin: 8px 6px 0; font-size: 14px; font-weight: 600; line-height: 1.3; height: 2.6em; overflow: hidden; overflow-wrap: anywhere; }
-.shop-mark { position: absolute; left: 14px; top: 14px; pointer-events: none; padding: 3px 8px; border-radius: 999px; background: var(--on-photo); color: var(--tint-warn-text); font-size: 11px; font-weight: 700; }
-.shop-mark.danger { color: var(--danger); }
+.shop-mark { position: absolute; left: 14px; top: 14px; pointer-events: none; padding: 3px 8px; border-radius: 999px; background: var(--on-photo); color: var(--on-photo-warn); font-size: 11px; font-weight: 700; }
+.shop-mark.danger { color: var(--on-photo-danger); }
 .shop-heart { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; min-height: 0; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; box-shadow: none; background: color-mix(in srgb, var(--on-photo) 92%, transparent); color: #0e1a14; cursor: pointer; }
 .shop-heart svg, .shop-over svg { width: 17px; height: 17px; }
 .shop-heart.on svg, .shop-heart-big.on svg { color: var(--danger); fill: currentColor; }
@@ -931,6 +933,19 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .shop-card-button svg { width: 19px; height: 19px; flex: none; }
 .shop-body > .shop-card-button { margin-top: 14px; width: 100%; }
 .shop-added { margin: 14px 0 0; font-size: 14px; }
+/* A business's shop (BusinessShop.tsx): the unit after the price, the
+   quantity prices as rows (the one reached marked), what stops the bag. */
+.shop-unit { font-size: 15px; font-weight: 500; color: var(--muted); }
+.shop-qty-prices { margin-top: 6px; }
+.shop-qty-prices > .hint { margin: 2px 2px 8px; font-size: 13.5px; }
+.shop-qty-rows { list-style: none; margin: 0; padding: 0 14px; border-radius: 16px; background: var(--panel); }
+.shop-qty-rows li { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14.5px; }
+.shop-qty-rows li:last-child { border-bottom: 0; }
+.shop-qty-rows li.on .grow { font-weight: 700; }
+.shop-qty-rows .grow { flex: 1; }
+.shop-qty-rows strong { font-variant-numeric: tabular-nums; }
+.shop-item .tk-order-sizes { display: grid; gap: 6px; }
+.shop-bag-stops { margin: 10px 4px 0; font-size: 13px; color: var(--text); }
 .shop-foot { display: flex; align-items: center; gap: 12px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--panel); }
 .shop-foot .shop-stepper button { width: 34px; height: 34px; }
 .shop-foot .tk-cta { flex: 1; min-height: 50px; font-size: 15px; }

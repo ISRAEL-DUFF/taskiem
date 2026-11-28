@@ -531,7 +531,7 @@ const SCREENS: {
     },
   },
   {
-    // Their shop from a business's tools (M5): their prices, one item in
+    // Their prices as the plain list from a business's tools (M5): one item in
     // the bag, the bag in pine at the foot.
     name: "chat-order",
     touch: true,
@@ -541,7 +541,9 @@ const SCREENS: {
       await expect(p.getByTestId("chat-message").first()).toBeVisible();
       await p.waitForLoadState("networkidle");
       await p.getByRole("button", { name: "Open tools" }).click();
-      await p.getByTestId("tools-panel").getByRole("button", { name: /^Their shop/ }).click();
+      // The plain list: Your orders' New order (Their shop opens the shop).
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Your orders/ }).click();
+      await p.getByTestId("tool-sheet").getByRole("button", { name: "New order" }).click();
       await expect(p.getByTestId("order-sheet")).toBeVisible();
       await p.waitForLoadState("networkidle");
       await p.getByRole("button", { name: /^One more / }).first().click();
@@ -561,7 +563,9 @@ const SCREENS: {
       await expect(p.getByTestId("chat-message").first()).toBeVisible();
       await p.waitForLoadState("networkidle");
       await p.getByRole("button", { name: "Open tools" }).click();
-      await p.getByTestId("tools-panel").getByRole("button", { name: /^Their shop/ }).click();
+      // The plain list: Your orders' New order (Their shop opens the shop).
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Your orders/ }).click();
+      await p.getByTestId("tool-sheet").getByRole("button", { name: "New order" }).click();
       await expect(p.getByTestId("order-sheet")).toBeVisible();
       await p.waitForLoadState("networkidle");
       await p.getByRole("button", { name: /^One more / }).first().click();

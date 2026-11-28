@@ -753,13 +753,17 @@ Future<void> _hold(WidgetTester t) async {
   await t.pumpAndSettle();
 }
 
-/// Their shop from the tools panel, the first item it can add in the bag;
+/// The plain list of their prices (the order sheet: Your orders, New order;
+/// the tools panel's Their shop opens the shop now), the first item it can
+/// add in the bag;
 /// with [review], its review.
 Future<void> _shop(WidgetTester t, {bool review = false}) async {
   await _loaded(t);
   await t.tap(find.bySemanticsLabel('Open tools'));
   await _loaded(t);
-  await t.tap(find.bySemanticsLabel(RegExp('^Their shop')));
+  await t.tap(find.bySemanticsLabel(RegExp('^Your orders, ')));
+  await _loaded(t);
+  await t.tap(find.bySemanticsLabel('New order'));
   await _loaded(t);
   // At large text the head can fill the sheet: the first row scrolled to.
   final more = find.bySemanticsLabel(RegExp('^One more '));
